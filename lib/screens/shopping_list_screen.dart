@@ -186,7 +186,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   controller: personCountController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Anzahl Personen',
+                    labelText: 'Anzahl Personen *',
                     hintText: 'z.B. 50',
                     border: OutlineInputBorder(),
                   ),
@@ -226,10 +226,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             FilledButton(
               onPressed: () {
                 final name = nameController.text.trim();
-                if (name.isEmpty) return;
+                final personCount = int.tryParse(personCountController.text) ?? 0;
+                if (name.isEmpty || personCount <= 0) return;
                 Navigator.pop(context, (
                   name: name,
-                  personCount: int.tryParse(personCountController.text) ?? 0,
+                  personCount: personCount,
                   drinkerType: drinkerType,
                 ));
               },
