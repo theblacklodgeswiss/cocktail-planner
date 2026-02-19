@@ -3,8 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// Admin email - only this user has admin privileges
-const String adminEmail = 'the.blacklodge@outlook.com';
+/// Super Admin email - always has admin privileges (hardcoded fallback)
+const String superAdminEmail = 'the.blacklodge@outlook.com';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -13,6 +13,7 @@ class AuthService {
 
   FirebaseAuth? _auth;
   GoogleSignIn? _googleSignIn;
+  bool? _cachedIsAdmin;
 
   FirebaseAuth get _firebaseAuth {
     _auth ??= FirebaseAuth.instance;
@@ -48,10 +49,53 @@ class AuthService {
     return user?.isAnonymous ?? true;
   }
 
-  /// Check if current user is admin
+  /// Check if current user is admin (sync - uses cache or hardcoded check)
   bool get isAdmin {
     final userEmail = email;
-    return userEmail != null && userEmail.toLowerCase() == adminEmail.toLowerCase();
+    if (userEmail == null) return false;
+    
+    // Super admin is always admin
+    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) {
+      return true;
+    }
+    
+    // Return cached value if available
+    return _cachedIsAdmin ?? false;
+  }
+
+  /// Check admin status from Firestore (async - call on login)
+  Future<bool> checkIsAdmin() async {
+    final userEmail = email;
+    if (userEmail == null) {
+      _cachedIsAdmin = false;
+      return false;
+    }
+    
+    // Super admin is always admin
+    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) {
+      _cachedIsAdmin = true;
+      return true;
+    }
+    
+    // Check Firestore allowedUsers collection
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('allowedUsers')
+          .doc(userEmail.toLowerCase())
+          .get();
+      
+      if (doc.exists) {
+        final data = doc.data();
+        _cachedIsAdmin = data?['isAdmin'] == true;
+      } else {
+        _cachedIsAdmin = false;
+      }
+    } catch (e) {
+      debugPrint('Failed to check admin status: $e');
+      _cachedIsAdmin = false;
+    }
+    
+    return _cachedIsAdmin ?? false;
   }
 
   /// User display name

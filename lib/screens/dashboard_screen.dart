@@ -30,6 +30,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _initializeAndLoad() async {
     if (!_initialized) {
+      // Check admin status from Firestore
+      await authService.checkIsAdmin();
       await cocktailRepository.initialize();
       _initialized = true;
     }

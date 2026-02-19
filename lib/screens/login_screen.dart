@@ -24,7 +24,11 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final result = await authService.signInWithGoogle();
       if (result != null && mounted) {
-        context.go('/');
+        // Check admin status after login
+        await authService.checkIsAdmin();
+        if (mounted) {
+          context.go('/');
+        }
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
