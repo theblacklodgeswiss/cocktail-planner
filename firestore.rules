@@ -24,9 +24,9 @@ service cloud.firestore {
       return isSuperAdmin() || isAdminFromCollection();
     }
     
-    // Authenticated non-anonymous users only
+    // Authenticated users (including anonymous)
     function isAuthenticated() {
-      return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      return request.auth != null;
     }
     
     // Materials collection

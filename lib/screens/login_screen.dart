@@ -45,6 +45,28 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInAsGuest() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await authService.signInAnonymously();
+      if (mounted) {
+        context.go('/');
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Gast-Anmeldung fehlgeschlagen.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   String _getErrorMessage(String code) {
     switch (code) {
       case 'popup-closed-by-user':
@@ -180,6 +202,44 @@ class _LoginScreenState extends State<LoginScreen> {
                         fontWeight: FontWeight.w500,
                         color: colorScheme.onSurface,
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Divider
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: colorScheme.outline.withValues(alpha: 0.5))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'oder',
+                        style: TextStyle(
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: colorScheme.outline.withValues(alpha: 0.5))),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Guest Sign-In Button
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: _isLoading ? null : _signInAsGuest,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.person_outline),
+                    label: const Text(
+                      'Als Gast fortfahren',
+                      style: TextStyle(fontSize: 16),
                     ),
                   ),
                 ),

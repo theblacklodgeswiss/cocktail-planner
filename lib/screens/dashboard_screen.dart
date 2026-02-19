@@ -60,12 +60,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? NetworkImage(user.photoURL!)
                     : null,
                 child: user.photoURL == null
-                    ? const Icon(Icons.person)
+                    ? Icon(user.isAnonymous ? Icons.person_outline : Icons.person)
                     : null,
               ),
               title: Row(
                 children: [
-                  Text(user.displayName ?? 'Benutzer'),
+                  Text(user.displayName ?? (user.isAnonymous ? 'Gast' : 'Benutzer')),
                   if (authService.isAdmin) ...[
                     const SizedBox(width: 8),
                     Container(
@@ -82,7 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ],
               ),
-              subtitle: Text(user.email ?? ''),
+              subtitle: Text(user.email ?? (user.isAnonymous ? 'Anonym angemeldet' : '')),
             ),
             const Divider(),
             if (authService.isAdmin) ...[
@@ -104,6 +104,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () {
                   Navigator.pop(ctx);
                   _showAdminPanel();
+                },
+              ),
+            if (user.isAnonymous)
+              ListTile(
+                leading: const Icon(Icons.login),
+                title: const Text('Mit Google verknüpfen'),
+                subtitle: const Text('Speichere deine Daten dauerhaft'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await authService.linkWithGoogle();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Konto erfolgreich verknüpft!')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Fehler: $e')),
+                      );
+                    }
+                  }
                 },
               ),
             ListTile(
@@ -584,8 +607,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? NetworkImage(authService.photoUrl!)
                           : null,
                       child: authService.photoUrl == null
-                          ? const Icon(
-                              Icons.person,
+                          ? Icon(
+                              authService.isAnonymous ? Icons.person_outline : Icons.person,
                               size: 20,
                             )
                           : null,
