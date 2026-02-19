@@ -634,6 +634,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Checkbox
             if (hasQuantity)
@@ -654,12 +655,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 ),
               )
             else
-              const SizedBox(width: 48), // Space for alignment
-            // Item info
+              const SizedBox(width: 48),
+            // Item info (left side)
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     item.name,
@@ -667,11 +667,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                       fontWeight: FontWeight.w600,
                       color: colorScheme.onSurface,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}',
@@ -679,8 +682,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           color: colorScheme.outline,
                         ),
                       ),
-                      if (item.note.isNotEmpty) ...[
-                        const SizedBox(width: 8),
+                      if (item.note.isNotEmpty)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -694,32 +696,34 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                             ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            // Quantity controls
-            _buildQuantityControl(
-              context, key, colorScheme, textTheme,
-            ),
-            // Item total
-            if (hasQuantity) ...[
-              const SizedBox(width: 12),
-              Container(
-                constraints: const BoxConstraints(minWidth: 70),
-                child: Text(
-                  itemTotal.toStringAsFixed(2),
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: isSelected ? colorScheme.primary : colorScheme.outline,
-                  ),
-                  textAlign: TextAlign.end,
+            const SizedBox(width: 8),
+            // Right side: Stepper + Price below
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Quantity controls
+                _buildQuantityControl(
+                  context, key, colorScheme, textTheme,
                 ),
-              ),
-            ],
+                // Item total below stepper
+                if (hasQuantity) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '${itemTotal.toStringAsFixed(2)} CHF',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? colorScheme.primary : colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
