@@ -44,7 +44,15 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       );
       controller.addListener(() {
         final value = int.tryParse(controller.text) ?? 0;
-        setState(() => _quantities[key] = value);
+        setState(() {
+          _quantities[key] = value;
+          // Auto-select when quantity > 0, deselect when 0
+          if (value > 0) {
+            _selectedItems.add(key);
+          } else {
+            _selectedItems.remove(key);
+          }
+        });
       });
       return controller;
     });
