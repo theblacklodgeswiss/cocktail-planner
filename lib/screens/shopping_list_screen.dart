@@ -25,12 +25,77 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   
   late PageController _pageController;
   int _currentPage = 0;
+  int _venueDistanceKm = 0;
 
   @override
   void initState() {
     super.initState();
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
     _pageController = PageController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showDistanceDialog());
+  }
+
+  Future<void> _showDistanceDialog() async {
+    final distanceController = TextEditingController();
+    String? errorText;
+
+    final result = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Entfernung zum Veranstaltungsort'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Bitte gib die Entfernung zum Veranstaltungsort ein.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: distanceController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: 'Entfernung (km)',
+                  hintText: 'z.B. 150',
+                  border: const OutlineInputBorder(),
+                  errorText: errorText,
+                  suffixText: 'km',
+                ),
+                autofocus: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final km = int.tryParse(distanceController.text.trim());
+                if (km == null) {
+                  setDialogState(
+                    () => errorText = 'Bitte eine gültige Entfernung eingeben',
+                  );
+                  return;
+                }
+                Navigator.pop(context, km);
+              },
+              child: const Text('Weiter'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    if (result == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _venueDistanceKm = result);
   }
 
   @override
@@ -99,8 +164,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
+    final isLongDistance = _venueDistanceKm > 200;
     final fixedValues = data.fixedValues
-        .where((item) => item.active)
+        .where((item) {
+          if (!item.active) return false;
+          if (item.note == 'BlackLodge') {
+            // Travel variants: "Barkeeper (5h+2hFahrt)", "Keeper (5h+2h Fahrt)"
+            if (item.name.contains('(5h+2h')) return isLongDistance;
+            // Non-travel variants: "Barkeeper (5h)", "Keeper (5h)"
+            if (item.name.contains('(5h)')) return !isLongDistance;
+          }
+          return true;
+        })
         .toList()
       ..sort((a, b) {
         final aOrder = a.sortOrder;
