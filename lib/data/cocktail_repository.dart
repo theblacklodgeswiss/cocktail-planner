@@ -56,16 +56,36 @@ class CocktailRepository {
     }
   }
 
+  /// Force reseed Firestore from local JSON (deletes existing data)
+  Future<void> forceReseed() async {
+    if (!_firebaseAvailable) return;
+    
+    // Delete all documents in collections
+    await _deleteCollection(_materialsCollection);
+    await _deleteCollection(_recipesCollection);
+    await _deleteCollection(_fixedValuesCollection);
+    
+    // Reseed from assets
+    await _seedFirestoreFromAssets();
+    
+    // Clear cache
+    _cached = null;
+  }
+
+  Future<void> _deleteCollection(CollectionReference collection) async {
+    final snapshot = await collection.get();
+    final batch = _firestore.batch();
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
   /// Seeds Firestore with data from local JSON assets
   Future<void> _seedFirestoreFromAssets() async {
-    // Load cocktail data
+    // Load cocktail data (includes materialListe, rezepte, fixedValues)
     final raw = await rootBundle.loadString(assetPath);
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
-
-    // Load wertigkeiten
-    final wertigkeitenRaw = await rootBundle.loadString(wertigkeitenPath);
-    final wertigkeitenDecoded =
-        jsonDecode(wertigkeitenRaw) as Map<String, dynamic>;
 
     // Seed materials
     final materialList =
@@ -86,11 +106,24 @@ class CocktailRepository {
     }
     await batch2.commit();
 
-    // Seed fixed values
-    final fixedValuesList =
-        wertigkeitenDecoded['fixedValues'] as List<dynamic>? ??
-        wertigkeitenDecoded['wertigkeiten'] as List<dynamic>? ??
-        <dynamic>[];
+    // Seed fixed values from cocktail_data.json (or fallback to wertigkeiten.json)
+    List<dynamic> fixedValuesList = decoded['fixedValues'] as List<dynamic>? ?? <dynamic>[];
+    
+    if (fixedValuesList.isEmpty) {
+      // Fallback to wertigkeiten.json for backwards compatibility
+      try {
+        final wertigkeitenRaw = await rootBundle.loadString(wertigkeitenPath);
+        final wertigkeitenDecoded =
+            jsonDecode(wertigkeitenRaw) as Map<String, dynamic>;
+        fixedValuesList =
+            wertigkeitenDecoded['fixedValues'] as List<dynamic>? ??
+            wertigkeitenDecoded['wertigkeiten'] as List<dynamic>? ??
+            <dynamic>[];
+      } catch (_) {
+        // Ignore if file doesn't exist
+      }
+    }
+    
     final batch3 = _firestore.batch();
     for (final item in fixedValuesList) {
       final docRef = _fixedValuesCollection.doc();

@@ -76,7 +76,9 @@
     {"menge": "Packungen", "artikel": "Mangostücke (tiefgefroren)", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
     {"menge": "Packungen", "artikel": "Wildberren (tiefgefroren)", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
     {"menge": "Packungen", "artikel": "Schlagsahne", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
-    {"menge": "Packungen", "artikel": "Rohrzucker", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "Packungen", "artikel": "Rohrzucker", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"}
+  ],
+  "fixedValues": [
     {"menge": "Packungen", "artikel": "Crushed Ice 5kg", "preis": 10.00, "waehrung": "CHF", "bemerkung": "Coop"},
     {"menge": "100er Packung", "artikel": "Champagnerbecher", "preis": 40.00, "waehrung": "CHF", "bemerkung": "shop.tombotto.ch"},
     {"menge": "40er Packung", "artikel": "Hartplastikbecher 0.2L", "preis": 7.00, "waehrung": "CHF", "bemerkung": "Prodega"},
@@ -89,9 +91,7 @@
     {"menge": "Packungen", "artikel": "Haribo Primavera", "preis": 1.50, "waehrung": "CHF", "bemerkung": "Kaufland"},
     {"menge": "Packungen", "artikel": "Marshmellow", "preis": 1.50, "waehrung": "CHF", "bemerkung": "Kaufland"},
     {"menge": "Stk", "artikel": "BL Box", "preis": 0.00, "waehrung": "CHF", "bemerkung": "BlackLodge"},
-    {"menge": "Stk", "artikel": "Smoothie Maker", "preis": 0.00, "waehrung": "CHF", "bemerkung": "BlackLodge"}
-  ],
-  "fixedValues": [
+    {"menge": "Stk", "artikel": "Smoothie Maker", "preis": 0.00, "waehrung": "CHF", "bemerkung": "BlackLodge"},
     {"menge": "Stk", "artikel": "Van", "preis": 120.00, "waehrung": "CHF", "bemerkung": "Visakan"},
     {"menge": "Stk", "artikel": "Theken", "preis": 100.00, "waehrung": "CHF", "bemerkung": "BlackLodge"},
     {"menge": "Stk", "artikel": "Reinvstement", "preis": 100.00, "waehrung": "CHF", "bemerkung": "XXX"},

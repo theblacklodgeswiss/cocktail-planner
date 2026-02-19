@@ -18,11 +18,15 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  late final Future<CocktailData> _dataFuture;
+  late Future<CocktailData> _dataFuture;
 
   @override
   void initState() {
     super.initState();
+    _loadData();
+  }
+
+  void _loadData() {
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
   }
 
@@ -69,6 +73,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
               appBar: AppBar(
                 title: Text(translate(context, 'dashboard.title')),
                 actions: [
+                  if (cocktailRepository.isUsingFirebase)
+                    IconButton(
+                      icon: const Icon(Icons.sync),
+                      tooltip: 'Daten neu laden',
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Daten aktualisieren?'),
+                            content: const Text(
+                              'Dies lädt alle Materialien und Rezepte neu aus der lokalen Datei. '
+                              'Bestehende Firebase-Daten werden überschrieben.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Abbrechen'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Aktualisieren'),
+                              ),
+                            ],
+                          ),
+                        );
+                        
+                        if (confirm == true && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Daten werden aktualisiert...')),
+                          );
+                          await cocktailRepository.forceReseed();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Daten erfolgreich aktualisiert!')),
+                            );
+                            // Reload data
+                            setState(() {
+                              _loadData();
+                            });
+                          }
+                        }
+                      },
+                    ),
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Chip(

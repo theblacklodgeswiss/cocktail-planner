@@ -58,21 +58,61 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     });
   }
 
-  /// Returns (ingredients, fixedValues) separately
-  ({List<MaterialItem> ingredients, List<MaterialItem> fixedValues}) _buildSeparatedItems(CocktailData data) {
-    final requiredIngredients = appState.selectedRecipes
-        .expand((recipe) => recipe.ingredients)
-        .toSet();
+  /// Returns ingredients grouped by cocktail, fixedValues, and ingredientToCocktails map
+  ({
+    Map<String, List<MaterialItem>> ingredientsByCocktail,
+    List<MaterialItem> fixedValues,
+    Map<String, List<String>> ingredientToCocktails,
+  }) _buildSeparatedItems(CocktailData data) {
+    // Build map: ingredient name -> list of cocktail names that use it
+    final ingredientToCocktails = <String, List<String>>{};
+    for (final recipe in appState.selectedRecipes) {
+      for (final ingredient in recipe.ingredients) {
+        ingredientToCocktails.putIfAbsent(ingredient, () => []).add(recipe.name);
+      }
+    }
 
-    final filteredRecipeItems = data.materials
-        .where((item) => requiredIngredients.contains(item.name))
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final requiredIngredients = ingredientToCocktails.keys.toSet();
+    
+    // Build material lookup
+    final materialByName = <String, MaterialItem>{};
+    for (final item in data.materials) {
+      if (requiredIngredients.contains(item.name)) {
+        materialByName[item.name] = item;
+      }
+    }
+
+    // Group ingredients by cocktail (each ingredient only appears once, under its first cocktail)
+    final usedIngredients = <String>{};
+    final ingredientsByCocktail = <String, List<MaterialItem>>{};
+    
+    for (final recipe in appState.selectedRecipes) {
+      final cocktailItems = <MaterialItem>[];
+      for (final ingredientName in recipe.ingredients) {
+        if (!usedIngredients.contains(ingredientName) && materialByName.containsKey(ingredientName)) {
+          cocktailItems.add(materialByName[ingredientName]!);
+          usedIngredients.add(ingredientName);
+        }
+      }
+      if (cocktailItems.isNotEmpty) {
+        cocktailItems.sort((a, b) => a.name.compareTo(b.name));
+        ingredientsByCocktail[recipe.name] = cocktailItems;
+      }
+    }
 
     final fixedValues = data.fixedValues.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
-    return (ingredients: filteredRecipeItems, fixedValues: fixedValues);
+    return (
+      ingredientsByCocktail: ingredientsByCocktail,
+      fixedValues: fixedValues,
+      ingredientToCocktails: ingredientToCocktails,
+    );
+  }
+
+  /// Flattened list of all ingredients for total calculation
+  List<MaterialItem> _getAllIngredients(Map<String, List<MaterialItem>> ingredientsByCocktail) {
+    return ingredientsByCocktail.values.expand((items) => items).toList();
   }
 
   String _itemKey(MaterialItem item) => '${item.name}|${item.unit}';
@@ -262,7 +302,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         }
 
         final separated = _buildSeparatedItems(snapshot.data!);
-        final allItems = [...separated.ingredients, ...separated.fixedValues];
+        final allIngredients = _getAllIngredients(separated.ingredientsByCocktail);
+        final allItems = [...allIngredients, ...separated.fixedValues];
         final total = _calculateTotal(allItems);
 
         return Scaffold(
@@ -271,8 +312,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               ? _buildEmptyState(context, colorScheme, textTheme)
               : _buildShoppingList(
                   context,
-                  separated.ingredients,
+                  separated.ingredientsByCocktail,
                   separated.fixedValues,
+                  separated.ingredientToCocktails,
                   allItems,
                   total,
                   colorScheme,
@@ -319,13 +361,16 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   Widget _buildShoppingList(
     BuildContext context,
-    List<MaterialItem> ingredients,
+    Map<String, List<MaterialItem>> ingredientsByCocktail,
     List<MaterialItem> fixedValues,
+    Map<String, List<String>> ingredientToCocktails,
     List<MaterialItem> allItems,
     double total,
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
+    final cocktailNames = ingredientsByCocktail.keys.toList();
+    
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 900;
@@ -341,16 +386,24 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Ingredients column
+                      // Ingredients column (grouped by cocktail)
                       Expanded(
                         flex: 3,
-                        child: _buildSection(
-                          context,
-                          translate(context, 'shopping.section_ingredients'),
-                          Icons.local_bar,
-                          ingredients,
-                          colorScheme,
-                          textTheme,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final cocktailName in cocktailNames) ...[
+                              _buildCocktailSection(
+                                context,
+                                cocktailName,
+                                ingredientsByCocktail[cocktailName]!,
+                                ingredientToCocktails,
+                                colorScheme,
+                                textTheme,
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                          ],
                         ),
                       ),
                       const SizedBox(width: 24),
@@ -362,6 +415,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           translate(context, 'shopping.section_fixed_costs'),
                           Icons.receipt_long,
                           fixedValues,
+                          {},
                           colorScheme,
                           textTheme,
                         ),
@@ -377,16 +431,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           return CustomScrollView(
             slivers: [
               _buildSliverAppBar(context, colorScheme, textTheme, total, allItems),
-              // Ingredients section
-              if (ingredients.isNotEmpty) ...[
-                _buildSectionHeader(
-                  context,
-                  translate(context, 'shopping.section_ingredients'),
-                  Icons.local_bar,
-                  colorScheme,
-                  textTheme,
-                ),
-                _buildItemsSliver(ingredients, colorScheme, textTheme),
+              // Cocktail sections
+              for (final cocktailName in cocktailNames) ...[
+                _buildCocktailSectionHeader(context, cocktailName, colorScheme, textTheme),
+                _buildItemsSliver(ingredientsByCocktail[cocktailName]!, ingredientToCocktails, colorScheme, textTheme),
               ],
               // Fixed values section
               if (fixedValues.isNotEmpty) ...[
@@ -397,7 +445,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   colorScheme,
                   textTheme,
                 ),
-                _buildItemsSliver(fixedValues, colorScheme, textTheme),
+                _buildItemsSliver(fixedValues, {}, colorScheme, textTheme),
               ],
               // Bottom padding
               const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
@@ -408,11 +456,112 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
+  Widget _buildCocktailSection(
+    BuildContext context,
+    String cocktailName,
+    List<MaterialItem> items,
+    Map<String, List<String>> ingredientToCocktails,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Cocktail header
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.local_bar,
+                  size: 20,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  cocktailName,
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${items.length}',
+                  style: textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Items
+        ...items.map((item) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildItemCard(context, item, ingredientToCocktails, colorScheme, textTheme),
+        )),
+      ],
+    );
+  }
+
+  SliverToBoxAdapter _buildCocktailSectionHeader(
+    BuildContext context,
+    String cocktailName,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.local_bar,
+                size: 20,
+                color: colorScheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                cocktailName,
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSection(
     BuildContext context,
     String title,
     IconData icon,
     List<MaterialItem> items,
+    Map<String, List<String>> ingredientToCocktails,
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
@@ -467,7 +616,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         // Items
         ...items.map((item) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _buildItemCard(context, item, colorScheme, textTheme),
+          child: _buildItemCard(context, item, ingredientToCocktails, colorScheme, textTheme),
         )),
       ],
     );
@@ -512,6 +661,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   SliverPadding _buildItemsSliver(
     List<MaterialItem> items,
+    Map<String, List<String>> ingredientToCocktails,
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
@@ -521,7 +671,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         delegate: SliverChildBuilderDelegate(
           (context, index) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _buildItemCard(context, items[index], colorScheme, textTheme),
+            child: _buildItemCard(context, items[index], ingredientToCocktails, colorScheme, textTheme),
           ),
           childCount: items.length,
         ),
@@ -605,6 +755,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   Widget _buildItemCard(
     BuildContext context,
     MaterialItem item,
+    Map<String, List<String>> ingredientToCocktails,
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
@@ -613,6 +764,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final hasQuantity = quantity > 0;
     final isSelected = _selectedItems.contains(key);
     final itemTotal = item.price * quantity;
+    final cocktails = ingredientToCocktails[item.name] ?? [];
 
     return Container(
       decoration: BoxDecoration(
@@ -698,6 +850,28 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                         ),
                     ],
                   ),
+                  // Cocktails that use this ingredient
+                  if (cocktails.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: cocktails.map((cocktail) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colorScheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          cocktail,
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onTertiaryContainer,
+                            fontSize: 10,
+                          ),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
