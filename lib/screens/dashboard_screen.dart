@@ -95,6 +95,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context.go('/admin');
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.bar_chart),
+                title: const Text('Bestellungsübersicht'),
+                subtitle: const Text('Jahresübersicht aller Bestellungen'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/orders');
+                },
+              ),
             ],
             if (authService.canManageUsers)
               ListTile(

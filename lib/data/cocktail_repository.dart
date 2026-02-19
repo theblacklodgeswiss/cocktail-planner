@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../models/cocktail_data.dart';
 import '../models/material_item.dart';
+import '../models/order.dart' show SavedOrder;
 import '../models/recipe.dart';
 import '../services/auth_service.dart';
 
@@ -261,6 +262,28 @@ class CocktailRepository {
     } catch (e) {
       debugPrint('Failed to save order: $e');
       return null;
+    }
+  }
+
+  /// Fetch saved orders from Firestore, optionally filtered by [year].
+  /// Returns an empty list if Firebase is unavailable.
+  Future<List<SavedOrder>> getOrders({int? year}) async {
+    if (!_firebaseAvailable) return [];
+
+    try {
+      final snapshot = await _ordersCollection
+          .orderBy('createdAt', descending: true)
+          .get();
+      final orders = snapshot.docs
+          .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+          .toList();
+      if (year != null) {
+        return orders.where((o) => o.year == year).toList();
+      }
+      return orders;
+    } catch (e) {
+      debugPrint('Failed to fetch orders: $e');
+      return [];
     }
   }
 
