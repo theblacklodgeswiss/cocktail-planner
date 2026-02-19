@@ -1,0 +1,16 @@
+{
+  "fixedValues": [
+    {"unit": "Stk", "name": "BL Box", "price": 0.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Smoothie Maker", "price": 0.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Van", "price": 120.0, "currency": "CHF", "note": "Visakan"},
+    {"unit": "Stk", "name": "Theken", "price": 100.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Reinvestment", "price": 100.0, "currency": "CHF", "note": "XXX"},
+    {"unit": "Stk", "name": "Aufwandsentschädigung", "price": 100.0, "currency": "CHF", "note": "XXX"},
+    {"unit": "Stk", "name": "Barkeeper (5h)", "price": 400.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Keeper (5h)", "price": 250.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Barkeeper (5h+2h Fahrt)", "price": 500.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Keeper (5h+2h Fahrt)", "price": 350.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "Stk", "name": "Vermittlungsprämie", "price": 50.0, "currency": "CHF", "note": "BlackLodge"},
+    {"unit": "KM", "name": "Fahrtkosten", "price": 0.7, "currency": "CHF", "note": "BlackLodge"}
+  ]
+}

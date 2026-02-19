@@ -1,0 +1,147 @@
+{
+  "materialListe": [
+    {"menge": "Stk", "artikel": "Limetten (54 Stk.)", "preis": 14.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "Stk", "artikel": "Orangen", "preis": 0.50, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "Stk", "artikel": "Zitronen", "preis": 0.50, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "Stk", "artikel": "Ananas", "preis": 2.50, "waehrung": "CHF", "bemerkung": "Coop"},
+    {"menge": "KG", "artikel": "Passionsfrucht", "preis": 25.00, "waehrung": "CHF", "bemerkung": "Migros"},
+    {"menge": "Stk", "artikel": "Gurke", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Coop"},
+    {"menge": "Bund", "artikel": "Minze", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Alima"},
+    {"menge": "24er Pack", "artikel": "Roasted Coconut Saft", "preis": 38.00, "waehrung": "CHF", "bemerkung": "Importas"},
+    {"menge": "24er Pack", "artikel": "Wasser", "preis": 10.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "24er Pack", "artikel": "Fanta", "preis": 12.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "24er Pack", "artikel": "Sprite", "preis": 22.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "24er Pack", "artikel": "Coca Cola", "preis": 12.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "24er Pack", "artikel": "Necto", "preis": 16.00, "waehrung": "CHF", "bemerkung": "Importas"},
+    {"menge": "24er Pack", "artikel": "RedBull", "preis": 28.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "24er Pack", "artikel": "Corona", "preis": 30.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "12 Pack", "artikel": "Milch", "preis": 15.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "6x1.5L", "artikel": "Wasser", "preis": 3.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "6x1.5L", "artikel": "Sprudelwasser", "preis": 3.00, "waehrung": "CHF", "bemerkung": "Prodega"},
+    {"menge": "6x1.5L", "artikel": "Ginger Ale (Kaufland)", "preis": 10.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "6x1.5L", "artikel": "Wildberry (Kaufland)", "preis": 10.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "12x1L", "artikel": "Sprudelwasser", "preis": 11.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "12x1L", "artikel": "Fanta", "preis": 17.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "12x1L", "artikel": "Sprite", "preis": 17.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "12x1L", "artikel": "Coca Cola", "preis": 17.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "6x0.5L", "artikel": "Ginger Beer (Aperitiv)", "preis": 9.00, "waehrung": "CHF", "bemerkung": "Migros"},
+    {"menge": "1L", "artikel": "Tonic Water (Schweppes)", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Edeka"},
+    {"menge": "10x0.33L", "artikel": "Feldschlösschen", "preis": 15.00, "waehrung": "CHF", "bemerkung": "Migros"},
+    {"menge": "0,7L", "artikel": "Vodka (Absolut)", "preis": 18.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Vodka (Belvedere)", "preis": 35.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Vodka (Three Sixty)", "preis": 16.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Gin (Bombay Saphire)", "preis": 20.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Gin (Mare)", "preis": 35.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Whiskey (JackDaniels)", "preis": 16.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Whiskey (BlackLabel)", "preis": 30.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0,7L", "artikel": "Whiskey (ChivasRegal)", "preis": 30.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "1L", "artikel": "Cachacha (Pitu)", "preis": 12.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "1L", "artikel": "Weisser Rum (Bacardi)", "preis": 15.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "1L", "artikel": "Brauner Rum (Barcardi)", "preis": 14.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0.7L", "artikel": "Rose Lillet", "preis": 15.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "1L", "artikel": "Sekt", "preis": 7.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "1L", "artikel": "Weisswein", "preis": 10.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "1L", "artikel": "Amaretto (Galatti)", "preis": 12.00, "waehrung": "CHF", "bemerkung": "yewel.de"},
+    {"menge": "0.7L", "artikel": "Kokoslikör (Malibu)", "preis": 14.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "0.7L", "artikel": "Baileys", "preis": 14.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "0.7L", "artikel": "Kahlua", "preis": 18.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "0.7L", "artikel": "Stroh 80", "preis": 20.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "0.7L", "artikel": "Blue Curacao", "preis": 16.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "0.7L", "artikel": "Triple Sec", "preis": 17.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "1L", "artikel": "Limettensaft", "preis": 4.00, "waehrung": "CHF", "bemerkung": "Kaufland"}
+  ],
+  "rezepte": [
+    {
+      "name": "Mojito - Classic",
+      "zutaten": ["Limetten (54 Stk.)", "Rohrzucker", "Weisser Rum (Bacardi)", "Minze", "Sprudelwasser", "Ginger Ale (Kaufland)"]
+    },
+    {
+      "name": "Mojito - Maracuja",
+      "zutaten": ["Limetten (54 Stk.)", "Rohrzucker", "Weisser Rum (Bacardi)", "Minze", "Maracuja Sirup", "Ginger Ale (Kaufland)", "Maracuja Saft"]
+    },
+    {
+      "name": "Mojito - Mango",
+      "zutaten": ["Mango Püree", "Rohrzucker", "Minze", "Weisser Rum (Bacardi)", "Ginger Ale (Kaufland)"]
+    },
+    {
+      "name": "Mojito - Guave",
+      "zutaten": ["Limetten (54 Stk.)", "Guave Sirup", "Rohrzucker", "Minze", "Weisser Rum (Bacardi)", "Ginger Ale (Kaufland)"]
+    },
+    {
+      "name": "Mojito - Litchi",
+      "zutaten": ["Limetten (54 Stk.)", "Litchi Sirup", "Rohrzucker", "Minze", "Weisser Rum (Bacardi)", "Ginger Ale (Kaufland)"]
+    },
+    {
+      "name": "Wildberry Lillet",
+      "zutaten": ["Rose Lillet", "Wildberry (Kaufland)", "Beeren"]
+    },
+    {
+      "name": "Fruit Blush",
+      "zutaten": ["Weisser Rum (Bacardi)", "Maracuja Sirup", "Mangosaft", "O-Saft", "Ginger Ale (Kaufland)", "Grenadinesirup"]
+    },
+    {
+      "name": "Fresh Passion",
+      "zutaten": ["Weisser Rum (Bacardi)", "Passionsfrucht Sirup", "Passionsfrucht", "Minze", "O-Saft", "Ginger Ale (Kaufland)"]
+    },
+    {
+      "name": "Mai Tai",
+      "zutaten": ["Limetten (54 Stk.)", "Brauner Rum (Barcardi)", "Triple Sec", "Ananas Saft", "O-Saft", "Grenadinesirup"]
+    },
+    {
+      "name": "Malibu Sunrise",
+      "zutaten": ["Kokoslikör (Malibu)", "Orangensaft", "Grenadine"]
+    },
+    {
+      "name": "Moscow Mule",
+      "zutaten": ["Limetten (54 Stk.)", "Vodka (Absolut)", "Ginger Beer (Aperitiv)", "Minze", "Gurke"]
+    },
+    {
+      "name": "Sex on the Beach",
+      "zutaten": ["Vodka (Absolut)", "Pfirsichlikör", "Cranberry Saft", "Zitronen Saft", "O-Saft"]
+    },
+    {
+      "name": "Pina Colada",
+      "zutaten": ["Schlagsahne", "Weisser Rum (Bacardi)", "Ananas & Kokossaft", "Kokossirup", "Grenadinesirup"]
+    },
+    {
+      "name": "Blue Lagoon",
+      "zutaten": ["Vodka (Absolut)", "Blue Curacao", "Limetten (54 Stk.)", "Sprite"]
+    },
+    {
+      "name": "Caipirinha",
+      "zutaten": ["Limetten (54 Stk.)", "Rohrzucker", "Cachacha (Pitu)", "Sprudelwasser"]
+    },
+    {
+      "name": "Ipanema - Classic (Virgin)",
+      "zutaten": ["Limetten (54 Stk.)", "Rohrzucker", "Minze", "Maracuja Sirup", "Ginger Ale (Kaufland)", "Maracujasaft"]
+    },
+    {
+      "name": "Coconut Kick",
+      "zutaten": ["Litchi Sirup", "Coconut Sirup", "Coconut Juice mit Fruchtfleisch", "Ginger Ale (Kaufland)", "Sprudelwasser"]
+    },
+    {
+      "name": "Amaretto Sour",
+      "zutaten": ["Amaretto (Galatti)", "Zitronensaft", "O-Saft"]
+    },
+    {
+      "name": "Cuba Libre",
+      "zutaten": ["Limetten (54 Stk.)", "Coca Cola", "Weisser Rum (Bacardi)"]
+    },
+    {
+      "name": "Mango Caipirinha",
+      "zutaten": ["Mango Sirup", "Rohrzucker", "Mango Saft", "Cachacha (Pitu)", "Sprudelwasser"]
+    },
+    {
+      "name": "Shot - B52",
+      "zutaten": ["Baileys", "Kahlua", "Stroh 80"]
+    },
+    {
+      "name": "Shot - Blue Lagoon",
+      "zutaten": ["Vodka (Absolut)", "Blue Curacao", "Limettensaft", "Triple Sec"]
+    },
+    {
+      "name": "Shot - Kamikaze",
+      "zutaten": ["Vodka (Absolut)", "Triple Sec", "Limettensaft"]
+    }
+  ]
+}

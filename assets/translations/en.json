@@ -1,0 +1,21 @@
+{
+  "dashboard": {
+    "title": "Cocktail Planner",
+    "empty": "No cocktails selected yet.\nTap + and add multiple cocktails.",
+    "generate_button": "Generate Shopping List",
+    "load_error": "Could not load data."
+  },
+  "dialog": {
+    "title": "Select Cocktails",
+    "search_hint": "Cocktail search",
+    "add_selected": "Apply selection",
+    "tag_cocktail": "Cocktail",
+    "tag_shot": "Shot"
+  },
+  "shopping": {
+    "title": "Shopping List",
+    "empty": "No matching ingredients found in the material list.",
+    "amount_hint": "0",
+    "load_error": "Could not load shopping list."
+  }
+}
