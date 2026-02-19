@@ -246,7 +246,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         _field(
                           controller: _clientContactCtrl,
                           label: 'offer.client_contact'.tr(),
-                          hint: '+41 78 682 46 27',
+                          hint: 'offer.client_contact_hint'.tr(),
                         ),
                       ];
                       return wide
@@ -295,19 +295,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   _field(
                     controller: _cocktailsCtrl,
                     label: 'offer.cocktails'.tr(),
-                    hint: 'Mojito, Mango Mojito, Blue Lagoon',
+                    hint: 'offer.cocktails_hint'.tr(),
                   ),
                   const SizedBox(height: 8),
                   _field(
                     controller: _barDescCtrl,
                     label: 'offer.bar_description'.tr(),
-                    hint: 'Whiskey & Mischgetränke',
+                    hint: 'offer.bar_description_hint'.tr(),
                   ),
                   const SizedBox(height: 8),
                   _field(
                     controller: _shotsCtrl,
                     label: 'offer.shots'.tr(),
-                    hint: 'Aarewasser, Erbeerlime',
+                    hint: 'offer.shots_hint'.tr(),
                   ),
                   const SizedBox(height: 20),
 
