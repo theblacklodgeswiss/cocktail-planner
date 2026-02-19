@@ -12,6 +12,46 @@
     "tag_cocktail": "Cocktail",
     "tag_shot": "Shot"
   },
+  "common": {
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "save": "Speichern",
+    "error": "Fehler",
+    "name": "Name",
+    "pdf": "PDF",
+    "close": "Schließen",
+    "add": "Hinzufügen",
+    "user_added": "Benutzer hinzugefügt!",
+    "add_error": "Fehler beim Hinzufügen"
+  },
+  "drawer": {
+    "admin_badge": "Admin",
+    "anonymous_user": "Anonym angemeldet",
+    "inventory_title": "Inventar verwalten",
+    "inventory_subtitle": "Materialien, Verbrauch, Rezepte",
+    "orders_title": "Bestellungsübersicht",
+    "orders_subtitle": "Jahresübersicht aller Bestellungen",
+    "users_title": "Benutzer verwalten",
+    "users_subtitle": "Neue Benutzer hinzufügen",
+    "link_google_title": "Mit Google verknüpfen",
+    "link_google_subtitle": "Speichere deine Daten dauerhaft",
+    "link_success": "Konto erfolgreich verknüpft!",
+    "logout": "Abmelden"
+  },
+  "admin_panel": {
+    "title": "Benutzer verwalten",
+    "add_user": "Neuen Benutzer hinzufügen",
+    "no_users": "Keine Benutzer hinzugefügt",
+    "remove_user_title": "Benutzer entfernen?",
+    "remove_user_message": "{email} wird entfernt.",
+    "remove": "Entfernen",
+    "email_label": "E-Mail Adresse",
+    "email_hint": "user@example.com",
+    "name_label": "Name (optional)",
+    "name_hint": "Max Mustermann"
+  },
   "shopping": {
     "title": "Einkaufsliste",
     "empty": "Keine passenden Zutaten aus der Materialliste gefunden.",
@@ -25,14 +65,24 @@
     "total": "Gesamtsumme",
     "order_name": "Eventname",
     "order_name_hint": "z.B. Hochzeit Müller",
+    "order_name_label": "Name der Bestellung *",
+    "person_count_label": "Anzahl Personen *",
+    "person_count_hint": "z.B. 50",
+    "person_count_error": "Bitte eine gültige Personenzahl eingeben",
     "generate_pdf": "PDF erstellen",
-    "name_required": "Bitte gib einen Namen ein.",
+    "name_required": "Name erforderlich",
     "saved_and_generated": "Bestellung gespeichert und PDF erstellt!",
-    "generated_local": "PDF erstellt (offline)"
-  },
-  "common": {
-    "cancel": "Abbrechen",
-    "delete": "Löschen"
+    "generated_local": "PDF erstellt (offline)",
+    "distance_title": "Entfernung zum Veranstaltungsort",
+    "distance_description": "Bitte gib die Entfernung zum Veranstaltungsort ein.",
+    "distance_label": "Entfernung (km)",
+    "distance_hint": "z.B. 150",
+    "distance_error": "Bitte eine gültige Entfernung eingeben",
+    "save_order": "Bestellung speichern",
+    "currency": "Währung:",
+    "drinker_type": "Trinkverhalten:",
+    "no_ingredients": "Keine Zutaten gefunden",
+    "step_of": "Schritt {current} von {total}"
   },
   "offer": {
     "title": "Angebot erstellen",

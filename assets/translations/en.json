@@ -12,6 +12,46 @@
     "tag_cocktail": "Cocktail",
     "tag_shot": "Shot"
   },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "back": "Back",
+    "next": "Next",
+    "save": "Save",
+    "error": "Error",
+    "name": "Name",
+    "pdf": "PDF",
+    "close": "Close",
+    "add": "Add",
+    "user_added": "User added!",
+    "add_error": "Error adding user"
+  },
+  "drawer": {
+    "admin_badge": "Admin",
+    "anonymous_user": "Signed in anonymously",
+    "inventory_title": "Manage Inventory",
+    "inventory_subtitle": "Materials, supplies, recipes",
+    "orders_title": "Orders Overview",
+    "orders_subtitle": "Yearly overview of all orders",
+    "users_title": "Manage Users",
+    "users_subtitle": "Add new users",
+    "link_google_title": "Link with Google",
+    "link_google_subtitle": "Save your data permanently",
+    "link_success": "Account successfully linked!",
+    "logout": "Sign out"
+  },
+  "admin_panel": {
+    "title": "Manage Users",
+    "add_user": "Add new user",
+    "no_users": "No users added",
+    "remove_user_title": "Remove user?",
+    "remove_user_message": "{email} will be removed.",
+    "remove": "Remove",
+    "email_label": "Email address",
+    "email_hint": "user@example.com",
+    "name_label": "Name (optional)",
+    "name_hint": "John Doe"
+  },
   "shopping": {
     "title": "Shopping List",
     "empty": "No matching ingredients found in the material list.",
@@ -25,14 +65,24 @@
     "total": "Total",
     "order_name": "Event name",
     "order_name_hint": "e.g. Miller Wedding",
+    "order_name_label": "Order name *",
+    "person_count_label": "Number of persons *",
+    "person_count_hint": "e.g. 50",
+    "person_count_error": "Please enter a valid number of persons",
     "generate_pdf": "Create PDF",
-    "name_required": "Please enter a name.",
+    "name_required": "Name required",
     "saved_and_generated": "Order saved and PDF created!",
-    "generated_local": "PDF created (offline)"
-  },
-  "common": {
-    "cancel": "Cancel",
-    "delete": "Delete"
+    "generated_local": "PDF created (offline)",
+    "distance_title": "Distance to venue",
+    "distance_description": "Please enter the distance to the venue.",
+    "distance_label": "Distance (km)",
+    "distance_hint": "e.g. 150",
+    "distance_error": "Please enter a valid distance",
+    "save_order": "Save order",
+    "currency": "Currency:",
+    "drinker_type": "Drinking behavior:",
+    "no_ingredients": "No ingredients found",
+    "step_of": "Step {current} of {total}"
   },
   "offer": {
     "title": "Create Offer",

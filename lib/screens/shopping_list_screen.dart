@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,7 +8,6 @@ import '../models/material_item.dart';
 import '../services/pdf_generator.dart';
 import '../state/app_state.dart';
 import '../utils/currency.dart';
-import '../utils/translation.dart';
 
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key, this.loadData});
@@ -45,12 +45,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Entfernung zum Veranstaltungsort'),
+          title: Text('shopping.distance_title'.tr()),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Bitte gib die Entfernung zum Veranstaltungsort ein.',
+              Text(
+                'shopping.distance_description'.tr(),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -58,8 +58,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
-                  labelText: 'Entfernung (km)',
-                  hintText: 'z.B. 150',
+                  labelText: 'shopping.distance_label'.tr(),
+                  hintText: 'shopping.distance_hint'.tr(),
                   border: const OutlineInputBorder(),
                   errorText: errorText,
                   suffixText: 'km',
@@ -71,20 +71,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen'),
+              child: Text('common.cancel'.tr()),
             ),
             FilledButton(
               onPressed: () {
                 final km = int.tryParse(distanceController.text.trim());
                 if (km == null) {
                   setDialogState(
-                    () => errorText = 'Bitte eine gültige Entfernung eingeben',
+                    () => errorText = 'shopping.distance_error'.tr(),
                   );
                   return;
                 }
                 Navigator.pop(context, km);
               },
-              child: const Text('Weiter'),
+              child: Text('common.next'.tr()),
             ),
           ],
         ),
@@ -234,7 +234,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     if (selectedOrderItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(translate(context, 'shopping.no_selection')),
+          content: Text('shopping.no_selection'.tr()),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -252,19 +252,19 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Bestellung speichern'),
+          title: Text('shopping.save_order'.tr()),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${selectedOrderItems.length} Artikel • ${selectedCurrency.format(total)}'),
+                Text('${selectedOrderItems.length} ${'orders.articles'.tr()} • ${selectedCurrency.format(total)}'),
                 const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
                   decoration: InputDecoration(
-                    labelText: 'Name der Bestellung *',
-                    hintText: 'z.B. Hochzeit Meyer',
+                    labelText: 'shopping.order_name_label'.tr(),
+                    hintText: 'shopping.order_name_hint'.tr(),
                     border: const OutlineInputBorder(),
                     errorText: nameError,
                   ),
@@ -278,8 +278,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   controller: personCountController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Anzahl Personen *',
-                    hintText: 'z.B. 50',
+                    labelText: 'shopping.person_count_label'.tr(),
+                    hintText: 'shopping.person_count_hint'.tr(),
                     border: const OutlineInputBorder(),
                     errorText: personCountError,
                   ),
@@ -288,7 +288,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                const Text('Währung:'),
+                Text('shopping.currency'.tr()),
                 const SizedBox(height: 8),
                 SegmentedButton<Currency>(
                   segments: Currency.values.map((c) => ButtonSegment(
@@ -299,24 +299,24 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   onSelectionChanged: (v) => setDialogState(() => selectedCurrency = v.first),
                 ),
                 const SizedBox(height: 16),
-                const Text('Trinkverhalten:'),
+                Text('shopping.drinker_type'.tr()),
                 const SizedBox(height: 8),
                 SegmentedButton<String>(
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: 'light',
-                      label: Text('Wenig'),
-                      icon: Icon(Icons.local_drink),
+                      label: Text('orders.drinker_light'.tr()),
+                      icon: const Icon(Icons.local_drink),
                     ),
                     ButtonSegment(
                       value: 'normal',
-                      label: Text('Normal'),
-                      icon: Icon(Icons.local_bar),
+                      label: Text('orders.drinker_normal'.tr()),
+                      icon: const Icon(Icons.local_bar),
                     ),
                     ButtonSegment(
                       value: 'heavy',
-                      label: Text('Viel'),
-                      icon: Icon(Icons.sports_bar),
+                      label: Text('orders.drinker_heavy'.tr()),
+                      icon: const Icon(Icons.sports_bar),
                     ),
                   ],
                   selected: {drinkerType},
@@ -328,7 +328,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Abbrechen'),
+              child: Text('common.cancel'.tr()),
             ),
             FilledButton(
               onPressed: () {
@@ -336,8 +336,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 final personCount = int.tryParse(personCountController.text.trim()) ?? 0;
                 String? nameErr;
                 String? personErr;
-                if (name.isEmpty) nameErr = 'Name erforderlich';
-                if (personCount <= 0) personErr = 'Bitte eine gültige Personenzahl eingeben';
+                if (name.isEmpty) nameErr = 'shopping.name_required'.tr();
+                if (personCount <= 0) personErr = 'shopping.person_count_error'.tr();
                 if (nameErr != null || personErr != null) {
                   setDialogState(() {
                     nameError = nameErr;
@@ -352,7 +352,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   currency: selectedCurrency,
                 ));
               },
-              child: const Text('PDF erstellen'),
+              child: Text('shopping.generate_pdf'.tr()),
             ),
           ],
         ),
@@ -364,7 +364,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final orderName = result.name;
     if (orderName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name erforderlich')),
+        SnackBar(content: Text('shopping.name_required'.tr())),
       );
       return;
     }
@@ -401,7 +401,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('PDF erstellt!')),
+      SnackBar(content: Text('orders.pdf_created'.tr())),
     );
   }
 
@@ -422,8 +422,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         if (snapshot.hasError || !snapshot.hasData) {
           return Scaffold(
             backgroundColor: colorScheme.surface,
-            appBar: AppBar(title: const Text('Einkaufsliste')),
-            body: const Center(child: Text('Fehler beim Laden')),
+            appBar: AppBar(title: Text('shopping.title'.tr())),
+            body: Center(child: Text('shopping.load_error'.tr())),
           );
         }
 
@@ -502,7 +502,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           children: [
             Icon(Icons.shopping_cart_outlined, size: 64, color: colorScheme.outline),
             const SizedBox(height: 16),
-            Text('Keine Zutaten gefunden', style: TextStyle(color: colorScheme.outline)),
+            Text('shopping.no_ingredients'.tr(), style: TextStyle(color: colorScheme.outline)),
           ],
         ),
       ),
@@ -524,14 +524,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Einkaufsliste',
+                  'shopping.title'.tr(),
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Schritt ${_currentPage + 1} von $totalPages',
+                  'shopping.step_of'.tr(namedArgs: {'current': '${_currentPage + 1}', 'total': '$totalPages'}),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.outline,
                   ),
@@ -1027,7 +1027,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             TextButton.icon(
               onPressed: () => _goToPage(_currentPage - 1),
               icon: const Icon(Icons.arrow_back),
-              label: const Text('Zurück'),
+              label: Text('common.back'.tr()),
             )
           else
             const SizedBox(width: 100),
@@ -1061,13 +1061,13 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   ? () => _export(allItems, total)
                   : null,
               icon: const Icon(Icons.picture_as_pdf),
-              label: const Text('PDF'),
+              label: Text('common.pdf'.tr()),
             )
           else
             FilledButton.icon(
               onPressed: () => _goToPage(_currentPage + 1),
               icon: const Icon(Icons.arrow_forward),
-              label: const Text('Weiter'),
+              label: Text('common.next'.tr()),
             ),
         ],
       ),

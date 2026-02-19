@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../models/recipe.dart';
-import '../utils/translation.dart';
 
 class RecipeSelectionDialog extends StatefulWidget {
   const RecipeSelectionDialog({
@@ -57,7 +57,7 @@ class _RecipeSelectionDialogState extends State<RecipeSelectionDialog> {
                 children: [
                   Expanded(
                     child: Text(
-                      translate(context, 'dialog.title'),
+                      'dialog.title'.tr(),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
@@ -74,7 +74,7 @@ class _RecipeSelectionDialogState extends State<RecipeSelectionDialog> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
-                  hintText: translate(context, 'dialog.search_hint'),
+                  hintText: 'dialog.search_hint'.tr(),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -104,8 +104,8 @@ class _RecipeSelectionDialogState extends State<RecipeSelectionDialog> {
                           ),
                           child: Text(
                             recipe.isShot
-                                ? translate(context, 'dialog.tag_shot')
-                                : translate(context, 'dialog.tag_cocktail'),
+                                ? 'dialog.tag_shot'.tr()
+                                : 'dialog.tag_cocktail'.tr(),
                             style: Theme.of(context)
                                 .textTheme
                                 .labelSmall
@@ -150,7 +150,7 @@ class _RecipeSelectionDialogState extends State<RecipeSelectionDialog> {
                         .toList();
                     Navigator.of(context).pop(selectedRecipes);
                   },
-                  child: Text(translate(context, 'dialog.add_selected')),
+                  child: Text('dialog.add_selected'.tr()),
                 ),
               ),
             ),

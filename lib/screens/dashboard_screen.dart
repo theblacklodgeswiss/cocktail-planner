@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,7 +7,6 @@ import '../models/cocktail_data.dart';
 import '../models/recipe.dart';
 import '../services/auth_service.dart';
 import '../state/app_state.dart';
-import '../utils/translation.dart';
 import '../widgets/recipe_selection_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -74,22 +74,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: Colors.amber,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        'Admin',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      child: Text(
+                        'drawer.admin_badge'.tr(),
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
                 ],
               ),
-              subtitle: Text(user.email ?? (user.isAnonymous ? 'Anonym angemeldet' : '')),
+              subtitle: Text(user.email ?? (user.isAnonymous ? 'drawer.anonymous_user'.tr() : '')),
             ),
             const Divider(),
             if (authService.isAdmin) ...[
               ListTile(
                 leading: const Icon(Icons.inventory),
-                title: const Text('Inventar verwalten'),
-                subtitle: const Text('Materialien, Verbrauch, Rezepte'),
+                title: Text('drawer.inventory_title'.tr()),
+                subtitle: Text('drawer.inventory_subtitle'.tr()),
                 onTap: () {
                   Navigator.pop(ctx);
                   context.go('/admin');
@@ -99,8 +99,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (authService.isAdmin || authService.isSuperAdmin)
               ListTile(
                 leading: const Icon(Icons.bar_chart),
-                title: const Text('Bestellungsübersicht'),
-                subtitle: const Text('Jahresübersicht aller Bestellungen'),
+                title: Text('drawer.orders_title'.tr()),
+                subtitle: Text('drawer.orders_subtitle'.tr()),
                 onTap: () {
                   Navigator.pop(ctx);
                   context.push('/orders');
@@ -109,8 +109,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (authService.canManageUsers)
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings),
-                title: const Text('Benutzer verwalten'),
-                subtitle: const Text('Neue Benutzer hinzufügen'),
+                title: Text('drawer.users_title'.tr()),
+                subtitle: Text('drawer.users_subtitle'.tr()),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showAdminPanel();
@@ -119,21 +119,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (user.isAnonymous)
               ListTile(
                 leading: const Icon(Icons.login),
-                title: const Text('Mit Google verknüpfen'),
-                subtitle: const Text('Speichere deine Daten dauerhaft'),
+                title: Text('drawer.link_google_title'.tr()),
+                subtitle: Text('drawer.link_google_subtitle'.tr()),
                 onTap: () async {
                   Navigator.pop(ctx);
                   try {
                     await authService.linkWithGoogle();
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Konto erfolgreich verknüpft!')),
+                        SnackBar(content: Text('drawer.link_success'.tr())),
                       );
                     }
                   } catch (e) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Fehler: $e')),
+                        SnackBar(content: Text('${'common.error'.tr()}: $e')),
                       );
                     }
                   }
@@ -141,7 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ListTile(
               leading: const Icon(Icons.logout),
-              title: const Text('Abmelden'),
+              title: Text('drawer.logout'.tr()),
               onTap: () async {
                 Navigator.pop(ctx);
                 await authService.signOut();
@@ -164,11 +164,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.admin_panel_settings),
-            SizedBox(width: 8),
-            Text('Benutzer verwalten'),
+            const Icon(Icons.admin_panel_settings),
+            const SizedBox(width: 8),
+            Text('admin_panel.title'.tr()),
           ],
         ),
         content: SizedBox(
@@ -179,7 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               // Add user button
               ListTile(
                 leading: const Icon(Icons.person_add),
-                title: const Text('Neuen Benutzer hinzufügen'),
+                title: Text('admin_panel.add_user'.tr()),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showAddUserDialog();
@@ -188,9 +188,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const Divider(),
               // User list
               if (users.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Keine Benutzer hinzugefügt'),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('admin_panel.no_users'.tr()),
                 )
               else
                 ConstrainedBox(
@@ -212,16 +212,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   final confirm = await showDialog<bool>(
                                     context: listContext,
                                     builder: (c) => AlertDialog(
-                                      title: const Text('Benutzer entfernen?'),
-                                      content: Text('${user.email} wird entfernt.'),
+                                      title: Text('admin_panel.remove_user_title'.tr()),
+                                      content: Text('admin_panel.remove_user_message'.tr(namedArgs: {'email': user.email})),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(c, false),
-                                          child: const Text('Abbrechen'),
+                                          child: Text('common.cancel'.tr()),
                                         ),
                                         FilledButton(
                                           onPressed: () => Navigator.pop(c, true),
-                                          child: const Text('Entfernen'),
+                                          child: Text('admin_panel.remove'.tr()),
                                         ),
                                       ],
                                     ),
@@ -246,7 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Schließen'),
+            child: Text('common.close'.tr()),
           ),
         ],
       ),
@@ -260,28 +260,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Neuen Benutzer hinzufügen'),
+        title: Text('admin_panel.add_user'.tr()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: emailController,
-              decoration: const InputDecoration(
-                labelText: 'E-Mail Adresse',
-                hintText: 'user@example.com',
-                prefixIcon: Icon(Icons.email),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'admin_panel.email_label'.tr(),
+                hintText: 'admin_panel.email_hint'.tr(),
+                prefixIcon: const Icon(Icons.email),
+                border: const OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name (optional)',
-                hintText: 'Max Mustermann',
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'admin_panel.name_label'.tr(),
+                hintText: 'admin_panel.name_hint'.tr(),
+                prefixIcon: const Icon(Icons.person),
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -289,11 +289,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Abbrechen'),
+            child: Text('common.cancel'.tr()),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hinzufügen'),
+            child: Text('common.add'.tr()),
           ),
         ],
       ),
@@ -309,8 +309,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(success 
-                ? 'Benutzer hinzugefügt!' 
-                : 'Fehler beim Hinzufügen'),
+                ? 'common.user_added'.tr() 
+                : 'common.add_error'.tr()),
           ),
         );
         if (success) {
@@ -530,9 +530,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         if (snapshot.hasError || !snapshot.hasData) {
           return Scaffold(
-            appBar: AppBar(title: Text(translate(context, 'dashboard.title'))),
+            appBar: AppBar(title: Text('dashboard.title'.tr())),
             body: Center(
-              child: Text(translate(context, 'dashboard.load_error')),
+              child: Text('dashboard.load_error'.tr()),
             ),
           );
         }
@@ -546,7 +546,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             
             return Scaffold(
               appBar: AppBar(
-                title: Text(translate(context, 'dashboard.title')),
+                title: Text('dashboard.title'.tr()),
                 actions: [
                   if (cocktailRepository.isUsingFirebase)
                     IconButton(
