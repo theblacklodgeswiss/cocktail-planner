@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../data/cocktail_repository.dart';
 import '../models/cocktail_data.dart';
 import '../models/material_item.dart';
+import '../services/pdf_generator.dart';
 import '../state/app_state.dart';
 import '../utils/translation.dart';
 
@@ -20,6 +21,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   late final Future<CocktailData> _dataFuture;
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, int> _quantities = {};
+  final Set<String> _selectedItems = {};
 
   @override
   void initState() {
@@ -70,10 +72,149 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   double _calculateTotal(List<MaterialItem> items) {
     double total = 0;
     for (final item in items) {
-      final qty = _quantities[_itemKey(item)] ?? 0;
-      total += item.price * qty;
+      final key = _itemKey(item);
+      final qty = _quantities[key] ?? 0;
+      if (qty > 0 && _selectedItems.contains(key)) {
+        total += item.price * qty;
+      }
     }
     return total;
+  }
+
+  /// Get selected items with their quantities for export
+  List<OrderItem> _getSelectedOrderItems(List<MaterialItem> allItems) {
+    final result = <OrderItem>[];
+    for (final item in allItems) {
+      final key = _itemKey(item);
+      final qty = _quantities[key] ?? 0;
+      if (qty > 0 && _selectedItems.contains(key)) {
+        result.add(OrderItem(item: item, quantity: qty));
+      }
+    }
+    return result;
+  }
+
+  /// Show export dialog and generate PDF
+  Future<void> _showExportDialog(
+    BuildContext context,
+    List<MaterialItem> allItems,
+    double total,
+  ) async {
+    final selectedOrderItems = _getSelectedOrderItems(allItems);
+    
+    if (selectedOrderItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(translate(context, 'shopping.no_selection')),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
+
+    final nameController = TextEditingController();
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(translate(context, 'shopping.export_title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${selectedOrderItems.length} ${translate(context, 'shopping.items_selected')}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${translate(context, 'shopping.total')}: ${total.toStringAsFixed(2)} CHF',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: translate(context, 'shopping.order_name'),
+                hintText: translate(context, 'shopping.order_name_hint'),
+                border: const OutlineInputBorder(),
+              ),
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(translate(context, 'common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(translate(context, 'shopping.generate_pdf')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final orderName = nameController.text.trim();
+    if (orderName.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(translate(context, 'shopping.name_required')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    final orderDate = DateTime.now();
+
+    // Save to Firestore
+    final orderId = await cocktailRepository.saveOrder(
+      name: orderName,
+      date: orderDate,
+      items: selectedOrderItems.map((oi) => {
+        'name': oi.item.name,
+        'unit': oi.item.unit,
+        'price': oi.item.price,
+        'currency': oi.item.currency,
+        'note': oi.item.note,
+        'quantity': oi.quantity,
+        'total': oi.total,
+      }).toList(),
+      total: total,
+    );
+
+    // Generate and download PDF
+    await PdfGenerator.generateAndDownload(
+      orderName: orderName,
+      orderDate: orderDate,
+      items: selectedOrderItems,
+      grandTotal: total,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          orderId != null
+              ? translate(context, 'shopping.saved_and_generated')
+              : translate(context, 'shopping.generated_local'),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
   }
 
   @override
@@ -124,6 +265,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   context,
                   separated.ingredients,
                   separated.fixedValues,
+                  allItems,
                   total,
                   colorScheme,
                   textTheme,
@@ -140,7 +282,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   ) {
     return CustomScrollView(
       slivers: [
-        _buildSliverAppBar(context, colorScheme, textTheme, null),
+        _buildSliverAppBar(context, colorScheme, textTheme, null, null),
         SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
@@ -171,6 +313,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     BuildContext context,
     List<MaterialItem> ingredients,
     List<MaterialItem> fixedValues,
+    List<MaterialItem> allItems,
     double total,
     ColorScheme colorScheme,
     TextTheme textTheme,
@@ -183,7 +326,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           // Desktop: Two columns side by side
           return CustomScrollView(
             slivers: [
-              _buildSliverAppBar(context, colorScheme, textTheme, total),
+              _buildSliverAppBar(context, colorScheme, textTheme, total, allItems),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
                 sliver: SliverToBoxAdapter(
@@ -225,7 +368,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           // Mobile/Tablet: Stacked vertically
           return CustomScrollView(
             slivers: [
-              _buildSliverAppBar(context, colorScheme, textTheme, total),
+              _buildSliverAppBar(context, colorScheme, textTheme, total, allItems),
               // Ingredients section
               if (ingredients.isNotEmpty) ...[
                 _buildSectionHeader(
@@ -383,7 +526,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     ColorScheme colorScheme,
     TextTheme textTheme,
     double? total,
+    List<MaterialItem>? allItems,
   ) {
+    final hasSelection = _selectedItems.isNotEmpty && total != null && total > 0;
+    
     return SliverAppBar.large(
       backgroundColor: colorScheme.surface,
       surfaceTintColor: Colors.transparent,
@@ -398,20 +544,46 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: hasSelection && allItems != null
+                          ? () => _showExportDialog(context, allItems, total)
+                          : null,
                       borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${total.toStringAsFixed(2)} CHF',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onPrimaryContainer,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: hasSelection
+                              ? colorScheme.primary
+                              : colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (hasSelection) ...[
+                              Icon(
+                                Icons.picture_as_pdf,
+                                size: 18,
+                                color: colorScheme.onPrimary,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(
+                              '${total.toStringAsFixed(2)} CHF',
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: hasSelection
+                                    ? colorScheme.onPrimary
+                                    : colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -431,25 +603,50 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final key = _itemKey(item);
     final quantity = _quantities[key] ?? 0;
     final hasQuantity = quantity > 0;
+    final isSelected = _selectedItems.contains(key);
     final itemTotal = item.price * quantity;
 
     return Container(
       decoration: BoxDecoration(
-        color: hasQuantity
-            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: isSelected && hasQuantity
+            ? colorScheme.primaryContainer.withValues(alpha: 0.4)
+            : hasQuantity
+                ? colorScheme.primaryContainer.withValues(alpha: 0.2)
+                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasQuantity
-              ? colorScheme.primary.withValues(alpha: 0.3)
-              : colorScheme.outline.withValues(alpha: 0.1),
-          width: 1,
+          color: isSelected && hasQuantity
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : hasQuantity
+                  ? colorScheme.primary.withValues(alpha: 0.2)
+                  : colorScheme.outline.withValues(alpha: 0.1),
+          width: isSelected && hasQuantity ? 2 : 1,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
+            // Checkbox
+            if (hasQuantity)
+              Checkbox(
+                value: isSelected,
+                onChanged: (value) {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (value == true) {
+                      _selectedItems.add(key);
+                    } else {
+                      _selectedItems.remove(key);
+                    }
+                  });
+                },
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              )
+            else
+              const SizedBox(width: 48), // Space for alignment
             // Item info
             Expanded(
               child: Column(
@@ -466,26 +663,32 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.outline,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (item.note.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      item.note,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.outline.withValues(alpha: 0.7),
-                        fontStyle: FontStyle.italic,
+                  Row(
+                    children: [
+                      Text(
+                        '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.outline,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      if (item.note.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: colorScheme.secondaryContainer,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            item.note,
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSecondaryContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -503,7 +706,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   itemTotal.toStringAsFixed(2),
                   style: textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: colorScheme.primary,
+                    color: isSelected ? colorScheme.primary : colorScheme.outline,
                   ),
                   textAlign: TextAlign.end,
                 ),

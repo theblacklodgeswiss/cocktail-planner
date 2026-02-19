@@ -18,6 +18,19 @@
     "amount_hint": "0",
     "load_error": "Einkaufsliste konnte nicht geladen werden.",
     "section_ingredients": "Zutaten",
-    "section_fixed_costs": "Fixkosten"
+    "section_fixed_costs": "Fixkosten",
+    "no_selection": "Bitte wähle mindestens einen Artikel aus.",
+    "export_title": "Bestellung exportieren",
+    "items_selected": "Artikel ausgewählt",
+    "total": "Gesamtsumme",
+    "order_name": "Eventname",
+    "order_name_hint": "z.B. Hochzeit Müller",
+    "generate_pdf": "PDF erstellen",
+    "name_required": "Bitte gib einen Namen ein.",
+    "saved_and_generated": "Bestellung gespeichert und PDF erstellt!",
+    "generated_local": "PDF erstellt (offline)"
+  },
+  "common": {
+    "cancel": "Abbrechen"
   }
 }

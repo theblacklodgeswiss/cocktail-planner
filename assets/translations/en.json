@@ -18,6 +18,19 @@
     "amount_hint": "0",
     "load_error": "Could not load shopping list.",
     "section_ingredients": "Ingredients",
-    "section_fixed_costs": "Fixed Costs"
+    "section_fixed_costs": "Fixed Costs",
+    "no_selection": "Please select at least one item.",
+    "export_title": "Export Order",
+    "items_selected": "items selected",
+    "total": "Total",
+    "order_name": "Event name",
+    "order_name_hint": "e.g. Miller Wedding",
+    "generate_pdf": "Create PDF",
+    "name_required": "Please enter a name.",
+    "saved_and_generated": "Order saved and PDF created!",
+    "generated_local": "PDF created (offline)"
+  },
+  "common": {
+    "cancel": "Cancel"
   }
 }

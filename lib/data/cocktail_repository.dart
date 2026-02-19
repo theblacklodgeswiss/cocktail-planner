@@ -190,6 +190,38 @@ class CocktailRepository {
   void clearCache() {
     _cached = null;
   }
+
+  /// Collection for saved orders
+  CollectionReference<Map<String, dynamic>> get _ordersCollection =>
+      _firestore.collection('orders');
+
+  /// Save an order to Firestore
+  /// Returns the order ID if successful, null if Firebase unavailable
+  Future<String?> saveOrder({
+    required String name,
+    required DateTime date,
+    required List<Map<String, dynamic>> items,
+    required double total,
+  }) async {
+    if (!_firebaseAvailable) {
+      debugPrint('Firebase not available, order not saved to cloud');
+      return null;
+    }
+
+    try {
+      final docRef = await _ordersCollection.add({
+        'name': name,
+        'date': date.toIso8601String(),
+        'items': items,
+        'total': total,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Failed to save order: $e');
+      return null;
+    }
+  }
 }
 
 final CocktailRepository cocktailRepository = CocktailRepository();

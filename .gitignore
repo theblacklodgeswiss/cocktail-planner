@@ -43,3 +43,4 @@ app.*.map.json
 # Firebase
 .firebase/
 firebase-debug.log
+lib/firebase_options.dart

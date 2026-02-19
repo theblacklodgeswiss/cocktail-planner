@@ -1,15 +1,27 @@
 {
-    "name": "Shopping List",
-    "short_name": "Shop List",
-    "start_url": ".",
+    "name": "BlackLodge Cocktail Planner",
+    "short_name": "BL Planner",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#FFFFFF",
+    "background_color": "#1a1a1a",
     "theme_color": "#4CAF50",
-    "description": "A Flutter-based shopping list web app with PWA support.",
-    "orientation": "portrait-primary",
+    "description": "Cocktail Planner & Shopping List Generator by BlackLodge",
+    "orientation": "any",
     "prefer_related_applications": false,
     "scope": "/",
+    "id": "blacklodge-cocktail-planner",
+    "categories": ["food", "productivity", "utilities"],
     "icons": [
+        {
+            "src": "icons/favicon-16x16.png",
+            "sizes": "16x16",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/favicon-32x32.png",
+            "sizes": "32x32",
+            "type": "image/png"
+        },
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
@@ -31,6 +43,22 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        },
+        {
+            "src": "icons/apple-touch-icon.png",
+            "sizes": "180x180",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Einkaufsliste",
+            "short_name": "Liste",
+            "description": "Direkt zur Einkaufsliste",
+            "url": "/shopping-list",
+            "icons": [{"src": "icons/Icon-192.png", "sizes": "192x192"}]
         }
     ]
 }
