@@ -22,15 +22,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, int> _quantities = {};
   final Set<String> _selectedItems = {};
+  
+  late PageController _pageController;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
+    _pageController = PageController();
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     for (final controller in _controllers.values) {
       controller.dispose();
     }
@@ -46,7 +51,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         final value = int.tryParse(controller.text) ?? 0;
         setState(() {
           _quantities[key] = value;
-          // Auto-select when quantity > 0, deselect when 0
           if (value > 0) {
             _selectedItems.add(key);
           } else {
@@ -58,13 +62,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     });
   }
 
-  /// Returns ingredients grouped by cocktail, fixedValues, and ingredientToCocktails map
   ({
     Map<String, List<MaterialItem>> ingredientsByCocktail,
     List<MaterialItem> fixedValues,
     Map<String, List<String>> ingredientToCocktails,
   }) _buildSeparatedItems(CocktailData data) {
-    // Build map: ingredient name -> list of cocktail names that use it
     final ingredientToCocktails = <String, List<String>>{};
     for (final recipe in appState.selectedRecipes) {
       for (final ingredient in recipe.ingredients) {
@@ -73,8 +75,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
 
     final requiredIngredients = ingredientToCocktails.keys.toSet();
-    
-    // Build material lookup
     final materialByName = <String, MaterialItem>{};
     for (final item in data.materials) {
       if (requiredIngredients.contains(item.name)) {
@@ -82,7 +82,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    // Group ingredients by cocktail (each ingredient only appears once, under its first cocktail)
     final usedIngredients = <String>{};
     final ingredientsByCocktail = <String, List<MaterialItem>>{};
     
@@ -110,11 +109,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
-  /// Flattened list of all ingredients for total calculation
-  List<MaterialItem> _getAllIngredients(Map<String, List<MaterialItem>> ingredientsByCocktail) {
-    return ingredientsByCocktail.values.expand((items) => items).toList();
-  }
-
   String _itemKey(MaterialItem item) => '${item.name}|${item.unit}';
 
   double _calculateTotal(List<MaterialItem> items) {
@@ -129,7 +123,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     return total;
   }
 
-  /// Get selected items with their quantities for export
   List<OrderItem> _getSelectedOrderItems(List<MaterialItem> allItems) {
     final result = <OrderItem>[];
     for (final item in allItems) {
@@ -142,12 +135,15 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     return result;
   }
 
-  /// Show export dialog and generate PDF
-  Future<void> _showExportDialog(
-    BuildContext context,
-    List<MaterialItem> allItems,
-    double total,
-  ) async {
+  void _goToPage(int page) {
+    _pageController.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _export(List<MaterialItem> allItems, double total) async {
     final selectedOrderItems = _getSelectedOrderItems(allItems);
     
     if (selectedOrderItems.isEmpty) {
@@ -165,46 +161,31 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(translate(context, 'shopping.export_title')),
+        title: const Text('Bestellung speichern'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${selectedOrderItems.length} ${translate(context, 'shopping.items_selected')}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${translate(context, 'shopping.total')}: ${total.toStringAsFixed(2)} CHF',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
+            Text('${selectedOrderItems.length} Artikel • ${total.toStringAsFixed(2)} CHF'),
             const SizedBox(height: 16),
             TextField(
               controller: nameController,
-              decoration: InputDecoration(
-                labelText: translate(context, 'shopping.order_name'),
-                hintText: translate(context, 'shopping.order_name_hint'),
-                border: const OutlineInputBorder(),
+              decoration: const InputDecoration(
+                labelText: 'Name der Bestellung',
+                hintText: 'z.B. Hochzeit Meyer',
+                border: OutlineInputBorder(),
               ),
               autofocus: true,
-              textCapitalization: TextCapitalization.words,
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(translate(context, 'common.cancel')),
+            child: const Text('Abbrechen'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(translate(context, 'shopping.generate_pdf')),
+            child: const Text('PDF erstellen'),
           ),
         ],
       ),
@@ -214,21 +195,15 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     final orderName = nameController.text.trim();
     if (orderName.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(translate(context, 'shopping.name_required')),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name erforderlich')),
+      );
       return;
     }
 
     final orderDate = DateTime.now();
 
-    // Save to Firestore
-    final orderId = await cocktailRepository.saveOrder(
+    await cocktailRepository.saveOrder(
       name: orderName,
       date: orderDate,
       items: selectedOrderItems.map((oi) => {
@@ -243,7 +218,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       total: total,
     );
 
-    // Generate and download PDF
     await PdfGenerator.generateAndDownload(
       orderName: orderName,
       orderDate: orderDate,
@@ -252,23 +226,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
 
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          orderId != null
-              ? translate(context, 'shopping.saved_and_generated')
-              : translate(context, 'shopping.generated_local'),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
+      const SnackBar(content: Text('PDF erstellt!')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     return FutureBuilder<CocktailData>(
       future: _dataFuture,
@@ -283,579 +248,299 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         if (snapshot.hasError || !snapshot.hasData) {
           return Scaffold(
             backgroundColor: colorScheme.surface,
-            appBar: AppBar(
-              title: Text(translate(context, 'shopping.title')),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-            ),
-            body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: colorScheme.error),
-                  const SizedBox(height: 16),
-                  Text(translate(context, 'shopping.load_error')),
-                ],
-              ),
-            ),
+            appBar: AppBar(title: const Text('Einkaufsliste')),
+            body: const Center(child: Text('Fehler beim Laden')),
           );
         }
 
         final separated = _buildSeparatedItems(snapshot.data!);
-        final allIngredients = _getAllIngredients(separated.ingredientsByCocktail);
+        final allIngredients = separated.ingredientsByCocktail.values
+            .expand((items) => items)
+            .toList();
         final allItems = [...allIngredients, ...separated.fixedValues];
         final total = _calculateTotal(allItems);
 
+        if (allItems.isEmpty) {
+          return _buildEmptyState(colorScheme);
+        }
+
+        // Build pages: each cocktail group + fixedValues + summary
+        final cocktailNames = separated.ingredientsByCocktail.keys.toList();
+        final totalPages = cocktailNames.length + 
+            (separated.fixedValues.isNotEmpty ? 1 : 0) + 1; // +1 for summary
+
         return Scaffold(
           backgroundColor: colorScheme.surface,
-          body: allItems.isEmpty
-              ? _buildEmptyState(context, colorScheme, textTheme)
-              : _buildShoppingList(
-                  context,
-                  separated.ingredientsByCocktail,
-                  separated.fixedValues,
-                  separated.ingredientToCocktails,
-                  allItems,
-                  total,
-                  colorScheme,
-                  textTheme,
+          body: SafeArea(
+            child: Column(
+              children: [
+                // Header with back button and progress
+                _buildHeader(colorScheme, totalPages),
+                
+                // Page content
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: (page) => setState(() => _currentPage = page),
+                    itemCount: totalPages,
+                    itemBuilder: (context, index) {
+                      if (index < cocktailNames.length) {
+                        // Cocktail ingredient page
+                        final cocktailName = cocktailNames[index];
+                        final items = separated.ingredientsByCocktail[cocktailName]!;
+                        return _buildCocktailPage(
+                          cocktailName,
+                          items,
+                          separated.ingredientToCocktails,
+                          colorScheme,
+                        );
+                      } else if (index == cocktailNames.length && separated.fixedValues.isNotEmpty) {
+                        // FixedValues page
+                        return _buildFixedValuesPage(separated.fixedValues, colorScheme);
+                      } else {
+                        // Summary page
+                        return _buildSummaryPage(allItems, total, colorScheme);
+                      }
+                    },
+                  ),
                 ),
-          floatingActionButton: cocktailRepository.isUsingFirebase
-              ? FloatingActionButton.extended(
-                  onPressed: () => _showAddItemDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Neu'),
-                )
-              : null,
+                
+                // Bottom navigation
+                _buildBottomNav(totalPages, allItems, total, colorScheme),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  Future<void> _showAddItemDialog(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => const _AddItemDialog(),
+  Widget _buildEmptyState(ColorScheme colorScheme) {
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shopping_cart_outlined, size: 64, color: colorScheme.outline),
+            const SizedBox(height: 16),
+            Text('Keine Zutaten gefunden', style: TextStyle(color: colorScheme.outline)),
+          ],
+        ),
+      ),
     );
-    
-    if (result == true && mounted) {
-      // Reload data
-      setState(() {
-        _dataFuture = cocktailRepository.load();
-      });
-    }
   }
 
-  Widget _buildEmptyState(
-    BuildContext context,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    return CustomScrollView(
-      slivers: [
-        _buildSliverAppBar(context, colorScheme, textTheme, null, null),
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
+  Widget _buildHeader(ColorScheme colorScheme, int totalPages) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.shopping_cart_outlined,
-                  size: 64,
-                  color: colorScheme.outline,
-                ),
-                const SizedBox(height: 16),
                 Text(
-                  translate(context, 'shopping.empty'),
-                  style: textTheme.bodyLarge?.copyWith(
+                  'Einkaufsliste',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Schritt ${_currentPage + 1} von $totalPages',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.outline,
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildShoppingList(
-    BuildContext context,
-    Map<String, List<MaterialItem>> ingredientsByCocktail,
-    List<MaterialItem> fixedValues,
-    Map<String, List<String>> ingredientToCocktails,
-    List<MaterialItem> allItems,
-    double total,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    final cocktailNames = ingredientsByCocktail.keys.toList();
-    
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 900;
-
-        if (isWide) {
-          // Desktop: Two columns side by side
-          return CustomScrollView(
-            slivers: [
-              _buildSliverAppBar(context, colorScheme, textTheme, total, allItems),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-                sliver: SliverToBoxAdapter(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Ingredients column (grouped by cocktail)
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final cocktailName in cocktailNames) ...[
-                              _buildCocktailSection(
-                                context,
-                                cocktailName,
-                                ingredientsByCocktail[cocktailName]!,
-                                ingredientToCocktails,
-                                colorScheme,
-                                textTheme,
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      // Fixed values column
-                      Expanded(
-                        flex: 2,
-                        child: _buildSection(
-                          context,
-                          translate(context, 'shopping.section_fixed_costs'),
-                          Icons.receipt_long,
-                          fixedValues,
-                          {},
-                          colorScheme,
-                          textTheme,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        } else {
-          // Mobile/Tablet: Stacked vertically
-          return CustomScrollView(
-            slivers: [
-              _buildSliverAppBar(context, colorScheme, textTheme, total, allItems),
-              // Cocktail sections
-              for (final cocktailName in cocktailNames) ...[
-                _buildCocktailSectionHeader(context, cocktailName, colorScheme, textTheme),
-                _buildItemsSliver(ingredientsByCocktail[cocktailName]!, ingredientToCocktails, colorScheme, textTheme),
-              ],
-              // Fixed values section
-              if (fixedValues.isNotEmpty) ...[
-                _buildSectionHeader(
-                  context,
-                  translate(context, 'shopping.section_fixed_costs'),
-                  Icons.receipt_long,
-                  colorScheme,
-                  textTheme,
-                ),
-                _buildItemsSliver(fixedValues, {}, colorScheme, textTheme),
-              ],
-              // Bottom padding
-              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-            ],
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildCocktailSection(
-    BuildContext context,
+  Widget _buildCocktailPage(
     String cocktailName,
     List<MaterialItem> items,
     Map<String, List<String>> ingredientToCocktails,
     ColorScheme colorScheme,
-    TextTheme textTheme,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Cocktail header
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
+    final isShot = cocktailName.toLowerCase().contains('shot');
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          // Cocktail header with icon
+          Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
+                  color: isShot 
+                      ? Colors.orange.withValues(alpha: 0.15)
+                      : Colors.green.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  Icons.local_bar,
-                  size: 20,
-                  color: colorScheme.onPrimaryContainer,
+                  isShot ? Icons.wine_bar : Icons.local_bar,
+                  color: isShot ? Colors.orange : Colors.green,
+                  size: 28,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  cocktailName,
-                  style: textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${items.length}',
-                  style: textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Items
-        ...items.map((item) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildItemCard(context, item, ingredientToCocktails, colorScheme, textTheme),
-        )),
-      ],
-    );
-  }
-
-  SliverToBoxAdapter _buildCocktailSectionHeader(
-    BuildContext context,
-    String cocktailName,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.local_bar,
-                size: 20,
-                color: colorScheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                cocktailName,
-                style: textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection(
-    BuildContext context,
-    String title,
-    IconData icon,
-    List<MaterialItem> items,
-    Map<String, List<String>> ingredientToCocktails,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    if (items.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section header
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${items.length}',
-                  style: textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Items
-        ...items.map((item) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildItemCard(context, item, ingredientToCocktails, colorScheme, textTheme),
-        )),
-      ],
-    );
-  }
-
-  SliverToBoxAdapter _buildSectionHeader(
-    BuildContext context,
-    String title,
-    IconData icon,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: colorScheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  SliverPadding _buildItemsSliver(
-    List<MaterialItem> items,
-    Map<String, List<String>> ingredientToCocktails,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildItemCard(context, items[index], ingredientToCocktails, colorScheme, textTheme),
-          ),
-          childCount: items.length,
-        ),
-      ),
-    );
-  }
-
-  SliverAppBar _buildSliverAppBar(
-    BuildContext context,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-    double? total,
-    List<MaterialItem>? allItems,
-  ) {
-    final hasSelection = _selectedItems.isNotEmpty && total != null && total > 0;
-    
-    return SliverAppBar.large(
-      backgroundColor: colorScheme.surface,
-      surfaceTintColor: Colors.transparent,
-      title: Text(
-        translate(context, 'shopping.title'),
-        style: textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      actions: total != null
-          ? [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Center(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: hasSelection && allItems != null
-                          ? () => _showExportDialog(context, allItems, total)
-                          : null,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: hasSelection
-                              ? colorScheme.primary
-                              : colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (hasSelection) ...[
-                              Icon(
-                                Icons.picture_as_pdf,
-                                size: 18,
-                                color: colorScheme.onPrimary,
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            Text(
-                              '${total.toStringAsFixed(2)} CHF',
-                              style: textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: hasSelection
-                                    ? colorScheme.onPrimary
-                                    : colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ],
-                        ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cocktailName,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
+                    Text(
+                      '${items.length} Zutaten',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.outline,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ]
-          : null,
+            ],
+          ),
+          const SizedBox(height: 32),
+          
+          // Ingredients list
+          ...items.map((item) => _buildItemCard(item, ingredientToCocktails, colorScheme)),
+          
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFixedValuesPage(List<MaterialItem> items, ColorScheme colorScheme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.attach_money,
+                  color: Colors.purple,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fixkosten & Material',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${items.length} Positionen',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          
+          // Items list
+          ...items.map((item) => _buildItemCard(item, {}, colorScheme)),
+          
+          const SizedBox(height: 100),
+        ],
+      ),
     );
   }
 
   Widget _buildItemCard(
-    BuildContext context,
     MaterialItem item,
     Map<String, List<String>> ingredientToCocktails,
     ColorScheme colorScheme,
-    TextTheme textTheme,
   ) {
     final key = _itemKey(item);
-    final quantity = _quantities[key] ?? 0;
-    final hasQuantity = quantity > 0;
-    final isSelected = _selectedItems.contains(key);
-    final itemTotal = item.price * quantity;
+    final controller = _controllerFor(key);
+    final qty = _quantities[key] ?? 0;
+    final isSelected = qty > 0;
     final cocktails = ingredientToCocktails[item.name] ?? [];
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isSelected && hasQuantity
-            ? colorScheme.primaryContainer.withValues(alpha: 0.4)
-            : hasQuantity
-                ? colorScheme.primaryContainer.withValues(alpha: 0.2)
-                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: isSelected 
+            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSelected && hasQuantity
-              ? colorScheme.primary.withValues(alpha: 0.5)
-              : hasQuantity
-                  ? colorScheme.primary.withValues(alpha: 0.2)
-                  : colorScheme.outline.withValues(alpha: 0.1),
-          width: isSelected && hasQuantity ? 2 : 1,
+          color: isSelected ? colorScheme.primary : Colors.transparent,
+          width: 2,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Checkbox
-            if (hasQuantity)
-              Checkbox(
-                value: isSelected,
-                onChanged: (value) {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    if (value == true) {
-                      _selectedItems.add(key);
-                    } else {
-                      _selectedItems.remove(key);
-                    }
-                  });
-                },
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              )
-            else
-              const SizedBox(width: 48),
-            // Item info (left side)
+            // Item info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     item.name,
-                    style: textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  Row(
                     children: [
                       Text(
-                        '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}',
-                        style: textTheme.bodySmall?.copyWith(
+                        '${item.unit} • ${item.price.toStringAsFixed(2)} CHF',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.outline,
                         ),
                       ),
-                      if (item.note.isNotEmpty)
+                      if (item.note.isNotEmpty) ...[
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -864,60 +549,107 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           ),
                           child: Text(
                             item.note,
-                            style: textTheme.labelSmall?.copyWith(
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: colorScheme.onSecondaryContainer,
                             ),
                           ),
                         ),
+                      ],
                     ],
                   ),
-                  // Cocktails that use this ingredient
-                  if (cocktails.isNotEmpty) ...[
+                  if (cocktails.length > 1) ...[
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 4,
-                      runSpacing: 4,
-                      children: cocktails.map((cocktail) => Container(
+                      children: cocktails.map((c) => Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: colorScheme.tertiaryContainer,
+                          color: Colors.green.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          cocktail,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onTertiaryContainer,
+                          c,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Colors.green.shade700,
                             fontSize: 10,
                           ),
                         ),
                       )).toList(),
                     ),
                   ],
+                  // Show subtotal when qty > 0
+                  if (isSelected) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '${(item.price * qty).toStringAsFixed(2)} CHF',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            // Right side: Stepper + Price below
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Quantity controls
-                _buildQuantityControl(
-                  context, key, colorScheme, textTheme,
-                ),
-                // Item total below stepper
-                if (hasQuantity) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    '${itemTotal.toStringAsFixed(2)} CHF',
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: isSelected ? colorScheme.primary : colorScheme.outline,
+            
+            // Quantity stepper - always visible
+            const SizedBox(width: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: isSelected 
+                    ? colorScheme.surface 
+                    : colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove, size: 18),
+                    onPressed: qty > 0
+                        ? () {
+                            final newQty = qty - 1;
+                            _quantities[key] = newQty;
+                            controller.text = newQty > 0 ? newQty.toString() : '';
+                            if (newQty > 0) {
+                              _selectedItems.add(key);
+                            } else {
+                              _selectedItems.remove(key);
+                            }
+                          }
+                        : null,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  SizedBox(
+                    width: 40,
+                    child: TextField(
+                      controller: controller,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
+                        hintText: '0',
+                      ),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.add, size: 18),
+                    onPressed: () {
+                      final newQty = qty + 1;
+                      _quantities[key] = newQty;
+                      controller.text = newQty.toString();
+                      _selectedItems.add(key);
+                    },
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ],
-              ],
+              ),
             ),
           ],
         ),
@@ -925,310 +657,246 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
-  Widget _buildQuantityControl(
-    BuildContext context,
-    String key,
-    ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
-    final controller = _controllerFor(key);
-    final quantity = _quantities[key] ?? 0;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildSummaryPage(List<MaterialItem> allItems, double total, ColorScheme colorScheme) {
+    final selectedItems = _getSelectedOrderItems(allItems);
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Minus button
-          _buildStepperButton(
-            icon: Icons.remove,
-            onPressed: quantity > 0
-                ? () {
-                    HapticFeedback.lightImpact();
-                    final newQty = (quantity - 1).clamp(0, 999);
-                    controller.text = newQty > 0 ? newQty.toString() : '';
-                  }
-                : null,
-            colorScheme: colorScheme,
-          ),
-          // Text field
-          SizedBox(
-            width: 48,
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: InputDecoration(
-                hintText: '0',
-                hintStyle: textTheme.titleMedium?.copyWith(
-                  color: colorScheme.outline.withValues(alpha: 0.5),
+          const SizedBox(height: 20),
+          // Header
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
+                child: Icon(
+                  Icons.receipt_long,
+                  color: colorScheme.onPrimaryContainer,
+                  size: 28,
+                ),
               ),
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(3),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Zusammenfassung',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${selectedItems.length} Artikel ausgewählt',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          
+          // Total card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colorScheme.primary,
+                  colorScheme.primary.withValues(alpha: 0.8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Gesamtbetrag',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onPrimary.withValues(alpha: 0.8),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${total.toStringAsFixed(2)} CHF',
+                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onPrimary,
+                  ),
+                ),
               ],
             ),
           ),
-          // Plus button
-          _buildStepperButton(
-            icon: Icons.add,
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              final newQty = (quantity + 1).clamp(0, 999);
-              controller.text = newQty.toString();
-            },
-            colorScheme: colorScheme,
-          ),
+          const SizedBox(height: 24),
+          
+          // Selected items list
+          if (selectedItems.isNotEmpty) ...[
+            Text(
+              'Ausgewählte Artikel',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...selectedItems.map((oi) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${oi.quantity}x',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      oi.item.name,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  Text(
+                    '${oi.total.toStringAsFixed(2)} CHF',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ] else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.remove_shopping_cart, size: 48, color: colorScheme.outline),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Keine Artikel ausgewählt',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: colorScheme.outline,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Gehe zurück und wähle Artikel aus',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  Widget _buildStepperButton({
-    required IconData icon,
-    required VoidCallback? onPressed,
-    required ColorScheme colorScheme,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          child: Icon(
-            icon,
-            size: 20,
-            color: onPressed != null
-                ? colorScheme.primary
-                : colorScheme.outline.withValues(alpha: 0.3),
+  Widget _buildBottomNav(int totalPages, List<MaterialItem> allItems, double total, ColorScheme colorScheme) {
+    final isLastPage = _currentPage == totalPages - 1;
+    final isFirstPage = _currentPage == 0;
+    final selectedItems = _getSelectedOrderItems(allItems);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
-        ),
+        ],
       ),
-    );
-  }
-}
-
-enum ItemType { ingredient, fixedValue }
-
-class _AddItemDialog extends StatefulWidget {
-  const _AddItemDialog();
-
-  @override
-  State<_AddItemDialog> createState() => _AddItemDialogState();
-}
-
-class _AddItemDialogState extends State<_AddItemDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _unitController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _noteController = TextEditingController();
-  
-  ItemType _selectedType = ItemType.fixedValue;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _unitController.dispose();
-    _priceController.dispose();
-    _noteController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    setState(() => _isLoading = true);
-    
-    final success = await cocktailRepository.addMaterial(
-      name: _nameController.text.trim(),
-      unit: _unitController.text.trim(),
-      price: double.tryParse(_priceController.text) ?? 0,
-      currency: 'CHF',
-      note: _noteController.text.trim(),
-      isFixedValue: _selectedType == ItemType.fixedValue,
-    );
-    
-    if (!mounted) return;
-    
-    setState(() => _isLoading = false);
-    
-    if (success) {
-      Navigator.of(context).pop(true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Item erfolgreich hinzugefügt!')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fehler beim Hinzufügen')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Neues Item hinzufügen'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Type selection
-              const Text('Typ:', style: TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              SegmentedButton<ItemType>(
-                segments: const [
-                  ButtonSegment(
-                    value: ItemType.ingredient,
-                    label: Text('Zutat'),
-                    icon: Icon(Icons.restaurant),
-                  ),
-                  ButtonSegment(
-                    value: ItemType.fixedValue,
-                    label: Text('Fixkosten'),
-                    icon: Icon(Icons.attach_money),
-                  ),
-                ],
-                selected: {_selectedType},
-                onSelectionChanged: (selection) {
-                  setState(() => _selectedType = selection.first);
-                },
-              ),
-              const SizedBox(height: 16),
-              
-              // Name
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name *',
-                  hintText: 'z.B. Strohhalme',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Name ist erforderlich';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              
-              // Unit and Price in a row
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _unitController,
-                      decoration: const InputDecoration(
-                        labelText: 'Einheit *',
-                        hintText: 'z.B. Stk, 100er Pack',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Erforderlich';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _priceController,
-                      decoration: const InputDecoration(
-                        labelText: 'Preis (CHF) *',
-                        hintText: '0.00',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Erforderlich';
-                        }
-                        if (double.tryParse(value) == null) {
-                          return 'Ungültig';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              
-              // Note
-              TextFormField(
-                controller: _noteController,
-                decoration: const InputDecoration(
-                  labelText: 'Bemerkung',
-                  hintText: 'z.B. Kaufland, Amazon',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              
-              if (_selectedType == ItemType.ingredient) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          // Back button
+          if (!isFirstPage)
+            TextButton.icon(
+              onPressed: () => _goToPage(_currentPage - 1),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Zurück'),
+            )
+          else
+            const SizedBox(width: 100),
+          
+          // Progress dots
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(totalPages, (index) {
+                final isActive = index == _currentPage;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 24 : 8,
+                  height: 8,
                   decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    color: isActive 
+                        ? colorScheme.primary 
+                        : colorScheme.outline.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 18, color: Colors.amber),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Zutaten erscheinen nur wenn ein Cocktail sie verwendet.',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
+                );
+              }),
+            ),
           ),
-        ),
+          
+          // Next/Export button
+          if (isLastPage)
+            FilledButton.icon(
+              onPressed: selectedItems.isNotEmpty 
+                  ? () => _export(allItems, total)
+                  : null,
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('PDF'),
+            )
+          else
+            FilledButton.icon(
+              onPressed: () => _goToPage(_currentPage + 1),
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('Weiter'),
+            ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _isLoading ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Abbrechen'),
-        ),
-        FilledButton(
-          onPressed: _isLoading ? null : _submit,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Hinzufügen'),
-        ),
-      ],
     );
   }
 }

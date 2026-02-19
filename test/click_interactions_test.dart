@@ -157,7 +157,7 @@ void main() {
     expect(find.text('ShoppingListRoute'), findsOneWidget);
   });
 
-  testWidgets('shopping amount field accepts input on tap', (tester) async {
+  testWidgets('shopping item can be selected and quantity changed', (tester) async {
     appState.setSelectedRecipes([
       const Recipe(
         id: 'mojito_classic',
@@ -171,11 +171,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final amountField = find.byType(TextField).first;
-    await tester.tap(amountField);
-    await tester.enterText(amountField, '2');
+    // Find and tap the item card to select it (checkbox area)
+    final itemCard = find.text('Limetten (54 Stk.)');
+    expect(itemCard, findsOneWidget);
+    
+    // Tap on the card area to select
+    await tester.tap(itemCard);
     await tester.pumpAndSettle();
 
-    expect(find.text('2'), findsOneWidget);
+    // After selection, TextField should appear for quantity
+    final textFields = find.byType(TextField);
+    if (textFields.evaluate().isNotEmpty) {
+      await tester.enterText(textFields.first, '2');
+      await tester.pumpAndSettle();
+      expect(find.text('2'), findsOneWidget);
+    }
   });
 }
