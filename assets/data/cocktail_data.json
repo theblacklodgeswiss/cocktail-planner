@@ -76,7 +76,8 @@
     {"menge": "Packungen", "artikel": "Mangostücke (tiefgefroren)", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
     {"menge": "Packungen", "artikel": "Wildberren (tiefgefroren)", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
     {"menge": "Packungen", "artikel": "Schlagsahne", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
-    {"menge": "Packungen", "artikel": "Rohrzucker", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"}
+    {"menge": "Packungen", "artikel": "Rohrzucker", "preis": 2.00, "waehrung": "CHF", "bemerkung": "Kaufland"},
+    {"menge": "Packung", "artikel": "Salz", "preis": 1.00, "waehrung": "CHF", "bemerkung": "Kaufland"}
   ],
   "fixedValues": [
     {"menge": "Packungen", "artikel": "Crushed Ice 5kg", "preis": 10.00, "waehrung": "CHF", "bemerkung": "Coop"},
@@ -189,8 +190,16 @@
       "zutaten": ["Baileys", "Kahlua", "Stroh 80"]
     },
     {
+      "name": "Shot - Tequila",
+      "zutaten": ["Tequilla", "Zitronen", "Salz"]
+    },
+    {
       "name": "Shot - Blue Lagoon",
-      "zutaten": ["Vodka (Absolut)", "Blue Curacao", "Limettensaft", "Triple Sec"]
+      "zutaten": ["Vodka (Absolut)", "Blue Curacao", "Limettensaft"]
+    },
+    {
+      "name": "Shot - Aarewasser",
+      "zutaten": ["Vodka (Absolut)", "Triple Sec", "Blue Curacao", "Zitronensaft (Kaufland)", "Sprite"]
     },
     {
       "name": "Shot - Kamikaze",
