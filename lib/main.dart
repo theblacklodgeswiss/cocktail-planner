@@ -10,17 +10,22 @@ import 'firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
-  // Sign in anonymously
-  await _signInAnonymously();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    // Sign in anonymously (with error handling)
+    await _signInAnonymously();
+    
+    // Initialize data in Firestore (seeds if not exists)
+    await cocktailRepository.initialize();
+  } catch (e) {
+    // Firebase initialization failed - app will use local JSON fallback
+    debugPrint('Firebase initialization failed: $e');
+  }
   
   await EasyLocalization.ensureInitialized();
-  
-  // Initialize data in Firestore (seeds if not exists)
-  await cocktailRepository.initialize();
 
   runApp(
     EasyLocalization(
@@ -33,14 +38,19 @@ Future<void> main() async {
 }
 
 Future<void> _signInAnonymously() async {
-  final auth = FirebaseAuth.instance;
-  
-  // Check if already signed in
-  if (auth.currentUser != null) {
-    return;
+  try {
+    final auth = FirebaseAuth.instance;
+    
+    // Check if already signed in
+    if (auth.currentUser != null) {
+      return;
+    }
+    
+    // Sign in anonymously
+    await auth.signInAnonymously();
+  } catch (e) {
+    debugPrint('Anonymous sign-in failed: $e');
+    rethrow;
   }
-  
-  // Sign in anonymously
-  await auth.signInAnonymously();
 }
 

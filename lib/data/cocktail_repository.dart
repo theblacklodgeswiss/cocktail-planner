@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/cocktail_data.dart';
@@ -16,6 +17,7 @@ class CocktailRepository {
   final String assetPath;
   final String wertigkeitenPath;
   CocktailData? _cached;
+  bool _useLocalFallback = false;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
@@ -30,10 +32,15 @@ class CocktailRepository {
 
   /// Initialize repository - seeds Firestore if empty
   Future<void> initialize() async {
-    final materialsSnapshot = await _materialsCollection.limit(1).get();
-    
-    if (materialsSnapshot.docs.isEmpty) {
-      await _seedFirestoreFromAssets();
+    try {
+      final materialsSnapshot = await _materialsCollection.limit(1).get();
+      
+      if (materialsSnapshot.docs.isEmpty) {
+        await _seedFirestoreFromAssets();
+      }
+    } catch (e) {
+      debugPrint('Firestore initialization failed, using local fallback: $e');
+      _useLocalFallback = true;
     }
   }
 
@@ -106,38 +113,68 @@ class CocktailRepository {
     return 'cocktail';
   }
 
-  /// Load data from Firestore
+  /// Load data - tries Firestore first, falls back to local JSON
   Future<CocktailData> load() async {
     if (_cached != null) {
       return _cached!;
     }
 
-    final materialsSnapshot = await _materialsCollection.get();
-    final recipesSnapshot = await _recipesCollection.get();
-    final fixedValuesSnapshot = await _fixedValuesCollection.get();
+    // Use local fallback if Firebase init failed
+    if (_useLocalFallback) {
+      return _loadFromLocalAssets();
+    }
 
-    final materials = materialsSnapshot.docs
-        .map((doc) => MaterialItem.fromJson(doc.data()))
-        .toList();
+    // Try Firestore
+    try {
+      final materialsSnapshot = await _materialsCollection.get();
+      final recipesSnapshot = await _recipesCollection.get();
+      final fixedValuesSnapshot = await _fixedValuesCollection.get();
 
-    final recipes = recipesSnapshot.docs
-        .map((doc) => Recipe.fromJson(doc.data()))
-        .toList();
+      final materials = materialsSnapshot.docs
+          .map((doc) => MaterialItem.fromJson(doc.data()))
+          .toList();
 
-    final fixedValues = fixedValuesSnapshot.docs
-        .map((doc) => MaterialItem.fromJson(doc.data()))
-        .toList();
+      final recipes = recipesSnapshot.docs
+          .map((doc) => Recipe.fromJson(doc.data()))
+          .toList();
 
-    _cached = CocktailData(
-      materials: materials,
-      recipes: recipes,
-      fixedValues: fixedValues,
-    );
+      final fixedValues = fixedValuesSnapshot.docs
+          .map((doc) => MaterialItem.fromJson(doc.data()))
+          .toList();
 
+      _cached = CocktailData(
+        materials: materials,
+        recipes: recipes,
+        fixedValues: fixedValues,
+      );
+
+      return _cached!;
+    } catch (e) {
+      debugPrint('Firestore load failed, using local fallback: $e');
+      return _loadFromLocalAssets();
+    }
+  }
+
+  /// Load data from local JSON assets
+  Future<CocktailData> _loadFromLocalAssets() async {
+    final raw = await rootBundle.loadString(assetPath);
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+
+    final wertigkeitenRaw = await rootBundle.loadString(wertigkeitenPath);
+    final wertigkeitenDecoded =
+        jsonDecode(wertigkeitenRaw) as Map<String, dynamic>;
+
+    _cached = CocktailData.fromJson({
+      ...decoded,
+      'fixedValues':
+          wertigkeitenDecoded['fixedValues'] ??
+          wertigkeitenDecoded['wertigkeiten'] ??
+          const [],
+    });
     return _cached!;
   }
 
-  /// Clear cache to force reload from Firestore
+  /// Clear cache to force reload
   void clearCache() {
     _cached = null;
   }
