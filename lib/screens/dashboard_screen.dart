@@ -60,12 +60,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? NetworkImage(user.photoURL!)
                     : null,
                 child: user.photoURL == null
-                    ? Icon(user.isAnonymous ? Icons.person_outline : Icons.person)
+                    ? const Icon(Icons.person)
                     : null,
               ),
               title: Row(
                 children: [
-                  Text(user.displayName ?? (user.isAnonymous ? 'Gast' : 'Benutzer')),
+                  Text(user.displayName ?? 'Benutzer'),
                   if (authService.isAdmin) ...[
                     const SizedBox(width: 8),
                     Container(
@@ -82,7 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ],
               ),
-              subtitle: Text(user.email ?? (user.isAnonymous ? 'Anonym angemeldet' : '')),
+              subtitle: Text(user.email ?? ''),
             ),
             const Divider(),
             if (authService.isAdmin) ...[
@@ -95,6 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context.go('/admin');
                 },
               ),
+            ],
+            if (authService.canManageUsers)
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings),
                 title: const Text('Benutzer verwalten'),
@@ -102,30 +104,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () {
                   Navigator.pop(ctx);
                   _showAdminPanel();
-                },
-              ),
-            ],
-            if (user.isAnonymous)
-              ListTile(
-                leading: const Icon(Icons.login),
-                title: const Text('Mit Google verknüpfen'),
-                subtitle: const Text('Speichere deine Daten dauerhaft'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    await authService.linkWithGoogle();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Konto erfolgreich verknüpft!')),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Fehler: $e')),
-                      );
-                    }
-                  }
                 },
               ),
             ListTile(
@@ -193,36 +171,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         leading: const Icon(Icons.person),
                         title: Text(user.name.isNotEmpty ? user.name : user.email),
                         subtitle: Text(user.email),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final navigator = Navigator.of(listContext);
-                            final confirm = await showDialog<bool>(
-                              context: listContext,
-                              builder: (c) => AlertDialog(
-                                title: const Text('Benutzer entfernen?'),
-                                content: Text('${user.email} wird entfernt.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(c, false),
-                                    child: const Text('Abbrechen'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(c, true),
-                                    child: const Text('Entfernen'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              await authService.removeAllowedUser(user.email);
-                              if (mounted) {
-                                navigator.pop();
-                                _showAdminPanel(); // Refresh
-                              }
-                            }
-                          },
-                        ),
+                        trailing: authService.isAdmin
+                            ? IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  final navigator = Navigator.of(listContext);
+                                  final confirm = await showDialog<bool>(
+                                    context: listContext,
+                                    builder: (c) => AlertDialog(
+                                      title: const Text('Benutzer entfernen?'),
+                                      content: Text('${user.email} wird entfernt.'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(c, false),
+                                          child: const Text('Abbrechen'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(c, true),
+                                          child: const Text('Entfernen'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    await authService.removeAllowedUser(user.email);
+                                    if (mounted) {
+                                      navigator.pop();
+                                      _showAdminPanel(); // Refresh
+                                    }
+                                  }
+                                },
+                              )
+                            : null,
                       );
                     },
                   ),
@@ -604,8 +584,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? NetworkImage(authService.photoUrl!)
                           : null,
                       child: authService.photoUrl == null
-                          ? Icon(
-                              authService.isAnonymous ? Icons.person_outline : Icons.person,
+                          ? const Icon(
+                              Icons.person,
                               size: 20,
                             )
                           : null,

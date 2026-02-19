@@ -23,7 +23,7 @@ final GoRouter appRouter = GoRouter(
   refreshListenable: _authNotifier,
   redirect: (context, state) {
     final user = FirebaseAuth.instance.currentUser;
-    final isLoggedIn = user != null;
+    final isLoggedIn = user != null && !user.isAnonymous;
     final isLoginRoute = state.matchedLocation == '/login';
 
     // Not logged in and not on login page -> redirect to login

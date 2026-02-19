@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../models/cocktail_data.dart';
 import '../models/material_item.dart';
 import '../models/recipe.dart';
+import '../services/auth_service.dart';
 
 class CocktailRepository {
   CocktailRepository({
@@ -252,6 +253,7 @@ class CocktailRepository {
         'personCount': personCount,
         'drinkerType': drinkerType,
         'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': authService.email ?? authService.currentUser?.uid,
       });
       return docRef.id;
     } catch (e) {
@@ -282,6 +284,8 @@ class CocktailRepository {
         'price': price,
         'currency': currency,
         'note': note,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': authService.email ?? authService.currentUser?.uid,
       });
       
       // Clear cache to reload data
@@ -309,6 +313,8 @@ class CocktailRepository {
         'name': name,
         'ingredients': ingredients,
         'type': type,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': authService.email ?? authService.currentUser?.uid,
       });
       
       // Clear cache to reload data
@@ -342,6 +348,8 @@ class CocktailRepository {
         'price': price,
         'currency': currency,
         'note': note,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': authService.email ?? authService.currentUser?.uid,
       });
       _cached = null;
       return true;
@@ -365,6 +373,8 @@ class CocktailRepository {
         'name': name,
         'ingredients': ingredients,
         'type': type,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': authService.email ?? authService.currentUser?.uid,
       });
       _cached = null;
       return true;

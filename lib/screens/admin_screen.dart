@@ -29,7 +29,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    if (!authService.isAdmin) {
+    if (!authService.canManageUsers) {
       return Scaffold(
         appBar: AppBar(title: const Text('Admin')),
         body: const Center(
