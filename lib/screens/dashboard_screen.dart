@@ -92,7 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 subtitle: const Text('Materialien, Verbrauch, Rezepte'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  context.push('/admin');
+                  context.go('/admin');
                 },
               ),
               ListTile(
