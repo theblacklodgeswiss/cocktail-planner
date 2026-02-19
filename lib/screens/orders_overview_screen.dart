@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/cocktail_repository.dart';
 import '../models/order.dart';
@@ -113,6 +114,14 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   onPressed: () => Navigator.pop(context),
                 ),
                 actions: [
+                  IconButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/create-offer', extra: order);
+                    },
+                    icon: const Icon(Icons.description_outlined),
+                    tooltip: 'offer.create_offer'.tr(),
+                  ),
                   FilledButton.icon(
                     onPressed: () async {
                       await PdfGenerator.generateFromSavedOrder(order);

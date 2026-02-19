@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shopping_list/models/cocktail_data.dart';
 import 'package:shopping_list/models/material_item.dart';
+import 'package:shopping_list/models/offer.dart';
 import 'package:shopping_list/models/recipe.dart';
 
 void main() {
@@ -106,6 +107,46 @@ void main() {
 
     test('Ginger Ale (Kaufland) ist in der Materialliste', () {
       expect(materialNames, contains('Ginger Ale (Kaufland)'));
+    });
+  });
+
+  group('OfferData', () {
+    final offer = OfferData(
+      orderName: 'Hochzeit Meyer',
+      eventDate: DateTime(2026, 9, 12),
+      eventTime: '17:30',
+      currency: 'EUR',
+      guestCount: 250,
+      editorName: 'Mario Kantharoobarajah',
+      clientName: 'Virusan Sinnathurai',
+      clientContact: '+41 78 682 46 27',
+      eventTypes: {EventType.wedding},
+      cocktails: ['Mojito', 'Mango Mojito'],
+      shots: [],
+      barDescription: '',
+      barServiceCost: 1600,
+      distanceKm: 150,
+      travelCostPerKm: 0.70,
+      barCost: 100,
+      discount: 0,
+      additionalInfo: OfferData.defaultAdditionalInfoDe,
+      language: 'de',
+    );
+
+    test('calculates travel cost total (return trip)', () {
+      expect(offer.travelCostTotal, closeTo(210.0, 0.001));
+    });
+
+    test('calculates grand total', () {
+      expect(offer.grandTotal, closeTo(1910.0, 0.001));
+    });
+
+    test('default additional info DE is not empty', () {
+      expect(OfferData.defaultAdditionalInfoDe, isNotEmpty);
+    });
+
+    test('default additional info EN is not empty', () {
+      expect(OfferData.defaultAdditionalInfoEn, isNotEmpty);
     });
   });
 }
