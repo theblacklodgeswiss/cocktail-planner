@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
 import '../screens/admin_screen.dart';
@@ -6,8 +7,20 @@ import '../screens/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/shopping_list_screen.dart';
 
+/// Notifier that listens to Firebase Auth state changes
+class AuthNotifier extends ChangeNotifier {
+  AuthNotifier() {
+    FirebaseAuth.instance.authStateChanges().listen((_) {
+      notifyListeners();
+    });
+  }
+}
+
+final _authNotifier = AuthNotifier();
+
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  refreshListenable: _authNotifier,
   redirect: (context, state) {
     final user = FirebaseAuth.instance.currentUser;
     final isLoggedIn = user != null;
