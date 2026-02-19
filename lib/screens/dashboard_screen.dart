@@ -68,6 +68,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return Scaffold(
               appBar: AppBar(
                 title: Text(translate(context, 'dashboard.title')),
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Chip(
+                      avatar: Icon(
+                        cocktailRepository.isUsingFirebase
+                            ? Icons.cloud_done
+                            : Icons.folder,
+                        size: 16,
+                      ),
+                      label: Text(
+                        cocktailRepository.dataSourceLabel,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      backgroundColor: cocktailRepository.isUsingFirebase
+                          ? Colors.green.shade100
+                          : Colors.orange.shade100,
+                    ),
+                  ),
+                ],
               ),
               body: Padding(
                 padding: const EdgeInsets.all(16),

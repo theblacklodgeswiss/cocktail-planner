@@ -19,6 +19,12 @@ class CocktailRepository {
   CocktailData? _cached;
   bool _firebaseAvailable = false;
 
+  /// Gibt true zurück wenn Firebase verwendet wird, false bei lokalem Fallback
+  bool get isUsingFirebase => _firebaseAvailable;
+  
+  /// Datenquelle als String für UI-Anzeige
+  String get dataSourceLabel => _firebaseAvailable ? 'Firebase' : 'Local JSON';
+
   FirebaseFirestore? _firestoreInstance;
   
   FirebaseFirestore get _firestore {
