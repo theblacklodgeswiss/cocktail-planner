@@ -259,6 +259,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       icon: const Icon(Icons.sync),
                       tooltip: 'Daten neu laden',
                       onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         final confirm = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
@@ -281,12 +282,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         );
                         
                         if (confirm == true && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             const SnackBar(content: Text('Daten werden aktualisiert...')),
                           );
                           await cocktailRepository.forceReseed();
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               const SnackBar(content: Text('Daten erfolgreich aktualisiert!')),
                             );
                             setState(() {
