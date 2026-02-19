@@ -85,7 +85,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               subtitle: Text(user.email ?? (user.isAnonymous ? 'Anonym angemeldet' : '')),
             ),
             const Divider(),
-            if (authService.isAdmin)
+            if (authService.isAdmin) ...[
+              ListTile(
+                leading: const Icon(Icons.inventory),
+                title: const Text('Inventar verwalten'),
+                subtitle: const Text('Materialien, Verbrauch, Rezepte'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/admin');
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings),
                 title: const Text('Benutzer verwalten'),
@@ -95,6 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _showAdminPanel();
                 },
               ),
+            ],
             if (user.isAnonymous)
               ListTile(
                 leading: const Icon(Icons.login),
@@ -147,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.admin_panel_settings),
             SizedBox(width: 8),
-            Text('Admin-Panel'),
+            Text('Benutzer verwalten'),
           ],
         ),
         content: SizedBox(
@@ -155,17 +165,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Inventory management
-              ListTile(
-                leading: const Icon(Icons.inventory),
-                title: const Text('Inventar verwalten'),
-                subtitle: const Text('Materialien, Verbrauch, Rezepte'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/admin');
-                },
-              ),
-              const Divider(),
               // Add user button
               ListTile(
                 leading: const Icon(Icons.person_add),
