@@ -612,9 +612,22 @@ class _RecipeEditDialogState extends State<_RecipeEditDialog> {
   }
 
   List<String> get _filteredMaterials {
-    if (_searchQuery.isEmpty) return _availableMaterials;
-    final query = _searchQuery.toLowerCase();
-    return _availableMaterials.where((m) => m.toLowerCase().contains(query)).toList();
+    List<String> materials;
+    if (_searchQuery.isEmpty) {
+      materials = List.from(_availableMaterials);
+    } else {
+      final query = _searchQuery.toLowerCase();
+      materials = _availableMaterials.where((m) => m.toLowerCase().contains(query)).toList();
+    }
+    // Sort: selected items at top, then alphabetical
+    materials.sort((a, b) {
+      final aSelected = _selectedIngredients.contains(a);
+      final bSelected = _selectedIngredients.contains(b);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    return materials;
   }
 
   Future<void> _addNewIngredient() async {
