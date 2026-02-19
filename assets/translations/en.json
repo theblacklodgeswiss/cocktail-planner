@@ -31,6 +31,37 @@
     "generated_local": "PDF created (offline)"
   },
   "common": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "orders": {
+    "title": "Orders Overview",
+    "total_revenue": "Total Revenue",
+    "order_count": "Orders",
+    "avg_order": "Avg per Order",
+    "open_quotes": "Open Quotes",
+    "accepted_only": "accepted",
+    "persons": "Persons",
+    "articles": "Items",
+    "status": "Status",
+    "date": "Date",
+    "total": "Total",
+    "status_quote": "Quote",
+    "status_accepted": "Accepted",
+    "status_declined": "Declined",
+    "change_status": "Change status:",
+    "accept": "Accept",
+    "decline": "Decline",
+    "status_changed": "Status changed to \"{status}\"",
+    "delete_order": "Delete Order",
+    "delete_confirm_title": "Delete Order?",
+    "delete_confirm_message": "Do you really want to permanently delete \"{name}\"?",
+    "deleted": "Order deleted",
+    "delete_failed": "Deletion failed",
+    "pdf_created": "PDF created!",
+    "drinker_light": "Light",
+    "drinker_normal": "Normal",
+    "drinker_heavy": "Heavy",
+    "no_orders": "No orders"
   }
 }

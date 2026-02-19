@@ -31,6 +31,37 @@
     "generated_local": "PDF erstellt (offline)"
   },
   "common": {
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "orders": {
+    "title": "Bestellungsübersicht",
+    "total_revenue": "Gesamtumsatz",
+    "order_count": "Bestellungen",
+    "avg_order": "Ø pro Bestellung",
+    "open_quotes": "Offene Angebote",
+    "accepted_only": "angenommene",
+    "persons": "Personen",
+    "articles": "Artikel",
+    "status": "Status",
+    "date": "Datum",
+    "total": "Gesamt",
+    "status_quote": "Angebot",
+    "status_accepted": "Angenommen",
+    "status_declined": "Abgelehnt",
+    "change_status": "Status ändern:",
+    "accept": "Annehmen",
+    "decline": "Ablehnen",
+    "status_changed": "Status auf \"{status}\" geändert",
+    "delete_order": "Bestellung löschen",
+    "delete_confirm_title": "Bestellung löschen?",
+    "delete_confirm_message": "Möchtest du \"{name}\" wirklich unwiderruflich löschen?",
+    "deleted": "Bestellung gelöscht",
+    "delete_failed": "Löschen fehlgeschlagen",
+    "pdf_created": "PDF erstellt!",
+    "drinker_light": "Wenig",
+    "drinker_normal": "Normal",
+    "drinker_heavy": "Viel",
+    "no_orders": "Keine Bestellungen"
   }
 }

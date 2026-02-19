@@ -95,6 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context.go('/admin');
                 },
               ),
+            ],
+            if (authService.isAdmin || authService.isSuperAdmin)
               ListTile(
                 leading: const Icon(Icons.bar_chart),
                 title: const Text('Bestellungsübersicht'),
@@ -104,7 +106,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context.push('/orders');
                 },
               ),
-            ],
             if (authService.canManageUsers)
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings),

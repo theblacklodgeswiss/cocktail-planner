@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../data/cocktail_repository.dart';
@@ -32,11 +33,22 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   String _drinkerLabel(String type) {
     switch (type) {
       case 'light':
-        return 'Wenig';
+        return 'orders.drinker_light'.tr();
       case 'heavy':
-        return 'Viel';
+        return 'orders.drinker_heavy'.tr();
       default:
-        return 'Normal';
+        return 'orders.drinker_normal'.tr();
+    }
+  }
+
+  String _statusLabel(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.quote:
+        return 'orders.status_quote'.tr();
+      case OrderStatus.accepted:
+        return 'orders.status_accepted'.tr();
+      case OrderStatus.declined:
+        return 'orders.status_declined'.tr();
     }
   }
 
@@ -82,7 +94,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               _loadOrders(); // Refresh the list
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Status auf "${newStatus.label}" geändert')),
+                  SnackBar(content: Text('orders.status_changed'.tr(namedArgs: {'status': _statusLabel(newStatus)}))),
                 );
               }
             }
@@ -106,7 +118,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                       await PdfGenerator.generateFromSavedOrder(order);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('PDF erstellt!')),
+                          SnackBar(content: Text('orders.pdf_created'.tr())),
                         );
                       }
                     },
@@ -133,7 +145,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                               Icon(_statusIcon(currentStatus), color: _statusColor(currentStatus)),
                               const SizedBox(width: 8),
                               Text(
-                                'Status: ${currentStatus.label}',
+                                '${"orders.status".tr()}: ${_statusLabel(currentStatus)}',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: _statusColor(currentStatus),
@@ -143,7 +155,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          Text('Status ändern:', style: Theme.of(context).textTheme.bodySmall),
+                          Text('orders.change_status'.tr(), style: Theme.of(context).textTheme.bodySmall),
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -152,7 +164,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                                   child: FilledButton.icon(
                                     onPressed: () => updateStatus(OrderStatus.accepted),
                                     icon: const Icon(Icons.check),
-                                    label: const Text('Annehmen'),
+                                    label: Text('orders.accept'.tr()),
                                     style: FilledButton.styleFrom(
                                       backgroundColor: Colors.green,
                                     ),
@@ -165,7 +177,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                                   child: OutlinedButton.icon(
                                     onPressed: () => updateStatus(OrderStatus.declined),
                                     icon: const Icon(Icons.close),
-                                    label: const Text('Ablehnen'),
+                                    label: Text('orders.decline'.tr()),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: Colors.red,
                                     ),
@@ -177,7 +189,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                                   child: OutlinedButton.icon(
                                     onPressed: () => updateStatus(OrderStatus.quote),
                                     icon: const Icon(Icons.undo),
-                                    label: const Text('Angebot'),
+                                    label: Text('orders.status_quote'.tr()),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: Colors.orange,
                                     ),
@@ -226,7 +238,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                             children: [
                               _OrderInfoChip(
                                 icon: Icons.people,
-                                label: '${order.personCount} Personen',
+                                label: '${order.personCount} ${'orders.persons'.tr()}',
                                 colorScheme: colorScheme,
                               ),
                               const SizedBox(width: 8),
@@ -245,7 +257,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   
                   // Items list header
                   Text(
-                    '${order.items.length} Artikel',
+                    '${order.items.length} ${'orders.articles'.tr()}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -297,17 +309,17 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('Bestellung löschen?'),
-                              content: Text('Möchtest du "${order.name}" wirklich unwiderruflich löschen?'),
+                              title: Text('orders.delete_confirm_title'.tr()),
+                              content: Text('orders.delete_confirm_message'.tr(namedArgs: {'name': order.name})),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Abbrechen'),
+                                  child: Text('common.cancel'.tr()),
                                 ),
                                 FilledButton(
                                   onPressed: () => Navigator.pop(ctx, true),
                                   style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                                  child: const Text('Löschen'),
+                                  child: Text('common.delete'.tr()),
                                 ),
                               ],
                             ),
@@ -318,19 +330,19 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                               Navigator.pop(context);
                               if (success) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Bestellung gelöscht')),
+                                  SnackBar(content: Text('orders.deleted'.tr())),
                                 );
                                 _loadOrders();
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Löschen fehlgeschlagen')),
+                                  SnackBar(content: Text('orders.delete_failed'.tr())),
                                 );
                               }
                             }
                           }
                         },
                         icon: const Icon(Icons.delete_forever),
-                        label: const Text('Bestellung löschen'),
+                        label: Text('orders.delete_order'.tr()),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red,
                         ),
@@ -397,26 +409,26 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
         final cards = [
           _SummaryCard(
             icon: Icons.receipt_long,
-            label: 'Angebote',
+            label: 'orders.open_quotes'.tr(),
             value: '${quoteOrders.length} / $totalOrders',
             color: Colors.orange.shade700,
           ),
           _SummaryCard(
             icon: Icons.attach_money,
-            label: 'Gesamtumsatz',
+            label: 'orders.total_revenue'.tr(),
             value: '${totalRevenue.toStringAsFixed(2)} $dominantCurrency',
-            subtitle: '${acceptedOrders.length} angenommen',
+            subtitle: '${acceptedOrders.length} ${'orders.accepted_only'.tr()}',
             color: Colors.green.shade700,
           ),
           _SummaryCard(
             icon: Icons.people,
-            label: 'Personen gesamt',
+            label: 'orders.persons'.tr(),
             value: totalPersons.toString(),
             color: Colors.blue.shade700,
           ),
           _SummaryCard(
             icon: Icons.trending_up,
-            label: 'Ø pro Bestellung',
+            label: 'orders.avg_order'.tr(),
             value: '${avgTotal.toStringAsFixed(2)} $dominantCurrency',
             color: Colors.purple.shade700,
           ),
@@ -456,7 +468,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               Icon(Icons.inbox_outlined, size: 64, color: colorScheme.outline),
               const SizedBox(height: 16),
               Text(
-                'Keine Bestellungen für $_selectedYear',
+                '${'orders.no_orders'.tr()} $_selectedYear',
                 style: TextStyle(color: colorScheme.outline),
               ),
             ],
@@ -480,13 +492,13 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   colorScheme.primaryContainer.withValues(alpha: 0.4),
                 ),
                 showCheckboxColumn: false,
-                columns: const [
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('Datum')),
+                columns: [
+                  DataColumn(label: Text('orders.status'.tr())),
+                  DataColumn(label: Text('orders.date'.tr())),
                   DataColumn(label: Text('Name')),
-                  DataColumn(label: Text('Personen'), numeric: true),
-                  DataColumn(label: Text('Artikel'), numeric: true),
-                  DataColumn(label: Text('Gesamt'), numeric: true),
+                  DataColumn(label: Text('orders.persons'.tr()), numeric: true),
+                  DataColumn(label: Text('orders.articles'.tr()), numeric: true),
+                  DataColumn(label: Text('orders.total'.tr()), numeric: true),
                 ],
                 rows: orders.map((order) {
                   final dateStr =
@@ -507,7 +519,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                               Icon(_statusIcon(order.status), size: 14, color: _statusColor(order.status)),
                               const SizedBox(width: 4),
                               Text(
-                                order.status.label,
+                                _statusLabel(order.status),
                                 style: TextStyle(
                                   color: _statusColor(order.status),
                                   fontWeight: FontWeight.w500,
@@ -562,7 +574,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                                 Icon(_statusIcon(order.status), size: 14, color: _statusColor(order.status)),
                                 const SizedBox(width: 4),
                                 Text(
-                                  order.status.label,
+                                  _statusLabel(order.status),
                                   style: TextStyle(
                                     color: _statusColor(order.status),
                                     fontWeight: FontWeight.w500,
@@ -599,7 +611,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                           const SizedBox(width: 8),
                           _OrderInfoChip(
                             icon: Icons.shopping_cart,
-                            label: '${order.items.length} Artikel',
+                            label: '${order.items.length} ${'orders.articles'.tr()}',
                             colorScheme: colorScheme,
                           ),
                         ],
@@ -642,7 +654,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bestellungsübersicht'),
+        title: Text('orders.title'.tr()),
       ),
       body: FutureBuilder<List<SavedOrder>>(
         future: _ordersFuture,
@@ -666,7 +678,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                     _buildSummaryCards(orders),
                     const SizedBox(height: 20),
                     Text(
-                      'Bestellungen $_selectedYear',
+                      '${'orders.order_count'.tr()} $_selectedYear',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
