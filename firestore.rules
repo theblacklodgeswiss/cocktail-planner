@@ -2,23 +2,23 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only authenticated users (including anonymous) can access
+    // Allow public read access, write requires auth
     
-    // Materials collection - read for authenticated users
+    // Materials collection
     match /materials/{document=**} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if request.auth != null;
     }
     
-    // Recipes collection - read for authenticated users
+    // Recipes collection
     match /recipes/{document=**} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if request.auth != null;
     }
     
-    // Fixed values collection - read for authenticated users
+    // Fixed values collection
     match /fixedValues/{document=**} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if request.auth != null;
     }
   }

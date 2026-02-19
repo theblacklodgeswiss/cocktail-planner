@@ -17,9 +17,14 @@ class CocktailRepository {
   final String assetPath;
   final String wertigkeitenPath;
   CocktailData? _cached;
-  bool _useLocalFallback = false;
+  bool _firebaseAvailable = false;
 
-  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+  FirebaseFirestore? _firestoreInstance;
+  
+  FirebaseFirestore get _firestore {
+    _firestoreInstance ??= FirebaseFirestore.instance;
+    return _firestoreInstance!;
+  }
 
   CollectionReference<Map<String, dynamic>> get _materialsCollection =>
       _firestore.collection('materials');
@@ -34,13 +39,14 @@ class CocktailRepository {
   Future<void> initialize() async {
     try {
       final materialsSnapshot = await _materialsCollection.limit(1).get();
+      _firebaseAvailable = true;
       
       if (materialsSnapshot.docs.isEmpty) {
         await _seedFirestoreFromAssets();
       }
     } catch (e) {
       debugPrint('Firestore initialization failed, using local fallback: $e');
-      _useLocalFallback = true;
+      _firebaseAvailable = false;
     }
   }
 
@@ -119,8 +125,8 @@ class CocktailRepository {
       return _cached!;
     }
 
-    // Use local fallback if Firebase init failed
-    if (_useLocalFallback) {
+    // Use local fallback if Firebase is not available
+    if (!_firebaseAvailable) {
       return _loadFromLocalAssets();
     }
 
