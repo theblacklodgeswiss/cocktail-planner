@@ -183,8 +183,11 @@ void main() {
     await tester.enterText(distanceField, '100');
     await tester.pump();
     
-    // Tap the Weiter button
-    final weiterButton = find.widgetWithText(FilledButton, 'Weiter');
+    // Tap the Weiter button inside the dialog (bottom-nav also has a 'Weiter' button)
+    final weiterButton = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Weiter'),
+    );
     expect(weiterButton, findsOneWidget);
     await tester.tap(weiterButton);
     await tester.pumpAndSettle();
