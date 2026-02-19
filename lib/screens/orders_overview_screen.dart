@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/cocktail_repository.dart';
-import '../models/order.dart';
+import '../models/order.dart' show SavedOrder;
 
 class OrdersOverviewScreen extends StatefulWidget {
   const OrdersOverviewScreen({super.key});
@@ -11,7 +11,7 @@ class OrdersOverviewScreen extends StatefulWidget {
 }
 
 class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
-  late Future<List<Order>> _ordersFuture;
+  late Future<List<SavedOrder>> _ordersFuture;
   int _selectedYear = DateTime.now().year;
 
   @override
@@ -65,7 +65,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  Widget _buildSummaryCards(List<Order> orders) {
+  Widget _buildSummaryCards(List<SavedOrder> orders) {
     final totalOrders = orders.length;
     final totalRevenue = orders.fold<double>(0, (sum, o) => sum + o.total);
     final totalPersons = orders.fold<int>(0, (sum, o) => sum + o.personCount);
@@ -125,7 +125,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  Widget _buildOrdersTable(List<Order> orders, ColorScheme colorScheme) {
+  Widget _buildOrdersTable(List<SavedOrder> orders, ColorScheme colorScheme) {
     if (orders.isEmpty) {
       return Center(
         child: Padding(
@@ -185,7 +185,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       appBar: AppBar(
         title: const Text('Bestellungsübersicht'),
       ),
-      body: FutureBuilder<List<Order>>(
+      body: FutureBuilder<List<SavedOrder>>(
         future: _ordersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {

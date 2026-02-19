@@ -1,5 +1,5 @@
-class Order {
-  const Order({
+class SavedOrder {
+  const SavedOrder({
     required this.id,
     required this.name,
     required this.date,
@@ -21,8 +21,8 @@ class Order {
 
   int get year => date.year;
 
-  factory Order.fromFirestore(String id, Map<String, dynamic> data) {
-    return Order(
+  factory SavedOrder.fromFirestore(String id, Map<String, dynamic> data) {
+    return SavedOrder(
       id: id,
       name: data['name'] as String? ?? '',
       date: data['date'] != null
