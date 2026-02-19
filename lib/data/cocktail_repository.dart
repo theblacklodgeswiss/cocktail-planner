@@ -141,6 +141,8 @@ class CocktailRepository {
       'price': (item['price'] ?? item['preis'] ?? 0).toDouble(),
       'currency': item['currency'] ?? item['waehrung'] ?? 'CHF',
       'note': item['note'] ?? item['bemerkung'] ?? '',
+      'active': item['active'] ?? true,
+      'visible': item['visible'] ?? true,
     };
   }
 
@@ -270,6 +272,8 @@ class CocktailRepository {
     required String currency,
     required String note,
     required bool isFixedValue,
+    bool active = true,
+    bool visible = true,
   }) async {
     if (!_firebaseAvailable) {
       debugPrint('Firebase not available, cannot add material');
@@ -284,6 +288,8 @@ class CocktailRepository {
         'price': price,
         'currency': currency,
         'note': note,
+        'active': active,
+        'visible': visible,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -337,6 +343,8 @@ class CocktailRepository {
     required String currency,
     required String note,
     required bool isFixedValue,
+    bool active = true,
+    bool visible = true,
   }) async {
     if (!_firebaseAvailable) return false;
 
@@ -348,6 +356,8 @@ class CocktailRepository {
         'price': price,
         'currency': currency,
         'note': note,
+        'active': active,
+        'visible': visible,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': authService.email ?? authService.currentUser?.uid,
       });

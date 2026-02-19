@@ -99,7 +99,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    final fixedValues = data.fixedValues.toList()
+    final fixedValues = data.fixedValues
+        .where((item) => item.active)
+        .toList()
       ..sort((a, b) {
         final aOrder = a.sortOrder;
         final bOrder = b.sortOrder;

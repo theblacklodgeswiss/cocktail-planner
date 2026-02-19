@@ -77,6 +77,7 @@ class _MaterialsTabState extends State<_MaterialsTab> {
   List<({String id, MaterialItem item})> _items = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  bool _showHidden = false;
 
   @override
   void initState() {
@@ -111,9 +112,15 @@ class _MaterialsTabState extends State<_MaterialsTab> {
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
+    // Work with the currently displayed (filtered) list
+    final visible = _filteredItems;
+    final newVisible = List.of(visible)
+      ..removeAt(oldIndex)
+      ..insert(newIndex, visible[oldIndex]);
+    // Rebuild _items: reordered visible items first, hidden items appended
+    final hiddenItems = _items.where((i) => !i.item.visible).toList();
     setState(() {
-      final item = _items.removeAt(oldIndex);
-      _items.insert(newIndex, item);
+      _items = [...newVisible, ...hiddenItems];
     });
     await cocktailRepository.updateFixedValueSortOrders(
       _items.map((e) => e.id).toList(),
@@ -121,9 +128,10 @@ class _MaterialsTabState extends State<_MaterialsTab> {
   }
 
   List<({String id, MaterialItem item})> get _filteredItems {
-    if (_searchQuery.isEmpty) return _items;
+    var list = _showHidden ? _items : _items.where((i) => i.item.visible).toList();
+    if (_searchQuery.isEmpty) return list;
     final query = _searchQuery.toLowerCase();
-    return _items.where((i) => 
+    return list.where((i) => 
       i.item.name.toLowerCase().contains(query) ||
       i.item.note.toLowerCase().contains(query)
     ).toList();
@@ -139,83 +147,102 @@ class _MaterialsTabState extends State<_MaterialsTab> {
       text: item?.currency ?? 'CHF',
     );
     final noteController = TextEditingController(text: item?.note ?? '');
+    bool activeValue = item?.active ?? true;
+    bool visibleValue = item?.visible ?? true;
 
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(docId == null ? 'Neuer Artikel' : 'Artikel bearbeiten'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name *',
-                  border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(docId == null ? 'Neuer Artikel' : 'Artikel bearbeiten'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name *',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: unitController,
-                      decoration: const InputDecoration(
-                        labelText: 'Einheit',
-                        hintText: 'z.B. 0.7L, Stk',
-                        border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: unitController,
+                        decoration: const InputDecoration(
+                          labelText: 'Einheit',
+                          hintText: 'z.B. 0.7L, Stk',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: priceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Preis',
-                        border: OutlineInputBorder(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Preis',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: currencyController,
-                      decoration: const InputDecoration(
-                        labelText: 'Währung',
-                        border: OutlineInputBorder(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: currencyController,
+                        decoration: const InputDecoration(
+                          labelText: 'Währung',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteController,
-                decoration: const InputDecoration(
-                  labelText: 'Bemerkung',
-                  hintText: 'z.B. Lieferant',
-                  border: OutlineInputBorder(),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Bemerkung',
+                    hintText: 'z.B. Lieferant',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('Aktiv'),
+                  subtitle: const Text('In Einkaufsliste einschliessen'),
+                  value: activeValue,
+                  onChanged: (v) => setDialogState(() => activeValue = v),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                SwitchListTile(
+                  title: const Text('Sichtbar'),
+                  subtitle: const Text('In Inventarliste anzeigen'),
+                  value: visibleValue,
+                  onChanged: (v) => setDialogState(() => visibleValue = v),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Speichern'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Speichern'),
-          ),
-        ],
       ),
     );
 
@@ -231,6 +258,8 @@ class _MaterialsTabState extends State<_MaterialsTab> {
           currency: currencyController.text.trim(),
           note: noteController.text.trim(),
           isFixedValue: widget.isFixedValue,
+          active: activeValue,
+          visible: visibleValue,
         );
       } else {
         // Update existing
@@ -242,6 +271,8 @@ class _MaterialsTabState extends State<_MaterialsTab> {
           currency: currencyController.text.trim(),
           note: noteController.text.trim(),
           isFixedValue: widget.isFixedValue,
+          active: activeValue,
+          visible: visibleValue,
         );
       }
 
@@ -326,10 +357,21 @@ class _MaterialsTabState extends State<_MaterialsTab> {
                 '${_filteredItems.length} Artikel',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              FilledButton.tonalIcon(
-                onPressed: () => _showEditDialog(),
-                icon: const Icon(Icons.add),
-                label: const Text('Neu'),
+              Row(
+                children: [
+                  if (_items.any((i) => !i.item.visible))
+                    TextButton.icon(
+                      onPressed: () => setState(() => _showHidden = !_showHidden),
+                      icon: Icon(_showHidden ? Icons.visibility_off : Icons.visibility),
+                      label: Text(_showHidden ? 'Versteckte ausblenden' : 'Versteckte anzeigen'),
+                    ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _showEditDialog(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Neu'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -343,37 +385,16 @@ class _MaterialsTabState extends State<_MaterialsTab> {
               : (widget.isFixedValue && _searchQuery.isEmpty)
                   ? ReorderableListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _items.length,
+                      itemCount: _filteredItems.length,
                       onReorder: _onReorder,
                       itemBuilder: (context, index) {
-                        final record = _items[index];
+                        final record = _filteredItems[index];
                         final item = record.item;
-                        return Card(
+                        return _buildItemCard(
                           key: ValueKey(record.id),
-                          child: ListTile(
-                            leading: const Icon(Icons.drag_handle),
-                            title: Text(item.name),
-                            subtitle: Text(
-                              '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}'
-                              '${item.note.isNotEmpty ? ' • ${item.note}' : ''}',
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () => _showEditDialog(
-                                    docId: record.id,
-                                    item: item,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _deleteItem(record.id, item.name),
-                                ),
-                              ],
-                            ),
-                          ),
+                          record: record,
+                          item: item,
+                          leading: const Icon(Icons.drag_handle),
                         );
                       },
                     )
@@ -383,35 +404,75 @@ class _MaterialsTabState extends State<_MaterialsTab> {
                       itemBuilder: (context, index) {
                         final record = _filteredItems[index];
                         final item = record.item;
-                        return Card(
-                          child: ListTile(
-                            title: Text(item.name),
-                            subtitle: Text(
-                              '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}'
-                              '${item.note.isNotEmpty ? ' • ${item.note}' : ''}',
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () => _showEditDialog(
-                                    docId: record.id,
-                                    item: item,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _deleteItem(record.id, item.name),
-                                ),
-                              ],
-                            ),
-                          ),
+                        return _buildItemCard(
+                          key: ValueKey(record.id),
+                          record: record,
+                          item: item,
                         );
                       },
                     ),
         ),
       ],
+    );
+  }
+
+  Widget _buildItemCard({
+    required Key key,
+    required ({String id, MaterialItem item}) record,
+    required MaterialItem item,
+    Widget? leading,
+  }) {
+    final isInactive = !item.active;
+    final isHidden = !item.visible;
+    return Opacity(
+      key: key,
+      opacity: isInactive || isHidden ? 0.5 : 1.0,
+      child: Card(
+        child: ListTile(
+          leading: leading,
+          title: Row(
+            children: [
+              Expanded(child: Text(item.name)),
+              if (isInactive)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Tooltip(
+                    message: 'Inaktiv – nicht in Einkaufsliste',
+                    child: Icon(Icons.block, size: 16, color: Colors.orange),
+                  ),
+                ),
+              if (isHidden)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Tooltip(
+                    message: 'Versteckt',
+                    child: Icon(Icons.visibility_off, size: 16, color: Colors.grey),
+                  ),
+                ),
+            ],
+          ),
+          subtitle: Text(
+            '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}'
+            '${item.note.isNotEmpty ? ' • ${item.note}' : ''}',
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () => _showEditDialog(
+                  docId: record.id,
+                  item: item,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _deleteItem(record.id, item.name),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
