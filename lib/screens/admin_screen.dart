@@ -396,80 +396,29 @@ class _RecipesTabState extends State<_RecipesTab> {
   }
 
   Future<void> _showEditDialog({String? docId, Recipe? recipe}) async {
-    final nameController = TextEditingController(text: recipe?.name ?? '');
-    final ingredientsController = TextEditingController(
-      text: recipe?.ingredients.join(', ') ?? '',
-    );
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-    final result = await showDialog<bool>(
+    final result = await showDialog<({String name, List<String> ingredients})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(docId == null ? 'Neues Rezept' : 'Rezept bearbeiten'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name *',
-                  hintText: 'z.B. Mojito - Classic',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ingredientsController,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Zutaten (kommagetrennt)',
-                  hintText: 'Rum, Limetten, Minze, Zucker',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tipp: Zutaten müssen exakt den Namen im Inventar entsprechen',
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Speichern'),
-          ),
-        ],
+      builder: (ctx) => _RecipeEditDialog(
+        initialName: recipe?.name ?? '',
+        initialIngredients: recipe?.ingredients ?? [],
       ),
     );
 
-    if (result == true && nameController.text.trim().isNotEmpty) {
-      final ingredients = ingredientsController.text
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
-
+    if (result != null && result.name.trim().isNotEmpty) {
       bool success;
 
       if (docId == null) {
         success = await cocktailRepository.addRecipe(
-          name: nameController.text.trim(),
-          ingredients: ingredients,
+          name: result.name.trim(),
+          ingredients: result.ingredients,
         );
       } else {
         success = await cocktailRepository.updateRecipe(
           docId: docId,
-          name: nameController.text.trim(),
-          ingredients: ingredients,
+          name: result.name.trim(),
+          ingredients: result.ingredients,
         );
       }
 
@@ -607,6 +556,230 @@ class _RecipesTabState extends State<_RecipesTab> {
                     );
                   },
                 ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============ Recipe Edit Dialog ============
+
+class _RecipeEditDialog extends StatefulWidget {
+  const _RecipeEditDialog({
+    required this.initialName,
+    required this.initialIngredients,
+  });
+
+  final String initialName;
+  final List<String> initialIngredients;
+
+  @override
+  State<_RecipeEditDialog> createState() => _RecipeEditDialogState();
+}
+
+class _RecipeEditDialogState extends State<_RecipeEditDialog> {
+  late TextEditingController _nameController;
+  late Set<String> _selectedIngredients;
+  List<String> _availableMaterials = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _selectedIngredients = Set.from(widget.initialIngredients);
+    _loadMaterials();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMaterials() async {
+    final materials = await cocktailRepository.getMaterialsWithIds(isFixedValue: false);
+    if (mounted) {
+      setState(() {
+        _availableMaterials = materials
+            .map((m) => m.item.name)
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<String> get _filteredMaterials {
+    if (_searchQuery.isEmpty) return _availableMaterials;
+    final query = _searchQuery.toLowerCase();
+    return _availableMaterials.where((m) => m.toLowerCase().contains(query)).toList();
+  }
+
+  Future<void> _addNewIngredient() async {
+    final nameController = TextEditingController();
+    
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Neue Zutat hinzufügen'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Name der Zutat',
+            hintText: 'z.B. Wodka',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: const Text('Hinzufügen'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      // Add to Firestore
+      final success = await cocktailRepository.addMaterial(
+        name: result,
+        unit: '',
+        price: 0,
+        currency: 'CHF',
+        note: '',
+        isFixedValue: false,
+      );
+
+      if (success) {
+        setState(() {
+          _availableMaterials.add(result);
+          _availableMaterials.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _selectedIngredients.add(result);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNewRecipe = widget.initialName.isEmpty;
+    
+    return AlertDialog(
+      title: Text(isNewRecipe ? 'Neues Rezept' : 'Rezept bearbeiten'),
+      content: SizedBox(
+        width: 400,
+        height: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Recipe name
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name *',
+                hintText: 'z.B. Mojito - Classic',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Selected ingredients chips
+            if (_selectedIngredients.isNotEmpty) ...[
+              Text(
+                'Ausgewählt (${_selectedIngredients.length}):',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _selectedIngredients.map((ingredient) {
+                  return Chip(
+                    label: Text(ingredient),
+                    deleteIcon: const Icon(Icons.close, size: 18),
+                    onDeleted: () {
+                      setState(() => _selectedIngredients.remove(ingredient));
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Search field
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Zutat suchen...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                isDense: true,
+              ),
+              onChanged: (value) => setState(() => _searchQuery = value),
+            ),
+            const SizedBox(height: 8),
+
+            // Add new button
+            TextButton.icon(
+              onPressed: _addNewIngredient,
+              icon: const Icon(Icons.add),
+              label: const Text('Neue Zutat erstellen'),
+            ),
+            const Divider(),
+
+            // Ingredients list
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredMaterials.isEmpty
+                      ? const Center(child: Text('Keine Zutaten gefunden'))
+                      : ListView.builder(
+                          itemCount: _filteredMaterials.length,
+                          itemBuilder: (context, index) {
+                            final material = _filteredMaterials[index];
+                            final isSelected = _selectedIngredients.contains(material);
+                            return CheckboxListTile(
+                              title: Text(material),
+                              value: isSelected,
+                              dense: true,
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    _selectedIngredients.add(material);
+                                  } else {
+                                    _selectedIngredients.remove(material);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(context, (
+              name: _nameController.text,
+              ingredients: _selectedIngredients.toList(),
+            ));
+          },
+          child: const Text('Speichern'),
         ),
       ],
     );
