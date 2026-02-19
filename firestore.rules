@@ -2,30 +2,58 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read access, write requires auth
+    // Admin email - hardcoded for security
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'the.blacklodge@outlook.com';
+    }
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
     
     // Materials collection
     match /materials/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
     // Recipes collection
     match /recipes/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
     // Fixed values collection
     match /fixedValues/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    // Orders collection
-    match /orders/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    // Orders collection - all authenticated users can read/write their own
+    match /orders/{orderId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || resource.data.userId == request.auth.uid;
+    }
+    
+    // Users collection - for user profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Allowed users collection - only admin can manage
+    match /allowedUsers/{email} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Admin config - only admin can read/write
+    match /config/{document=**} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

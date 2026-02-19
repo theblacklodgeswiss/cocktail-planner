@@ -77,7 +77,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.add));
+    // New UI uses FilledButton.tonalIcon with text "Cocktails hinzufügen"
+    await tester.tap(find.text('Cocktails hinzufügen'));
     await tester.pumpAndSettle();
 
     expect(find.byType(RecipeSelectionDialog), findsOneWidget);
@@ -89,7 +90,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.add));
+    // New UI uses FilledButton.tonalIcon with text "Cocktails hinzufügen"
+    await tester.tap(find.text('Cocktails hinzufügen'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Mojito - Classic');

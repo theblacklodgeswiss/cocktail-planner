@@ -1,11 +1,35 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 
 import '../screens/dashboard_screen.dart';
+import '../screens/login_screen.dart';
 import '../screens/shopping_list_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  redirect: (context, state) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isLoggedIn = user != null;
+    final isLoginRoute = state.matchedLocation == '/login';
+
+    // Not logged in and not on login page -> redirect to login
+    if (!isLoggedIn && !isLoginRoute) {
+      return '/login';
+    }
+
+    // Logged in and on login page -> redirect to home
+    if (isLoggedIn && isLoginRoute) {
+      return '/';
+    }
+
+    // No redirect needed
+    return null;
+  },
   routes: [
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginScreen(),
+    ),
     GoRoute(
       path: '/',
       builder: (context, state) => const DashboardScreen(),

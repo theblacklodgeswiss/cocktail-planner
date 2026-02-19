@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../data/cocktail_repository.dart';
 import '../models/cocktail_data.dart';
 import '../models/recipe.dart';
+import '../services/auth_service.dart';
 import '../state/app_state.dart';
 import '../utils/translation.dart';
 import '../widgets/recipe_selection_dialog.dart';
@@ -18,16 +19,280 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  late Future<CocktailData> _dataFuture;
+  Future<CocktailData>? _dataFuture;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
+    _initializeAndLoad();
+  }
+
+  Future<void> _initializeAndLoad() async {
+    if (!_initialized) {
+      await cocktailRepository.initialize();
+      _initialized = true;
+    }
     _loadData();
   }
 
   void _loadData() {
-    _dataFuture = (widget.loadData ?? cocktailRepository.load)();
+    setState(() {
+      _dataFuture = (widget.loadData ?? cocktailRepository.load)();
+    });
+  }
+
+  Future<void> _showUserMenu() async {
+    final user = authService.currentUser;
+    if (user == null) return;
+
+    await showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundImage: user.photoURL != null
+                    ? NetworkImage(user.photoURL!)
+                    : null,
+                child: user.photoURL == null
+                    ? Icon(user.isAnonymous ? Icons.person_outline : Icons.person)
+                    : null,
+              ),
+              title: Row(
+                children: [
+                  Text(user.displayName ?? (user.isAnonymous ? 'Gast' : 'Benutzer')),
+                  if (authService.isAdmin) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'Admin',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              subtitle: Text(user.email ?? (user.isAnonymous ? 'Anonym angemeldet' : '')),
+            ),
+            const Divider(),
+            if (authService.isAdmin)
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings),
+                title: const Text('Benutzer verwalten'),
+                subtitle: const Text('Neue Benutzer hinzufügen'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAdminPanel();
+                },
+              ),
+            if (user.isAnonymous)
+              ListTile(
+                leading: const Icon(Icons.login),
+                title: const Text('Mit Google verknüpfen'),
+                subtitle: const Text('Speichere deine Daten dauerhaft'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await authService.linkWithGoogle();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Konto erfolgreich verknüpft!')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Fehler: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Abmelden'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await authService.signOut();
+                if (mounted) {
+                  context.go('/login');
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAdminPanel() async {
+    final users = await authService.getAllowedUsers();
+    
+    if (!mounted) return;
+    
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.admin_panel_settings),
+            SizedBox(width: 8),
+            Text('Benutzer verwalten'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Add user button
+              ListTile(
+                leading: const Icon(Icons.person_add),
+                title: const Text('Neuen Benutzer hinzufügen'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAddUserDialog();
+                },
+              ),
+              const Divider(),
+              // User list
+              if (users.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Keine Benutzer hinzugefügt'),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: users.length,
+                    itemBuilder: (listContext, index) {
+                      final user = users[index];
+                      return ListTile(
+                        leading: const Icon(Icons.person),
+                        title: Text(user.name.isNotEmpty ? user.name : user.email),
+                        subtitle: Text(user.email),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            final navigator = Navigator.of(listContext);
+                            final confirm = await showDialog<bool>(
+                              context: listContext,
+                              builder: (c) => AlertDialog(
+                                title: const Text('Benutzer entfernen?'),
+                                content: Text('${user.email} wird entfernt.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(c, false),
+                                    child: const Text('Abbrechen'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(c, true),
+                                    child: const Text('Entfernen'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              await authService.removeAllowedUser(user.email);
+                              if (mounted) {
+                                navigator.pop();
+                                _showAdminPanel(); // Refresh
+                              }
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddUserDialog() async {
+    final emailController = TextEditingController();
+    final nameController = TextEditingController();
+    
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Neuen Benutzer hinzufügen'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'E-Mail Adresse',
+                hintText: 'user@example.com',
+                prefixIcon: Icon(Icons.email),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name (optional)',
+                hintText: 'Max Mustermann',
+                prefixIcon: Icon(Icons.person),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hinzufügen'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result == true && emailController.text.trim().isNotEmpty) {
+      final success = await authService.addAllowedUser(
+        emailController.text.trim(),
+        name: nameController.text.trim(),
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success 
+                ? 'Benutzer hinzugefügt!' 
+                : 'Fehler beim Hinzufügen'),
+          ),
+        );
+        if (success) {
+          _showAdminPanel(); // Reopen panel
+        }
+      }
+    }
   }
 
   Future<void> _openRecipeSelection(List<Recipe> allRecipes) async {
@@ -227,6 +492,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_dataFuture == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    
     return FutureBuilder<CocktailData>(
       future: _dataFuture,
       builder: (context, snapshot) {
@@ -315,6 +584,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           : Colors.orange.shade100,
                     ),
                   ),
+                  // User menu
+                  IconButton(
+                    icon: CircleAvatar(
+                      radius: 16,
+                      backgroundImage: authService.photoUrl != null
+                          ? NetworkImage(authService.photoUrl!)
+                          : null,
+                      child: authService.photoUrl == null
+                          ? Icon(
+                              authService.isAnonymous ? Icons.person_outline : Icons.person,
+                              size: 20,
+                            )
+                          : null,
+                    ),
+                    onPressed: _showUserMenu,
+                    tooltip: authService.displayName ?? 'Benutzer',
+                  ),
+                  const SizedBox(width: 8),
                 ],
               ),
               body: hasSelection
