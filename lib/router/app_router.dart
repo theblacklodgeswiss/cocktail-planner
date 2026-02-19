@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 
+import '../screens/admin_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/shopping_list_screen.dart';
@@ -37,6 +38,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/shopping-list',
       builder: (context, state) => const ShoppingListScreen(),
+    ),
+    GoRoute(
+      path: '/admin',
+      builder: (context, state) => const AdminScreen(),
     ),
   ],
 );

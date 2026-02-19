@@ -315,6 +315,131 @@ class CocktailRepository {
       return false;
     }
   }
+
+  // ============ Update Methods ============
+
+  /// Update a material item in Firestore
+  Future<bool> updateMaterial({
+    required String docId,
+    required String name,
+    required String unit,
+    required double price,
+    required String currency,
+    required String note,
+    required bool isFixedValue,
+  }) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      final collection = isFixedValue ? _fixedValuesCollection : _materialsCollection;
+      await collection.doc(docId).update({
+        'name': name,
+        'unit': unit,
+        'price': price,
+        'currency': currency,
+        'note': note,
+      });
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update material: $e');
+      return false;
+    }
+  }
+
+  /// Update a recipe in Firestore
+  Future<bool> updateRecipe({
+    required String docId,
+    required String name,
+    required List<String> ingredients,
+  }) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      final type = name.toLowerCase().contains('shot') ? 'shot' : 'cocktail';
+      await _recipesCollection.doc(docId).update({
+        'name': name,
+        'ingredients': ingredients,
+        'type': type,
+      });
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update recipe: $e');
+      return false;
+    }
+  }
+
+  // ============ Delete Methods ============
+
+  /// Delete a material from Firestore
+  Future<bool> deleteMaterial({
+    required String docId,
+    required bool isFixedValue,
+  }) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      final collection = isFixedValue ? _fixedValuesCollection : _materialsCollection;
+      await collection.doc(docId).delete();
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to delete material: $e');
+      return false;
+    }
+  }
+
+  /// Delete a recipe from Firestore
+  Future<bool> deleteRecipe({required String docId}) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      await _recipesCollection.doc(docId).delete();
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to delete recipe: $e');
+      return false;
+    }
+  }
+
+  // ============ Get with Document IDs ============
+
+  /// Get materials with their Firestore document IDs
+  Future<List<({String id, MaterialItem item})>> getMaterialsWithIds({
+    required bool isFixedValue,
+  }) async {
+    if (!_firebaseAvailable) return [];
+
+    try {
+      final collection = isFixedValue ? _fixedValuesCollection : _materialsCollection;
+      final snapshot = await collection.get();
+      return snapshot.docs.map((doc) => (
+        id: doc.id,
+        item: MaterialItem.fromJson(doc.data()),
+      )).toList();
+    } catch (e) {
+      debugPrint('Failed to get materials with IDs: $e');
+      return [];
+    }
+  }
+
+  /// Get recipes with their Firestore document IDs
+  Future<List<({String id, Recipe item})>> getRecipesWithIds() async {
+    if (!_firebaseAvailable) return [];
+
+    try {
+      final snapshot = await _recipesCollection.get();
+      return snapshot.docs.map((doc) => (
+        id: doc.id,
+        item: Recipe.fromJson(doc.data()),
+      )).toList();
+    } catch (e) {
+      debugPrint('Failed to get recipes with IDs: $e');
+      return [];
+    }
+  }
 }
 
 final CocktailRepository cocktailRepository = CocktailRepository();

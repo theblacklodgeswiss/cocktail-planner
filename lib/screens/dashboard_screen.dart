@@ -147,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.admin_panel_settings),
             SizedBox(width: 8),
-            Text('Benutzer verwalten'),
+            Text('Admin-Panel'),
           ],
         ),
         content: SizedBox(
@@ -155,6 +155,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Inventory management
+              ListTile(
+                leading: const Icon(Icons.inventory),
+                title: const Text('Inventar verwalten'),
+                subtitle: const Text('Materialien, Verbrauch, Rezepte'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/admin');
+                },
+              ),
+              const Divider(),
               // Add user button
               ListTile(
                 leading: const Icon(Icons.person_add),
