@@ -235,6 +235,8 @@ class CocktailRepository {
     required DateTime date,
     required List<Map<String, dynamic>> items,
     required double total,
+    int personCount = 0,
+    String drinkerType = 'normal',
   }) async {
     if (!_firebaseAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -247,6 +249,8 @@ class CocktailRepository {
         'date': date.toIso8601String(),
         'items': items,
         'total': total,
+        'personCount': personCount,
+        'drinkerType': drinkerType,
         'createdAt': FieldValue.serverTimestamp(),
       });
       return docRef.id;

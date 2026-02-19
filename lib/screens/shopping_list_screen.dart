@@ -157,43 +157,92 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
 
     final nameController = TextEditingController();
+    final personCountController = TextEditingController();
+    String drinkerType = 'normal'; // normal, light, heavy
     
-    final confirmed = await showDialog<bool>(
+    final result = await showDialog<({String name, int personCount, String drinkerType})>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bestellung speichern'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('${selectedOrderItems.length} Artikel • ${total.toStringAsFixed(2)} CHF'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name der Bestellung',
-                hintText: 'z.B. Hochzeit Meyer',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Bestellung speichern'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${selectedOrderItems.length} Artikel • ${total.toStringAsFixed(2)} CHF'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name der Bestellung *',
+                    hintText: 'z.B. Hochzeit Meyer',
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: personCountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Anzahl Personen',
+                    hintText: 'z.B. 50',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Trinkverhalten:'),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'light',
+                      label: Text('Wenig'),
+                      icon: Icon(Icons.local_drink),
+                    ),
+                    ButtonSegment(
+                      value: 'normal',
+                      label: Text('Normal'),
+                      icon: Icon(Icons.local_bar),
+                    ),
+                    ButtonSegment(
+                      value: 'heavy',
+                      label: Text('Viel'),
+                      icon: Icon(Icons.sports_bar),
+                    ),
+                  ],
+                  selected: {drinkerType},
+                  onSelectionChanged: (v) => setDialogState(() => drinkerType = v.first),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isEmpty) return;
+                Navigator.pop(context, (
+                  name: name,
+                  personCount: int.tryParse(personCountController.text) ?? 0,
+                  drinkerType: drinkerType,
+                ));
+              },
+              child: const Text('PDF erstellen'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('PDF erstellen'),
-          ),
-        ],
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (result == null || !mounted) return;
 
-    final orderName = nameController.text.trim();
+    final orderName = result.name;
     if (orderName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Name erforderlich')),
@@ -216,6 +265,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         'total': oi.total,
       }).toList(),
       total: total,
+      personCount: result.personCount,
+      drinkerType: result.drinkerType,
     );
 
     await PdfGenerator.generateAndDownload(
@@ -223,6 +274,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       orderDate: orderDate,
       items: selectedOrderItems,
       grandTotal: total,
+      personCount: result.personCount,
+      drinkerType: result.drinkerType,
     );
 
     if (!mounted) return;

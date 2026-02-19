@@ -25,6 +25,8 @@ class PdfGenerator {
     required DateTime orderDate,
     required List<OrderItem> items,
     required double grandTotal,
+    int personCount = 0,
+    String drinkerType = 'normal',
   }) async {
     final pdf = pw.Document();
 
@@ -49,11 +51,11 @@ class PdfGenerator {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
-        header: (context) => _buildHeader(orderName, orderDate),
+        header: (context) => _buildHeader(orderName, orderDate, personCount, drinkerType),
         footer: (context) => _buildFooter(context),
         build: (context) => [
           // Summary section
-          _buildSummarySection(items.length, grandTotal),
+          _buildSummarySection(items.length, grandTotal, personCount, drinkerType),
           pw.SizedBox(height: 20),
           
           // Items grouped by location
@@ -73,7 +75,13 @@ class PdfGenerator {
     );
   }
 
-  static pw.Widget _buildHeader(String orderName, DateTime date) {
+  static pw.Widget _buildHeader(String orderName, DateTime date, int personCount, String drinkerType) {
+    final drinkerLabel = switch (drinkerType) {
+      'light' => 'Wenig Trinker',
+      'heavy' => 'Starke Trinker',
+      _ => 'Normal',
+    };
+    
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 20),
       decoration: const pw.BoxDecoration(
@@ -103,6 +111,16 @@ class PdfGenerator {
                   color: PdfColors.grey700,
                 ),
               ),
+              if (personCount > 0) ...[
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  '$personCount Personen • $drinkerLabel',
+                  style: const pw.TextStyle(
+                    fontSize: 12,
+                    color: PdfColors.grey600,
+                  ),
+                ),
+              ],
             ],
           ),
           pw.Column(
@@ -155,7 +173,13 @@ class PdfGenerator {
     );
   }
 
-  static pw.Widget _buildSummarySection(int itemCount, double total) {
+  static pw.Widget _buildSummarySection(int itemCount, double total, int personCount, String drinkerType) {
+    final drinkerLabel = switch (drinkerType) {
+      'light' => 'Wenig Trinker',
+      'heavy' => 'Starke Trinker',
+      _ => 'Normal',
+    };
+    
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
       decoration: pw.BoxDecoration(
@@ -180,6 +204,13 @@ class PdfGenerator {
                 '$itemCount Artikel ausgewählt',
                 style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
               ),
+              if (personCount > 0) ...[
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  '$personCount Personen • $drinkerLabel',
+                  style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                ),
+              ],
             ],
           ),
           pw.Column(
