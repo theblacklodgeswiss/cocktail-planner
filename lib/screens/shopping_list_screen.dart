@@ -99,8 +99,17 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    final fixedValues = data.fixedValues.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final fixedValues = data.fixedValues
+        .where((item) => item.active)
+        .toList()
+      ..sort((a, b) {
+        final aOrder = a.sortOrder;
+        final bOrder = b.sortOrder;
+        if (aOrder != null && bOrder != null) return aOrder.compareTo(bOrder);
+        if (aOrder != null) return -1;
+        if (bOrder != null) return 1;
+        return a.name.compareTo(b.name);
+      });
 
     return (
       ingredientsByCocktail: ingredientsByCocktail,
@@ -159,6 +168,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final nameController = TextEditingController();
     final personCountController = TextEditingController();
     String drinkerType = 'normal'; // normal, light, heavy
+    String? nameError;
+    String? personCountError;
     
     final result = await showDialog<({String name, int personCount, String drinkerType})>(
       context: context,
@@ -174,22 +185,30 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Name der Bestellung *',
                     hintText: 'z.B. Hochzeit Meyer',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: nameError,
                   ),
                   autofocus: true,
+                  onChanged: (_) {
+                    if (nameError != null) setDialogState(() => nameError = null);
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: personCountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Anzahl Personen *',
                     hintText: 'z.B. 50',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: personCountError,
                   ),
+                  onChanged: (_) {
+                    if (personCountError != null) setDialogState(() => personCountError = null);
+                  },
                 ),
                 const SizedBox(height: 16),
                 const Text('Trinkverhalten:'),
@@ -226,8 +245,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             FilledButton(
               onPressed: () {
                 final name = nameController.text.trim();
-                final personCount = int.tryParse(personCountController.text) ?? 0;
-                if (name.isEmpty || personCount <= 0) return;
+                final personCount = int.tryParse(personCountController.text.trim()) ?? 0;
+                String? nameErr;
+                String? personErr;
+                if (name.isEmpty) nameErr = 'Name erforderlich';
+                if (personCount <= 0) personErr = 'Bitte eine gültige Personenzahl eingeben';
+                if (nameErr != null || personErr != null) {
+                  setDialogState(() {
+                    nameError = nameErr;
+                    personCountError = personErr;
+                  });
+                  return;
+                }
                 Navigator.pop(context, (
                   name: name,
                   personCount: personCount,

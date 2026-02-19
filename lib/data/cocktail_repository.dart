@@ -141,6 +141,8 @@ class CocktailRepository {
       'price': (item['price'] ?? item['preis'] ?? 0).toDouble(),
       'currency': item['currency'] ?? item['waehrung'] ?? 'CHF',
       'note': item['note'] ?? item['bemerkung'] ?? '',
+      'active': item['active'] ?? true,
+      'visible': item['visible'] ?? true,
     };
   }
 
@@ -270,6 +272,8 @@ class CocktailRepository {
     required String currency,
     required String note,
     required bool isFixedValue,
+    bool active = true,
+    bool visible = true,
   }) async {
     if (!_firebaseAvailable) {
       debugPrint('Firebase not available, cannot add material');
@@ -284,6 +288,8 @@ class CocktailRepository {
         'price': price,
         'currency': currency,
         'note': note,
+        'active': active,
+        'visible': visible,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -337,6 +343,8 @@ class CocktailRepository {
     required String currency,
     required String note,
     required bool isFixedValue,
+    bool active = true,
+    bool visible = true,
   }) async {
     if (!_firebaseAvailable) return false;
 
@@ -348,6 +356,8 @@ class CocktailRepository {
         'price': price,
         'currency': currency,
         'note': note,
+        'active': active,
+        'visible': visible,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -400,6 +410,27 @@ class CocktailRepository {
       return true;
     } catch (e) {
       debugPrint('Failed to delete material: $e');
+      return false;
+    }
+  }
+
+  /// Persist a new manual sort order for fixed-value (Verbrauch) items.
+  /// [orderedDocIds] is the list of document IDs in the desired display order.
+  Future<bool> updateFixedValueSortOrders(List<String> orderedDocIds) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      final batch = _firestore.batch();
+      for (var i = 0; i < orderedDocIds.length; i++) {
+        batch.update(_fixedValuesCollection.doc(orderedDocIds[i]), {
+          'sortOrder': i,
+        });
+      }
+      await batch.commit();
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update sort orders: $e');
       return false;
     }
   }
