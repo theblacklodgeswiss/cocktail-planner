@@ -67,14 +67,18 @@ class AuthService {
   Future<UserCredential?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // Web uses popup
+        // Web uses popup - always show account selection
         final googleProvider = GoogleAuthProvider();
         googleProvider.addScope('email');
         googleProvider.addScope('profile');
+        googleProvider.setCustomParameters({
+          'prompt': 'select_account', // Force account selection
+        });
         
         return await _firebaseAuth.signInWithPopup(googleProvider);
       } else {
-        // Mobile/Desktop uses GoogleSignIn package
+        // Mobile/Desktop - sign out first to force account selection
+        await _google.signOut();
         final GoogleSignInAccount? googleUser = await _google.signIn();
         if (googleUser == null) {
           return null; // User cancelled
@@ -129,9 +133,13 @@ class AuthService {
         final googleProvider = GoogleAuthProvider();
         googleProvider.addScope('email');
         googleProvider.addScope('profile');
+        googleProvider.setCustomParameters({
+          'prompt': 'select_account', // Force account selection
+        });
         
         return await user.linkWithPopup(googleProvider);
       } else {
+        await _google.signOut(); // Force account selection
         final GoogleSignInAccount? googleUser = await _google.signIn();
         if (googleUser == null) {
           return null;
