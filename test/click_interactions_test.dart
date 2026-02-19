@@ -116,7 +116,8 @@ void main() {
 
     expect(find.text('Delete Me'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.delete_outline).first);
+    // InputChip uses close icon for deletion
+    await tester.tap(find.byIcon(Icons.close).first);
     await tester.pumpAndSettle();
 
     expect(find.text('Delete Me'), findsNothing);
@@ -147,7 +148,10 @@ void main() {
     await tester.pumpWidget(_localizedRouterApp(router));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(FilledButton).first);
+    // Find the generate button in the bottomNavigationBar by text
+    final generateButton = find.text('Einkaufsliste generieren');
+    expect(generateButton, findsOneWidget);
+    await tester.tap(generateButton);
     await tester.pumpAndSettle();
 
     expect(find.text('ShoppingListRoute'), findsOneWidget);

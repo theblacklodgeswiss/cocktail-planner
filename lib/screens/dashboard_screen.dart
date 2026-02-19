@@ -46,6 +46,185 @@ class _DashboardScreenState extends State<DashboardScreen> {
     appState.setSelectedRecipes(result);
   }
 
+  Widget _buildEmptyState(VoidCallback onAdd) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.local_bar_outlined,
+              size: 60,
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Keine Cocktails ausgewählt',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Füge Cocktails hinzu um eine\nEinkaufsliste zu generieren',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 32),
+          FilledButton.tonalIcon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('Cocktails hinzufügen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCocktailChip(Recipe recipe) {
+    final isShot = recipe.name.toLowerCase().contains('shot');
+    return Padding(
+      padding: const EdgeInsets.only(right: 8, bottom: 8),
+      child: InputChip(
+        label: Text(recipe.name),
+        avatar: Icon(
+          isShot ? Icons.wine_bar : Icons.local_bar,
+          size: 18,
+        ),
+        deleteIcon: const Icon(Icons.close, size: 18),
+        onDeleted: () => appState.removeRecipe(recipe.id),
+        backgroundColor: isShot 
+            ? Colors.orange.withValues(alpha: 0.15)
+            : Colors.green.withValues(alpha: 0.15),
+      ),
+    );
+  }
+
+  Widget _buildSelectedCocktails(List<Recipe> recipes, VoidCallback onAdd) {
+    final shots = recipes.where((r) => r.name.toLowerCase().contains('shot')).toList();
+    final cocktails = recipes.where((r) => !r.name.toLowerCase().contains('shot')).toList();
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Summary card
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.local_bar,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${recipes.length} ausgewählt',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${cocktails.length} Cocktails • ${shots.length} Shots',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text('Bearbeiten'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Cocktails section
+              if (cocktails.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.local_bar, size: 20, color: Colors.green.shade700),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Cocktails',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Wrap(
+                  children: cocktails.map(_buildCocktailChip).toList(),
+                ),
+                const SizedBox(height: 20),
+              ],
+              
+              // Shots section
+              if (shots.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.wine_bar, size: 20, color: Colors.orange.shade700),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Shots',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Wrap(
+                  children: shots.map(_buildCocktailChip).toList(),
+                ),
+              ],
+              
+              // Space for bottom bar
+              const SizedBox(height: 100),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<CocktailData>(
@@ -69,6 +248,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return AnimatedBuilder(
           animation: appState,
           builder: (context, _) {
+            final hasSelection = appState.selectedRecipes.isNotEmpty;
+            
             return Scaffold(
               appBar: AppBar(
                 title: Text(translate(context, 'dashboard.title')),
@@ -108,7 +289,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Daten erfolgreich aktualisiert!')),
                             );
-                            // Reload data
                             setState(() {
                               _loadData();
                             });
@@ -136,59 +316,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
-              body: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (appState.selectedRecipes.isEmpty)
-                      Expanded(
-                        child: Center(
-                          child: Text(
-                            translate(context, 'dashboard.empty'),
-                            textAlign: TextAlign.center,
+              body: hasSelection
+                  ? _buildSelectedCocktails(
+                      appState.selectedRecipes,
+                      () => _openRecipeSelection(data.recipes),
+                    )
+                  : _buildEmptyState(() => _openRecipeSelection(data.recipes)),
+              bottomNavigationBar: hasSelection
+                  ? Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: FilledButton.icon(
+                          onPressed: () => context.push('/shopping-list'),
+                          icon: const Icon(Icons.shopping_cart),
+                          label: const Text('Einkaufsliste generieren'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 56),
                           ),
                         ),
-                      )
-                    else
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: appState.selectedRecipes.length,
-                          itemBuilder: (context, index) {
-                            final recipe = appState.selectedRecipes[index];
-                            return Card(
-                              child: ListTile(
-                                title: Text(recipe.name),
-                                subtitle: Text(
-                                  recipe.ingredients.join(', '),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () => appState.removeRecipe(recipe.id),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
                       ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: appState.selectedRecipes.isEmpty
-                          ? null
-                          : () => context.push('/shopping-list'),
-                      child: Text(
-                        translate(context, 'dashboard.generate_button'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              floatingActionButton: FloatingActionButton(
-                onPressed: () => _openRecipeSelection(data.recipes),
-                child: const Icon(Icons.add),
-              ),
+                    )
+                  : null,
             );
           },
         );
