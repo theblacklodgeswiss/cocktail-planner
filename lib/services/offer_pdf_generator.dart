@@ -248,7 +248,7 @@ class OfferPdfGenerator {
             // Fill remaining columns
             ...List.generate(
               3 - row2.length,
-              (_) => const pw.Expanded(child: pw.SizedBox()),
+              (_) =>  pw.Expanded(child: pw.SizedBox()),
             ),
           ],
         ),
