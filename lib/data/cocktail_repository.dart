@@ -255,6 +255,66 @@ class CocktailRepository {
       return null;
     }
   }
+
+  /// Add a new material item to Firestore
+  Future<bool> addMaterial({
+    required String name,
+    required String unit,
+    required double price,
+    required String currency,
+    required String note,
+    required bool isFixedValue,
+  }) async {
+    if (!_firebaseAvailable) {
+      debugPrint('Firebase not available, cannot add material');
+      return false;
+    }
+
+    try {
+      final collection = isFixedValue ? _fixedValuesCollection : _materialsCollection;
+      await collection.add({
+        'name': name,
+        'unit': unit,
+        'price': price,
+        'currency': currency,
+        'note': note,
+      });
+      
+      // Clear cache to reload data
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to add material: $e');
+      return false;
+    }
+  }
+
+  /// Add a new recipe to Firestore
+  Future<bool> addRecipe({
+    required String name,
+    required List<String> ingredients,
+  }) async {
+    if (!_firebaseAvailable) {
+      debugPrint('Firebase not available, cannot add recipe');
+      return false;
+    }
+
+    try {
+      final type = name.toLowerCase().contains('shot') ? 'shot' : 'cocktail';
+      await _recipesCollection.add({
+        'name': name,
+        'ingredients': ingredients,
+        'type': type,
+      });
+      
+      // Clear cache to reload data
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to add recipe: $e');
+      return false;
+    }
+  }
 }
 
 final CocktailRepository cocktailRepository = CocktailRepository();

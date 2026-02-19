@@ -18,7 +18,7 @@ class ShoppingListScreen extends StatefulWidget {
 }
 
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
-  late final Future<CocktailData> _dataFuture;
+  late Future<CocktailData> _dataFuture;
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, int> _quantities = {};
   final Set<String> _selectedItems = {};
@@ -320,9 +320,30 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   colorScheme,
                   textTheme,
                 ),
+          floatingActionButton: cocktailRepository.isUsingFirebase
+              ? FloatingActionButton.extended(
+                  onPressed: () => _showAddItemDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Neu'),
+                )
+              : null,
         );
       },
     );
+  }
+
+  Future<void> _showAddItemDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => const _AddItemDialog(),
+    );
+    
+    if (result == true && mounted) {
+      // Reload data
+      setState(() {
+        _dataFuture = cocktailRepository.load();
+      });
+    }
   }
 
   Widget _buildEmptyState(
@@ -998,6 +1019,216 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+enum ItemType { ingredient, fixedValue }
+
+class _AddItemDialog extends StatefulWidget {
+  const _AddItemDialog();
+
+  @override
+  State<_AddItemDialog> createState() => _AddItemDialogState();
+}
+
+class _AddItemDialogState extends State<_AddItemDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _unitController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _noteController = TextEditingController();
+  
+  ItemType _selectedType = ItemType.fixedValue;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _unitController.dispose();
+    _priceController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    
+    final success = await cocktailRepository.addMaterial(
+      name: _nameController.text.trim(),
+      unit: _unitController.text.trim(),
+      price: double.tryParse(_priceController.text) ?? 0,
+      currency: 'CHF',
+      note: _noteController.text.trim(),
+      isFixedValue: _selectedType == ItemType.fixedValue,
+    );
+    
+    if (!mounted) return;
+    
+    setState(() => _isLoading = false);
+    
+    if (success) {
+      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Item erfolgreich hinzugefügt!')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fehler beim Hinzufügen')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Neues Item hinzufügen'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Type selection
+              const Text('Typ:', style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              SegmentedButton<ItemType>(
+                segments: const [
+                  ButtonSegment(
+                    value: ItemType.ingredient,
+                    label: Text('Zutat'),
+                    icon: Icon(Icons.restaurant),
+                  ),
+                  ButtonSegment(
+                    value: ItemType.fixedValue,
+                    label: Text('Fixkosten'),
+                    icon: Icon(Icons.attach_money),
+                  ),
+                ],
+                selected: {_selectedType},
+                onSelectionChanged: (selection) {
+                  setState(() => _selectedType = selection.first);
+                },
+              ),
+              const SizedBox(height: 16),
+              
+              // Name
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name *',
+                  hintText: 'z.B. Strohhalme',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Name ist erforderlich';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              
+              // Unit and Price in a row
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _unitController,
+                      decoration: const InputDecoration(
+                        labelText: 'Einheit *',
+                        hintText: 'z.B. Stk, 100er Pack',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Erforderlich';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _priceController,
+                      decoration: const InputDecoration(
+                        labelText: 'Preis (CHF) *',
+                        hintText: '0.00',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Erforderlich';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Ungültig';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Note
+              TextFormField(
+                controller: _noteController,
+                decoration: const InputDecoration(
+                  labelText: 'Bemerkung',
+                  hintText: 'z.B. Kaufland, Amazon',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              
+              if (_selectedType == ItemType.ingredient) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 18, color: Colors.amber),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Zutaten erscheinen nur wenn ein Cocktail sie verwendet.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: _isLoading ? null : _submit,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Hinzufügen'),
+        ),
+      ],
     );
   }
 }
