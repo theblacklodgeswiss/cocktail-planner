@@ -6,6 +6,7 @@ import '../models/cocktail_data.dart';
 import '../models/material_item.dart';
 import '../services/pdf_generator.dart';
 import '../state/app_state.dart';
+import '../utils/currency.dart';
 import '../utils/translation.dart';
 
 class ShoppingListScreen extends StatefulWidget {
@@ -243,10 +244,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final nameController = TextEditingController();
     final personCountController = TextEditingController();
     String drinkerType = 'normal'; // normal, light, heavy
+    Currency selectedCurrency = defaultCurrency;
     String? nameError;
     String? personCountError;
     
-    final result = await showDialog<({String name, int personCount, String drinkerType})>(
+    final result = await showDialog<({String name, int personCount, String drinkerType, Currency currency})>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -256,7 +258,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${selectedOrderItems.length} Artikel • ${total.toStringAsFixed(2)} CHF'),
+                Text('${selectedOrderItems.length} Artikel • ${selectedCurrency.format(total)}'),
                 const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
@@ -284,6 +286,17 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   onChanged: (_) {
                     if (personCountError != null) setDialogState(() => personCountError = null);
                   },
+                ),
+                const SizedBox(height: 16),
+                const Text('Währung:'),
+                const SizedBox(height: 8),
+                SegmentedButton<Currency>(
+                  segments: Currency.values.map((c) => ButtonSegment(
+                    value: c,
+                    label: Text(c.code),
+                  )).toList(),
+                  selected: {selectedCurrency},
+                  onSelectionChanged: (v) => setDialogState(() => selectedCurrency = v.first),
                 ),
                 const SizedBox(height: 16),
                 const Text('Trinkverhalten:'),
@@ -336,6 +349,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   name: name,
                   personCount: personCount,
                   drinkerType: drinkerType,
+                  currency: selectedCurrency,
                 ));
               },
               child: const Text('PDF erstellen'),
@@ -370,6 +384,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         'total': oi.total,
       }).toList(),
       total: total,
+      currency: result.currency.code,
       personCount: result.personCount,
       drinkerType: result.drinkerType,
     );
@@ -379,6 +394,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       orderDate: orderDate,
       items: selectedOrderItems,
       grandTotal: total,
+      currency: result.currency.code,
       personCount: result.personCount,
       drinkerType: result.drinkerType,
     );
@@ -692,7 +708,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   Row(
                     children: [
                       Text(
-                        '${item.unit} • ${item.price.toStringAsFixed(2)} CHF',
+                        '${item.unit} • ${Currency.fromCode(item.currency).format(item.price)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.outline,
                         ),
@@ -739,7 +755,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   if (isSelected) ...[
                     const SizedBox(height: 6),
                     Text(
-                      '${(item.price * qty).toStringAsFixed(2)} CHF',
+                      Currency.fromCode(item.currency).format(item.price * qty),
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: colorScheme.primary,
@@ -890,7 +906,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${total.toStringAsFixed(2)} CHF',
+                  defaultCurrency.format(total),
                   style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: colorScheme.onPrimary,
@@ -943,7 +959,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     ),
                   ),
                   Text(
-                    '${oi.total.toStringAsFixed(2)} CHF',
+                    Currency.fromCode(oi.item.currency).format(oi.total),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),

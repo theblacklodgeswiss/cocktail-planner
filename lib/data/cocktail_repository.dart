@@ -239,8 +239,10 @@ class CocktailRepository {
     required DateTime date,
     required List<Map<String, dynamic>> items,
     required double total,
+    required String currency,
     int personCount = 0,
     String drinkerType = 'normal',
+    String status = 'quote',
   }) async {
     if (!_firebaseAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -253,8 +255,10 @@ class CocktailRepository {
         'date': date.toIso8601String(),
         'items': items,
         'total': total,
+        'currency': currency,
         'personCount': personCount,
         'drinkerType': drinkerType,
+        'status': status,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -262,6 +266,22 @@ class CocktailRepository {
     } catch (e) {
       debugPrint('Failed to save order: $e');
       return null;
+    }
+  }
+
+  /// Update order status in Firestore
+  Future<bool> updateOrderStatus(String orderId, String status) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      await _ordersCollection.doc(orderId).update({
+        'status': status,
+        'statusUpdatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update order status: $e');
+      return false;
     }
   }
 
@@ -284,6 +304,25 @@ class CocktailRepository {
     } catch (e) {
       debugPrint('Failed to fetch orders: $e');
       return [];
+    }
+  }
+
+  /// Delete an order from Firestore (super admin only)
+  Future<bool> deleteOrder(String orderId) async {
+    if (!_firebaseAvailable) return false;
+
+    // Only super admin can delete orders
+    if (!authService.isSuperAdmin) {
+      debugPrint('Delete order denied: not super admin');
+      return false;
+    }
+
+    try {
+      await _ordersCollection.doc(orderId).delete();
+      return true;
+    } catch (e) {
+      debugPrint('Failed to delete order: $e');
+      return false;
     }
   }
 

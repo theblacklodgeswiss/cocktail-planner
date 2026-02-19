@@ -64,6 +64,13 @@ class AuthService {
     return _cachedIsAdmin ?? false;
   }
 
+  /// Check if current user is super admin
+  bool get isSuperAdmin {
+    final userEmail = email;
+    if (userEmail == null) return false;
+    return userEmail.toLowerCase() == superAdminEmail.toLowerCase();
+  }
+
   /// Check admin status from Firestore (async - call on login)
   Future<bool> checkIsAdmin() async {
     final userEmail = email;
