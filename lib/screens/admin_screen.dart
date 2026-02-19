@@ -29,7 +29,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    if (!authService.isAdmin) {
+    if (!authService.canManageUsers) {
       return Scaffold(
         appBar: AppBar(title: const Text('Admin')),
         body: const Center(
@@ -711,18 +711,23 @@ class _RecipeEditDialogState extends State<_RecipeEditDialog> {
                 style: Theme.of(context).textTheme.labelMedium,
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: _selectedIngredients.map((ingredient) {
-                  return Chip(
-                    label: Text(ingredient),
-                    deleteIcon: const Icon(Icons.close, size: 18),
-                    onDeleted: () {
-                      setState(() => _selectedIngredients.remove(ingredient));
-                    },
-                  );
-                }).toList(),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 120),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _selectedIngredients.map((ingredient) {
+                      return Chip(
+                        label: Text(ingredient),
+                        deleteIcon: const Icon(Icons.close, size: 18),
+                        onDeleted: () {
+                          setState(() => _selectedIngredients.remove(ingredient));
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
             ],

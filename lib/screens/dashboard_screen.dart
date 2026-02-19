@@ -95,6 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context.go('/admin');
                 },
               ),
+            ],
+            if (authService.canManageUsers)
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings),
                 title: const Text('Benutzer verwalten'),
@@ -104,7 +106,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _showAdminPanel();
                 },
               ),
-            ],
             if (user.isAnonymous)
               ListTile(
                 leading: const Icon(Icons.login),
@@ -193,36 +194,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         leading: const Icon(Icons.person),
                         title: Text(user.name.isNotEmpty ? user.name : user.email),
                         subtitle: Text(user.email),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            final navigator = Navigator.of(listContext);
-                            final confirm = await showDialog<bool>(
-                              context: listContext,
-                              builder: (c) => AlertDialog(
-                                title: const Text('Benutzer entfernen?'),
-                                content: Text('${user.email} wird entfernt.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(c, false),
-                                    child: const Text('Abbrechen'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(c, true),
-                                    child: const Text('Entfernen'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              await authService.removeAllowedUser(user.email);
-                              if (mounted) {
-                                navigator.pop();
-                                _showAdminPanel(); // Refresh
-                              }
-                            }
-                          },
-                        ),
+                        trailing: authService.isAdmin
+                            ? IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  final navigator = Navigator.of(listContext);
+                                  final confirm = await showDialog<bool>(
+                                    context: listContext,
+                                    builder: (c) => AlertDialog(
+                                      title: const Text('Benutzer entfernen?'),
+                                      content: Text('${user.email} wird entfernt.'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(c, false),
+                                          child: const Text('Abbrechen'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(c, true),
+                                          child: const Text('Entfernen'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    await authService.removeAllowedUser(user.email);
+                                    if (mounted) {
+                                      navigator.pop();
+                                      _showAdminPanel(); // Refresh
+                                    }
+                                  }
+                                },
+                              )
+                            : null,
                       );
                     },
                   ),

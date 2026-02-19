@@ -49,17 +49,18 @@ class AuthService {
     return user?.isAnonymous ?? true;
   }
 
-  /// Check if current user is admin (sync - uses cache or hardcoded check)
+  /// Check if current user is admin (sync - uses cache)
   bool get isAdmin {
     final userEmail = email;
     if (userEmail == null) return false;
-    
-    // Super admin is always admin
-    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) {
-      return true;
-    }
-    
-    // Return cached value if available
+    return _cachedIsAdmin ?? false;
+  }
+
+  /// Check if current user can manage users (admin or super admin)
+  bool get canManageUsers {
+    final userEmail = email;
+    if (userEmail == null) return false;
+    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) return true;
     return _cachedIsAdmin ?? false;
   }
 
@@ -70,11 +71,11 @@ class AuthService {
       _cachedIsAdmin = false;
       return false;
     }
-    
-    // Super admin is always admin
+
+    // Super admin can manage users but is not a data admin
     if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) {
-      _cachedIsAdmin = true;
-      return true;
+      _cachedIsAdmin = false;
+      return false;
     }
     
     // Check Firestore allowedUsers collection
@@ -205,9 +206,9 @@ class AuthService {
 
   // ============ Admin Functions ============
 
-  /// Get list of allowed users (admin only)
+  /// Get list of allowed users (admin or super admin only)
   Future<List<AllowedUser>> getAllowedUsers() async {
-    if (!isAdmin) return [];
+    if (!canManageUsers) return [];
     
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -221,9 +222,9 @@ class AuthService {
     }
   }
 
-  /// Add allowed user (admin only)
+  /// Add allowed user (admin or super admin only)
   Future<bool> addAllowedUser(String email, {String? name, bool isAdmin = false}) async {
-    if (!this.isAdmin) return false;
+    if (!canManageUsers) return false;
     
     try {
       await FirebaseFirestore.instance
