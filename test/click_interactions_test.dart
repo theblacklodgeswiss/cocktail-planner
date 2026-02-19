@@ -174,10 +174,23 @@ void main() {
     await tester.pumpAndSettle();
 
     // Handle the distance dialog that appears on screen load
-    await tester.enterText(find.byType(TextField).first, '100');
+    // Wait for dialog to fully render
+    expect(find.text('Entfernung zum Veranstaltungsort'), findsOneWidget);
+    
+    // Find the distance TextField by its decoration (labelText)
+    final distanceField = find.widgetWithText(TextField, 'Entfernung (km)');
+    expect(distanceField, findsOneWidget);
+    await tester.enterText(distanceField, '100');
+    await tester.pump();
+    
+    // Tap the Weiter button
+    final weiterButton = find.widgetWithText(FilledButton, 'Weiter');
+    expect(weiterButton, findsOneWidget);
+    await tester.tap(weiterButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
-    await tester.pumpAndSettle();
+
+    // Verify dialog is closed
+    expect(find.text('Entfernung zum Veranstaltungsort'), findsNothing);
 
     // Find and tap the item card to select it (checkbox area)
     final itemCard = find.text('Limetten (54 Stk.)');
