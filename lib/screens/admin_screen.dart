@@ -91,10 +91,33 @@ class _MaterialsTabState extends State<_MaterialsTab> {
     );
     if (mounted) {
       setState(() {
-        _items = items..sort((a, b) => a.item.name.compareTo(b.item.name));
+        if (widget.isFixedValue) {
+          // Sort by manual sortOrder; fall back to name for unsorted items.
+          _items = items..sort((a, b) {
+            final aOrder = a.item.sortOrder;
+            final bOrder = b.item.sortOrder;
+            if (aOrder != null && bOrder != null) return aOrder.compareTo(bOrder);
+            if (aOrder != null) return -1;
+            if (bOrder != null) return 1;
+            return a.item.name.compareTo(b.item.name);
+          });
+        } else {
+          _items = items..sort((a, b) => a.item.name.compareTo(b.item.name));
+        }
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex--;
+    setState(() {
+      final item = _items.removeAt(oldIndex);
+      _items.insert(newIndex, item);
+    });
+    await cocktailRepository.updateFixedValueSortOrders(
+      _items.map((e) => e.id).toList(),
+    );
   }
 
   List<({String id, MaterialItem item})> get _filteredItems {
@@ -317,39 +340,76 @@ class _MaterialsTabState extends State<_MaterialsTab> {
         Expanded(
           child: _filteredItems.isEmpty
               ? const Center(child: Text('Keine Artikel gefunden'))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _filteredItems.length,
-                  itemBuilder: (context, index) {
-                    final record = _filteredItems[index];
-                    final item = record.item;
-                    return Card(
-                      child: ListTile(
-                        title: Text(item.name),
-                        subtitle: Text(
-                          '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}'
-                          '${item.note.isNotEmpty ? ' • ${item.note}' : ''}',
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              onPressed: () => _showEditDialog(
-                                docId: record.id,
-                                item: item,
-                              ),
+              : (widget.isFixedValue && _searchQuery.isEmpty)
+                  ? ReorderableListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _items.length,
+                      onReorder: _onReorder,
+                      itemBuilder: (context, index) {
+                        final record = _items[index];
+                        final item = record.item;
+                        return Card(
+                          key: ValueKey(record.id),
+                          child: ListTile(
+                            leading: const Icon(Icons.drag_handle),
+                            title: Text(item.name),
+                            subtitle: Text(
+                              '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}'
+                              '${item.note.isNotEmpty ? ' • ${item.note}' : ''}',
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteItem(record.id, item.name),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () => _showEditDialog(
+                                    docId: record.id,
+                                    item: item,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _deleteItem(record.id, item.name),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                          ),
+                        );
+                      },
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _filteredItems.length,
+                      itemBuilder: (context, index) {
+                        final record = _filteredItems[index];
+                        final item = record.item;
+                        return Card(
+                          child: ListTile(
+                            title: Text(item.name),
+                            subtitle: Text(
+                              '${item.unit} • ${item.price.toStringAsFixed(2)} ${item.currency}'
+                              '${item.note.isNotEmpty ? ' • ${item.note}' : ''}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () => _showEditDialog(
+                                    docId: record.id,
+                                    item: item,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _deleteItem(record.id, item.name),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
         ),
       ],
     );

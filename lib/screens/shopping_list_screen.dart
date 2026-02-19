@@ -100,7 +100,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
 
     final fixedValues = data.fixedValues.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+      ..sort((a, b) {
+        final aOrder = a.sortOrder;
+        final bOrder = b.sortOrder;
+        if (aOrder != null && bOrder != null) return aOrder.compareTo(bOrder);
+        if (aOrder != null) return -1;
+        if (bOrder != null) return 1;
+        return a.name.compareTo(b.name);
+      });
 
     return (
       ingredientsByCocktail: ingredientsByCocktail,

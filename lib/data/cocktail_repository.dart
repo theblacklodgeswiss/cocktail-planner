@@ -404,6 +404,27 @@ class CocktailRepository {
     }
   }
 
+  /// Persist a new manual sort order for fixed-value (Verbrauch) items.
+  /// [orderedDocIds] is the list of document IDs in the desired display order.
+  Future<bool> updateFixedValueSortOrders(List<String> orderedDocIds) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      final batch = _firestore.batch();
+      for (var i = 0; i < orderedDocIds.length; i++) {
+        batch.update(_fixedValuesCollection.doc(orderedDocIds[i]), {
+          'sortOrder': i,
+        });
+      }
+      await batch.commit();
+      _cached = null;
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update sort orders: $e');
+      return false;
+    }
+  }
+
   /// Delete a recipe from Firestore
   Future<bool> deleteRecipe({required String docId}) async {
     if (!_firebaseAvailable) return false;
