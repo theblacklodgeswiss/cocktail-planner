@@ -48,24 +48,21 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     });
   }
 
-  List<MaterialItem> _buildFilteredItems(CocktailData data) {
+  /// Returns (ingredients, fixedValues) separately
+  ({List<MaterialItem> ingredients, List<MaterialItem> fixedValues}) _buildSeparatedItems(CocktailData data) {
     final requiredIngredients = appState.selectedRecipes
         .expand((recipe) => recipe.ingredients)
         .toSet();
 
     final filteredRecipeItems = data.materials
         .where((item) => requiredIngredients.contains(item.name))
-        .toList();
-
-    final mergedByKey = <String, MaterialItem>{
-      for (final item in [...filteredRecipeItems, ...data.fixedValues])
-        '${item.name}|${item.unit}|${item.note}': item,
-    };
-
-    final items = mergedByKey.values.toList()
+        .toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
-    return items;
+    final fixedValues = data.fixedValues.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return (ingredients: filteredRecipeItems, fixedValues: fixedValues);
   }
 
   String _itemKey(MaterialItem item) => '${item.name}|${item.unit}';
@@ -115,14 +112,22 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           );
         }
 
-        final items = _buildFilteredItems(snapshot.data!);
-        final total = _calculateTotal(items);
+        final separated = _buildSeparatedItems(snapshot.data!);
+        final allItems = [...separated.ingredients, ...separated.fixedValues];
+        final total = _calculateTotal(allItems);
 
         return Scaffold(
           backgroundColor: colorScheme.surface,
-          body: items.isEmpty
+          body: allItems.isEmpty
               ? _buildEmptyState(context, colorScheme, textTheme)
-              : _buildShoppingList(context, items, total, colorScheme, textTheme),
+              : _buildShoppingList(
+                  context,
+                  separated.ingredients,
+                  separated.fixedValues,
+                  total,
+                  colorScheme,
+                  textTheme,
+                ),
         );
       },
     );
@@ -164,56 +169,212 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   Widget _buildShoppingList(
     BuildContext context,
-    List<MaterialItem> items,
+    List<MaterialItem> ingredients,
+    List<MaterialItem> fixedValues,
     double total,
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 600;
-        final crossAxisCount = isWide ? (constraints.maxWidth ~/ 340).clamp(2, 4) : 1;
+        final isWide = constraints.maxWidth > 900;
 
-        return CustomScrollView(
-          slivers: [
-            _buildSliverAppBar(context, colorScheme, textTheme, total),
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                isWide ? 24 : 16,
-                8,
-                isWide ? 24 : 16,
-                100,
+        if (isWide) {
+          // Desktop: Two columns side by side
+          return CustomScrollView(
+            slivers: [
+              _buildSliverAppBar(context, colorScheme, textTheme, total),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Ingredients column
+                      Expanded(
+                        flex: 3,
+                        child: _buildSection(
+                          context,
+                          translate(context, 'shopping.section_ingredients'),
+                          Icons.local_bar,
+                          ingredients,
+                          colorScheme,
+                          textTheme,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      // Fixed values column
+                      Expanded(
+                        flex: 2,
+                        child: _buildSection(
+                          context,
+                          translate(context, 'shopping.section_fixed_costs'),
+                          Icons.receipt_long,
+                          fixedValues,
+                          colorScheme,
+                          textTheme,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              sliver: isWide
-                  ? SliverGrid(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        mainAxisExtent: 100,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildItemCard(
-                          context, items[index], colorScheme, textTheme,
-                        ),
-                        childCount: items.length,
-                      ),
-                    )
-                  : SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _buildItemCard(
-                            context, items[index], colorScheme, textTheme,
-                          ),
-                        ),
-                        childCount: items.length,
-                      ),
-                    ),
+            ],
+          );
+        } else {
+          // Mobile/Tablet: Stacked vertically
+          return CustomScrollView(
+            slivers: [
+              _buildSliverAppBar(context, colorScheme, textTheme, total),
+              // Ingredients section
+              if (ingredients.isNotEmpty) ...[
+                _buildSectionHeader(
+                  context,
+                  translate(context, 'shopping.section_ingredients'),
+                  Icons.local_bar,
+                  colorScheme,
+                  textTheme,
+                ),
+                _buildItemsSliver(ingredients, colorScheme, textTheme),
+              ],
+              // Fixed values section
+              if (fixedValues.isNotEmpty) ...[
+                _buildSectionHeader(
+                  context,
+                  translate(context, 'shopping.section_fixed_costs'),
+                  Icons.receipt_long,
+                  colorScheme,
+                  textTheme,
+                ),
+                _buildItemsSliver(fixedValues, colorScheme, textTheme),
+              ],
+              // Bottom padding
+              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+            ],
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildSection(
+    BuildContext context,
+    String title,
+    IconData icon,
+    List<MaterialItem> items,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${items.length}',
+                  style: textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Items
+        ...items.map((item) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildItemCard(context, item, colorScheme, textTheme),
+        )),
+      ],
+    );
+  }
+
+  SliverToBoxAdapter _buildSectionHeader(
+    BuildContext context,
+    String title,
+    IconData icon,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: colorScheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  SliverPadding _buildItemsSliver(
+    List<MaterialItem> items,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildItemCard(context, items[index], colorScheme, textTheme),
+          ),
+          childCount: items.length,
+        ),
+      ),
     );
   }
 

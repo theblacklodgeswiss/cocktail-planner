@@ -16,6 +16,8 @@
     "title": "Einkaufsliste",
     "empty": "Keine passenden Zutaten aus der Materialliste gefunden.",
     "amount_hint": "0",
-    "load_error": "Einkaufsliste konnte nicht geladen werden."
+    "load_error": "Einkaufsliste konnte nicht geladen werden.",
+    "section_ingredients": "Zutaten",
+    "section_fixed_costs": "Fixkosten"
   }
 }

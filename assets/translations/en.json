@@ -16,6 +16,8 @@
     "title": "Shopping List",
     "empty": "No matching ingredients found in the material list.",
     "amount_hint": "0",
-    "load_error": "Could not load shopping list."
+    "load_error": "Could not load shopping list.",
+    "section_ingredients": "Ingredients",
+    "section_fixed_costs": "Fixed Costs"
   }
 }
