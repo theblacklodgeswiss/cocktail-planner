@@ -173,6 +173,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Handle the distance dialog that appears on screen load
+    await tester.enterText(find.byType(TextField).first, '100');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Weiter'));
+    await tester.pumpAndSettle();
+
     // Find and tap the item card to select it (checkbox area)
     final itemCard = find.text('Limetten (54 Stk.)');
     expect(itemCard, findsOneWidget);
