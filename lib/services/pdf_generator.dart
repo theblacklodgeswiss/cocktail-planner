@@ -35,8 +35,15 @@ class PdfGenerator {
       groupedByLocation.putIfAbsent(location, () => []).add(orderItem);
     }
 
-    // Sort locations alphabetically
-    final sortedLocations = groupedByLocation.keys.toList()..sort();
+    // Sort locations alphabetically, but BlackLodge always at the bottom
+    final sortedLocations = groupedByLocation.keys.toList()
+      ..sort((a, b) {
+        final aIsBlackLodge = a.toLowerCase() == 'blacklodge';
+        final bIsBlackLodge = b.toLowerCase() == 'blacklodge';
+        if (aIsBlackLodge && !bIsBlackLodge) return 1;
+        if (!aIsBlackLodge && bIsBlackLodge) return -1;
+        return a.compareTo(b);
+      });
 
     pdf.addPage(
       pw.MultiPage(
