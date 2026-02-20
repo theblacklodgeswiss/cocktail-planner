@@ -11,19 +11,12 @@ Future<void> showUserMenu(BuildContext context) async {
 
   await showModalBottomSheet(
     context: context,
-    builder: (ctx) => _UserMenuSheet(
-      onShowAdminPanel: () {
-        Navigator.pop(ctx);
-        showAdminPanel(context);
-      },
-    ),
+    builder: (ctx) => const _UserMenuSheet(),
   );
 }
 
 class _UserMenuSheet extends StatelessWidget {
-  const _UserMenuSheet({required this.onShowAdminPanel});
-
-  final VoidCallback onShowAdminPanel;
+  const _UserMenuSheet();
 
   @override
   Widget build(BuildContext context) {
@@ -39,8 +32,7 @@ class _UserMenuSheet extends StatelessWidget {
           if (authService.isAdmin) _buildAdminTile(context),
           if (authService.isAdmin || authService.isSuperAdmin)
             _buildOrdersTile(context),
-          if (authService.isAdmin) _buildSettingsTile(context),
-          if (authService.canManageUsers) _buildUsersTile(),
+          _buildSettingsTile(context),
           if (user.isAnonymous) _buildLinkGoogleTile(context),
           _buildLogoutTile(context),
         ],
@@ -118,15 +110,6 @@ class _UserMenuSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildUsersTile() {
-    return ListTile(
-      leading: const Icon(Icons.admin_panel_settings),
-      title: Text('drawer.users_title'.tr()),
-      subtitle: Text('drawer.users_subtitle'.tr()),
-      onTap: onShowAdminPanel,
-    );
-  }
-
   Widget _buildLinkGoogleTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.login),
@@ -164,177 +147,5 @@ class _UserMenuSheet extends StatelessWidget {
         }
       },
     );
-  }
-}
-
-/// Shows the admin panel dialog for managing users.
-Future<void> showAdminPanel(BuildContext context) async {
-  final users = await authService.getAllowedUsers();
-
-  if (!context.mounted) return;
-
-  await showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Row(
-        children: [
-          const Icon(Icons.admin_panel_settings),
-          const SizedBox(width: 8),
-          Text('admin_panel.title'.tr()),
-        ],
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.person_add),
-              title: Text('admin_panel.add_user'.tr()),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showAddUserDialog(context);
-              },
-            ),
-            const Divider(),
-            if (users.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('admin_panel.no_users'.tr()),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 300),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: users.length,
-                  itemBuilder: (listContext, index) {
-                    final user = users[index];
-                    return ListTile(
-                      leading: const Icon(Icons.person),
-                      title: Text(
-                          user.name.isNotEmpty ? user.name : user.email),
-                      subtitle: Text(user.email),
-                      trailing: authService.isAdmin
-                          ? IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _confirmRemoveUser(
-                                  listContext, context, user.email),
-                            )
-                          : null,
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text('common.close'.tr()),
-        ),
-      ],
-    ),
-  );
-}
-
-Future<void> _confirmRemoveUser(
-  BuildContext listContext,
-  BuildContext parentContext,
-  String email,
-) async {
-  final navigator = Navigator.of(listContext);
-  final confirm = await showDialog<bool>(
-    context: listContext,
-    builder: (c) => AlertDialog(
-      title: Text('admin_panel.remove_user_title'.tr()),
-      content:
-          Text('admin_panel.remove_user_message'.tr(namedArgs: {'email': email})),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(c, false),
-          child: Text('common.cancel'.tr()),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(c, true),
-          child: Text('admin_panel.remove'.tr()),
-        ),
-      ],
-    ),
-  );
-
-  if (confirm == true) {
-    await authService.removeAllowedUser(email);
-    if (parentContext.mounted) {
-      navigator.pop();
-      showAdminPanel(parentContext); // Refresh
-    }
-  }
-}
-
-Future<void> _showAddUserDialog(BuildContext context) async {
-  final emailController = TextEditingController();
-  final nameController = TextEditingController();
-
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text('admin_panel.add_user'.tr()),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: emailController,
-            decoration: InputDecoration(
-              labelText: 'admin_panel.email_label'.tr(),
-              hintText: 'admin_panel.email_hint'.tr(),
-              prefixIcon: const Icon(Icons.email),
-              border: const OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: nameController,
-            decoration: InputDecoration(
-              labelText: 'admin_panel.name_label'.tr(),
-              hintText: 'admin_panel.name_hint'.tr(),
-              prefixIcon: const Icon(Icons.person),
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text('common.cancel'.tr()),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text('common.add'.tr()),
-        ),
-      ],
-    ),
-  );
-
-  if (result == true && emailController.text.trim().isNotEmpty) {
-    final success = await authService.addAllowedUser(
-      emailController.text.trim(),
-      name: nameController.text.trim(),
-    );
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              success ? 'common.user_added'.tr() : 'common.add_error'.tr()),
-        ),
-      );
-      if (success) {
-        showAdminPanel(context); // Reopen panel
-      }
-    }
   }
 }

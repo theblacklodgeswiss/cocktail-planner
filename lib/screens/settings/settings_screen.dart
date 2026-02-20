@@ -1,11 +1,10 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../data/settings_repository.dart';
-import '../../models/app_settings.dart';
 import '../../services/auth_service.dart';
+import '../../services/user_preferences_service.dart';
 
 /// Settings screen for app configuration.
 class SettingsScreen extends StatefulWidget {
@@ -16,80 +15,33 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late TextEditingController _distanceController;
   bool _isLoading = true;
-  bool _isSaving = false;
-  AppSettings _settings = const AppSettings();
+  String _appVersion = '';
+  String _buildNumber = '';
 
   @override
   void initState() {
     super.initState();
-    _distanceController = TextEditingController();
-    _loadSettings();
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    _distanceController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadSettings() async {
-    final settings = await settingsRepository.load();
-    if (!mounted) return;
-    setState(() {
-      _settings = settings;
-      _distanceController.text = settings.longDistanceThresholdKm.toString();
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _saveSettings() async {
-    final newThreshold = int.tryParse(_distanceController.text);
-    if (newThreshold == null || newThreshold <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('settings.invalid_distance'.tr())),
-      );
-      return;
-    }
-
-    setState(() => _isSaving = true);
-
+  Future<void> _loadData() async {
+    // Load package info
     try {
-      final newSettings = _settings.copyWith(longDistanceThresholdKm: newThreshold);
-      await settingsRepository.save(newSettings);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('settings.saved'.tr())),
-      );
-      setState(() => _settings = newSettings);
+      final packageInfo = await PackageInfo.fromPlatform();
+      _appVersion = packageInfo.version;
+      _buildNumber = packageInfo.buildNumber;
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.error'.tr())),
-      );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      _appVersion = '1.0.0';
+      _buildNumber = '1';
     }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!authService.isAdmin) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.pop(),
-          ),
-          title: Text('settings.title'.tr()),
-        ),
-        body: Center(
-          child: Text('admin.access_denied'.tr()),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -97,61 +49,283 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text('settings.title'.tr()),
-        actions: [
-          if (!_isLoading)
-            IconButton(
-              onPressed: _isSaving ? null : _saveSettings,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save),
-            ),
-        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildSettingsForm(),
+          : _buildSettingsList(),
     );
   }
 
-  Widget _buildSettingsForm() {
+  Widget _buildSettingsList() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        _buildAppearanceSection(),
+        const SizedBox(height: 16),
+        _buildLegalSection(),
+        const SizedBox(height: 16),
+        _buildAboutSection(),
+        if (authService.isAdmin) ...[
+          const SizedBox(height: 16),
+          _buildAdminSection(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAppearanceSection() {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'settings.appearance_section'.tr(),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          // Theme Mode
+          ListTile(
+            leading: const Icon(Icons.brightness_6),
+            title: Text('settings.theme'.tr()),
+            subtitle: Text(_getThemeModeName(userPreferencesService.themeMode)),
+            onTap: () => _showThemePicker(),
+          ),
+          // Language
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: Text('settings.language'.tr()),
+            subtitle: Text(_getLanguageName(context.locale)),
+            onTap: () => _showLanguagePicker(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegalSection() {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'settings.legal_section'.tr(),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.business),
+            title: Text('legal.imprint_title'.tr()),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/legal/imprint'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.description),
+            title: Text('legal.terms_title'.tr()),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/legal/terms'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip),
+            title: Text('legal.privacy_title'.tr()),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/legal/privacy'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection() {
+    final userId = authService.currentUser?.uid ?? '';
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'settings.about_section'.tr(),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: Text('settings.app_version'.tr()),
+            subtitle: SelectableText('$_appVersion ($_buildNumber)'),
+          ),
+          if (userId.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.fingerprint),
+              title: Text('settings.user_id'.tr()),
+              subtitle: SelectableText(
+                userId,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminSection() {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
               children: [
                 Text(
-                  'settings.distance_section'.tr(),
+                  'settings.admin_section'.tr(),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'settings.distance_description'.tr(),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _distanceController,
-                  decoration: InputDecoration(
-                    labelText: 'settings.long_distance_threshold'.tr(),
-                    suffixText: 'km',
-                    border: const OutlineInputBorder(),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.amber,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  child: const Text(
+                    'Admin',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
           ),
+          ListTile(
+            leading: const Icon(Icons.tune),
+            title: Text('settings.distance_section'.tr()),
+            subtitle: Text('settings.admin_settings_subtitle'.tr()),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/admin'),
+          ),
+          if (authService.canManageUsers)
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: Text('drawer.users_title'.tr()),
+              subtitle: Text('drawer.users_subtitle'.tr()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/settings/users'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _getThemeModeName(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.system:
+        return 'settings.theme_system'.tr();
+      case ThemeMode.light:
+        return 'settings.theme_light'.tr();
+      case ThemeMode.dark:
+        return 'settings.theme_dark'.tr();
+    }
+  }
+
+  String _getLanguageName(Locale locale) {
+    switch (locale.languageCode) {
+      case 'de':
+        return 'Deutsch';
+      case 'en':
+        return 'English';
+      default:
+        return locale.languageCode;
+    }
+  }
+
+  void _showThemePicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.brightness_auto),
+              title: Text('settings.theme_system'.tr()),
+              trailing: userPreferencesService.themeMode == ThemeMode.system
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                userPreferencesService.setThemeMode(ThemeMode.system);
+                Navigator.pop(ctx);
+                setState(() {});
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.light_mode),
+              title: Text('settings.theme_light'.tr()),
+              trailing: userPreferencesService.themeMode == ThemeMode.light
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                userPreferencesService.setThemeMode(ThemeMode.light);
+                Navigator.pop(ctx);
+                setState(() {});
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dark_mode),
+              title: Text('settings.theme_dark'.tr()),
+              trailing: userPreferencesService.themeMode == ThemeMode.dark
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                userPreferencesService.setThemeMode(ThemeMode.dark);
+                Navigator.pop(ctx);
+                setState(() {});
+              },
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  void _showLanguagePicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Text('🇩🇪', style: TextStyle(fontSize: 24)),
+              title: const Text('Deutsch'),
+              trailing: context.locale.languageCode == 'de'
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                context.setLocale(const Locale('de'));
+                Navigator.pop(ctx);
+                setState(() {});
+              },
+            ),
+            ListTile(
+              leading: const Text('🇬🇧', style: TextStyle(fontSize: 24)),
+              title: const Text('English'),
+              trailing: context.locale.languageCode == 'en'
+                  ? const Icon(Icons.check, color: Colors.green)
+                  : null,
+              onTap: () {
+                context.setLocale(const Locale('en'));
+                Navigator.pop(ctx);
+                setState(() {});
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
