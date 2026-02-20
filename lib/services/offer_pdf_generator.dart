@@ -526,6 +526,17 @@ class OfferPdfGenerator {
             ),
           ],
         ),
+      // Extra positions (custom line items)
+      ...offer.extraPositions.map((pos) => pw.TableRow(
+        children: [
+          cell(dateStr),
+          cell(pos.name),
+          cell('1', align: pw.TextAlign.center),
+          cell(curr.format(pos.price), align: pw.TextAlign.right),
+          cell(curr.format(pos.price), align: pw.TextAlign.right),
+          cell(pos.remark),
+        ],
+      )),
       // Discount row (only if > 0)
       if (offer.discount > 0)
         pw.TableRow(

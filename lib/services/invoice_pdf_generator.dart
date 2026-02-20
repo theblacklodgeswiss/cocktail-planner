@@ -69,7 +69,11 @@ class InvoicePdfGenerator {
     final travelCostPerKm = 0.70;
     final travelTotal = order.distanceKm * 2 * travelCostPerKm;
     final barServiceCost = order.total - travelTotal - order.thekeCost;
-    final grandTotal = order.total - order.offerDiscount;
+    final extraPositionsTotal = order.offerExtraPositions.fold<double>(
+      0.0,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).price,
+    );
+    final grandTotal = order.total + extraPositionsTotal - order.offerDiscount;
     // Payment split: ~2/3 deposit, ~1/3 on-site (rounded UP to nearest 100)
     final oneThird = grandTotal / 3;
     final remainingAmount = ((oneThird / 100).ceil()) * 100.0; // Round up to nearest 100
@@ -389,7 +393,11 @@ class InvoicePdfGenerator {
   ) {
     final dateStr =
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
-    final grandTotal = order.total - order.offerDiscount;
+    final extraPositionsTotal = order.offerExtraPositions.fold<double>(
+      0.0,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).price,
+    );
+    final grandTotal = order.total + extraPositionsTotal - order.offerDiscount;
 
     pw.Widget headerCell(String text) => pw.Container(
           color: PdfColors.grey200,
@@ -517,6 +525,20 @@ class InvoicePdfGenerator {
             ),
           ],
         ),
+      // Extra positions
+      ...order.offerExtraPositions.map((posMap) {
+        final pos = ExtraPosition.fromJson(posMap);
+        return pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(pos.name),
+            cell('1', align: pw.TextAlign.center),
+            cell(curr.format(pos.price), align: pw.TextAlign.right),
+            cell(curr.format(pos.price), align: pw.TextAlign.right),
+            cell(pos.remark),
+          ],
+        );
+      }),
       // Discount row (if > 0)
       if (order.offerDiscount > 0)
         pw.TableRow(

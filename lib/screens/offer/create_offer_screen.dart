@@ -53,6 +53,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   // Event types
   final Set<EventType> _eventTypes = {};
 
+  // Extra positions
+  final List<ExtraPosition> _extraPositions = [];
+
   bool _isGenerating = false;
 
   @override
@@ -91,6 +94,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     for (final typeStr in widget.order.offerEventTypes) {
       final type = EventType.values.where((e) => e.name == typeStr).firstOrNull;
       if (type != null) _eventTypes.add(type);
+    }
+
+    // Load extra positions
+    for (final posData in widget.order.offerExtraPositions) {
+      _extraPositions.add(ExtraPosition.fromJson(posData));
     }
 
     // Set additional info based on language
@@ -164,6 +172,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
+      extraPositions: List.of(_extraPositions),
     );
   }
 
@@ -177,6 +186,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
       language: _language,
       eventDate: _eventDate,
+      extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
     );
   }
 
@@ -605,6 +615,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
             keyboard: TextInputType.number,
           ),
         ),
+        const SizedBox(height: 16),
+        // Extra positions section
+        _buildExtraPositionsSection(curr),
         const SizedBox(height: 12),
         OfferPricePreview(
           currency: curr,
@@ -614,8 +627,182 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
           barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
           discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
+          extraPositionsTotal: _extraPositions.fold(0.0, (sum, p) => sum + p.price),
         ),
       ],
+    );
+  }
+
+  Widget _buildExtraPositionsSection(Currency curr) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.add_circle_outline, 
+                    size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'offer.extra_positions'.tr(),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const Spacer(),
+                FilledButton.tonalIcon(
+                  onPressed: _showAddExtraPositionDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text('offer.add_position'.tr()),
+                ),
+              ],
+            ),
+            if (_extraPositions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              ..._extraPositions.asMap().entries.map((entry) {
+                final index = entry.key;
+                final pos = entry.value;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(pos.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                            if (pos.remark.isNotEmpty)
+                              Text(
+                                pos.remark,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        curr.format(pos.price),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 18),
+                        onPressed: () => _showEditExtraPositionDialog(index),
+                        tooltip: 'common.edit'.tr(),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete, size: 18, 
+                            color: Theme.of(context).colorScheme.error),
+                        onPressed: () => setState(() => _extraPositions.removeAt(index)),
+                        tooltip: 'common.delete'.tr(),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddExtraPositionDialog() async {
+    final result = await _showExtraPositionDialog();
+    if (result != null) {
+      setState(() => _extraPositions.add(result));
+    }
+  }
+
+  Future<void> _showEditExtraPositionDialog(int index) async {
+    final result = await _showExtraPositionDialog(existing: _extraPositions[index]);
+    if (result != null) {
+      setState(() => _extraPositions[index] = result);
+    }
+  }
+
+  Future<ExtraPosition?> _showExtraPositionDialog({ExtraPosition? existing}) async {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final priceCtrl = TextEditingController(
+      text: existing != null ? existing.price.toStringAsFixed(2) : '',
+    );
+    final remarkCtrl = TextEditingController(text: existing?.remark ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<ExtraPosition>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(existing == null ? 'offer.add_position'.tr() : 'offer.edit_position'.tr()),
+        content: Form(
+          key: formKey,
+          child: SizedBox(
+            width: 350,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'offer.position_name'.tr(),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.label_outline),
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'offer.field_required'.tr()
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: '${'offer.position_price'.tr()} (${widget.order.currency})',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.attach_money),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'offer.field_required'.tr();
+                    if (double.tryParse(v.trim()) == null) return 'offer.invalid_number'.tr();
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: remarkCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'offer.position_remark'.tr(),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.notes),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, ExtraPosition(
+                  name: nameCtrl.text.trim(),
+                  price: double.parse(priceCtrl.text.trim()),
+                  remark: remarkCtrl.text.trim(),
+                ));
+              }
+            },
+            child: Text('common.save'.tr()),
+          ),
+        ],
+      ),
     );
   }
 

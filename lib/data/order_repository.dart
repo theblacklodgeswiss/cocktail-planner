@@ -80,6 +80,7 @@ class OrderRepository {
     required double discount,
     required String language,
     required DateTime eventDate,
+    List<Map<String, dynamic>> extraPositions = const [],
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -91,6 +92,7 @@ class OrderRepository {
         'offerEventTypes': eventTypes,
         'offerDiscount': discount,
         'offerLanguage': language,
+        'offerExtraPositions': extraPositions,
         'offerUpdatedAt': FieldValue.serverTimestamp(),
         'date': eventDate.toIso8601String(),
       });

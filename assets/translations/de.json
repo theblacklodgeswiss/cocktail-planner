@@ -181,7 +181,14 @@
     "generate_pdf": "PDF speichern",
     "pdf_created": "Angebot PDF erstellt!",
     "field_required": "Pflichtfeld",
-    "create_offer": "Angebot erstellen"
+    "create_offer": "Angebot erstellen",
+    "extra_positions": "Extra Positionen",
+    "add_position": "Position hinzufügen",
+    "edit_position": "Position bearbeiten",
+    "position_name": "Bezeichnung",
+    "position_price": "Preis",
+    "position_remark": "Bemerkung",
+    "invalid_number": "Ungültige Zahl"
   },
   "orders": {
     "title": "Bestellungsübersicht",

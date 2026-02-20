@@ -181,7 +181,14 @@
     "generate_pdf": "Save PDF",
     "pdf_created": "Offer PDF created!",
     "field_required": "Required field",
-    "create_offer": "Create Offer"
+    "create_offer": "Create Offer",
+    "extra_positions": "Extra Positions",
+    "add_position": "Add Position",
+    "edit_position": "Edit Position",
+    "position_name": "Name",
+    "position_price": "Price",
+    "position_remark": "Remark",
+    "invalid_number": "Invalid number"
   },
   "orders": {
     "title": "Orders Overview",

@@ -13,6 +13,7 @@ class OfferPricePreview extends StatelessWidget {
     required this.travelCostPerKm,
     required this.barCost,
     required this.discount,
+    this.extraPositionsTotal = 0,
   });
 
   final Currency currency;
@@ -21,13 +22,14 @@ class OfferPricePreview extends StatelessWidget {
   final double travelCostPerKm;
   final double barCost;
   final double discount;
+  final double extraPositionsTotal;
 
   @override
   Widget build(BuildContext context) {
     final travel = distanceKm * 2 * travelCostPerKm;
     // barServiceCost is orderTotal minus travel and theke (already included)
     final barService = orderTotal - travel - barCost;
-    final total = orderTotal - discount;
+    final total = orderTotal + extraPositionsTotal - discount;
 
     return Card(
       color: Theme.of(context)
@@ -61,6 +63,11 @@ class OfferPricePreview extends StatelessWidget {
               _PreviewRow(
                 label: 'offer.bar_cost'.tr(),
                 value: currency.format(barCost),
+              ),
+            if (extraPositionsTotal > 0)
+              _PreviewRow(
+                label: 'offer.extra_positions'.tr(),
+                value: currency.format(extraPositionsTotal),
               ),
             if (discount > 0)
               _PreviewRow(

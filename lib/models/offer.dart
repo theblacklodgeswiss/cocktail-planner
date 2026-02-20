@@ -7,6 +7,45 @@ enum EventType {
   other,
 }
 
+/// Extra position (custom line item) for offers and invoices
+class ExtraPosition {
+  const ExtraPosition({
+    required this.name,
+    required this.price,
+    this.remark = '',
+  });
+
+  final String name;
+  final double price;
+  final String remark;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'price': price,
+        'remark': remark,
+      };
+
+  factory ExtraPosition.fromJson(Map<String, dynamic> json) {
+    return ExtraPosition(
+      name: json['name'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
+      remark: json['remark'] as String? ?? '',
+    );
+  }
+
+  ExtraPosition copyWith({
+    String? name,
+    double? price,
+    String? remark,
+  }) {
+    return ExtraPosition(
+      name: name ?? this.name,
+      price: price ?? this.price,
+      remark: remark ?? this.remark,
+    );
+  }
+}
+
 /// Data class holding all fields needed to generate an offer document (Angebot)
 class OfferData {
   const OfferData({
@@ -29,6 +68,7 @@ class OfferData {
     required this.discount,
     required this.additionalInfo,
     required this.language,
+    this.extraPositions = const [],
   });
 
   /// Event / order name (from SavedOrder.name)
@@ -88,13 +128,20 @@ class OfferData {
   /// Output language: 'de' or 'en'
   final String language;
 
+  /// Extra custom positions (line items)
+  final List<ExtraPosition> extraPositions;
+
   double get travelCostTotal => distanceKm * 2 * travelCostPerKm;
+
+  /// Sum of all extra positions
+  double get extraPositionsTotal =>
+      extraPositions.fold(0.0, (sum, pos) => sum + pos.price);
 
   /// Cocktail & Barservice cost (orderTotal minus travel and theke)
   double get barServiceCost => orderTotal - travelCostTotal - barCost;
 
-  /// Grand total = orderTotal - discount (travel & theke already in orderTotal)
-  double get grandTotal => orderTotal - discount;
+  /// Grand total = orderTotal + extraPositions - discount
+  double get grandTotal => orderTotal + extraPositionsTotal - discount;
 
   /// Default Zusatzinformation text in German
   static const String defaultAdditionalInfoDe =
