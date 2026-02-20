@@ -282,7 +282,17 @@
     "pending_banner": "{} Aufträge mit Pendenzen",
     "pending_count": "{} Aufträge ohne Kosten",
     "pending_info": "Diese Aufträge haben noch keine Gesamtkosten. Bitte Angebot erstellen.",
-    "no_pending": "Keine offenen Pendenzen"
+    "no_pending": "Keine offenen Pendenzen",
+    "generate_with_gemini": "Mit Gemini",
+    "gemini_not_configured": "Gemini API nicht konfiguriert. Bitte in Einstellungen > Admin einrichten.",
+    "gemini_generating": "KI generiert Vorschläge...",
+    "gemini_error": "Fehler bei der KI-Generierung",
+    "gemini_suggestions": "KI-Vorschläge",
+    "requested_cocktails": "Gewünschte Cocktails",
+    "gemini_reasoning": "Begründung",
+    "suggested_cocktails": "Vorgeschlagene Cocktails",
+    "no_suggestions": "Keine Vorschläge verfügbar",
+    "apply_suggestions": "Übernehmen"
   },
   "settings": {
     "title": "Einstellungen",
@@ -321,7 +331,14 @@
     "company_section": "Firmenprofil",
     "company_empty": "Noch keine Firmendaten hinterlegt.\nHinterlege deine Firmendaten für Angebote und Rechnungen.",
     "company_add": "Jetzt einrichten",
-    "payment_section": "Zahlungsdaten"
+    "payment_section": "Zahlungsdaten",
+    "gemini_section": "Gemini AI",
+    "gemini_description": "API-Schlüssel für KI-gestützte Einkaufslistengenerierung. Lernt von bestehenden Bestellungen.",
+    "gemini_api_key": "Gemini API Key",
+    "gemini_hint": "Hole deinen API Key von ai.google.dev/gemini-api",
+    "gemini_active": "Aktiv",
+    "gemini_from_env": "API Key aus Build-Konfiguration geladen",
+    "gemini_override_hint": "Key wird automatisch beim Build gesetzt (--dart-define=GEMINI_API_KEY)"
   },
   "legal": {
     "imprint_title": "Impressum",

@@ -318,6 +318,7 @@ class OrderRepository {
     String eventTime = '',
     DateTime? formCreatedAt,
     String? existingDocId,
+    List<String> requestedCocktails = const [],
   }) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available, form submission not saved');
@@ -360,6 +361,8 @@ class OrderRepository {
         'offerClientContact': phone,
         'offerEventTime': eventTime,
         'offerEventTypes': [eventType],
+        // Requested cocktails from form
+        'requestedCocktails': requestedCocktails,
       };
 
       if (existingDocId != null) {
@@ -455,7 +458,8 @@ class OrderRepository {
         // [10]: Gäste
         // [11]: Theke Ja/Nein
         // [12]: EventTyp
-        // [13-14]: ignore
+        // [13]: ignore
+        // [14]: Cocktails (comma/semicolon separated)
         
         if (row.length < 13) {
           debugPrint('Skipping row with ${row.length} columns (need at least 13)');
@@ -471,6 +475,11 @@ class OrderRepository {
         final guestCount = row[10].trim();
         final mobileBarStr = row[11].trim();
         final eventType = row[12].trim();
+        // Parse cocktails from column 15 (index 14) if available
+        final cocktailsStr = row.length > 14 ? row[14].trim() : '';
+        final requestedCocktails = cocktailsStr.isNotEmpty
+            ? cocktailsStr.split(RegExp(r'[,;]')).map((c) => c.trim()).where((c) => c.isNotEmpty).toList()
+            : <String>[];
 
         // Parse createdAt (Excel serial number)
         DateTime? formCreatedAt;
@@ -544,6 +553,7 @@ class OrderRepository {
           eventTime: timeStr,
           formCreatedAt: formCreatedAt,
           existingDocId: existingDocId,
+          requestedCocktails: requestedCocktails,
         );
 
         if (orderId != null) {

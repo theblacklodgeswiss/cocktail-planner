@@ -2,11 +2,14 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/cocktail_repository.dart';
 import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
+import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
+import '../../services/gemini_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
@@ -658,21 +661,35 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             ),
             if (order.needsShoppingList) ...[
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    // Link this order to the shopping list
-                    appState.setLinkedOrder(order.id, order.name);
-                    Navigator.pop(context);
-                    context.go('/');
-                  },
-                  icon: const Icon(Icons.shopping_cart),
-                  label: Text('orders.create_shopping_list'.tr()),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.orange,
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        // Link this order to the shopping list
+                        appState.setLinkedOrder(order.id, order.name);
+                        Navigator.pop(context);
+                        context.go('/');
+                      },
+                      icon: const Icon(Icons.shopping_cart),
+                      label: Text('orders.create_shopping_list'.tr()),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _showGeminiSuggestions(order),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: Text('orders.generate_with_gemini'.tr()),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -829,6 +846,126 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       ],
     );
   }
+
+  Future<void> _showGeminiSuggestions(SavedOrder order) async {
+    // Check if Gemini API is configured
+    if (!geminiService.isConfigured) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_not_configured'.tr()),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('orders.gemini_generating'.tr()),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Fetch cocktails and materials for the order
+      final cocktailData = await cocktailRepository.load();
+      final materials = cocktailData.materials
+          .where((m) => m.visible)
+          .map((m) => {
+            'name': m.name,
+            'unit': m.unit,
+            'price': m.price,
+            'currency': m.currency,
+          })
+          .toList();
+      
+      // Generate suggestions
+      final suggestion = await geminiService.generateSuggestions(
+        guestCount: order.personCount,
+        guestRange: order.guestCountRange,
+        requestedCocktails: order.requestedCocktails,
+        eventType: order.eventType,
+        drinkerType: order.drinkerType,
+        availableMaterials: materials,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (suggestion == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('orders.gemini_error'.tr()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show suggestion review dialog
+      if (mounted) {
+        _showSuggestionReviewDialog(order, suggestion, cocktailData.recipes);
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_error'.tr()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSuggestionReviewDialog(
+    SavedOrder order,
+    GeminiSuggestion suggestion,
+    List<Recipe> allRecipes,
+  ) {
+    // Convert suggested cocktails to recipes with quantities (default 1 each)
+    final suggestedRecipes = <String, int>{};
+    for (final cocktailName in suggestion.suggestedCocktails) {
+      final recipe = allRecipes.where(
+        (r) => r.name.toLowerCase() == cocktailName.toLowerCase(),
+      ).firstOrNull;
+      if (recipe != null) {
+        suggestedRecipes[recipe.name] = 1;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => _GeminiSuggestionDialog(
+        order: order,
+        suggestion: suggestion,
+        suggestedRecipes: suggestedRecipes,
+        onConfirm: (confirmedRecipes) {
+          // Link order and navigate with pre-selected recipes
+          appState.setLinkedOrder(order.id, order.name);
+          appState.setGeminiSuggestions(confirmedRecipes);
+          Navigator.pop(context);
+          context.go('/');
+        },
+      ),
+    );
+  }
 }
 
 /// Widget for assigning employees to an order with multi-select chips
@@ -953,6 +1090,175 @@ class _EmployeeAssignmentWidgetState
           ],
         );
       },
+    );
+  }
+}
+
+/// Dialog to review and confirm Gemini suggestions
+class _GeminiSuggestionDialog extends StatefulWidget {
+  const _GeminiSuggestionDialog({
+    required this.order,
+    required this.suggestion,
+    required this.suggestedRecipes,
+    required this.onConfirm,
+  });
+
+  final SavedOrder order;
+  final GeminiSuggestion suggestion;
+  final Map<String, int> suggestedRecipes;
+  final void Function(Map<String, int>) onConfirm;
+
+  @override
+  State<_GeminiSuggestionDialog> createState() => _GeminiSuggestionDialogState();
+}
+
+class _GeminiSuggestionDialogState extends State<_GeminiSuggestionDialog> {
+  late Map<String, int> _editableRecipes;
+
+  @override
+  void initState() {
+    super.initState();
+    _editableRecipes = Map.from(widget.suggestedRecipes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.auto_awesome, color: Colors.deepPurple),
+          const SizedBox(width: 8),
+          Text('orders.gemini_suggestions'.tr()),
+        ],
+      ),
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Info section
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${'orders.guests'.tr()}: ${widget.order.personCount}',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    if (widget.order.requestedCocktails.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${'orders.requested_cocktails'.tr()}: ${widget.order.requestedCocktails.join(", ")}',
+                        style: TextStyle(color: colorScheme.outline),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Reasoning
+              if (widget.suggestion.explanation.isNotEmpty) ...[
+                Text(
+                  'orders.gemini_reasoning'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.suggestion.explanation,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              // Suggested cocktails
+              Text(
+                'orders.suggested_cocktails'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              
+              ..._editableRecipes.entries.map((entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(entry.key),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      iconSize: 20,
+                      onPressed: () {
+                        setState(() {
+                          if (entry.value > 1) {
+                            _editableRecipes[entry.key] = entry.value - 1;
+                          } else {
+                            _editableRecipes.remove(entry.key);
+                          }
+                        });
+                      },
+                    ),
+                    SizedBox(
+                      width: 40,
+                      child: Text(
+                        '${entry.value}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      iconSize: 20,
+                      onPressed: () {
+                        setState(() {
+                          _editableRecipes[entry.key] = entry.value + 1;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              )),
+              
+              if (_editableRecipes.isEmpty)
+                Text(
+                  'orders.no_suggestions'.tr(),
+                  style: TextStyle(color: colorScheme.outline),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('common.cancel'.tr()),
+        ),
+        FilledButton.icon(
+          onPressed: _editableRecipes.isNotEmpty
+              ? () {
+                  Navigator.pop(context);
+                  widget.onConfirm(_editableRecipes);
+                }
+              : null,
+          icon: const Icon(Icons.check),
+          label: Text('orders.apply_suggestions'.tr()),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+          ),
+        ),
+      ],
     );
   }
 }

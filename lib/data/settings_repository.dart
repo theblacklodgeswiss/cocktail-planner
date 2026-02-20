@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/app_settings.dart';
+import '../services/gemini_service.dart';
 import 'firestore_service.dart';
 
 /// Repository for app settings, backed by Firestore.
@@ -25,6 +26,11 @@ class SettingsRepository {
       } else {
         // Create default settings
         await save(_cachedSettings);
+      }
+      
+      // Initialize Gemini if API key is configured
+      if (_cachedSettings.geminiApiKey != null && _cachedSettings.geminiApiKey!.isNotEmpty) {
+        geminiService.setApiKey(_cachedSettings.geminiApiKey!);
       }
     } catch (e) {
       debugPrint('Failed to load settings: $e');

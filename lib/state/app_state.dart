@@ -9,6 +9,9 @@ class AppState extends ChangeNotifier {
   String? linkedOrderId;
   /// Pre-filled name for the order.
   String? linkedOrderName;
+  
+  /// Gemini-suggested recipes with quantities (cocktailName -> quantity).
+  Map<String, int>? geminiSuggestions;
 
   void setSelectedRecipes(List<Recipe> recipes) {
     selectedRecipes
@@ -37,6 +40,19 @@ class AppState extends ChangeNotifier {
   void clearLinkedOrder() {
     linkedOrderId = null;
     linkedOrderName = null;
+    geminiSuggestions = null;
+    notifyListeners();
+  }
+  
+  /// Set Gemini-suggested recipes with quantities.
+  void setGeminiSuggestions(Map<String, int> suggestions) {
+    geminiSuggestions = Map.from(suggestions);
+    notifyListeners();
+  }
+  
+  /// Clear Gemini suggestions.
+  void clearGeminiSuggestions() {
+    geminiSuggestions = null;
     notifyListeners();
   }
 }

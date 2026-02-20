@@ -282,7 +282,17 @@
     "pending_banner": "{} orders with pending issues",
     "pending_count": "{} orders without costs",
     "pending_info": "These orders do not have total costs yet. Please create an offer.",
-    "no_pending": "No pending issues"
+    "no_pending": "No pending issues",
+    "generate_with_gemini": "With Gemini",
+    "gemini_not_configured": "Gemini API not configured. Please set up in Settings > Admin.",
+    "gemini_generating": "AI is generating suggestions...",
+    "gemini_error": "Error during AI generation",
+    "gemini_suggestions": "AI Suggestions",
+    "requested_cocktails": "Requested Cocktails",
+    "gemini_reasoning": "Reasoning",
+    "suggested_cocktails": "Suggested Cocktails",
+    "no_suggestions": "No suggestions available",
+    "apply_suggestions": "Apply"
   },
   "settings": {
     "title": "Settings",
@@ -321,7 +331,14 @@
     "company_section": "Company Profile",
     "company_empty": "No company data set up yet.\nAdd your company details for offers and invoices.",
     "company_add": "Set up now",
-    "payment_section": "Payment Details"
+    "payment_section": "Payment Details",
+    "gemini_section": "Gemini AI",
+    "gemini_description": "API key for AI-powered shopping list generation. Learns from existing orders.",
+    "gemini_api_key": "Gemini API Key",
+    "gemini_hint": "Get your API key from ai.google.dev/gemini-api",
+    "gemini_active": "Active",
+    "gemini_from_env": "API key loaded from build configuration",
+    "gemini_override_hint": "Key is automatically set during build (--dart-define=GEMINI_API_KEY)"
   },
   "legal": {
     "imprint_title": "Imprint",

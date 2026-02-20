@@ -70,6 +70,7 @@ class SavedOrder {
     this.mobileBar = false,
     this.eventType = '',
     this.serviceType = '',
+    this.requestedCocktails = const [],
   });
 
   final String id;
@@ -108,6 +109,8 @@ class SavedOrder {
   final bool mobileBar;
   final String eventType;
   final String serviceType;
+  /// Cocktails requested in the form submission (from Excel column 15).
+  final List<String> requestedCocktails;
 
   int get year => date.year;
   
@@ -182,6 +185,7 @@ class SavedOrder {
       mobileBar: data['mobileBar'] as bool? ?? false,
       eventType: data['eventType'] as String? ?? '',
       serviceType: data['serviceType'] as String? ?? '',
+      requestedCocktails: (data['requestedCocktails'] as List<dynamic>?)?.cast<String>() ?? [],
     );
   }
 }

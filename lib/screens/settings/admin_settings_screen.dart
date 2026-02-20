@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/settings_repository.dart';
 import '../../models/app_settings.dart';
 import '../../services/auth_service.dart';
+import '../../services/gemini_service.dart';
 
 /// Admin settings screen for configuring app-wide settings.
 class AdminSettingsScreen extends StatefulWidget {
@@ -17,20 +18,24 @@ class AdminSettingsScreen extends StatefulWidget {
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   late TextEditingController _distanceController;
+  late TextEditingController _geminiKeyController;
   bool _isLoading = true;
   bool _isSaving = false;
   AppSettings _settings = const AppSettings();
+  bool _showGeminiKey = false;
 
   @override
   void initState() {
     super.initState();
     _distanceController = TextEditingController();
+    _geminiKeyController = TextEditingController();
     _loadSettings();
   }
 
   @override
   void dispose() {
     _distanceController.dispose();
+    _geminiKeyController.dispose();
     super.dispose();
   }
 
@@ -40,6 +45,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() {
       _settings = settings;
       _distanceController.text = settings.longDistanceThresholdKm.toString();
+      _geminiKeyController.text = settings.geminiApiKey ?? '';
       _isLoading = false;
     });
   }
@@ -56,7 +62,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final newSettings = _settings.copyWith(longDistanceThresholdKm: newThreshold);
+      final geminiKey = _geminiKeyController.text.trim();
+      final newSettings = _settings.copyWith(
+        longDistanceThresholdKm: newThreshold,
+        geminiApiKey: geminiKey.isNotEmpty ? geminiKey : null,
+      );
       await settingsRepository.save(newSettings);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -147,6 +157,108 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Gemini AI Settings
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.purple),
+                    const SizedBox(width: 8),
+                    Text(
+                      'settings.gemini_section'.tr(),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    if (geminiService.isConfigured)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check, color: Colors.white, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              'settings.gemini_active'.tr(),
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'settings.gemini_description'.tr(),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                // Show env key status
+                if (GeminiService.hasEnvKey) ...[  
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified, color: Colors.green, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'settings.gemini_from_env'.tr(),
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'settings.gemini_override_hint'.tr(),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                  ),
+                ] else ...[  
+                  TextField(
+                    controller: _geminiKeyController,
+                    decoration: InputDecoration(
+                      labelText: 'settings.gemini_api_key'.tr(),
+                      hintText: 'AIza...',
+                      prefixIcon: const Icon(Icons.key),
+                      suffixIcon: IconButton(
+                        icon: Icon(_showGeminiKey ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _showGeminiKey = !_showGeminiKey),
+                      ),
+                    ),
+                    obscureText: !_showGeminiKey,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'settings.gemini_hint'.tr(),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                  ),
+                ],
               ],
             ),
           ),
