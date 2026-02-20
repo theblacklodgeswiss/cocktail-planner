@@ -170,9 +170,9 @@ void main() {
       expect(employee.email, 'mario@blacklodge.ch');
     });
 
-    test('employee defaults email to empty string when missing', () {
+    test('employee defaults email to null when missing', () {
       final employee = Employee.fromFirestore('emp_2', {'name': 'Test'});
-      expect(employee.email, '');
+      expect(employee.email, isNull);
     });
 
     test('employee toMap returns correct data', () {

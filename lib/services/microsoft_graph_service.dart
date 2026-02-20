@@ -1,16 +1,48 @@
 import 'dart:convert';
 import 'dart:js_interop';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// JavaScript interop declarations for MSAL.js.
-@JS('msalInstance')
-external JSObject? get _msalInstance;
-
 @JS('msalAcquireToken')
 external JSPromise<JSString> _acquireToken(String scope);
+
+@JS('msalLogin')
+external JSPromise<JSString> _msalLogin();
+
+@JS('msalLogout')
+external JSPromise<JSAny?> _msalLogout();
+
+@JS('msalGetAccount')
+external JSString? _msalGetAccount();
+
+@JS('msalIsConfigured')
+external JSBoolean _msalIsConfigured();
+
+@JS('msalSetClientId')
+external JSBoolean _msalSetClientId(String clientId, String? tenantId);
+
+@JS('msalGetClientId')
+external JSString? _msalGetClientId();
+
+@JS('msalClearClientId')
+external JSBoolean _msalClearClientId();
+
+/// Account info returned from MSAL.
+class MicrosoftAccount {
+  final String name;
+  final String email;
+
+  MicrosoftAccount({required this.name, required this.email});
+
+  factory MicrosoftAccount.fromJson(Map<String, dynamic> json) {
+    return MicrosoftAccount(
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+    );
+  }
+}
 
 /// Service for Microsoft Graph API: OneDrive file upload and Outlook calendar.
 /// Requires MSAL.js to be loaded and configured in web/index.html.
@@ -25,6 +57,95 @@ class MicrosoftGraphService {
   MicrosoftGraphService._internal();
 
   bool get isSupported => kIsWeb;
+
+  /// Check if MSAL is configured (client ID set).
+  bool get isConfigured {
+    if (!kIsWeb) return false;
+    try {
+      return _msalIsConfigured().toDart;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Check if user is logged in to Microsoft.
+  bool get isLoggedIn {
+    if (!kIsWeb) return false;
+    try {
+      return _msalGetAccount() != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get the current Client ID (null if not configured).
+  String? getClientId() {
+    if (!kIsWeb) return null;
+    try {
+      return _msalGetClientId()?.toDart;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Set the Client ID. Requires page reload to take effect.
+  bool setClientId(String clientId, {String? tenantId}) {
+    if (!kIsWeb) return false;
+    try {
+      return _msalSetClientId(clientId, tenantId).toDart;
+    } catch (e) {
+      debugPrint('Failed to set Client ID: $e');
+      return false;
+    }
+  }
+
+  /// Clear the Client ID from localStorage. Requires page reload.
+  bool clearClientId() {
+    if (!kIsWeb) return false;
+    try {
+      return _msalClearClientId().toDart;
+    } catch (e) {
+      debugPrint('Failed to clear Client ID: $e');
+      return false;
+    }
+  }
+
+  /// Get the current logged-in Microsoft account info.
+  MicrosoftAccount? getAccount() {
+    if (!kIsWeb) return null;
+    try {
+      final accountJson = _msalGetAccount();
+      if (accountJson == null) return null;
+      final data = jsonDecode(accountJson.toDart) as Map<String, dynamic>;
+      return MicrosoftAccount.fromJson(data);
+    } catch (e) {
+      debugPrint('Failed to get Microsoft account: $e');
+      return null;
+    }
+  }
+
+  /// Login to Microsoft account via popup.
+  Future<MicrosoftAccount?> login() async {
+    if (!kIsWeb) return null;
+    try {
+      final result = await _msalLogin().toDart;
+      final data = jsonDecode(result.toDart) as Map<String, dynamic>;
+      return MicrosoftAccount.fromJson(data);
+    } catch (e) {
+      debugPrint('Microsoft login failed: $e');
+      return null;
+    }
+  }
+
+  /// Logout from Microsoft account.
+  Future<void> logout() async {
+    if (!kIsWeb) return;
+    try {
+      await _msalLogout().toDart;
+    } catch (e) {
+      debugPrint('Microsoft logout failed: $e');
+    }
+  }
 
   /// Acquire an access token for the given scope.
   Future<String?> _getToken(String scope) async {

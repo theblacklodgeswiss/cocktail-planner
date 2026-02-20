@@ -80,5 +80,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
+    
+    // Employees collection - users who can manage users can read/write
+    match /employees/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if canManageUsers();
+    }
   }
 }
