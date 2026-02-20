@@ -423,6 +423,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           children: [
             _buildStatusCard(),
             const SizedBox(height: 16),
+            if (widget.order.isFromForm) ...[
+              _buildFormDetailsCard(),
+              const SizedBox(height: 16),
+            ],
             _buildInfoCard(),
             const SizedBox(height: 16),
             _buildItemsHeader(),
@@ -570,6 +574,129 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFormDetailsCard() {
+    final order = widget.order;
+    return Card(
+      color: order.needsShoppingList
+          ? Colors.orange.withValues(alpha: 0.1)
+          : Colors.blue.withValues(alpha: 0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.description_outlined,
+                  color: order.needsShoppingList ? Colors.orange : Colors.blue,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'orders.form_details'.tr(),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: order.needsShoppingList ? Colors.orange : Colors.blue,
+                    fontSize: 16,
+                  ),
+                ),
+                const Spacer(),
+                if (order.needsShoppingList)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'orders.no_shopping_list'.tr(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildFormDetailRow(
+              Icons.phone,
+              'orders.phone'.tr(),
+              order.phone.isNotEmpty ? order.phone : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.location_on,
+              'orders.location'.tr(),
+              order.location.isNotEmpty ? order.location : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.people,
+              'orders.guests'.tr(),
+              order.guestCountRange.isNotEmpty ? order.guestCountRange : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.local_bar,
+              'orders.mobile_bar'.tr(),
+              order.mobileBar ? 'orders.yes'.tr() : 'orders.no'.tr(),
+            ),
+            _buildFormDetailRow(
+              Icons.celebration,
+              'orders.event_type'.tr(),
+              order.eventType.isNotEmpty ? order.eventType : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.room_service,
+              'orders.service_type'.tr(),
+              order.serviceType.isNotEmpty ? order.serviceType : '-',
+            ),
+            if (order.needsShoppingList) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    context.push('/dashboard', extra: order);
+                  },
+                  icon: const Icon(Icons.shopping_cart),
+                  label: Text('orders.create_shopping_list'.tr()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: widget.colorScheme.outline),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: TextStyle(color: widget.colorScheme.outline),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
       ),
     );
   }

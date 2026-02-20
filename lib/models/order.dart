@@ -16,6 +16,22 @@ enum OrderStatus {
   }
 }
 
+/// Order source enum
+enum OrderSource {
+  app('app'),
+  form('form');
+
+  const OrderSource(this.value);
+  final String value;
+
+  static OrderSource fromString(String? value) {
+    return OrderSource.values.firstWhere(
+      (s) => s.value == value,
+      orElse: () => OrderSource.app,
+    );
+  }
+}
+
 class SavedOrder {
   const SavedOrder({
     required this.id,
@@ -28,6 +44,7 @@ class SavedOrder {
     required this.currency,
     required this.status,
     this.createdBy,
+    this.createdAt,
     this.cocktails = const [],
     this.shots = const [],
     this.bar = '',
@@ -42,6 +59,17 @@ class SavedOrder {
     this.offerLanguage = 'de',
     this.offerExtraPositions = const [],
     this.assignedEmployees = const [],
+    // Form sync fields
+    this.source = OrderSource.app,
+    this.hasShoppingList = false,
+    this.formSubmissionId = '',
+    this.formCreatedAt,
+    this.phone = '',
+    this.location = '',
+    this.guestCountRange = '',
+    this.mobileBar = false,
+    this.eventType = '',
+    this.serviceType = '',
   });
 
   final String id;
@@ -54,6 +82,7 @@ class SavedOrder {
   final String currency;
   final OrderStatus status;
   final String? createdBy;
+  final DateTime? createdAt;
   final List<String> cocktails;
   final List<String> shots;
   final String bar;
@@ -68,12 +97,45 @@ class SavedOrder {
   final String offerLanguage;
   final List<Map<String, dynamic>> offerExtraPositions;
   final List<String> assignedEmployees;
+  // Form sync fields
+  final OrderSource source;
+  final bool hasShoppingList;
+  final String formSubmissionId;
+  final DateTime? formCreatedAt;
+  final String phone;
+  final String location;
+  final String guestCountRange;
+  final bool mobileBar;
+  final String eventType;
+  final String serviceType;
 
   int get year => date.year;
   
   bool get isAccepted => status == OrderStatus.accepted;
+  
+  bool get isFromForm => source == OrderSource.form;
+  
+  bool get needsShoppingList => isFromForm && !hasShoppingList;
 
   factory SavedOrder.fromFirestore(String id, Map<String, dynamic> data) {
+    // Helper to parse datetime from either Timestamp or String
+    DateTime? parseDateTime(dynamic value) {
+      if (value == null) return null;
+      if (value is String) return DateTime.tryParse(value);
+      // Firestore Timestamp has toDate() method
+      if (value is Map && value['_seconds'] != null) {
+        return DateTime.fromMillisecondsSinceEpoch(
+          (value['_seconds'] as int) * 1000,
+        );
+      }
+      // Try calling toDate() if it's a Timestamp object
+      try {
+        return (value as dynamic).toDate() as DateTime;
+      } catch (_) {
+        return null;
+      }
+    }
+
     return SavedOrder(
       id: id,
       name: data['name'] as String? ?? '',
@@ -89,6 +151,7 @@ class SavedOrder {
       currency: data['currency'] as String? ?? 'CHF',
       status: OrderStatus.fromString(data['status'] as String?),
       createdBy: data['createdBy'] as String?,
+      createdAt: parseDateTime(data['createdAt']),
       cocktails: (data['cocktails'] as List<dynamic>?)?.cast<String>() ?? [],
       shots: (data['shots'] as List<dynamic>?)?.cast<String>() ?? [],
       bar: data['bar'] as String? ?? '',
@@ -105,6 +168,17 @@ class SavedOrder {
           ?.map((e) => Map<String, dynamic>.from(e as Map))
           .toList() ?? [],
       assignedEmployees: (data['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
+      // Form sync fields
+      source: OrderSource.fromString(data['source'] as String?),
+      hasShoppingList: data['hasShoppingList'] as bool? ?? (data['items'] as List<dynamic>? ?? []).isNotEmpty,
+      formSubmissionId: data['formSubmissionId'] as String? ?? '',
+      formCreatedAt: parseDateTime(data['formCreatedAt']),
+      phone: data['phone'] as String? ?? '',
+      location: data['location'] as String? ?? '',
+      guestCountRange: data['guestCountRange'] as String? ?? '',
+      mobileBar: data['mobileBar'] as bool? ?? false,
+      eventType: data['eventType'] as String? ?? '',
+      serviceType: data['serviceType'] as String? ?? '',
     );
   }
 }

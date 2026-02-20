@@ -86,5 +86,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if canManageUsers();
     }
+    
+    // Microsoft Forms collection - authenticated users can read/write
+    match /microsoftForms/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
   }
 }

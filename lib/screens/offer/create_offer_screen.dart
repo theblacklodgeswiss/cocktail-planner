@@ -424,7 +424,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(label: 'offer.guest_count'.tr()),
+        SectionHeader(label: 'offer.event_details'.tr()),
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -493,7 +493,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: 'offer.event_date'.tr(),
-          border: const OutlineInputBorder(),
           suffixIcon: const Icon(Icons.calendar_today),
         ),
         child: Text(
@@ -748,7 +747,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   controller: nameCtrl,
                   decoration: InputDecoration(
                     labelText: 'offer.position_name'.tr(),
-                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.label_outline),
                   ),
                   validator: (v) => v == null || v.trim().isEmpty
@@ -761,7 +759,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: '${'offer.position_price'.tr()} (${widget.order.currency})',
-                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.attach_money),
                   ),
                   validator: (v) {
@@ -775,7 +772,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   controller: remarkCtrl,
                   decoration: InputDecoration(
                     labelText: 'offer.position_remark'.tr(),
-                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.notes),
                   ),
                   maxLines: 2,
@@ -816,7 +812,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           controller: _additionalInfoCtrl,
           maxLines: 8,
           decoration: InputDecoration(
-            border: const OutlineInputBorder(),
             hintText: 'offer.additional_info'.tr(),
           ),
         ),
@@ -839,7 +834,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        border: const OutlineInputBorder(),
       ),
       validator: required
           ? (v) => (v == null || v.trim().isEmpty)

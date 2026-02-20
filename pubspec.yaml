@@ -55,6 +55,9 @@ dependencies:
   
   # Package info
   package_info_plus: ^8.0.0
+  
+  # URL launcher
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:
