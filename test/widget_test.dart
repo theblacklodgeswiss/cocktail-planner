@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shopping_list/models/cocktail_data.dart';
 import 'package:shopping_list/models/material_item.dart';
+import 'package:shopping_list/models/offer.dart';
 import 'package:shopping_list/models/recipe.dart';
 
 void main() {
@@ -106,6 +107,53 @@ void main() {
 
     test('Ginger Ale (Kaufland) ist in der Materialliste', () {
       expect(materialNames, contains('Ginger Ale (Kaufland)'));
+    });
+  });
+
+  group('OfferData', () {
+    // orderTotal = barService (1600) + travel (150*2*0.70=210) + theke (100) = 1910
+    final offer = OfferData(
+      orderName: 'Hochzeit Meyer',
+      eventDate: DateTime(2026, 9, 12),
+      eventTime: '17:30',
+      currency: 'EUR',
+      guestCount: 250,
+      editorName: 'Mario Kantharoobarajah',
+      clientName: 'Virusan Sinnathurai',
+      clientContact: '+41 78 682 46 27',
+      eventTypes: {EventType.wedding},
+      cocktails: ['Mojito', 'Mango Mojito'],
+      shots: [],
+      barDescription: '',
+      orderTotal: 1910,
+      distanceKm: 150,
+      travelCostPerKm: 0.70,
+      barCost: 100,
+      discount: 0,
+      additionalInfo: OfferData.defaultAdditionalInfoDe,
+      language: 'de',
+    );
+
+    test('calculates travel cost total (return trip)', () {
+      expect(offer.travelCostTotal, closeTo(210.0, 0.001));
+    });
+
+    test('calculates barServiceCost as orderTotal minus travel and theke', () {
+      // orderTotal (1910) - travel (210) - barCost (100) = 1600
+      expect(offer.barServiceCost, closeTo(1600.0, 0.001));
+    });
+
+    test('calculates grand total as orderTotal minus discount', () {
+      // orderTotal (1910) - discount (0) = 1910
+      expect(offer.grandTotal, closeTo(1910.0, 0.001));
+    });
+
+    test('default additional info DE is not empty', () {
+      expect(OfferData.defaultAdditionalInfoDe, isNotEmpty);
+    });
+
+    test('default additional info EN is not empty', () {
+      expect(OfferData.defaultAdditionalInfoEn, isNotEmpty);
     });
   });
 }

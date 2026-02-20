@@ -1,9 +1,11 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/cocktail_repository.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
+import '../services/invoice_pdf_generator.dart';
 import '../services/pdf_generator.dart';
 import '../utils/currency.dart';
 
@@ -113,6 +115,85 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   onPressed: () => Navigator.pop(context),
                 ),
                 actions: [
+                  // Angebot erstellen
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/create-offer', extra: order);
+                    },
+                    icon: const Icon(Icons.description_outlined),
+                    label: Text('orders.offer'.tr()),
+                  ),
+                  // Rechnung erstellen (nur bei angenommenen Aufträgen)
+                  if (currentStatus == OrderStatus.accepted)
+                    TextButton.icon(
+                      onPressed: () async {
+                        // Sprachauswahl Dialog
+                        final language = await showDialog<String>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text('orders.select_language'.tr()),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ListTile(
+                                  leading: const Text('🇩🇪', style: TextStyle(fontSize: 24)),
+                                  title: const Text('Deutsch'),
+                                  onTap: () => Navigator.pop(ctx, 'de'),
+                                ),
+                                ListTile(
+                                  leading: const Text('🇬🇧', style: TextStyle(fontSize: 24)),
+                                  title: const Text('English'),
+                                  onTap: () => Navigator.pop(ctx, 'en'),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: Text('common.cancel'.tr()),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (language == null || !context.mounted) return;
+                        
+                        // Show loading dialog
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (ctx) => AlertDialog(
+                            content: Row(
+                              children: [
+                                const CircularProgressIndicator(),
+                                const SizedBox(width: 20),
+                                Text('orders.generating_invoice'.tr()),
+                              ],
+                            ),
+                          ),
+                        );
+                        
+                        try {
+                          await InvoicePdfGenerator.generateAndDownload(order, language: language);
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close loading dialog
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('orders.invoice_created'.tr())),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close loading dialog
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('common.error'.tr())),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.receipt_long),
+                      label: Text('orders.invoice'.tr()),
+                    ),
+                  // Einkaufsliste PDF
                   FilledButton.icon(
                     onPressed: () async {
                       await PdfGenerator.generateFromSavedOrder(order);
@@ -122,8 +203,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                         );
                       }
                     },
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('PDF'),
+                    icon: const Icon(Icons.shopping_cart),
+                    label: Text('orders.shopping_list'.tr()),
                   ),
                   const SizedBox(width: 8),
                 ],

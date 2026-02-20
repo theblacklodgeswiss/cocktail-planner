@@ -2,7 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/order.dart';
 import '../screens/admin_screen.dart';
+import '../screens/create_offer_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/orders_overview_screen.dart';
@@ -60,6 +62,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/orders',
       builder: (context, state) => const OrdersOverviewScreen(),
+    ),
+    GoRoute(
+      path: '/create-offer',
+      builder: (context, state) {
+        final order = state.extra as SavedOrder;
+        return CreateOfferScreen(order: order);
+      },
     ),
   ],
 );

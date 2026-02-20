@@ -50,7 +50,16 @@ class PdfGenerator {
     int personCount = 0,
     String drinkerType = 'normal',
   }) async {
-    final pdf = pw.Document();
+    // Load Unicode-compatible fonts
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold = await PdfGoogleFonts.notoSansBold();
+    
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: fontRegular,
+        bold: fontBold,
+      ),
+    );
     final curr = Currency.fromCode(currency);
 
     // Group items by purchase location (note field)
@@ -100,7 +109,16 @@ class PdfGenerator {
 
   /// Generate and download PDF from a saved order
   static Future<void> generateFromSavedOrder(SavedOrder order) async {
-    final pdf = pw.Document();
+    // Load Unicode-compatible fonts
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold = await PdfGoogleFonts.notoSansBold();
+    
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: fontRegular,
+        bold: fontBold,
+      ),
+    );
     final curr = Currency.fromCode(order.currency);
 
     // Convert saved items to simple order items
