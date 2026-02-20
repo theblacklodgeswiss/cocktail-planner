@@ -56,6 +56,14 @@
     "link_success": "Account successfully linked!",
     "logout": "Sign out"
   },
+  "admin": {
+    "title": "Manage Inventory",
+    "title_short": "Admin",
+    "access_denied": "Access denied - admins only",
+    "tab_materials": "Materials",
+    "tab_fixed": "Supplies",
+    "tab_recipes": "Recipes"
+  },
   "admin_panel": {
     "title": "Manage Users",
     "add_user": "Add new user",

@@ -89,7 +89,7 @@ class _UserMenuSheet extends StatelessWidget {
       subtitle: Text('drawer.inventory_subtitle'.tr()),
       onTap: () {
         Navigator.pop(context);
-        context.go('/admin');
+        context.push('/admin');
       },
     );
   }

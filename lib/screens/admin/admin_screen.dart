@@ -1,4 +1,6 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
 import 'materials_tab.dart';
@@ -32,22 +34,32 @@ class _AdminScreenState extends State<AdminScreen>
   Widget build(BuildContext context) {
     if (!authService.canManageUsers) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Admin')),
-        body: const Center(
-          child: Text('Zugriff verweigert - nur für Admins'),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.pop(),
+          ),
+          title: Text('admin.title_short'.tr()),
+        ),
+        body: Center(
+          child: Text('admin.access_denied'.tr()),
         ),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inventar verwalten'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
+        title: Text('admin.title'.tr()),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.inventory), text: 'Materialien'),
-            Tab(icon: Icon(Icons.build), text: 'Verbrauch'),
-            Tab(icon: Icon(Icons.local_bar), text: 'Rezepte'),
+          tabs: [
+            Tab(icon: const Icon(Icons.inventory), text: 'admin.tab_materials'.tr()),
+            Tab(icon: const Icon(Icons.build), text: 'admin.tab_fixed'.tr()),
+            Tab(icon: const Icon(Icons.local_bar), text: 'admin.tab_recipes'.tr()),
           ],
         ),
       ),

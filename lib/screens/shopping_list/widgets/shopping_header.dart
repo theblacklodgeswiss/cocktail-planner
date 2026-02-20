@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 /// Header widget for shopping list screen.
 class ShoppingHeader extends StatelessWidget {
@@ -21,8 +22,9 @@ class ShoppingHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.pop(),
             icon: const Icon(Icons.arrow_back),
+            tooltip: 'dashboard.title'.tr(),
           ),
           const SizedBox(width: 8),
           Expanded(

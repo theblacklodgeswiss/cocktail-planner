@@ -56,6 +56,14 @@
     "link_success": "Konto erfolgreich verknüpft!",
     "logout": "Abmelden"
   },
+  "admin": {
+    "title": "Inventar verwalten",
+    "title_short": "Admin",
+    "access_denied": "Zugriff verweigert - nur für Admins",
+    "tab_materials": "Materialien",
+    "tab_fixed": "Verbrauch",
+    "tab_recipes": "Rezepte"
+  },
   "admin_panel": {
     "title": "Benutzer verwalten",
     "add_user": "Neuen Benutzer hinzufügen",
