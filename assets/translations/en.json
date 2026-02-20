@@ -186,5 +186,13 @@
     "drinker_normal": "Normal",
     "drinker_heavy": "Heavy",
     "no_orders": "No orders"
+  },
+  "settings": {
+    "title": "Settings",
+    "distance_section": "Distance Settings",
+    "distance_description": "Threshold for long-distance travel costs. When exceeded, alternative pricing applies.",
+    "long_distance_threshold": "Long Distance Threshold",
+    "invalid_distance": "Please enter a valid distance",
+    "saved": "Settings saved"
   }
 }

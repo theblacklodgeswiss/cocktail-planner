@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/cocktail_repository.dart';
 import '../../data/order_repository.dart';
+import '../../data/settings_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/material_item.dart';
 import '../../services/pdf_generator.dart';
@@ -30,13 +31,23 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   late PageController _pageController;
   int _currentPage = 0;
   int _venueDistanceKm = 0;
+  int _longDistanceThresholdKm = 400;
 
   @override
   void initState() {
     super.initState();
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
     _pageController = PageController();
+    _loadSettings();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initDistance());
+  }
+
+  Future<void> _loadSettings() async {
+    final settings = await settingsRepository.load();
+    if (!mounted) return;
+    setState(() {
+      _longDistanceThresholdKm = settings.longDistanceThresholdKm;
+    });
   }
 
   Future<void> _initDistance() async {
@@ -240,6 +251,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       data,
       appState.selectedRecipes,
       _venueDistanceKm,
+      longDistanceThresholdKm: _longDistanceThresholdKm,
     );
     final allIngredients =
         separated.ingredientsByCocktail.values.expand((i) => i).toList();

@@ -39,6 +39,7 @@ class _UserMenuSheet extends StatelessWidget {
           if (authService.isAdmin) _buildAdminTile(context),
           if (authService.isAdmin || authService.isSuperAdmin)
             _buildOrdersTile(context),
+          if (authService.isAdmin) _buildSettingsTile(context),
           if (authService.canManageUsers) _buildUsersTile(),
           if (user.isAnonymous) _buildLinkGoogleTile(context),
           _buildLogoutTile(context),
@@ -102,6 +103,17 @@ class _UserMenuSheet extends StatelessWidget {
       onTap: () {
         Navigator.pop(context);
         context.push('/orders');
+      },
+    );
+  }
+
+  Widget _buildSettingsTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.settings),
+      title: Text('settings.title'.tr()),
+      onTap: () {
+        Navigator.pop(context);
+        context.push('/settings');
       },
     );
   }

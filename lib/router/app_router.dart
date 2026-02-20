@@ -8,6 +8,7 @@ import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
+import '../screens/settings/settings_screen.dart';
 import '../screens/shopping_list/shopping_list_screen.dart';
 
 /// Notifier that listens to Firebase Auth state changes
@@ -58,6 +59,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/admin',
       builder: (context, state) => const AdminScreen(),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (context, state) => const SettingsScreen(),
     ),
     GoRoute(
       path: '/orders',

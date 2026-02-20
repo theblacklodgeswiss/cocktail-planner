@@ -14,11 +14,13 @@ typedef SeparatedItems = ({
 class ShoppingListLogic {
   /// Builds separated items from cocktail data and selected recipes.
   /// Each cocktail shows ALL its ingredients (no deduplication).
+  /// [longDistanceThresholdKm] configures when travel pricing switches (default: 400).
   static SeparatedItems buildSeparatedItems(
     CocktailData data,
     List<Recipe> selectedRecipes,
-    int venueDistanceKm,
-  ) {
+    int venueDistanceKm, {
+    int longDistanceThresholdKm = 400,
+  }) {
     // Map ingredients to their cocktails
     final ingredientToCocktails = <String, List<String>>{};
     for (final recipe in selectedRecipes) {
@@ -51,8 +53,8 @@ class ShoppingListLogic {
       }
     }
 
-    // Filter fixed values based on distance
-    final isLongDistance = venueDistanceKm > 200;
+    // Filter fixed values based on distance (using configurable threshold)
+    final isLongDistance = venueDistanceKm > longDistanceThresholdKm;
     final fixedValues = data.fixedValues.where((item) {
       if (!item.active) return false;
       if (item.note == 'BlackLodge') {

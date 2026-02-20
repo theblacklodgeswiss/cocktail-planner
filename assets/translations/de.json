@@ -186,5 +186,13 @@
     "drinker_normal": "Normal",
     "drinker_heavy": "Viel",
     "no_orders": "Keine Bestellungen"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "distance_section": "Entfernungseinstellungen",
+    "distance_description": "Schwellenwert für Langstrecken-Reisekosten. Bei Überschreitung werden alternative Preise berechnet.",
+    "long_distance_threshold": "Langstrecken-Schwellenwert",
+    "invalid_distance": "Bitte eine gültige Entfernung eingeben",
+    "saved": "Einstellungen gespeichert"
   }
 }
