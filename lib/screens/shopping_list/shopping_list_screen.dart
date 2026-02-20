@@ -46,7 +46,16 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       Navigator.of(context).pop();
       return;
     }
-    setState(() => _venueDistanceKm = result);
+    setState(() {
+      _venueDistanceKm = result;
+      // Pre-fill Fahrtkosten with the entered distance
+      // Key format is 'name|unit' as per ShoppingListLogic.itemKey
+      const fahrtkosten = 'Fahrtkosten|KM';
+      _quantities[fahrtkosten] = result;
+      _selectedItems.add(fahrtkosten);
+      // Update controller if already created
+      _controllers[fahrtkosten]?.text = result.toString();
+    });
   }
 
   @override
