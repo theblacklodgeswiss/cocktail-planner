@@ -2,7 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../data/cocktail_repository.dart';
+import '../data/order_repository.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/invoice_pdf_generator.dart';
@@ -20,7 +20,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   int _selectedYear = DateTime.now().year;
 
   Stream<List<SavedOrder>> get _ordersStream =>
-      cocktailRepository.watchOrders(year: _selectedYear);
+      orderRepository.watchOrders(year: _selectedYear);
 
   void _changeYear(int year) {
     setState(() {
@@ -86,7 +86,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
           var currentStatus = order.status;
           
           Future<void> updateStatus(OrderStatus newStatus) async {
-            final success = await cocktailRepository.updateOrderStatus(order.id, newStatus.value);
+            final success = await orderRepository.updateStatus(order.id, newStatus.value);
             if (success) {
               setSheetState(() => currentStatus = newStatus);
               if (context.mounted) {
@@ -401,7 +401,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                             ),
                           );
                           if (confirm == true) {
-                            final success = await cocktailRepository.deleteOrder(order.id);
+                            final success = await orderRepository.deleteOrder(order.id);
                             if (context.mounted) {
                               Navigator.pop(context);
                               if (success) {

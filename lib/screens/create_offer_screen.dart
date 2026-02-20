@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
-import '../data/cocktail_repository.dart';
+import '../data/order_repository.dart';
 import '../models/offer.dart';
 import '../models/order.dart';
 import '../services/offer_pdf_generator.dart';
@@ -168,7 +168,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _saveOfferData() async {
-    await cocktailRepository.updateOrderOfferData(
+    await orderRepository.updateOfferData(
       orderId: widget.order.id,
       clientName: _clientNameCtrl.text.trim(),
       clientContact: _clientContactCtrl.text.trim(),

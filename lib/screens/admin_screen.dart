@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../data/cocktail_repository.dart';
+import '../data/admin_repository.dart';
 import '../models/material_item.dart';
 import '../models/recipe.dart';
 import '../services/auth_service.dart';
@@ -87,7 +87,7 @@ class _MaterialsTabState extends State<_MaterialsTab> {
 
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
-    final items = await cocktailRepository.getMaterialsWithIds(
+    final items = await adminRepository.getMaterialsWithIds(
       isFixedValue: widget.isFixedValue,
     );
     if (mounted) {
@@ -122,7 +122,7 @@ class _MaterialsTabState extends State<_MaterialsTab> {
     setState(() {
       _items = [...newVisible, ...hiddenItems];
     });
-    await cocktailRepository.updateFixedValueSortOrders(
+    await adminRepository.updateFixedValueSortOrders(
       _items.map((e) => e.id).toList(),
     );
   }
@@ -251,7 +251,7 @@ class _MaterialsTabState extends State<_MaterialsTab> {
 
       if (docId == null) {
         // Add new
-        success = await cocktailRepository.addMaterial(
+        success = await adminRepository.addMaterial(
           name: nameController.text.trim(),
           unit: unitController.text.trim(),
           price: double.tryParse(priceController.text) ?? 0,
@@ -263,7 +263,7 @@ class _MaterialsTabState extends State<_MaterialsTab> {
         );
       } else {
         // Update existing
-        success = await cocktailRepository.updateMaterial(
+        success = await adminRepository.updateMaterial(
           docId: docId,
           name: nameController.text.trim(),
           unit: unitController.text.trim(),
@@ -308,7 +308,7 @@ class _MaterialsTabState extends State<_MaterialsTab> {
     );
 
     if (confirm == true) {
-      final success = await cocktailRepository.deleteMaterial(
+      final success = await adminRepository.deleteMaterial(
         docId: docId,
         isFixedValue: widget.isFixedValue,
       );
@@ -499,7 +499,7 @@ class _RecipesTabState extends State<_RecipesTab> {
 
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
-    final items = await cocktailRepository.getRecipesWithIds();
+    final items = await adminRepository.getRecipesWithIds();
     if (mounted) {
       setState(() {
         _items = items..sort((a, b) => a.item.name.compareTo(b.item.name));
@@ -531,12 +531,12 @@ class _RecipesTabState extends State<_RecipesTab> {
       bool success;
 
       if (docId == null) {
-        success = await cocktailRepository.addRecipe(
+        success = await adminRepository.addRecipe(
           name: result.name.trim(),
           ingredients: result.ingredients,
         );
       } else {
-        success = await cocktailRepository.updateRecipe(
+        success = await adminRepository.updateRecipe(
           docId: docId,
           name: result.name.trim(),
           ingredients: result.ingredients,
@@ -575,7 +575,7 @@ class _RecipesTabState extends State<_RecipesTab> {
     );
 
     if (confirm == true) {
-      final success = await cocktailRepository.deleteRecipe(docId: docId);
+      final success = await adminRepository.deleteRecipe(docId: docId);
 
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text(success ? 'Gelöscht!' : 'Fehler beim Löschen')),
@@ -720,7 +720,7 @@ class _RecipeEditDialogState extends State<_RecipeEditDialog> {
   }
 
   Future<void> _loadMaterials() async {
-    final materials = await cocktailRepository.getMaterialsWithIds(isFixedValue: false);
+    final materials = await adminRepository.getMaterialsWithIds(isFixedValue: false);
     if (mounted) {
       setState(() {
         _availableMaterials = materials
@@ -782,7 +782,7 @@ class _RecipeEditDialogState extends State<_RecipeEditDialog> {
 
     if (result != null && result.isNotEmpty) {
       // Add to Firestore
-      final success = await cocktailRepository.addMaterial(
+      final success = await adminRepository.addMaterial(
         name: result,
         unit: '',
         price: 0,

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/cocktail_repository.dart';
+import '../../data/order_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/material_item.dart';
 import '../../services/pdf_generator.dart';
@@ -144,7 +145,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    await cocktailRepository.saveOrder(
+    await orderRepository.saveOrder(
       name: result.name,
       date: orderDate,
       items: selectedOrderItems
