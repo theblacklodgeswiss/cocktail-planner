@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -22,26 +23,35 @@ class OfferPdfGenerator {
     final curr = Currency.fromCode(offer.currency);
     final isEn = offer.language == 'en';
 
+    // Load logo image
+    pw.ImageProvider? logoImage;
+    try {
+      final logoBytes = await rootBundle.load('assets/images/logo.png');
+      logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+    } catch (e) {
+      // Logo not available, will use text fallback
+    }
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         build: (context) => [
-          _buildCompanyHeader(),
-          pw.SizedBox(height: 28),
+          _buildCompanyHeader(logoImage),
+          pw.SizedBox(height: 24),
           pw.Text(
             isEn ? 'Offer' : 'Angebot',
-            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
           ),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 18),
           _buildEditorAndClient(offer, isEn),
-          pw.SizedBox(height: 20),
-          _buildAnlass(offer, isEn),
           pw.SizedBox(height: 16),
+          _buildAnlass(offer, isEn),
+          pw.SizedBox(height: 14),
           _buildGuestAndServices(offer, isEn),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 18),
           _buildPositionsTable(offer, curr, isEn),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 18),
           _buildAdditionalInfo(offer, isEn),
         ],
         footer: (context) => _buildFooter(context, isEn),
@@ -60,7 +70,7 @@ class OfferPdfGenerator {
 
   // ── Company header ────────────────────────────────────────────────────────
 
-  static pw.Widget _buildCompanyHeader() {
+  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -72,7 +82,7 @@ class OfferPdfGenerator {
                 (line) => pw.Text(
                   line,
                   style: pw.TextStyle(
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: line == 'Black Lodge'
                         ? pw.FontWeight.bold
                         : pw.FontWeight.normal,
@@ -81,34 +91,41 @@ class OfferPdfGenerator {
               )
               .toList(),
         ),
-        pw.Container(
-          width: 100,
-          height: 60,
-          alignment: pw.Alignment.centerRight,
-          child: pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.center,
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.amber700, width: 2),
-                  borderRadius: pw.BorderRadius.circular(6),
-                ),
-                child: pw.Text(
-                  'BLACK\nLODGE',
-                  style: pw.TextStyle(
-                    fontSize: 14,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.amber700,
+        if (logoImage != null)
+          pw.Container(
+            width: 70,
+            height: 70,
+            child: pw.Image(logoImage),
+          )
+        else
+          pw.Container(
+            width: 100,
+            height: 60,
+            alignment: pw.Alignment.centerRight,
+            child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.amber700, width: 2),
+                    borderRadius: pw.BorderRadius.circular(6),
                   ),
-                  textAlign: pw.TextAlign.center,
+                  child: pw.Text(
+                    'BLACK\nLODGE',
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.amber700,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -129,22 +146,17 @@ class OfferPdfGenerator {
               pw.Text(
                 isEn ? 'Editor' : 'Bearbeiter',
                 style: pw.TextStyle(
-                    fontSize: 11, fontWeight: pw.FontWeight.bold),
+                    fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
                 'Name: ${offer.editorName}',
-                style: const pw.TextStyle(fontSize: 10),
+                style: const pw.TextStyle(fontSize: 9),
               ),
               pw.Text(
                 '${isEn ? 'Date' : 'Datum'}: $dateStr',
-                style: const pw.TextStyle(fontSize: 10),
+                style: const pw.TextStyle(fontSize: 9),
               ),
-              if (offer.eventTime.isNotEmpty)
-                pw.Text(
-                  '${isEn ? 'Time' : 'Uhrzeit'}: ${offer.eventTime} Uhr',
-                  style: const pw.TextStyle(fontSize: 10),
-                ),
             ],
           ),
         ),
@@ -155,16 +167,16 @@ class OfferPdfGenerator {
               pw.Text(
                 isEn ? 'Client' : 'Auftraggeber',
                 style: pw.TextStyle(
-                    fontSize: 11, fontWeight: pw.FontWeight.bold),
+                    fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
                 'Name: ${offer.clientName}',
-                style: const pw.TextStyle(fontSize: 10),
+                style: const pw.TextStyle(fontSize: 9),
               ),
               pw.Text(
                 '${isEn ? 'Contact' : 'Kontakt'}: ${offer.clientContact}',
-                style: const pw.TextStyle(fontSize: 10),
+                style: const pw.TextStyle(fontSize: 9),
               ),
             ],
           ),
@@ -216,13 +228,16 @@ class OfferPdfGenerator {
             ),
             child: checked
                 ? pw.Center(
-                    child: pw.Text('✗',
-                        style: const pw.TextStyle(fontSize: 8)),
+                    child: pw.Text('X',
+                        style: pw.TextStyle(
+                          fontSize: 8, 
+                          fontWeight: pw.FontWeight.bold,
+                        )),
                   )
                 : null,
           ),
           pw.SizedBox(width: 4),
-          pw.Text(opt.$2, style: const pw.TextStyle(fontSize: 10)),
+          pw.Text(opt.$2, style: const pw.TextStyle(fontSize: 9)),
         ],
       );
     }
@@ -233,7 +248,7 @@ class OfferPdfGenerator {
         pw.Text(
           isEn ? 'Event Type' : 'Anlass',
           style:
-              pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
         pw.Row(
@@ -262,20 +277,42 @@ class OfferPdfGenerator {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.RichText(
-          text: pw.TextSpan(
-            children: [
-              pw.TextSpan(
-                text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
-                style: pw.TextStyle(
-                    fontSize: 10, fontWeight: pw.FontWeight.bold),
+        pw.Row(
+          children: [
+            pw.RichText(
+              text: pw.TextSpan(
+                children: [
+                  pw.TextSpan(
+                    text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.TextSpan(
+                    text: '${offer.guestCount} ${isEn ? 'Guests' : 'Gäste'}',
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
+                ],
               ),
-              pw.TextSpan(
-                text: '${offer.guestCount} ${isEn ? 'Guests' : 'Gäste'}',
-                style: const pw.TextStyle(fontSize: 10),
+            ),
+            if (offer.eventTime.isNotEmpty) ...[            
+              pw.SizedBox(width: 40),
+              pw.RichText(
+                text: pw.TextSpan(
+                  children: [
+                    pw.TextSpan(
+                      text: isEn ? 'Time: ' : 'Uhrzeit: ',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.TextSpan(
+                      text: '${offer.eventTime} ${isEn ? '' : 'Uhr'}',
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
+          ],
         ),
         if (offer.cocktails.isNotEmpty) ...[
           pw.SizedBox(height: 4),
@@ -285,11 +322,11 @@ class OfferPdfGenerator {
                 pw.TextSpan(
                   text: 'Cocktails: ',
                   style: pw.TextStyle(
-                      fontSize: 10, fontWeight: pw.FontWeight.bold),
+                      fontSize: 9, fontWeight: pw.FontWeight.bold),
                 ),
                 pw.TextSpan(
                   text: offer.cocktails.join(', '),
-                  style: const pw.TextStyle(fontSize: 10),
+                  style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
             ),
@@ -303,11 +340,11 @@ class OfferPdfGenerator {
                 pw.TextSpan(
                   text: 'Bar: ',
                   style: pw.TextStyle(
-                      fontSize: 10, fontWeight: pw.FontWeight.bold),
+                      fontSize: 9, fontWeight: pw.FontWeight.bold),
                 ),
                 pw.TextSpan(
                   text: offer.barDescription,
-                  style: const pw.TextStyle(fontSize: 10),
+                  style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
             ),
@@ -321,11 +358,11 @@ class OfferPdfGenerator {
                 pw.TextSpan(
                   text: 'Shots: ',
                   style: pw.TextStyle(
-                      fontSize: 10, fontWeight: pw.FontWeight.bold),
+                      fontSize: 9, fontWeight: pw.FontWeight.bold),
                 ),
                 pw.TextSpan(
                   text: offer.shots.join(', '),
-                  style: const pw.TextStyle(fontSize: 10),
+                  style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
             ),
@@ -344,20 +381,20 @@ class OfferPdfGenerator {
 
     pw.Widget headerCell(String text) => pw.Container(
           color: PdfColors.grey200,
-          padding: const pw.EdgeInsets.all(6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
           child: pw.Text(
             text,
             style:
-                pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
           ),
         );
 
     pw.Widget cell(String text, {pw.TextAlign align = pw.TextAlign.left}) =>
         pw.Padding(
-          padding: const pw.EdgeInsets.all(6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
           child: pw.Text(
             text,
-            style: const pw.TextStyle(fontSize: 9),
+            style: const pw.TextStyle(fontSize: 8),
             textAlign: align,
           ),
         );
@@ -365,22 +402,22 @@ class OfferPdfGenerator {
     pw.Widget boldCell(String text,
             {pw.TextAlign align = pw.TextAlign.left}) =>
         pw.Padding(
-          padding: const pw.EdgeInsets.all(6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
           child: pw.Text(
             text,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
             textAlign: align,
           ),
         );
 
     final travelTotal = offer.travelCostTotal;
     final columnWidths = {
-      0: const pw.FlexColumnWidth(1.2), // Datum
-      1: const pw.FlexColumnWidth(2.0), // Paket
-      2: const pw.FlexColumnWidth(1.0), // Anzahl
-      3: const pw.FlexColumnWidth(1.2), // Preis
-      4: const pw.FlexColumnWidth(1.2), // Gesamtpreis
-      5: const pw.FlexColumnWidth(2.5), // Bemerkung
+      0: const pw.FlexColumnWidth(1.1), // Datum
+      1: const pw.FlexColumnWidth(1.8), // Paket
+      2: const pw.FlexColumnWidth(0.9), // Anzahl
+      3: const pw.FlexColumnWidth(1.0), // Preis
+      4: const pw.FlexColumnWidth(1.1), // Gesamtpreis
+      5: const pw.FlexColumnWidth(2.6), // Bemerkung
     };
 
     final rows = <pw.TableRow>[
@@ -405,8 +442,8 @@ class OfferPdfGenerator {
           cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
           cell(
             isEn
-                ? '- 3 Barkeeper\n- Max. 5h Cocktail & Bar Service\n- Unlimited Cocktails\n- served in 0.3L hard plastic cups'
-                : '- 3 Barkeeper\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben welche Cocktails)\n- ausgeschenkt in 0.3L Hartplastikbechern',
+                ? '3 Barkeeper, max. 5h, unlimited Cocktails (s. above), 0.3L hard plastic cups'
+                : '3 Barkeeper, max. 5h, unlimitiert Cocktails (s. oben), 0.3L Hartplastikbecher',
           ),
         ],
       ),
@@ -421,8 +458,8 @@ class OfferPdfGenerator {
             cell(curr.format(travelTotal), align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Return trip from Allschwil, CH to venue'
-                  : 'An & Rückfahrt von Allschwil, CH nach ${offer.orderName}',
+                  ? 'Return trip Allschwil CH - venue'
+                  : 'Hin & Rück Allschwil CH - ${offer.orderName}',
             ),
           ],
         ),
@@ -436,8 +473,8 @@ class OfferPdfGenerator {
           cell('tbd'),
           cell(
             isEn
-                ? 'Price is determined as follows:\n50 ${offer.currency} per extra Barkeeper per hour'
-                : 'Der Preis setzt sich, wie folgt zusammen:\n50 ${offer.currency} a Barkeeper pro Stunde',
+                ? '50 ${offer.currency}/Barkeeper/h extra'
+                : '50 ${offer.currency}/Barkeeper/Std. extra',
           ),
         ],
       ),
@@ -452,8 +489,8 @@ class OfferPdfGenerator {
             cell(curr.format(offer.barCost), align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Mobile bar counter will be set up and provided'
-                  : 'Mobile Theke wird aufgebaut und zur Verfügung gestellt',
+                  ? 'Mobile bar counter provided'
+                  : 'Mobile Theke wird gestellt',
             ),
           ],
         ),
@@ -504,12 +541,12 @@ class OfferPdfGenerator {
       children: [
         pw.Text(
           isEn ? 'Additional Information:' : 'Zusatzinformationen:',
-          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
         pw.Text(
           offer.additionalInfo,
-          style: const pw.TextStyle(fontSize: 9),
+          style: const pw.TextStyle(fontSize: 8),
         ),
       ],
     );

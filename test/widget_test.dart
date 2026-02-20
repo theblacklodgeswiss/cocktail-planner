@@ -111,6 +111,7 @@ void main() {
   });
 
   group('OfferData', () {
+    // orderTotal = barService (1600) + travel (150*2*0.70=210) + theke (100) = 1910
     final offer = OfferData(
       orderName: 'Hochzeit Meyer',
       eventDate: DateTime(2026, 9, 12),
@@ -124,7 +125,7 @@ void main() {
       cocktails: ['Mojito', 'Mango Mojito'],
       shots: [],
       barDescription: '',
-      barServiceCost: 1600,
+      orderTotal: 1910,
       distanceKm: 150,
       travelCostPerKm: 0.70,
       barCost: 100,
@@ -137,7 +138,13 @@ void main() {
       expect(offer.travelCostTotal, closeTo(210.0, 0.001));
     });
 
-    test('calculates grand total', () {
+    test('calculates barServiceCost as orderTotal minus travel and theke', () {
+      // orderTotal (1910) - travel (210) - barCost (100) = 1600
+      expect(offer.barServiceCost, closeTo(1600.0, 0.001));
+    });
+
+    test('calculates grand total as orderTotal minus discount', () {
+      // orderTotal (1910) - discount (0) = 1910
       expect(offer.grandTotal, closeTo(1910.0, 0.001));
     });
 

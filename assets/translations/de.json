@@ -108,6 +108,7 @@
     "shots": "Shots (kommagetrennt, leer = nicht inkludiert)",
     "shots_hint": "Aarewasser, Erbeerlime",
     "pricing": "Preise",
+    "order_total": "Bestellsumme (inkl. Fahrt & Theke)",
     "bar_service_cost": "Cocktail & Barservice",
     "distance_km": "Entfernung (km, einfach)",
     "travel_cost_per_km": "Reisekosten pro km",

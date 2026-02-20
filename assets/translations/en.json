@@ -108,6 +108,7 @@
     "shots": "Shots (comma-separated, empty = not included)",
     "shots_hint": "Aarewasser, Strawberry Lime",
     "pricing": "Pricing",
+    "order_total": "Order Total (incl. Travel & Counter)",
     "bar_service_cost": "Cocktail & Bar Service",
     "distance_km": "Distance (km, one way)",
     "travel_cost_per_km": "Travel cost per km",

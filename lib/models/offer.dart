@@ -22,7 +22,7 @@ class OfferData {
     required this.cocktails,
     required this.shots,
     required this.barDescription,
-    required this.barServiceCost,
+    required this.orderTotal,
     required this.distanceKm,
     required this.travelCostPerKm,
     required this.barCost,
@@ -67,8 +67,8 @@ class OfferData {
   /// Bar description (empty = not included)
   final String barDescription;
 
-  /// Cocktail & Barservice package price
-  final double barServiceCost;
+  /// Total from the order (already includes travel & theke costs)
+  final double orderTotal;
 
   /// One-way distance to venue in km (used for travel cost)
   final int distanceKm;
@@ -90,15 +90,18 @@ class OfferData {
 
   double get travelCostTotal => distanceKm * 2 * travelCostPerKm;
 
-  double get grandTotal =>
-      barServiceCost + travelCostTotal + barCost - discount;
+  /// Cocktail & Barservice cost (orderTotal minus travel and theke)
+  double get barServiceCost => orderTotal - travelCostTotal - barCost;
+
+  /// Grand total = orderTotal - discount (travel & theke already in orderTotal)
+  double get grandTotal => orderTotal - discount;
 
   /// Default Zusatzinformation text in German
   static const String defaultAdditionalInfoDe =
-      '„BlackLodge" ist für den Einkauf und Zubereitung der Cocktails verantwortlich. '
-      'Dies betrifft auch die Hartplastikbecher, Süßigkeiten, Strohhalme, Früchte und den dazugehörigen Alkohol.\n'
-      'Eine „Bartheke" kann von uns zur Verfügung gestellt werden gegen Aufpreis (s. oben).\n\n'
-      'Die Zeit für die Anfahrt, Abfahrt und Aufbau gehören nicht zu den „5h Cocktail & Barservice", '
+      '"BlackLodge" ist für den Einkauf und Zubereitung der Cocktails verantwortlich. '
+      'Dies betrifft auch die Hartplastikbecher, Süssigkeiten, Strohhalme, Früchte und den dazugehörigen Alkohol.\n'
+      'Eine "Bartheke" kann von uns zur Verfügung gestellt werden gegen Aufpreis (s. oben).\n\n'
+      'Die Zeit für die Anfahrt, Abfahrt und Aufbau gehören nicht zu den "5h Cocktail & Barservice", '
       'werden dem Kunden dennoch nicht verrechnet. Unser Team wird mindestens 1 Stunde vor Auftragsbeginn '
       'am Standort erscheinen und den Aufbau beginnen, aber auch hier richten wir uns gern nach Kundenwunsch.\n\n'
       'Dieses Angebot ist 14 Tage gültig, sollte das Angebot erst zu einem späteren Zeitpunkt angenommen werden, '

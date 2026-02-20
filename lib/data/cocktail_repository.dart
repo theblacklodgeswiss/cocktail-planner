@@ -243,6 +243,11 @@ class CocktailRepository {
     int personCount = 0,
     String drinkerType = 'normal',
     String status = 'quote',
+    List<String> cocktails = const [],
+    List<String> shots = const [],
+    String bar = '',
+    int distanceKm = 0,
+    double thekeCost = 0,
   }) async {
     if (!_firebaseAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -259,6 +264,11 @@ class CocktailRepository {
         'personCount': personCount,
         'drinkerType': drinkerType,
         'status': status,
+        'cocktails': cocktails,
+        'shots': shots,
+        'bar': bar,
+        'distanceKm': distanceKm,
+        'thekeCost': thekeCost,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -281,6 +291,35 @@ class CocktailRepository {
       return true;
     } catch (e) {
       debugPrint('Failed to update order status: $e');
+      return false;
+    }
+  }
+
+  /// Update order with offer-related data in Firestore
+  Future<bool> updateOrderOfferData({
+    required String orderId,
+    required String clientName,
+    required String clientContact,
+    required String eventTime,
+    required List<String> eventTypes,
+    required double discount,
+    required String language,
+  }) async {
+    if (!_firebaseAvailable) return false;
+
+    try {
+      await _ordersCollection.doc(orderId).update({
+        'offerClientName': clientName,
+        'offerClientContact': clientContact,
+        'offerEventTime': eventTime,
+        'offerEventTypes': eventTypes,
+        'offerDiscount': discount,
+        'offerLanguage': language,
+        'offerUpdatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update order offer data: $e');
       return false;
     }
   }

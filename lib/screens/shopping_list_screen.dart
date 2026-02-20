@@ -371,6 +371,25 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     final orderDate = DateTime.now();
 
+    // Extract cocktails and shots from selected recipes
+    final cocktailNames = appState.selectedRecipes
+        .where((r) => !r.isShot)
+        .map((r) => r.name)
+        .toList();
+    final shotNames = appState.selectedRecipes
+        .where((r) => r.isShot)
+        .map((r) => r.name)
+        .toList();
+
+    // Find theke cost from selected items
+    double thekeCost = 0;
+    for (final oi in selectedOrderItems) {
+      if (oi.item.name.toLowerCase().contains('theke')) {
+        thekeCost = oi.total;
+        break;
+      }
+    }
+
     await cocktailRepository.saveOrder(
       name: orderName,
       date: orderDate,
@@ -387,6 +406,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       currency: result.currency.code,
       personCount: result.personCount,
       drinkerType: result.drinkerType,
+      cocktails: cocktailNames,
+      shots: shotNames,
+      distanceKm: _venueDistanceKm,
+      thekeCost: thekeCost,
     );
 
     await PdfGenerator.generateAndDownload(

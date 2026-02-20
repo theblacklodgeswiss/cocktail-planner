@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/cocktail_repository.dart';
 import '../models/offer.dart';
 import '../models/order.dart';
 import '../services/offer_pdf_generator.dart';
@@ -41,8 +42,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final _barDescCtrl = TextEditingController();
   final _shotsCtrl = TextEditingController();
 
-  // Pricing
-  final _barServiceCostCtrl = TextEditingController(text: '1600');
+  // Pricing (orderTotal from order, already includes travel & theke)
+  late final TextEditingController _orderTotalCtrl;
   final _distanceKmCtrl = TextEditingController();
   final _travelCostPerKmCtrl = TextEditingController(text: '0.70');
   final _barCostCtrl = TextEditingController();
@@ -58,8 +59,41 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     super.initState();
     _guestCountCtrl =
         TextEditingController(text: widget.order.personCount.toString());
-    _additionalInfoCtrl =
-        TextEditingController(text: OfferData.defaultAdditionalInfoDe);
+    _orderTotalCtrl =
+        TextEditingController(text: widget.order.total.toStringAsFixed(2));
+    
+    // Pre-fill from order data
+    _cocktailsCtrl.text = widget.order.cocktails.join(', ');
+    _shotsCtrl.text = widget.order.shots.join(', ');
+    _barDescCtrl.text = widget.order.bar;
+    _distanceKmCtrl.text = widget.order.distanceKm > 0 
+        ? widget.order.distanceKm.toString() 
+        : '';
+    _barCostCtrl.text = widget.order.thekeCost > 0 
+        ? widget.order.thekeCost.toStringAsFixed(2) 
+        : '';
+    
+    // Load saved offer data from order
+    _clientNameCtrl.text = widget.order.offerClientName;
+    _clientContactCtrl.text = widget.order.offerClientContact;
+    _eventTimeCtrl.text = widget.order.offerEventTime;
+    _discountCtrl.text = widget.order.offerDiscount > 0
+        ? widget.order.offerDiscount.toStringAsFixed(2)
+        : '';
+    _language = widget.order.offerLanguage;
+    
+    // Load event types
+    for (final typeStr in widget.order.offerEventTypes) {
+      final type = EventType.values.where((e) => e.name == typeStr).firstOrNull;
+      if (type != null) _eventTypes.add(type);
+    }
+    
+    // Set additional info based on language
+    _additionalInfoCtrl = TextEditingController(
+      text: _language == 'en'
+          ? OfferData.defaultAdditionalInfoEn
+          : OfferData.defaultAdditionalInfoDe,
+    );
   }
 
   @override
@@ -72,7 +106,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _cocktailsCtrl.dispose();
     _barDescCtrl.dispose();
     _shotsCtrl.dispose();
-    _barServiceCostCtrl.dispose();
+    _orderTotalCtrl.dispose();
     _distanceKmCtrl.dispose();
     _travelCostPerKmCtrl.dispose();
     _barCostCtrl.dispose();
@@ -116,8 +150,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       cocktails: cocktails,
       shots: shots,
       barDescription: _barDescCtrl.text.trim(),
-      barServiceCost:
-          double.tryParse(_barServiceCostCtrl.text.trim()) ?? 0,
+      orderTotal:
+          double.tryParse(_orderTotalCtrl.text.trim()) ?? widget.order.total,
       distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
       travelCostPerKm:
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
@@ -132,6 +166,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
     try {
+      // Save offer data to order first
+      await cocktailRepository.updateOrderOfferData(
+        orderId: widget.order.id,
+        clientName: _clientNameCtrl.text.trim(),
+        clientContact: _clientContactCtrl.text.trim(),
+        eventTime: _eventTimeCtrl.text.trim(),
+        eventTypes: _eventTypes.map((e) => e.name).toList(),
+        discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
+        language: _language,
+      );
+      
       final offer = _buildOfferData();
       await OfferPdfGenerator.generateAndDownload(offer);
       if (mounted) {
@@ -199,35 +244,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   // ── Bearbeiter ────────────────────────────────────────────
                   _SectionHeader(label: 'offer.editor'.tr()),
                   const SizedBox(height: 8),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 500;
-                      final fields = [
-                        _field(
-                          controller: _editorNameCtrl,
-                          label: 'offer.editor_name'.tr(),
-                          required: true,
-                        ),
-                        _field(
-                          controller: _eventTimeCtrl,
-                          label: 'offer.event_time'.tr(),
-                          hint: '17:30',
-                        ),
-                      ];
-                      return wide
-                          ? Row(
-                              children: fields
-                                  .map((f) => Expanded(
-                                        child: Padding(
-                                          padding:
-                                              const EdgeInsets.only(right: 8),
-                                          child: f,
-                                        ),
-                                      ))
-                                  .toList(),
-                            )
-                          : Column(children: fields);
-                    },
+                  SizedBox(
+                    width: 400,
+                    child: _field(
+                      controller: _editorNameCtrl,
+                      label: 'offer.editor_name'.tr(),
+                      required: true,
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -275,17 +298,52 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   // ── Gästeanzahl ───────────────────────────────────────────
                   _SectionHeader(label: 'offer.guest_count'.tr()),
                   const SizedBox(height: 8),
-                  SizedBox(
-                    width: 200,
-                    child: _field(
-                      controller: _guestCountCtrl,
-                      label: 'offer.guest_count'.tr(),
-                      keyboard: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
-                      required: true,
-                    ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wide = constraints.maxWidth >= 500;
+                      final fields = [
+                        SizedBox(
+                          width: 200,
+                          child: _field(
+                            controller: _guestCountCtrl,
+                            label: 'offer.guest_count'.tr(),
+                            keyboard: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            required: true,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 200,
+                          child: _field(
+                            controller: _eventTimeCtrl,
+                            label: 'offer.event_time'.tr(),
+                            hint: '17:30',
+                          ),
+                        ),
+                      ];
+                      return wide
+                          ? Row(
+                              children: fields
+                                  .map((f) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 16),
+                                        child: f,
+                                      ))
+                                  .toList(),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: fields
+                                  .map((f) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8),
+                                        child: f,
+                                      ))
+                                  .toList(),
+                            );
+                    },
                   ),
                   const SizedBox(height: 20),
 
@@ -319,9 +377,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       final wide = constraints.maxWidth >= 500;
                       final row1 = [
                         _field(
-                          controller: _barServiceCostCtrl,
+                          controller: _orderTotalCtrl,
                           label:
-                              '${'offer.bar_service_cost'.tr()} (${widget.order.currency})',
+                              '${'offer.order_total'.tr()} (${widget.order.currency})',
                           keyboard: TextInputType.number,
                           required: true,
                         ),
@@ -477,15 +535,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Widget _buildPricePreview(Currency curr) {
-    final barService =
-        double.tryParse(_barServiceCostCtrl.text.trim()) ?? 0;
+    final orderTotal =
+        double.tryParse(_orderTotalCtrl.text.trim()) ?? 0;
     final km = int.tryParse(_distanceKmCtrl.text.trim()) ?? 0;
     final perKm =
         double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70;
     final barCost = double.tryParse(_barCostCtrl.text.trim()) ?? 0;
     final discount = double.tryParse(_discountCtrl.text.trim()) ?? 0;
     final travel = km * 2 * perKm;
-    final total = barService + travel + barCost - discount;
+    // barServiceCost is orderTotal minus travel and theke (already included)
+    final barService = orderTotal - travel - barCost;
+    final total = orderTotal - discount;
 
     return Card(
       color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4),
