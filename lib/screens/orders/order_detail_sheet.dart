@@ -157,8 +157,24 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       
       // 5. Create calendar event with document links
       statusNotifier.value = 'orders.ms_step_creating_calendar'.tr();
-      final eventStart = order.date;
-      final eventEnd = eventStart.add(const Duration(hours: 4));
+      
+      // Parse event time (e.g. "17:30") and combine with date
+      DateTime eventStart = order.date;
+      if (order.offerEventTime.isNotEmpty) {
+        final timeParts = order.offerEventTime.split(':');
+        if (timeParts.length >= 2) {
+          final hour = int.tryParse(timeParts[0]) ?? 0;
+          final minute = int.tryParse(timeParts[1]) ?? 0;
+          eventStart = DateTime(
+            order.date.year,
+            order.date.month,
+            order.date.day,
+            hour,
+            minute,
+          );
+        }
+      }
+      final eventEnd = eventStart.add(const Duration(hours: 5));
       final employeeNames = _assignedEmployees.isNotEmpty
           ? _assignedEmployees.join(', ')
           : 'TBD';
