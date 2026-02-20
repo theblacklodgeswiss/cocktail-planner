@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:shopping_list/models/cocktail_data.dart';
 import 'package:shopping_list/models/material_item.dart';
 import 'package:shopping_list/models/recipe.dart';
-import 'package:shopping_list/screens/dashboard_screen.dart';
-import 'package:shopping_list/screens/shopping_list_screen.dart';
+import 'package:shopping_list/screens/dashboard/dashboard_screen.dart';
+import 'package:shopping_list/screens/shopping_list/shopping_list_screen.dart';
 import 'package:shopping_list/state/app_state.dart';
 import 'package:shopping_list/widgets/recipe_selection_dialog.dart';
 
@@ -77,8 +77,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // New UI uses FilledButton.tonalIcon with text "Cocktails hinzufügen"
-    await tester.tap(find.text('Cocktails hinzufügen'));
+    // Find the add button by its icon (Icons.add)
+    final addButton = find.byIcon(Icons.add);
+    expect(addButton, findsOneWidget, reason: 'Should find the add button');
+    await tester.tap(addButton);
     await tester.pumpAndSettle();
 
     expect(find.byType(RecipeSelectionDialog), findsOneWidget);
@@ -90,8 +92,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // New UI uses FilledButton.tonalIcon with text "Cocktails hinzufügen"
-    await tester.tap(find.text('Cocktails hinzufügen'));
+    // Find and tap the add button by icon
+    final addButton = find.byIcon(Icons.add);
+    expect(addButton, findsOneWidget, reason: 'Should find the add button');
+    await tester.tap(addButton);
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Mojito - Classic');
@@ -150,9 +154,9 @@ void main() {
     await tester.pumpWidget(_localizedRouterApp(router));
     await tester.pumpAndSettle();
 
-    // Find the generate button in the bottomNavigationBar by text
-    final generateButton = find.text('Einkaufsliste generieren');
-    expect(generateButton, findsOneWidget);
+    // Find the generate button by its icon (shopping_cart)
+    final generateButton = find.byIcon(Icons.shopping_cart);
+    expect(generateButton, findsOneWidget, reason: 'Should find the shopping cart button');
     await tester.tap(generateButton);
     await tester.pumpAndSettle();
 
@@ -211,7 +215,8 @@ void main() {
     if (textFields.evaluate().isNotEmpty) {
       await tester.enterText(textFields.first, '2');
       await tester.pumpAndSettle();
-      expect(find.text('2'), findsOneWidget);
+      // There may be 2 "2"s now (input + total badge), just verify at least one exists
+      expect(find.text('2'), findsWidgets);
     }
   });
 }

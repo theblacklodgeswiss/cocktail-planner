@@ -3,7 +3,23 @@
     "title": "Cocktail Planner",
     "empty": "No cocktails selected yet.\nTap + and add multiple cocktails.",
     "generate_button": "Generate Shopping List",
-    "load_error": "Could not load data."
+    "load_error": "Could not load data.",
+    "empty_title": "No cocktails selected",
+    "empty_subtitle": "Add cocktails to generate\na shopping list",
+    "add_cocktails": "Add Cocktails",
+    "selected_count": "{} selected",
+    "cocktails_shots_count": "{cocktails} Cocktails • {shots} Shots",
+    "edit_button": "Edit",
+    "cocktails_section": "Cocktails",
+    "shots_section": "Shots",
+    "generate_list": "Generate Shopping List",
+    "sync_tooltip": "Reload data",
+    "user_tooltip": "User",
+    "reseed_title": "Update data?",
+    "reseed_message": "This will reload all materials and recipes from the local file. Existing Firebase data will be overwritten.",
+    "reseed_confirm": "Update",
+    "reseed_progress": "Updating data...",
+    "reseed_success": "Data successfully updated!"
   },
   "dialog": {
     "title": "Select Cocktails",
@@ -39,6 +55,14 @@
     "link_google_subtitle": "Save your data permanently",
     "link_success": "Account successfully linked!",
     "logout": "Sign out"
+  },
+  "admin": {
+    "title": "Manage Inventory",
+    "title_short": "Admin",
+    "access_denied": "Access denied - admins only",
+    "tab_materials": "Materials",
+    "tab_fixed": "Supplies",
+    "tab_recipes": "Recipes"
   },
   "admin_panel": {
     "title": "Manage Users",
