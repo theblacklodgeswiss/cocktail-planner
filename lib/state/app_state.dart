@@ -30,7 +30,6 @@ class AppState extends ChangeNotifier {
   void setLinkedOrder(String orderId, String orderName) {
     linkedOrderId = orderId;
     linkedOrderName = orderName;
-    debugPrint('AppState.setLinkedOrder: id=$orderId, name=$orderName');
     notifyListeners();
   }
 

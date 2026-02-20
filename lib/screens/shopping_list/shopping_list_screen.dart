@@ -169,7 +169,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   Future<void> _saveAndGeneratePdf(
     List<OrderItem> selectedOrderItems,
     double total,
-    ExportDialogResult result,
+    ({String name, int personCount, String drinkerType, Currency currency}) result,
   ) async {
     final orderDate = DateTime.now();
     final cocktailNames = appState.selectedRecipes

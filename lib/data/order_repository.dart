@@ -97,6 +97,7 @@ class OrderRepository {
         'shots': shots,
         'distanceKm': distanceKm,
         'thekeCost': thekeCost,
+        'hasShoppingList': true,
         'shoppingListCreatedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

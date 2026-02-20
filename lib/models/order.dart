@@ -170,7 +170,10 @@ class SavedOrder {
       assignedEmployees: (data['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
       // Form sync fields
       source: OrderSource.fromString(data['source'] as String?),
-      hasShoppingList: data['hasShoppingList'] as bool? ?? (data['items'] as List<dynamic>? ?? []).isNotEmpty,
+      // hasShoppingList is true if explicitly set, or if items/total exist
+      hasShoppingList: ((data['hasShoppingList'] as bool?) ?? false) ||
+          (data['items'] as List<dynamic>? ?? []).isNotEmpty ||
+          ((data['total'] as num?)?.toDouble() ?? 0) > 0,
       formSubmissionId: data['formSubmissionId'] as String? ?? '',
       formCreatedAt: parseDateTime(data['formCreatedAt']),
       phone: data['phone'] as String? ?? '',
