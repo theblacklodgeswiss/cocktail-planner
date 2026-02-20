@@ -6,12 +6,16 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'app.dart';
 import 'firebase_options.dart';
+import 'services/user_preferences_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Use path-based URLs (removes # from URLs)
   usePathUrlStrategy();
+  
+  // Initialize user preferences
+  await userPreferencesService.initialize();
   
   // Initialize Firebase
   try {
