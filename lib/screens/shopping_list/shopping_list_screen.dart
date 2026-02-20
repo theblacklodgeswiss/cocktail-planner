@@ -8,6 +8,7 @@ import '../../models/cocktail_data.dart';
 import '../../models/material_item.dart';
 import '../../services/pdf_generator.dart';
 import '../../state/app_state.dart';
+import '../../utils/currency.dart';
 import 'shopping_list_dialogs.dart';
 import 'shopping_list_logic.dart';
 import 'widgets/widgets.dart';
@@ -30,8 +31,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   late PageController _pageController;
   int _currentPage = 0;
-  int _venueDistanceKm = 0;
   int _longDistanceThresholdKm = 400;
+  
+  // Master data from initial setup dialog
+  String _orderName = '';
+  int _personCount = 0;
+  String _drinkerType = 'normal';
+  Currency _currency = defaultCurrency;
+  int _venueDistanceKm = 0;
 
   @override
   void initState() {
@@ -39,7 +46,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
     _pageController = PageController();
     _loadSettings();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initDistance());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initSetup());
   }
 
   Future<void> _loadSettings() async {
@@ -50,22 +57,33 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     });
   }
 
-  Future<void> _initDistance() async {
-    final result = await showDistanceDialog(context);
+  Future<void> _initSetup() async {
+    // Get prefilled values from linked order (if coming from pending orders)
+    final prefilledName = appState.linkedOrderName;
+    // Could also get personCount from linked order if needed
+    
+    final result = await showInitialSetupDialog(
+      context,
+      prefilledName: prefilledName,
+    );
     if (!mounted) return;
     if (result == null) {
       Navigator.of(context).pop();
       return;
     }
     setState(() {
-      _venueDistanceKm = result;
+      _orderName = result.name;
+      _personCount = result.personCount;
+      _drinkerType = result.drinkerType;
+      _currency = result.currency;
+      _venueDistanceKm = result.distanceKm;
       // Pre-fill Fahrtkosten with the entered distance
       // Key format is 'name|unit' as per ShoppingListLogic.itemKey
       const fahrtkosten = 'Fahrtkosten|KM';
-      _quantities[fahrtkosten] = result;
+      _quantities[fahrtkosten] = result.distanceKm;
       _selectedItems.add(fahrtkosten);
       // Update controller if already created
-      _controllers[fahrtkosten]?.text = result.toString();
+      _controllers[fahrtkosten]?.text = result.distanceKm.toString();
     });
   }
 
@@ -137,13 +155,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       return;
     }
 
-    final result = await showExportDialog(
-      context,
-      selectedItemCount: selectedOrderItems.length,
-      total: total,
+    // Use master data from initial setup dialog (no need for second dialog)
+    final result = (
+      name: _orderName,
+      personCount: _personCount,
+      drinkerType: _drinkerType,
+      currency: _currency,
     );
 
-    if (result == null || !mounted) return;
     await _saveAndGeneratePdf(selectedOrderItems, total, result);
   }
 
@@ -170,29 +189,52 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    await orderRepository.saveOrder(
-      name: result.name,
-      date: orderDate,
-      items: selectedOrderItems
-          .map((oi) => {
-                'name': oi.item.name,
-                'unit': oi.item.unit,
-                'price': oi.item.price,
-                'currency': oi.item.currency,
-                'note': oi.item.note,
-                'quantity': oi.quantity,
-                'total': oi.total,
-              })
-          .toList(),
-      total: total,
-      currency: result.currency.code,
-      personCount: result.personCount,
-      drinkerType: result.drinkerType,
-      cocktails: cocktailNames,
-      shots: shotNames,
-      distanceKm: _venueDistanceKm,
-      thekeCost: thekeCost,
-    );
+    final itemsData = selectedOrderItems
+        .map((oi) => {
+              'name': oi.item.name,
+              'unit': oi.item.unit,
+              'price': oi.item.price,
+              'currency': oi.item.currency,
+              'note': oi.item.note,
+              'quantity': oi.quantity,
+              'total': oi.total,
+            })
+        .toList();
+
+    // Check if linking to existing order (from form submission)
+    final linkedOrderId = appState.linkedOrderId;
+    if (linkedOrderId != null) {
+      // Update existing order with shopping list data
+      await orderRepository.updateOrderShoppingList(
+        orderId: linkedOrderId,
+        items: itemsData,
+        total: total,
+        currency: result.currency.code,
+        personCount: result.personCount,
+        drinkerType: result.drinkerType,
+        cocktails: cocktailNames,
+        shots: shotNames,
+        distanceKm: _venueDistanceKm,
+        thekeCost: thekeCost,
+      );
+      // Clear linked order after saving
+      appState.clearLinkedOrder();
+    } else {
+      // Create new order
+      await orderRepository.saveOrder(
+        name: result.name,
+        date: orderDate,
+        items: itemsData,
+        total: total,
+        currency: result.currency.code,
+        personCount: result.personCount,
+        drinkerType: result.drinkerType,
+        cocktails: cocktailNames,
+        shots: shotNames,
+        distanceKm: _venueDistanceKm,
+        thekeCost: thekeCost,
+      );
+    }
 
     await PdfGenerator.generateAndDownload(
       orderName: result.name,

@@ -70,6 +70,43 @@ class OrderRepository {
     }
   }
 
+  /// Update an existing order with shopping list data.
+  /// Used for linking form submissions to shopping lists.
+  Future<bool> updateOrderShoppingList({
+    required String orderId,
+    required List<Map<String, dynamic>> items,
+    required double total,
+    required String currency,
+    int personCount = 0,
+    String drinkerType = 'normal',
+    List<String> cocktails = const [],
+    List<String> shots = const [],
+    int distanceKm = 0,
+    double thekeCost = 0,
+  }) async {
+    if (!firestoreService.isAvailable) return false;
+
+    try {
+      await firestoreService.ordersCollection.doc(orderId).update({
+        'items': items,
+        'total': total,
+        'currency': currency,
+        'personCount': personCount,
+        'drinkerType': drinkerType,
+        'cocktails': cocktails,
+        'shots': shots,
+        'distanceKm': distanceKm,
+        'thekeCost': thekeCost,
+        'shoppingListCreatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update order shopping list: $e');
+      return false;
+    }
+  }
+
   /// Update order with offer-related data.
   Future<bool> updateOfferData({
     required String orderId,
@@ -125,7 +162,8 @@ class OrderRepository {
   }
 
   /// Watch orders as a real-time stream.
-  Stream<List<SavedOrder>> watchOrders({int? year}) {
+  /// Excludes pending orders (total == 0) unless [includePending] is true.
+  Stream<List<SavedOrder>> watchOrders({int? year, bool includePending = false}) {
     if (!firestoreService.isAvailable) {
       return Stream.value([]);
     }
@@ -134,15 +172,41 @@ class OrderRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      final orders = snapshot.docs
+      var orders = snapshot.docs
           .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
           .toList();
+      
+      // Filter out pending orders (total == 0) unless explicitly included
+      if (!includePending) {
+        orders = orders.where((o) => o.total > 0).toList();
+      }
+      
       if (year != null) {
         return orders.where((o) => o.year == year).toList();
       }
       return orders;
     }).handleError((e) {
       debugPrint('Failed to watch orders: $e');
+      return <SavedOrder>[];
+    });
+  }
+
+  /// Watch pending orders (total == 0) across all years.
+  Stream<List<SavedOrder>> watchPendingOrders() {
+    if (!firestoreService.isAvailable) {
+      return Stream.value([]);
+    }
+
+    return firestoreService.ordersCollection
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+          .where((o) => o.total == 0)
+          .toList();
+    }).handleError((e) {
+      debugPrint('Failed to watch pending orders: $e');
       return <SavedOrder>[];
     });
   }

@@ -19,7 +19,9 @@
     "reseed_message": "This will reload all materials and recipes from the local file. Existing Firebase data will be overwritten.",
     "reseed_confirm": "Update",
     "reseed_progress": "Updating data...",
-    "reseed_success": "Data successfully updated!"
+    "reseed_success": "Data successfully updated!",
+    "linked_order": "Shopping list for: {}",
+    "unlink_order": "Unlink order"
   },
   "dialog": {
     "title": "Select Cocktails",
@@ -130,6 +132,8 @@
     "name_required": "Name required",
     "saved_and_generated": "Order saved and PDF created!",
     "generated_local": "PDF created (offline)",
+    "setup_title": "Order Details",
+    "setup_description": "Please enter the master data for this order.",
     "distance_title": "Distance to venue",
     "distance_description": "Please enter the distance to the venue.",
     "distance_label": "Distance (km)",
@@ -273,7 +277,12 @@
     "sort_name": "Name",
     "sort_status": "Status",
     "sort_asc": "Ascending",
-    "sort_desc": "Descending"
+    "sort_desc": "Descending",
+    "pending_title": "Orders with Pending Issues",
+    "pending_banner": "{} orders with pending issues",
+    "pending_count": "{} orders without costs",
+    "pending_info": "These orders do not have total costs yet. Please create an offer.",
+    "no_pending": "No pending issues"
   },
   "settings": {
     "title": "Settings",

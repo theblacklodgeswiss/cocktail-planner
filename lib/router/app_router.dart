@@ -8,6 +8,7 @@ import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
+import '../screens/orders/pending_orders_screen.dart';
 import '../screens/settings/admin_settings_screen.dart';
 import '../screens/settings/employees_screen.dart';
 import '../screens/settings/legal_info_screen.dart';
@@ -95,6 +96,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/orders',
       builder: (context, state) => const OrdersOverviewScreen(),
+    ),
+    GoRoute(
+      path: '/orders/pending',
+      builder: (context, state) => const PendingOrdersScreen(),
     ),
     GoRoute(
       path: '/create-offer',

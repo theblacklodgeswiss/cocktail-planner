@@ -119,17 +119,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
           animation: appState,
           builder: (context, _) {
             final hasSelection = appState.selectedRecipes.isNotEmpty;
+            final hasLinkedOrder = appState.linkedOrderId != null;
 
             return Scaffold(
               appBar: _buildAppBar(),
-              body: hasSelection
-                  ? SelectedCocktails(
-                      recipes: appState.selectedRecipes,
-                      onEdit: () => _openRecipeSelection(data.recipes),
-                    )
-                  : DashboardEmptyState(
-                      onAdd: () => _openRecipeSelection(data.recipes),
-                    ),
+              body: Column(
+                children: [
+                  if (hasLinkedOrder) _buildLinkedOrderBanner(),
+                  Expanded(
+                    child: hasSelection
+                        ? SelectedCocktails(
+                            recipes: appState.selectedRecipes,
+                            onEdit: () => _openRecipeSelection(data.recipes),
+                          )
+                        : DashboardEmptyState(
+                            onAdd: () => _openRecipeSelection(data.recipes),
+                          ),
+                  ),
+                ],
+              ),
               bottomNavigationBar: hasSelection ? _buildBottomBar() : null,
             );
           },
@@ -177,6 +185,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
             minimumSize: const Size(double.infinity, 56),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLinkedOrderBanner() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: colorScheme.primaryContainer,
+      child: Row(
+        children: [
+          Icon(Icons.link, color: colorScheme.onPrimaryContainer, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'dashboard.linked_order'.tr(args: [appState.linkedOrderName ?? '']),
+              style: TextStyle(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, color: colorScheme.onPrimaryContainer, size: 20),
+            onPressed: () => appState.clearLinkedOrder(),
+            visualDensity: VisualDensity.compact,
+            tooltip: 'dashboard.unlink_order'.tr(),
+          ),
+        ],
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
+import '../../state/app_state.dart';
 import '../../utils/currency.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -661,8 +662,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: () {
+                    // Link this order to the shopping list
+                    appState.setLinkedOrder(order.id, order.name);
                     Navigator.pop(context);
-                    context.push('/dashboard', extra: order);
+                    context.go('/');
                   },
                   icon: const Icon(Icons.shopping_cart),
                   label: Text('orders.create_shopping_list'.tr()),

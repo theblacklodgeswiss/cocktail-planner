@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/order_repository.dart';
 import '../../models/order.dart';
@@ -260,6 +261,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildYearSelector(),
+                    const SizedBox(height: 12),
+                    _buildPendingOrdersBanner(),
                     const SizedBox(height: 20),
                     _SummaryCardsSection(orders: orders),
                     const SizedBox(height: 20),
@@ -428,6 +431,52 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 4),
         visualDensity: VisualDensity.compact,
       ),
+    );
+  }
+
+  Widget _buildPendingOrdersBanner() {
+    return StreamBuilder<List<SavedOrder>>(
+      stream: orderRepository.watchPendingOrders(),
+      builder: (context, snapshot) {
+        final pendingOrders = snapshot.data ?? [];
+        if (pendingOrders.isEmpty) return const SizedBox.shrink();
+
+        final colorScheme = Theme.of(context).colorScheme;
+        return InkWell(
+          onTap: () => context.push('/orders/pending'),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.errorContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: colorScheme.error,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'orders.pending_banner'.tr(args: [pendingOrders.length.toString()]),
+                    style: TextStyle(
+                      color: colorScheme.onErrorContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: colorScheme.onErrorContainer,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
