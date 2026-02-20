@@ -43,7 +43,8 @@
     "close": "Close",
     "add": "Add",
     "user_added": "User added!",
-    "add_error": "Error adding user"
+    "add_error": "Error adding user",
+    "undo": "Undo"
   },
   "drawer": {
     "admin_badge": "Admin",
@@ -143,7 +144,8 @@
     "currency": "Currency:",
     "drinker_type": "Drinking behavior:",
     "no_ingredients": "No ingredients found",
-    "step_of": "Step {current} of {total}"
+    "step_of": "Step {current} of {total}",
+    "gemini_suggestions_applied": "{count} AI suggestions applied"
   },
   "offer": {
     "title": "Create Offer",
@@ -285,14 +287,19 @@
     "no_pending": "No pending issues",
     "generate_with_gemini": "With Gemini",
     "gemini_not_configured": "Gemini API not configured. Please set up in Settings > Admin.",
-    "gemini_generating": "AI is generating suggestions...",
+    "gemini_generating": "AI is generating material list...",
     "gemini_error": "Error during AI generation",
     "gemini_suggestions": "AI Suggestions",
+    "gemini_material_suggestions": "AI Material List",
     "requested_cocktails": "Requested Cocktails",
     "gemini_reasoning": "Reasoning",
     "suggested_cocktails": "Suggested Cocktails",
+    "suggested_materials": "Suggested Materials",
+    "items": "items",
     "no_suggestions": "No suggestions available",
-    "apply_suggestions": "Apply"
+    "no_material_suggestions": "No material suggestions available",
+    "apply_suggestions": "Apply",
+    "apply_to_shopping_list": "Add to shopping list"
   },
   "settings": {
     "title": "Settings",

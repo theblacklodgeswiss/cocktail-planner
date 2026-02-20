@@ -85,6 +85,57 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       // Update controller if already created
       _controllers[fahrtkosten]?.text = result.distanceKm.toString();
     });
+    
+    // Apply Gemini material suggestions if available
+    _applyMaterialSuggestions();
+  }
+  
+  /// Apply material suggestions from Gemini AI to the shopping list.
+  void _applyMaterialSuggestions() {
+    if (!appState.hasMaterialSuggestions) return;
+    
+    final suggestions = appState.materialSuggestions!;
+    for (final suggestion in suggestions) {
+      final key = suggestion.key;
+      setState(() {
+        _quantities[key] = suggestion.quantity;
+        _selectedItems.add(key);
+        // Update or create controller
+        if (_controllers.containsKey(key)) {
+          _controllers[key]?.text = suggestion.quantity.toString();
+        }
+      });
+    }
+    
+    // Show a snackbar that suggestions were applied
+    if (mounted && suggestions.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('shopping.gemini_suggestions_applied'.tr(
+            namedArgs: {'count': suggestions.length.toString()},
+          )),
+          backgroundColor: Colors.deepPurple,
+          action: SnackBarAction(
+            label: 'common.undo'.tr(),
+            textColor: Colors.white,
+            onPressed: () {
+              // Remove all suggested items
+              setState(() {
+                for (final suggestion in suggestions) {
+                  final key = suggestion.key;
+                  _quantities.remove(key);
+                  _selectedItems.remove(key);
+                  _controllers[key]?.text = '';
+                }
+              });
+            },
+          ),
+        ),
+      );
+    }
+    
+    // Clear suggestions so they don't get applied again
+    appState.clearMaterialSuggestions();
   }
 
   @override

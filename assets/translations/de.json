@@ -43,7 +43,8 @@
     "close": "Schließen",
     "add": "Hinzufügen",
     "user_added": "Benutzer hinzugefügt!",
-    "add_error": "Fehler beim Hinzufügen"
+    "add_error": "Fehler beim Hinzufügen",
+    "undo": "Rückgängig"
   },
   "drawer": {
     "admin_badge": "Admin",
@@ -143,7 +144,8 @@
     "currency": "Währung:",
     "drinker_type": "Trinkverhalten:",
     "no_ingredients": "Keine Zutaten gefunden",
-    "step_of": "Schritt {current} von {total}"
+    "step_of": "Schritt {current} von {total}",
+    "gemini_suggestions_applied": "{count} KI-Vorschläge übernommen"
   },
   "offer": {
     "title": "Angebot erstellen",
@@ -285,14 +287,19 @@
     "no_pending": "Keine offenen Pendenzen",
     "generate_with_gemini": "Mit Gemini",
     "gemini_not_configured": "Gemini API nicht konfiguriert. Bitte in Einstellungen > Admin einrichten.",
-    "gemini_generating": "KI generiert Vorschläge...",
+    "gemini_generating": "KI generiert Materialliste...",
     "gemini_error": "Fehler bei der KI-Generierung",
     "gemini_suggestions": "KI-Vorschläge",
+    "gemini_material_suggestions": "KI-Materialliste",
     "requested_cocktails": "Gewünschte Cocktails",
     "gemini_reasoning": "Begründung",
     "suggested_cocktails": "Vorgeschlagene Cocktails",
+    "suggested_materials": "Vorgeschlagene Materialien",
+    "items": "Artikel",
     "no_suggestions": "Keine Vorschläge verfügbar",
-    "apply_suggestions": "Übernehmen"
+    "no_material_suggestions": "Keine Materialvorschläge verfügbar",
+    "apply_suggestions": "Übernehmen",
+    "apply_to_shopping_list": "Zur Einkaufsliste hinzufügen"
   },
   "settings": {
     "title": "Einstellungen",

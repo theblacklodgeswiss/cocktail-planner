@@ -7,7 +7,6 @@ import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
-import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
 import '../../services/gemini_service.dart';
 import '../../services/invoice_pdf_generator.dart';
@@ -890,20 +889,26 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           })
           .toList();
       
-      // Get available cocktail names
-      final availableCocktails = cocktailData.recipes
-          .map((r) => r.name)
+      // Get recipe ingredients for the requested cocktails
+      final recipeIngredients = cocktailData.recipes
+          .where((r) => order.requestedCocktails.any(
+            (c) => c.toLowerCase() == r.name.toLowerCase(),
+          ))
+          .map((r) => {
+            'cocktail': r.name,
+            'ingredients': r.ingredients,
+          })
           .toList();
       
-      // Generate suggestions
-      final suggestion = await geminiService.generateSuggestions(
+      // Generate material suggestions
+      final suggestion = await geminiService.generateMaterialSuggestions(
         guestCount: order.personCount,
         guestRange: order.guestCountRange,
         requestedCocktails: order.requestedCocktails,
         eventType: order.eventType,
         drinkerType: order.drinkerType,
         availableMaterials: materials,
-        availableCocktails: availableCocktails,
+        recipeIngredients: recipeIngredients,
       );
 
       // Close loading dialog
@@ -921,9 +926,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         return;
       }
 
-      // Show suggestion review dialog
+      // Show material suggestion review dialog
       if (mounted) {
-        _showSuggestionReviewDialog(order, suggestion, cocktailData.recipes);
+        _showMaterialSuggestionDialog(order, suggestion);
       }
     } catch (e) {
       // Close loading dialog
@@ -940,32 +945,29 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     }
   }
 
-  void _showSuggestionReviewDialog(
+  void _showMaterialSuggestionDialog(
     SavedOrder order,
-    GeminiSuggestion suggestion,
-    List<Recipe> allRecipes,
+    GeminiMaterialSuggestion suggestion,
   ) {
-    // Convert suggested cocktails to recipes with quantities (default 1 each)
-    final suggestedRecipes = <String, int>{};
-    for (final cocktailName in suggestion.suggestedCocktails) {
-      final recipe = allRecipes.where(
-        (r) => r.name.toLowerCase() == cocktailName.toLowerCase(),
-      ).firstOrNull;
-      if (recipe != null) {
-        suggestedRecipes[recipe.name] = 1;
-      }
-    }
-
     showDialog(
       context: context,
-      builder: (ctx) => _GeminiSuggestionDialog(
+      builder: (ctx) => _GeminiMaterialDialog(
         order: order,
         suggestion: suggestion,
-        suggestedRecipes: suggestedRecipes,
-        onConfirm: (confirmedRecipes) {
-          // Link order and navigate with pre-selected recipes
+        onConfirm: (confirmedMaterials, explanation) {
+          // Convert to MaterialSuggestion and store in app state
+          final suggestions = confirmedMaterials.entries.map((e) {
+            final parts = e.key.split('|');
+            return MaterialSuggestion(
+              name: parts[0],
+              unit: parts.length > 1 ? parts[1] : '',
+              quantity: e.value,
+              reason: '',
+            );
+          }).toList();
+          
           appState.setLinkedOrder(order.id, order.name);
-          appState.setGeminiSuggestions(confirmedRecipes);
+          appState.setMaterialSuggestions(suggestions, explanation);
           Navigator.pop(context);
           context.go('/');
         },
@@ -1100,31 +1102,35 @@ class _EmployeeAssignmentWidgetState
   }
 }
 
-/// Dialog to review and confirm Gemini suggestions
-class _GeminiSuggestionDialog extends StatefulWidget {
-  const _GeminiSuggestionDialog({
+/// Dialog to review and confirm Gemini material suggestions
+class _GeminiMaterialDialog extends StatefulWidget {
+  const _GeminiMaterialDialog({
     required this.order,
     required this.suggestion,
-    required this.suggestedRecipes,
     required this.onConfirm,
   });
 
   final SavedOrder order;
-  final GeminiSuggestion suggestion;
-  final Map<String, int> suggestedRecipes;
-  final void Function(Map<String, int>) onConfirm;
+  final GeminiMaterialSuggestion suggestion;
+  final void Function(Map<String, int> materials, String explanation) onConfirm;
 
   @override
-  State<_GeminiSuggestionDialog> createState() => _GeminiSuggestionDialogState();
+  State<_GeminiMaterialDialog> createState() => _GeminiMaterialDialogState();
 }
 
-class _GeminiSuggestionDialogState extends State<_GeminiSuggestionDialog> {
-  late Map<String, int> _editableRecipes;
+class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
+  late Map<String, int> _editableMaterials;
+  late Map<String, String> _materialReasons;
 
   @override
   void initState() {
     super.initState();
-    _editableRecipes = Map.from(widget.suggestedRecipes);
+    _editableMaterials = {};
+    _materialReasons = {};
+    for (final material in widget.suggestion.materials) {
+      _editableMaterials[material.key] = material.quantity;
+      _materialReasons[material.key] = material.reason;
+    }
   }
 
   @override
@@ -1136,11 +1142,12 @@ class _GeminiSuggestionDialogState extends State<_GeminiSuggestionDialog> {
         children: [
           Icon(Icons.auto_awesome, color: Colors.deepPurple),
           const SizedBox(width: 8),
-          Text('orders.gemini_suggestions'.tr()),
+          Expanded(child: Text('orders.gemini_material_suggestions'.tr())),
         ],
       ),
       content: SizedBox(
-        width: 400,
+        width: 500,
+        height: 500,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1167,6 +1174,11 @@ class _GeminiSuggestionDialogState extends State<_GeminiSuggestionDialog> {
                         style: TextStyle(color: colorScheme.outline),
                       ),
                     ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '${'orders.event_type'.tr()}: ${widget.order.eventType}',
+                      style: TextStyle(color: colorScheme.outline),
+                    ),
                   ],
                 ),
               ),
@@ -1189,58 +1201,128 @@ class _GeminiSuggestionDialogState extends State<_GeminiSuggestionDialog> {
                 const SizedBox(height: 16),
               ],
               
-              // Suggested cocktails
-              Text(
-                'orders.suggested_cocktails'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              // Suggested materials header
+              Row(
+                children: [
+                  Text(
+                    'orders.suggested_materials'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_editableMaterials.length} ${'orders.items'.tr()}',
+                    style: TextStyle(color: colorScheme.outline, fontSize: 12),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               
-              ..._editableRecipes.entries.map((entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(entry.key),
+              // Material list
+              ..._editableMaterials.entries.map((entry) {
+                final parts = entry.key.split('|');
+                final name = parts[0];
+                final unit = parts.length > 1 ? parts[1] : '';
+                final reason = _materialReasons[entry.key] ?? '';
+                
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
+                                  if (unit.isNotEmpty)
+                                    Text(
+                                      unit,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colorScheme.outline,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              iconSize: 20,
+                              onPressed: () {
+                                setState(() {
+                                  if (entry.value > 1) {
+                                    _editableMaterials[entry.key] = entry.value - 1;
+                                  } else {
+                                    _editableMaterials.remove(entry.key);
+                                    _materialReasons.remove(entry.key);
+                                  }
+                                });
+                              },
+                            ),
+                            SizedBox(
+                              width: 50,
+                              child: Text(
+                                '${entry.value}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline),
+                              iconSize: 20,
+                              onPressed: () {
+                                setState(() {
+                                  _editableMaterials[entry.key] = entry.value + 1;
+                                });
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              iconSize: 20,
+                              color: colorScheme.error,
+                              onPressed: () {
+                                setState(() {
+                                  _editableMaterials.remove(entry.key);
+                                  _materialReasons.remove(entry.key);
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        if (reason.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            reason,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.outline,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      iconSize: 20,
-                      onPressed: () {
-                        setState(() {
-                          if (entry.value > 1) {
-                            _editableRecipes[entry.key] = entry.value - 1;
-                          } else {
-                            _editableRecipes.remove(entry.key);
-                          }
-                        });
-                      },
-                    ),
-                    SizedBox(
-                      width: 40,
-                      child: Text(
-                        '${entry.value}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      iconSize: 20,
-                      onPressed: () {
-                        setState(() {
-                          _editableRecipes[entry.key] = entry.value + 1;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              )),
+                  ),
+                );
+              }),
               
-              if (_editableRecipes.isEmpty)
-                Text(
-                  'orders.no_suggestions'.tr(),
-                  style: TextStyle(color: colorScheme.outline),
+              if (_editableMaterials.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'orders.no_material_suggestions'.tr(),
+                    style: TextStyle(color: colorScheme.outline),
+                  ),
                 ),
             ],
           ),
@@ -1252,14 +1334,17 @@ class _GeminiSuggestionDialogState extends State<_GeminiSuggestionDialog> {
           child: Text('common.cancel'.tr()),
         ),
         FilledButton.icon(
-          onPressed: _editableRecipes.isNotEmpty
+          onPressed: _editableMaterials.isNotEmpty
               ? () {
                   Navigator.pop(context);
-                  widget.onConfirm(_editableRecipes);
+                  widget.onConfirm(
+                    _editableMaterials,
+                    widget.suggestion.explanation,
+                  );
                 }
               : null,
-          icon: const Icon(Icons.check),
-          label: Text('orders.apply_suggestions'.tr()),
+          icon: const Icon(Icons.shopping_cart),
+          label: Text('orders.apply_to_shopping_list'.tr()),
           style: FilledButton.styleFrom(
             backgroundColor: Colors.deepPurple,
           ),

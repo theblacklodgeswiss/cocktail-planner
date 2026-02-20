@@ -2,6 +2,24 @@ import 'package:flutter/foundation.dart';
 
 import '../models/recipe.dart';
 
+/// Suggested material with quantity for shopping list.
+class MaterialSuggestion {
+  final String name;
+  final String unit;
+  final int quantity;
+  final String reason;
+
+  const MaterialSuggestion({
+    required this.name,
+    required this.unit,
+    required this.quantity,
+    required this.reason,
+  });
+
+  /// Key for lookup (name|unit).
+  String get key => '$name|$unit';
+}
+
 class AppState extends ChangeNotifier {
   final List<Recipe> selectedRecipes = [];
   
@@ -11,7 +29,14 @@ class AppState extends ChangeNotifier {
   String? linkedOrderName;
   
   /// Gemini-suggested recipes with quantities (cocktailName -> quantity).
+  @Deprecated('Use materialSuggestions instead')
   Map<String, int>? geminiSuggestions;
+  
+  /// Gemini-suggested materials for the shopping list.
+  List<MaterialSuggestion>? materialSuggestions;
+  
+  /// Explanation from Gemini about the suggestions.
+  String? materialSuggestionExplanation;
 
   void setSelectedRecipes(List<Recipe> recipes) {
     selectedRecipes
@@ -40,21 +65,43 @@ class AppState extends ChangeNotifier {
   void clearLinkedOrder() {
     linkedOrderId = null;
     linkedOrderName = null;
+    // ignore: deprecated_member_use_from_same_package
     geminiSuggestions = null;
+    materialSuggestions = null;
+    materialSuggestionExplanation = null;
     notifyListeners();
   }
   
   /// Set Gemini-suggested recipes with quantities.
+  @Deprecated('Use setMaterialSuggestions instead')
   void setGeminiSuggestions(Map<String, int> suggestions) {
     geminiSuggestions = Map.from(suggestions);
     notifyListeners();
   }
   
   /// Clear Gemini suggestions.
+  @Deprecated('Use clearMaterialSuggestions instead')
   void clearGeminiSuggestions() {
     geminiSuggestions = null;
     notifyListeners();
   }
+  
+  /// Set Gemini-suggested materials for shopping list.
+  void setMaterialSuggestions(List<MaterialSuggestion> suggestions, String explanation) {
+    materialSuggestions = List.from(suggestions);
+    materialSuggestionExplanation = explanation;
+    notifyListeners();
+  }
+  
+  /// Clear material suggestions.
+  void clearMaterialSuggestions() {
+    materialSuggestions = null;
+    materialSuggestionExplanation = null;
+    notifyListeners();
+  }
+  
+  /// Check if there are pending material suggestions.
+  bool get hasMaterialSuggestions => materialSuggestions != null && materialSuggestions!.isNotEmpty;
 }
 
 final AppState appState = AppState();

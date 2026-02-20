@@ -5,22 +5,22 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 
 import '../data/order_repository.dart';
 
-/// Suggested item for the shopping list from Gemini.
-class SuggestedItem {
+/// Suggested material item for the shopping list from Gemini.
+class SuggestedMaterial {
   final String name;
   final String unit;
   final int quantity;
   final String reason;
 
-  const SuggestedItem({
+  const SuggestedMaterial({
     required this.name,
     required this.unit,
     required this.quantity,
     required this.reason,
   });
 
-  factory SuggestedItem.fromJson(Map<String, dynamic> json) {
-    return SuggestedItem(
+  factory SuggestedMaterial.fromJson(Map<String, dynamic> json) {
+    return SuggestedMaterial(
       name: json['name'] as String? ?? '',
       unit: json['unit'] as String? ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
@@ -28,24 +28,18 @@ class SuggestedItem {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'unit': unit,
-        'quantity': quantity,
-        'reason': reason,
-      };
+  /// Key for app state storage (name|unit).
+  String get key => '$name|$unit';
 }
 
-/// Result from Gemini shopping list generation.
-class GeminiSuggestion {
-  final List<SuggestedItem> items;
-  final List<String> suggestedCocktails;
+/// Result from Gemini material list generation.
+class GeminiMaterialSuggestion {
+  final List<SuggestedMaterial> materials;
   final String explanation;
   final int trainingDataCount;
 
-  const GeminiSuggestion({
-    required this.items,
-    required this.suggestedCocktails,
+  const GeminiMaterialSuggestion({
+    required this.materials,
     required this.explanation,
     required this.trainingDataCount,
   });
@@ -138,15 +132,15 @@ class GeminiService {
     }
   }
 
-  /// Generate shopping list suggestions using Gemini AI.
-  Future<GeminiSuggestion?> generateSuggestions({
+  /// Generate material list suggestions using Gemini AI.
+  Future<GeminiMaterialSuggestion?> generateMaterialSuggestions({
     required int guestCount,
     required String guestRange,
     required List<String> requestedCocktails,
     required String eventType,
     required String drinkerType,
     required List<Map<String, dynamic>> availableMaterials,
-    required List<String> availableCocktails,
+    required List<Map<String, dynamic>> recipeIngredients,
   }) async {
     if (!isConfigured || _model == null) {
       debugPrint('Gemini not configured');
@@ -157,19 +151,19 @@ class GeminiService {
       // Get training data from existing orders
       final trainingData = await _getTrainingData();
 
-      // Build the prompt
-      final prompt = _buildPrompt(
+      // Build the prompt for material suggestions
+      final prompt = _buildMaterialPrompt(
         guestCount: guestCount,
         guestRange: guestRange,
         requestedCocktails: requestedCocktails,
         eventType: eventType,
         drinkerType: drinkerType,
         availableMaterials: availableMaterials,
-        availableCocktails: availableCocktails,
+        recipeIngredients: recipeIngredients,
         trainingData: trainingData,
       );
 
-      debugPrint('Sending prompt to Gemini...');
+      debugPrint('Sending material prompt to Gemini...');
 
       // Generate content
       final response = await _model!.generateContent([Content.text(prompt)]);
@@ -183,25 +177,25 @@ class GeminiService {
       debugPrint('Gemini response received');
 
       // Parse the JSON response
-      return _parseResponse(responseText, trainingData.length);
+      return _parseMaterialResponse(responseText, trainingData.length);
     } catch (e) {
       debugPrint('Gemini generation failed: $e');
       return null;
     }
   }
 
-  String _buildPrompt({
+  String _buildMaterialPrompt({
     required int guestCount,
     required String guestRange,
     required List<String> requestedCocktails,
     required String eventType,
     required String drinkerType,
     required List<Map<String, dynamic>> availableMaterials,
-    required List<String> availableCocktails,
+    required List<Map<String, dynamic>> recipeIngredients,
     required List<Map<String, dynamic>> trainingData,
   }) {
-    final cocktailsList = availableCocktails.join(', ');
-
+    final materialsJson = jsonEncode(availableMaterials);
+    final ingredientsJson = jsonEncode(recipeIngredients);
     final trainingDataJson = trainingData.isNotEmpty
         ? jsonEncode(trainingData)
         : 'Keine vorherigen Bestellungen verfügbar';
@@ -210,39 +204,47 @@ class GeminiService {
 Du bist ein Experte für Cocktail-Catering und Eventplanung in der Schweiz.
 
 AUFGABE:
-Schlage passende Cocktails für das Event vor.
+Erstelle eine Materialliste (Einkaufsliste) für das Event basierend auf den gewünschten Cocktails und der Gästezahl.
 
 EVENT-DETAILS:
 - Gästeanzahl: $guestCount (Bereich: $guestRange)
-- Angefragte Cocktails: ${requestedCocktails.isNotEmpty ? requestedCocktails.join(', ') : 'Nicht spezifiziert'}
+- Gewünschte Cocktails: ${requestedCocktails.isNotEmpty ? requestedCocktails.join(', ') : 'Nicht spezifiziert'}
 - Event-Typ: $eventType
-- Trinkverhalten: $drinkerType (light/normal/heavy)
+- Trinkverhalten: $drinkerType (light = 2-3 Drinks pro Person, normal = 4-5 Drinks, heavy = 6+ Drinks)
 
-VERFÜGBARE COCKTAILS (verwende NUR diese Namen exakt):
-$cocktailsList
+REZEPT-ZUTATEN (welche Zutaten für welchen Cocktail):
+$ingredientsJson
+
+VERFÜGBARE MATERIALIEN (verwende NUR diese Namen und Einheiten exakt):
+$materialsJson
 
 HISTORISCHE DATEN VON FRÜHEREN EVENTS (für Lernzwecke):
 $trainingDataJson
 
-REGELN:
-1. Wähle 4-8 passende Cocktails aus der Liste VERFÜGBARE COCKTAILS
-2. Berücksichtige Event-Typ und Gästezahl
-3. Bei Hochzeiten: elegante, klassische Cocktails
-4. Bei Geburtstagen: bunte, fruchtige Cocktails
-5. Mische alkoholische mit alkoholfreien Optionen
-6. Wenn Cocktails angefragt wurden, inkludiere diese (wenn verfügbar)
+BERECHNUNGSREGELN:
+1. Schätze Drinks pro Person basierend auf drinkerType:
+   - light: 2-3 Drinks
+   - normal: 4-5 Drinks
+   - heavy: 6-7 Drinks
+2. Verteile die Drinks gleichmässig auf die gewünschten Cocktails
+3. Berechne Mengen basierend auf Standard-Rezepturen (pro Cocktail ca. 4cl Spirituosen, 2cl Likör, etc.)
+4. Runde Mengen auf praktische Einkaufsmengen auf (ganze Flaschen à 0.7L, Kartons, etc.)
+5. Berücksichtige Reserve (+10-15% Puffer)
+6. Ignoriere Verbrauchsmaterialien wie Fahrtkosten, Personalkosten etc.
 
 WICHTIG: Antworte NUR mit validem JSON im folgenden Format:
 {
-  "suggestedCocktails": ["Cocktailname1", "Cocktailname2", "Cocktailname3"],
-  "explanation": "Kurze Erklärung warum diese Cocktails gewählt wurden"
+  "materials": [
+    {"name": "Materialname", "unit": "Einheit", "quantity": 10, "reason": "Kurze Begründung"}
+  ],
+  "explanation": "Zusammenfassung der Berechnung"
 }
 
-Die Namen in "suggestedCocktails" MÜSSEN exakt aus der Liste VERFÜGBARE COCKTAILS stammen!
+Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE MATERIALIEN stammen!
 ''';
   }
 
-  GeminiSuggestion? _parseResponse(String responseText, int trainingCount) {
+  GeminiMaterialSuggestion? _parseMaterialResponse(String responseText, int trainingCount) {
     try {
       // Extract JSON from response (might be wrapped in markdown code blocks)
       var jsonStr = responseText;
@@ -256,25 +258,20 @@ Die Namen in "suggestedCocktails" MÜSSEN exakt aus der Liste VERFÜGBARE COCKTA
 
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-      final itemsList = (json['items'] as List<dynamic>?)
-              ?.map((item) => SuggestedItem.fromJson(item as Map<String, dynamic>))
+      final materials = (json['materials'] as List<dynamic>?)
+              ?.map((item) => SuggestedMaterial.fromJson(item as Map<String, dynamic>))
               .toList() ??
-          [];
-
-      final cocktails = (json['suggestedCocktails'] as List<dynamic>?)
-              ?.cast<String>() ??
           [];
 
       final explanation = json['explanation'] as String? ?? '';
 
-      return GeminiSuggestion(
-        items: itemsList,
-        suggestedCocktails: cocktails,
+      return GeminiMaterialSuggestion(
+        materials: materials,
         explanation: explanation,
         trainingDataCount: trainingCount,
       );
     } catch (e) {
-      debugPrint('Failed to parse Gemini response: $e');
+      debugPrint('Failed to parse Gimini material response: $e');
       debugPrint('Raw response: $responseText');
       return null;
     }

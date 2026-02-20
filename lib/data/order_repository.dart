@@ -458,8 +458,9 @@ class OrderRepository {
         // [10]: Gäste
         // [11]: Theke Ja/Nein
         // [12]: EventTyp
-        // [13]: ignore
-        // [14]: Cocktails (comma/semicolon separated)
+        // [13]: Service
+        // [14]: Cocktails 1 (comma/semicolon separated)
+        // [15]: Cocktails 2 (comma/semicolon separated)
         
         if (row.length < 13) {
           debugPrint('Skipping row with ${row.length} columns (need at least 13)');
@@ -475,10 +476,12 @@ class OrderRepository {
         final guestCount = row[10].trim();
         final mobileBarStr = row[11].trim();
         final eventType = row[12].trim();
-        // Parse cocktails from column 15 (index 14) if available
-        final cocktailsStr = row.length > 14 ? row[14].trim() : '';
-        final requestedCocktails = cocktailsStr.isNotEmpty
-            ? cocktailsStr.split(RegExp(r'[,;]')).map((c) => c.trim()).where((c) => c.isNotEmpty).toList()
+        // Parse cocktails from columns O (14) and P (15) - combine both
+        final cocktailsStr1 = row.length > 14 ? row[14].trim() : '';
+        final cocktailsStr2 = row.length > 15 ? row[15].trim() : '';
+        final combinedCocktails = '$cocktailsStr1;$cocktailsStr2';
+        final requestedCocktails = combinedCocktails.isNotEmpty
+            ? combinedCocktails.split(RegExp(r'[,;]')).map((c) => c.trim()).where((c) => c.isNotEmpty).toList()
             : <String>[];
 
         // Parse createdAt (Excel serial number)
