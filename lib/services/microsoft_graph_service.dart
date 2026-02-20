@@ -161,14 +161,15 @@ class MicrosoftGraphService {
 
   /// Upload [bytes] to OneDrive at [oneDrivePath] (e.g. "Aufträge/2026/05 Mai/Auftrag_Foo.pdf").
   /// Creates folders automatically if they don't exist.
-  Future<bool> uploadToOneDrive({
+  /// Returns the web URL of the uploaded file, or null on failure.
+  Future<String?> uploadToOneDrive({
     required String oneDrivePath,
     required Uint8List bytes,
     String contentType = 'application/pdf',
   }) async {
-    if (!kIsWeb) return false;
+    if (!kIsWeb) return null;
     final token = await _getToken(_oneDriveScope);
-    if (token == null) return false;
+    if (token == null) return null;
 
     try {
       // Use the simple upload endpoint (≤4 MB) with createUploadSession fallback path
@@ -185,26 +186,33 @@ class MicrosoftGraphService {
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
         debugPrint('OneDrive upload success: $oneDrivePath');
-        return true;
+        // Parse response to get web URL
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return data['webUrl'] as String?;
+        } catch (_) {
+          return 'https://onedrive.live.com'; // Fallback URL
+        }
       }
       debugPrint('OneDrive upload failed: ${response.statusCode} ${response.body}');
-      return false;
+      return null;
     } catch (e) {
       debugPrint('OneDrive upload error: $e');
-      return false;
+      return null;
     }
   }
 
   /// Create an Outlook calendar event.
-  Future<bool> createCalendarEvent({
+  /// Returns the event ID on success, null on failure.
+  Future<String?> createCalendarEvent({
     required String subject,
     required DateTime start,
     required DateTime end,
     required String bodyContent,
   }) async {
-    if (!kIsWeb) return false;
+    if (!kIsWeb) return null;
     final token = await _getToken(_calendarScope);
-    if (token == null) return false;
+    if (token == null) return null;
 
     try {
       final url = Uri.parse('$_graphBaseUrl/me/events');
@@ -230,12 +238,58 @@ class MicrosoftGraphService {
       );
       if (response.statusCode == 201) {
         debugPrint('Calendar event created: $subject');
-        return true;
+        // Parse event ID from response
+        try {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return data['id'] as String?;
+        } catch (_) {
+          return 'unknown';
+        }
       }
       debugPrint('Calendar event failed: ${response.statusCode} ${response.body}');
-      return false;
+      return null;
     } catch (e) {
       debugPrint('Calendar event error: $e');
+      return null;
+    }
+  }
+
+  /// Add a file attachment to a calendar event.
+  Future<bool> addCalendarAttachment({
+    required String eventId,
+    required String fileName,
+    required Uint8List bytes,
+    String contentType = 'application/pdf',
+  }) async {
+    if (!kIsWeb) return false;
+    final token = await _getToken(_calendarScope);
+    if (token == null) return false;
+
+    try {
+      final url = Uri.parse('$_graphBaseUrl/me/events/$eventId/attachments');
+      final base64Content = base64Encode(bytes);
+      final payload = jsonEncode({
+        '@odata.type': '#microsoft.graph.fileAttachment',
+        'name': fileName,
+        'contentType': contentType,
+        'contentBytes': base64Content,
+      });
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: payload,
+      );
+      if (response.statusCode == 201) {
+        debugPrint('Attachment added: $fileName');
+        return true;
+      }
+      debugPrint('Attachment failed: ${response.statusCode} ${response.body}');
+      return false;
+    } catch (e) {
+      debugPrint('Attachment error: $e');
       return false;
     }
   }

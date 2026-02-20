@@ -120,6 +120,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isConfigured = microsoftGraphService.isConfigured;
     final isLoggedIn = microsoftGraphService.isLoggedIn;
     final account = microsoftGraphService.getAccount();
+    
+    // Check if Firestore has config but MSAL didn't pick it up yet
+    final firestoreClientId = settingsRepository.current.microsoftClientId;
+    final hasFirestoreConfig = firestoreClientId != null && firestoreClientId.isNotEmpty;
+    final needsReload = hasFirestoreConfig && !isConfigured;
 
     return Card(
       child: Column(
@@ -142,7 +147,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          if (!isConfigured)
+          if (needsReload)
+            ListTile(
+              leading: const Icon(Icons.refresh, color: Colors.orange),
+              title: Text('settings.microsoft_reload_title'.tr()),
+              subtitle: Text('settings.microsoft_reload_message'.tr()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _reloadPage,
+            )
+          else if (!isConfigured)
             ListTile(
               leading: const Icon(Icons.settings, color: Colors.orange),
               title: Text('settings.microsoft_not_configured'.tr()),

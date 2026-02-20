@@ -65,6 +65,7 @@
     "tab_fixed": "Verbrauch",
     "tab_recipes": "Rezepte",
     "tab_employees": "Mitarbeiter",
+    "tab_company": "Firma",
     "employees_subtitle": "Mitarbeiter verwalten",
     "employees_title": "Keine Mitarbeiter vorhanden",
     "add_employee": "Mitarbeiter hinzufügen",
@@ -81,7 +82,20 @@
     "employee_updated": "Mitarbeiter aktualisiert!",
     "employee_deleted": "Mitarbeiter gelöscht!",
     "delete_employee_confirm_title": "Mitarbeiter löschen?",
-    "delete_employee_confirm_message": "Möchtest du {name} wirklich löschen?"
+    "delete_employee_confirm_message": "Möchtest du {name} wirklich löschen?",
+    "company_info_section": "Firmeninformationen",
+    "payment_info_section": "Zahlungsinformationen",
+    "company_name": "Firmenname",
+    "company_owner": "Inhaber",
+    "company_street": "Strasse",
+    "company_city": "PLZ / Ort",
+    "company_phone": "Telefon",
+    "company_email": "E-Mail",
+    "bank_iban": "IBAN",
+    "twint_number": "TWINT Nummer",
+    "company_saved": "Firmendaten gespeichert!",
+    "company_save_failed": "Speichern fehlgeschlagen",
+    "field_required": "Pflichtfeld"
   },
   "admin_panel": {
     "title": "Benutzer verwalten",
@@ -211,7 +225,14 @@
     "upload_to_onedrive": "Auf OneDrive hochladen",
     "create_calendar_event": "Kalendereintrag erstellen",
     "microsoft_integration_success": "Microsoft Integration erfolgreich!",
-    "microsoft_integration_failed": "Microsoft Integration fehlgeschlagen"
+    "microsoft_integration_failed": "Microsoft Integration fehlgeschlagen",
+    "ms_step_generating_shopping_list": "Einkaufsliste wird erstellt...",
+    "ms_step_uploading_shopping_list": "Einkaufsliste wird hochgeladen...",
+    "ms_step_generating_invoice": "Auftragsbestätigung wird erstellt...",
+    "ms_step_uploading_invoice": "Auftragsbestätigung wird hochgeladen...",
+    "ms_step_creating_calendar": "Kalendereintrag wird erstellt...",
+    "ms_step_adding_attachments": "Anhänge werden hinzugefügt...",
+    "ms_step_complete": "Fertig!"
   },
   "settings": {
     "title": "Einstellungen",

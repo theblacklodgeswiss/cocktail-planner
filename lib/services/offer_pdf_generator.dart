@@ -3,19 +3,15 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../data/settings_repository.dart';
+import '../models/app_settings.dart';
 import '../models/offer.dart';
 import '../utils/currency.dart';
 
 /// Generates a PDF offer document (Angebot) from [OfferData].
 class OfferPdfGenerator {
-  static const _blackLodgeAddress = [
-    'Black Lodge',
-    'Mario Kantharoobarajah',
-    'Birkenstrasse 3',
-    'CH-4123 Allschwil',
-    'Telefon: +41 79 778 48 61',
-    'E-Mail: the.blacklodge@outlook.com',
-  ];
+  /// Gets the company address lines from settings.
+  static List<String> _getAddressLines(AppSettings settings) => settings.addressLines;
 
   /// Generates PDF bytes from offer data (for preview/print).
   static Future<Uint8List> generatePdfBytes(OfferData offer) async {
@@ -38,6 +34,9 @@ class OfferPdfGenerator {
 
   /// Builds the PDF document.
   static Future<pw.Document> _buildPdfDocument(OfferData offer) async {
+    // Load settings
+    final settings = settingsRepository.current;
+    
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
@@ -65,7 +64,7 @@ class OfferPdfGenerator {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         build: (context) => [
-          _buildCompanyHeader(logoImage),
+          _buildCompanyHeader(logoImage, settings),
           pw.SizedBox(height: 24),
           pw.Text(
             isEn ? 'Offer' : 'Angebot',
@@ -91,20 +90,21 @@ class OfferPdfGenerator {
 
   // ── Company header ────────────────────────────────────────────────────────
 
-  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage) {
+  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage, AppSettings settings) {
+    final addressLines = _getAddressLines(settings);
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: _blackLodgeAddress
+          children: addressLines
               .map(
                 (line) => pw.Text(
                   line,
                   style: pw.TextStyle(
                     fontSize: 9,
-                    fontWeight: line == 'Black Lodge'
+                    fontWeight: line == settings.companyName
                         ? pw.FontWeight.bold
                         : pw.FontWeight.normal,
                   ),
@@ -135,7 +135,7 @@ class OfferPdfGenerator {
                     borderRadius: pw.BorderRadius.circular(6),
                   ),
                   child: pw.Text(
-                    'BLACK\nLODGE',
+                    settings.companyName.toUpperCase().replaceAll(' ', '\n'),
                     style: pw.TextStyle(
                       fontSize: 14,
                       fontWeight: pw.FontWeight.bold,

@@ -89,41 +89,123 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   Future<void> _triggerMicrosoftIntegration() async {
     if (!microsoftGraphService.isSupported) return;
 
+    final statusNotifier = ValueNotifier<String>('orders.ms_step_generating_shopping_list'.tr());
+    
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: ValueListenableBuilder<String>(
+            valueListenable: statusNotifier,
+            builder: (_, status, child) => Row(
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(width: 20),
+                Expanded(child: Text(status)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
     try {
-      // Generate PDF bytes
-      final pdfBytes = await PdfGenerator.generateBytesFromSavedOrder(widget.order);
+      // Fetch fresh order data to get the current event date
+      final freshOrder = await orderRepository.getOrderById(widget.order.id);
+      final order = freshOrder ?? widget.order;
       
-      // Build OneDrive path
-      final fileName = 'Auftrag_${widget.order.name.replaceAll(' ', '_')}.pdf';
-      final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
+      final safeName = order.name.replaceAll(' ', '_');
+      final dateTag = '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
+      String? einkaufslisteUrl;
+      String? auftragsbestaetigungUrl;
+      
+      // 1. Generate Einkaufsliste (Shopping List) PDF
+      final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(order);
+      final shoppingListFileName = 'Einkaufsliste_${safeName}_$dateTag.pdf';
+      
+      // 2. Upload Einkaufsliste to OneDrive
+      statusNotifier.value = 'orders.ms_step_uploading_shopping_list'.tr();
+      final shoppingListPath = MicrosoftGraphService.buildOneDrivePath(
         rootFolder: 'Aufträge',
-        date: widget.order.date,
-        fileName: fileName,
+        date: order.date,
+        fileName: shoppingListFileName,
+      );
+      einkaufslisteUrl = await microsoftGraphService.uploadToOneDrive(
+        oneDrivePath: shoppingListPath,
+        bytes: shoppingListBytes,
       );
       
-      // Upload to OneDrive
-      final uploadSuccess = await microsoftGraphService.uploadToOneDrive(
-        oneDrivePath: oneDrivePath,
-        bytes: pdfBytes,
+      // 3. Generate Auftragsbestätigung (Order Confirmation) PDF
+      statusNotifier.value = 'orders.ms_step_generating_invoice'.tr();
+      final invoiceBytes = await InvoicePdfGenerator.generateBytes(order);
+      final invoiceFileName = InvoicePdfGenerator.getFilename(order);
+      
+      // 4. Upload Auftragsbestätigung to OneDrive
+      statusNotifier.value = 'orders.ms_step_uploading_invoice'.tr();
+      final invoicePath = MicrosoftGraphService.buildOneDrivePath(
+        rootFolder: 'Aufträge',
+        date: order.date,
+        fileName: invoiceFileName,
+      );
+      auftragsbestaetigungUrl = await microsoftGraphService.uploadToOneDrive(
+        oneDrivePath: invoicePath,
+        bytes: invoiceBytes,
       );
       
-      // Create calendar event
-      final eventStart = widget.order.date;
+      // 5. Create calendar event with document links
+      statusNotifier.value = 'orders.ms_step_creating_calendar'.tr();
+      final eventStart = order.date;
       final eventEnd = eventStart.add(const Duration(hours: 4));
       final employeeNames = _assignedEmployees.isNotEmpty
           ? _assignedEmployees.join(', ')
           : 'TBD';
-      final eventBody = 'Auftrag: ${widget.order.name}\n'
-          'Personen: ${widget.order.personCount}\n'
-          'Mitarbeiter: $employeeNames\n'
-          'Gesamtbetrag: ${Currency.fromCode(widget.order.currency).format(widget.order.total)}';
       
-      final calendarSuccess = await microsoftGraphService.createCalendarEvent(
-        subject: widget.order.name,
+      // Build event body with document links
+      final bodyLines = <String>[
+        'Auftrag: ${order.name}',
+        'Personen: ${order.personCount}',
+        'Mitarbeiter: $employeeNames',
+        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total)}',
+        '',
+        '--- Dokumente ---',
+      ];
+      if (einkaufslisteUrl != null) {
+        bodyLines.add('Einkaufsliste: $einkaufslisteUrl');
+      }
+      if (auftragsbestaetigungUrl != null) {
+        bodyLines.add('Auftragsbestätigung: $auftragsbestaetigungUrl');
+      }
+      
+      final eventId = await microsoftGraphService.createCalendarEvent(
+        subject: order.name,
         start: eventStart,
         end: eventEnd,
-        bodyContent: eventBody,
+        bodyContent: bodyLines.join('\n'),
       );
+      
+      // 6. Add PDF attachments to calendar event
+      if (eventId != null && eventId != 'unknown') {
+        statusNotifier.value = 'orders.ms_step_adding_attachments'.tr();
+        await microsoftGraphService.addCalendarAttachment(
+          eventId: eventId,
+          fileName: shoppingListFileName,
+          bytes: shoppingListBytes,
+        );
+        await microsoftGraphService.addCalendarAttachment(
+          eventId: eventId,
+          fileName: invoiceFileName,
+          bytes: invoiceBytes,
+        );
+      }
+      
+      final uploadSuccess = einkaufslisteUrl != null || auftragsbestaetigungUrl != null;
+      final calendarSuccess = eventId != null;
+      
+      // Close progress dialog
+      if (mounted) Navigator.of(context).pop();
       
       if (mounted && (uploadSuccess || calendarSuccess)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,6 +218,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       }
     } catch (e) {
       debugPrint('Microsoft integration error: $e');
+      // Close progress dialog
+      if (mounted) Navigator.of(context).pop();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('orders.microsoft_integration_failed'.tr())),
@@ -151,8 +235,32 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     _showLoadingDialog();
 
     try {
+      // Generate invoice PDF bytes
+      final pdfBytes = await InvoicePdfGenerator.generateBytes(widget.order,
+          language: language);
+      final fileName = InvoicePdfGenerator.getFilename(widget.order);
+
+      // Download locally
       await InvoicePdfGenerator.generateAndDownload(widget.order,
           language: language);
+
+      // Upload to OneDrive if available
+      if (microsoftGraphService.isLoggedIn) {
+        try {
+          final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
+            rootFolder: 'Aufträge',
+            date: widget.order.date,
+            fileName: fileName,
+          );
+          await microsoftGraphService.uploadToOneDrive(
+            oneDrivePath: oneDrivePath,
+            bytes: pdfBytes,
+          );
+        } catch (e) {
+          debugPrint('Invoice OneDrive upload failed: $e');
+        }
+      }
+
       if (mounted) {
         Navigator.pop(context); // Close loading
         ScaffoldMessenger.of(context).showSnackBar(

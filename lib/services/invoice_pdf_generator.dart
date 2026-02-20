@@ -3,27 +3,46 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../data/settings_repository.dart';
+import '../models/app_settings.dart';
 import '../models/offer.dart';
 import '../models/order.dart';
 import '../utils/currency.dart';
 
 /// Generates an invoice/confirmation PDF (Auftragsbestätigung) from a [SavedOrder].
 class InvoicePdfGenerator {
-  static const _blackLodgeAddress = [
-    'Black Lodge',
-    'Mario Kantharoobarajah',
-    'Birkenstrasse 3',
-    'CH-4123 Allschwil',
-    'Telefon: +41 79 778 48 61',
-    'E-Mail: the.blacklodge@outlook.com',
-  ];
+  /// Gets the company address lines from settings.
+  static List<String> _getAddressLines(AppSettings settings) => settings.addressLines;
 
-  static const _bankIban = 'CH86 0020 8208 1176 8440 B';
-  static const _twintNumber = '+41 79 778 48 61';
+  /// Generates invoice PDF bytes for upload/storage.
+  /// [language] overrides order.offerLanguage if provided ('de' or 'en').
+  static Future<Uint8List> generateBytes(SavedOrder order, {String? language}) async {
+    return _buildPdf(order, language: language);
+  }
+
+  /// Gets the filename for an invoice PDF.
+  static String getFilename(SavedOrder order) {
+    final dateTag =
+        '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
+    final safeName = order.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+    return 'auftragsbestaetigung_${safeName}_$dateTag.pdf';
+  }
 
   /// Generates and shares an invoice PDF from an accepted order.
   /// [language] overrides order.offerLanguage if provided ('de' or 'en').
   static Future<void> generateAndDownload(SavedOrder order, {String? language}) async {
+    final bytes = await _buildPdf(order, language: language);
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: getFilename(order),
+    );
+  }
+
+  /// Builds the PDF document and returns bytes.
+  static Future<Uint8List> _buildPdf(SavedOrder order, {String? language}) async {
+    // Load settings
+    final settings = settingsRepository.current;
+    
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
@@ -61,7 +80,7 @@ class InvoicePdfGenerator {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(36),
         build: (context) => [
-          _buildCompanyHeader(logoImage),
+          _buildCompanyHeader(logoImage, settings),
           pw.SizedBox(height: 20),
           pw.Text(
             isEn ? 'Order Confirmation' : 'Auftragsbestätigung',
@@ -84,6 +103,7 @@ class InvoicePdfGenerator {
             order,
             curr,
             isEn,
+            settings,
             depositAmount: depositAmount,
             remainingAmount: remainingAmount,
           ),
@@ -92,32 +112,27 @@ class InvoicePdfGenerator {
       ),
     );
 
-    final dateTag =
-        '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
-    final safeName = order.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
-    await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename: 'auftragsbestaetigung_${safeName}_$dateTag.pdf',
-    );
+    return pdf.save();
   }
 
   // ── Company header ────────────────────────────────────────────────────────
 
-  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage) {
+  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage, AppSettings settings) {
+    final addressLines = _getAddressLines(settings);
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: _blackLodgeAddress
+          children: addressLines
               .map(
                 (line) => pw.Text(
                   line,
                   style: pw.TextStyle(
                     fontSize: 9,
                     fontWeight:
-                        line == 'Black Lodge' ? pw.FontWeight.bold : pw.FontWeight.normal,
+                        line == settings.companyName ? pw.FontWeight.bold : pw.FontWeight.normal,
                   ),
                 ),
               )
@@ -145,7 +160,7 @@ class InvoicePdfGenerator {
                     borderRadius: pw.BorderRadius.circular(6),
                   ),
                   child: pw.Text(
-                    'BLACK\nLODGE',
+                    settings.companyName.toUpperCase().replaceAll(' ', '\n'),
                     style: pw.TextStyle(
                       fontSize: 14,
                       fontWeight: pw.FontWeight.bold,
@@ -544,7 +559,8 @@ class InvoicePdfGenerator {
   static pw.Widget _buildAdditionalInfo(
     SavedOrder order,
     Currency curr,
-    bool isEn, {
+    bool isEn,
+    AppSettings settings, {
     required double depositAmount,
     required double remainingAmount,
   }) {
@@ -552,26 +568,26 @@ class InvoicePdfGenerator {
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
 
     final additionalTextDe = '''
-"Black Lodge" ist für den Einkauf und Zubereitung der Cocktails verantwortlich. Dies betrifft auch die Hartplastikbecher, Süssigkeiten, Strohhalme, Früchte und den dazugehörigen Alkohol. Eine "Bartheke" kann von uns zur Verfügung gestellt werden gegen Aufpreis (s. oben).
+"${settings.companyName}" ist für den Einkauf und Zubereitung der Cocktails verantwortlich. Dies betrifft auch die Hartplastikbecher, Süssigkeiten, Strohhalme, Früchte und den dazugehörigen Alkohol. Eine "Bartheke" kann von uns zur Verfügung gestellt werden gegen Aufpreis (s. oben).
 Empfehlung: Am Anfang würden wir nur die Cocktails ohne "Barservice" für 2 Stunden anbieten und anschliessend sowohl Cocktails & Barservice für den restlichen Abend. Jedoch richten wir uns hier nach Kundenwunsch.
 
 Die Zeit für die Anfahrt, Abfahrt und Aufbau gehören nicht zu den "5h Cocktail & Barservice", werden dem Kunden dennoch nicht verrechnet. Unser Team wird mindestens 1 Stunde vor Auftragsbeginn am Standort erscheinen und den Aufbau beginnen, aber auch hier richten wir uns gern nach Kundenwunsch.
 
 Wir bitten den Auftraggeber eine Anzahlung in Höhe von ${curr.format(depositAmount)} binnen 14 Tage zu tätigen. Andernfalls wird der Auftrag automatisch storniert. Die restlichen ${curr.format(remainingAmount)} werden am $eventDateStr nach Auftragsende vom Kunden bar oder per TWINT bezahlt.
 
-Name: Mario Kantharoobarajah        IBAN: $_bankIban        TWINT: $_twintNumber
+Name: ${settings.companyOwner}        IBAN: ${settings.bankIban}        TWINT: ${settings.twintNumber}
 
 Wird der Auftrag seitens, Auftraggeber nach Anzahlung storniert, hat er keinen Anspruch auf die Anzahlung! Sollte es von seitens Auftragnehmer storniert werden, wird die Anzahlung unverzüglich wieder zurückerstattet!''';
 
     final additionalTextEn = '''
-"BlackLodge" is responsible for purchasing and preparing the cocktails. This includes hard plastic cups, sweets, straws, fruits, and the associated alcohol. A "bar counter" can be provided by us for an additional charge (see above).
+"${settings.companyName}" is responsible for purchasing and preparing the cocktails. This includes hard plastic cups, sweets, straws, fruits, and the associated alcohol. A "bar counter" can be provided by us for an additional charge (see above).
 Recommendation: At the beginning we would only offer cocktails without "bar service" for 2 hours and then both cocktails & bar service for the rest of the evening. However, we follow the customer's wishes.
 
 The time for arrival, departure and setup is not included in the "5h Cocktail & Bar Service", but will not be charged to the client. Our team will arrive at the venue at least 1 hour before the start of the assignment and begin setup.
 
 We ask the client to make a deposit of ${curr.format(depositAmount)} within 14 days. Otherwise the order will be automatically cancelled. The remaining ${curr.format(remainingAmount)} will be paid in cash or via TWINT on $eventDateStr after the order is completed.
 
-Name: Mario Kantharoobarajah        IBAN: $_bankIban        TWINT: $_twintNumber
+Name: ${settings.companyOwner}        IBAN: ${settings.bankIban}        TWINT: ${settings.twintNumber}
 
 If the order is cancelled by the client after the deposit has been made, they are not entitled to a refund! If the order is cancelled by the contractor, the deposit will be refunded immediately!''';
 

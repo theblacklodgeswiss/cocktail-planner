@@ -175,6 +175,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       eventTypes: _eventTypes.map((e) => e.name).toList(),
       discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
       language: _language,
+      eventDate: _eventDate,
     );
   }
 

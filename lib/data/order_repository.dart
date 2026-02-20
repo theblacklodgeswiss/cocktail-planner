@@ -79,6 +79,7 @@ class OrderRepository {
     required List<String> eventTypes,
     required double discount,
     required String language,
+    required DateTime eventDate,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -91,6 +92,7 @@ class OrderRepository {
         'offerDiscount': discount,
         'offerLanguage': language,
         'offerUpdatedAt': FieldValue.serverTimestamp(),
+        'date': eventDate.toIso8601String(),
       });
       return true;
     } catch (e) {
@@ -174,6 +176,20 @@ class OrderRepository {
     } catch (e) {
       debugPrint('Failed to delete order: $e');
       return false;
+    }
+  }
+
+  /// Fetch a single order by ID.
+  Future<SavedOrder?> getOrderById(String orderId) async {
+    if (!firestoreService.isAvailable) return null;
+
+    try {
+      final doc = await firestoreService.ordersCollection.doc(orderId).get();
+      if (!doc.exists || doc.data() == null) return null;
+      return SavedOrder.fromFirestore(doc.id, doc.data()!);
+    } catch (e) {
+      debugPrint('Failed to fetch order: $e');
+      return null;
     }
   }
 }

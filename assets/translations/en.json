@@ -65,6 +65,7 @@
     "tab_fixed": "Supplies",
     "tab_recipes": "Recipes",
     "tab_employees": "Employees",
+    "tab_company": "Company",
     "employees_subtitle": "Manage employees",
     "employees_title": "No employees available",
     "add_employee": "Add Employee",
@@ -81,7 +82,20 @@
     "employee_updated": "Employee updated!",
     "employee_deleted": "Employee deleted!",
     "delete_employee_confirm_title": "Delete Employee?",
-    "delete_employee_confirm_message": "Do you really want to delete {name}?"
+    "delete_employee_confirm_message": "Do you really want to delete {name}?",
+    "company_info_section": "Company Information",
+    "payment_info_section": "Payment Information",
+    "company_name": "Company Name",
+    "company_owner": "Owner",
+    "company_street": "Street",
+    "company_city": "Postal Code / City",
+    "company_phone": "Phone",
+    "company_email": "Email",
+    "bank_iban": "IBAN",
+    "twint_number": "TWINT Number",
+    "company_saved": "Company data saved!",
+    "company_save_failed": "Save failed",
+    "field_required": "Required field"
   },
   "admin_panel": {
     "title": "Manage Users",
@@ -211,7 +225,14 @@
     "upload_to_onedrive": "Upload to OneDrive",
     "create_calendar_event": "Create Calendar Event",
     "microsoft_integration_success": "Microsoft Integration successful!",
-    "microsoft_integration_failed": "Microsoft Integration failed"
+    "microsoft_integration_failed": "Microsoft integration failed",
+    "ms_step_generating_shopping_list": "Generating shopping list...",
+    "ms_step_uploading_shopping_list": "Uploading shopping list...",
+    "ms_step_generating_invoice": "Generating order confirmation...",
+    "ms_step_uploading_invoice": "Uploading order confirmation...",
+    "ms_step_creating_calendar": "Creating calendar event...",
+    "ms_step_adding_attachments": "Adding attachments...",
+    "ms_step_complete": "Complete!"
   },
   "settings": {
     "title": "Settings",
