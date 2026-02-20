@@ -269,7 +269,11 @@
     "microsoft_tenant_hint": "Verwende 'common' für beliebige Microsoft-Konten",
     "microsoft_reload_title": "Seite neu laden",
     "microsoft_reload_message": "Die Seite muss neu geladen werden, um die Änderungen zu übernehmen.",
-    "microsoft_reload_button": "Neu laden"
+    "microsoft_reload_button": "Neu laden",
+    "company_section": "Firmenprofil",
+    "company_empty": "Noch keine Firmendaten hinterlegt.\nHinterlege deine Firmendaten für Angebote und Rechnungen.",
+    "company_add": "Jetzt einrichten",
+    "payment_section": "Zahlungsdaten"
   },
   "legal": {
     "imprint_title": "Impressum",

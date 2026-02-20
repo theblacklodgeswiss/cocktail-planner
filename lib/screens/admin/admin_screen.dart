@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
-import 'company_settings_tab.dart';
 import 'materials_tab.dart';
 import 'recipes_tab.dart';
 
@@ -22,7 +21,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -62,7 +61,6 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(icon: const Icon(Icons.inventory), text: 'admin.tab_materials'.tr()),
             Tab(icon: const Icon(Icons.build), text: 'admin.tab_fixed'.tr()),
             Tab(icon: const Icon(Icons.local_bar), text: 'admin.tab_recipes'.tr()),
-            Tab(icon: const Icon(Icons.business), text: 'admin.tab_company'.tr()),
           ],
         ),
       ),
@@ -72,7 +70,6 @@ class _AdminScreenState extends State<AdminScreen>
           MaterialsTab(isFixedValue: false),
           MaterialsTab(isFixedValue: true),
           RecipesTab(),
-          CompanySettingsTab(),
         ],
       ),
     );

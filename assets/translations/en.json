@@ -269,7 +269,11 @@
     "microsoft_tenant_hint": "Use 'common' for any Microsoft account",
     "microsoft_reload_title": "Reload Page",
     "microsoft_reload_message": "The page needs to be reloaded to apply the changes.",
-    "microsoft_reload_button": "Reload"
+    "microsoft_reload_button": "Reload",
+    "company_section": "Company Profile",
+    "company_empty": "No company data set up yet.\nAdd your company details for offers and invoices.",
+    "company_add": "Set up now",
+    "payment_section": "Payment Details"
   },
   "legal": {
     "imprint_title": "Imprint",

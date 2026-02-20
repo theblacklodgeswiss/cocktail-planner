@@ -80,6 +80,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (authService.isAdmin) ...[
           const SizedBox(height: 16),
           _buildAdminSection(),
+          const SizedBox(height: 16),
+          _buildCompanySection(),
         ],
       ],
     );
@@ -449,6 +451,339 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompanySection() {
+    final settings = settingsRepository.current;
+    final hasCompanyInfo = settings.companyName.isNotEmpty;
+    
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with gradient
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primaryContainer,
+                  Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  child: Icon(
+                    Icons.business,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasCompanyInfo ? settings.companyName : 'settings.company_section'.tr(),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (hasCompanyInfo && settings.companyOwner.isNotEmpty)
+                        Text(
+                          settings.companyOwner,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton.filled(
+                  onPressed: _showCompanyEditDialog,
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'common.edit'.tr(),
+                ),
+              ],
+            ),
+          ),
+          
+          if (!hasCompanyInfo)
+            // Empty state
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.add_business,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'settings.company_empty'.tr(),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.tonalIcon(
+                      onPressed: _showCompanyEditDialog,
+                      icon: const Icon(Icons.add),
+                      label: Text('settings.company_add'.tr()),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            // Address info
+            if (settings.companyStreet.isNotEmpty || settings.companyCity.isNotEmpty)
+              _buildCompanyInfoTile(
+                icon: Icons.location_on_outlined,
+                title: [settings.companyStreet, settings.companyCity]
+                    .where((s) => s.isNotEmpty)
+                    .join(', '),
+              ),
+            
+            // Contact info
+            if (settings.companyPhone.isNotEmpty)
+              _buildCompanyInfoTile(
+                icon: Icons.phone_outlined,
+                title: settings.companyPhone,
+              ),
+            
+            if (settings.companyEmail.isNotEmpty)
+              _buildCompanyInfoTile(
+                icon: Icons.email_outlined,
+                title: settings.companyEmail,
+              ),
+            
+            // Payment section divider
+            if (settings.bankIban.isNotEmpty || settings.twintNumber.isNotEmpty) ...[
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  'settings.payment_section'.tr(),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              
+              if (settings.bankIban.isNotEmpty)
+                _buildCompanyInfoTile(
+                  icon: Icons.account_balance_outlined,
+                  title: 'IBAN',
+                  subtitle: settings.bankIban,
+                ),
+              
+              if (settings.twintNumber.isNotEmpty)
+                _buildCompanyInfoTile(
+                  icon: Icons.payment_outlined,
+                  title: 'TWINT',
+                  subtitle: settings.twintNumber,
+                ),
+            ],
+            
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompanyInfoTile({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.outline),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCompanyEditDialog() async {
+    final settings = settingsRepository.current;
+    final companyNameCtrl = TextEditingController(text: settings.companyName);
+    final companyOwnerCtrl = TextEditingController(text: settings.companyOwner);
+    final companyStreetCtrl = TextEditingController(text: settings.companyStreet);
+    final companyCityCtrl = TextEditingController(text: settings.companyCity);
+    final companyPhoneCtrl = TextEditingController(text: settings.companyPhone);
+    final companyEmailCtrl = TextEditingController(text: settings.companyEmail);
+    final bankIbanCtrl = TextEditingController(text: settings.bankIban);
+    final twintNumberCtrl = TextEditingController(text: settings.twintNumber);
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.business),
+            const SizedBox(width: 8),
+            Text('settings.company_section'.tr()),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Company Info
+                _buildEditField(
+                  controller: companyNameCtrl,
+                  label: 'admin.company_name'.tr(),
+                  icon: Icons.business,
+                ),
+                _buildEditField(
+                  controller: companyOwnerCtrl,
+                  label: 'admin.company_owner'.tr(),
+                  icon: Icons.person,
+                ),
+                _buildEditField(
+                  controller: companyStreetCtrl,
+                  label: 'admin.company_street'.tr(),
+                  icon: Icons.location_on,
+                ),
+                _buildEditField(
+                  controller: companyCityCtrl,
+                  label: 'admin.company_city'.tr(),
+                  icon: Icons.location_city,
+                ),
+                _buildEditField(
+                  controller: companyPhoneCtrl,
+                  label: 'admin.company_phone'.tr(),
+                  icon: Icons.phone,
+                  keyboardType: TextInputType.phone,
+                ),
+                _buildEditField(
+                  controller: companyEmailCtrl,
+                  label: 'admin.company_email'.tr(),
+                  icon: Icons.email,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'admin.payment_info_section'.tr(),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                _buildEditField(
+                  controller: bankIbanCtrl,
+                  label: 'admin.bank_iban'.tr(),
+                  icon: Icons.account_balance,
+                ),
+                _buildEditField(
+                  controller: twintNumberCtrl,
+                  label: 'admin.twint_number'.tr(),
+                  icon: Icons.payment,
+                  keyboardType: TextInputType.phone,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.save),
+            label: Text('common.save'.tr()),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final updated = settings.copyWith(
+        companyName: companyNameCtrl.text.trim(),
+        companyOwner: companyOwnerCtrl.text.trim(),
+        companyStreet: companyStreetCtrl.text.trim(),
+        companyCity: companyCityCtrl.text.trim(),
+        companyPhone: companyPhoneCtrl.text.trim(),
+        companyEmail: companyEmailCtrl.text.trim(),
+        bankIban: bankIbanCtrl.text.trim(),
+        twintNumber: twintNumberCtrl.text.trim(),
+      );
+      await settingsRepository.save(updated);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('admin.company_saved'.tr())),
+        );
+      }
+    }
+
+    // Dispose controllers
+    companyNameCtrl.dispose();
+    companyOwnerCtrl.dispose();
+    companyStreetCtrl.dispose();
+    companyCityCtrl.dispose();
+    companyPhoneCtrl.dispose();
+    companyEmailCtrl.dispose();
+    bankIbanCtrl.dispose();
+    twintNumberCtrl.dispose();
+  }
+
+  Widget _buildEditField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
       ),
     );
   }
