@@ -86,6 +86,39 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     }
   }
 
+  /// Check if offer has all required fields filled
+  bool _isOfferComplete() {
+    return widget.order.offerClientName.isNotEmpty &&
+        widget.order.offerClientContact.isNotEmpty &&
+        widget.order.offerEventTime.isNotEmpty &&
+        widget.order.offerEventTypes.isNotEmpty;
+  }
+
+  /// Show message that offer needs to be completed first
+  void _showOfferIncompleteMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('orders.offer_incomplete'.tr()),
+        action: SnackBarAction(
+          label: 'orders.complete_offer'.tr(),
+          onPressed: () {
+            Navigator.pop(context);
+            context.push('/create-offer', extra: widget.order);
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Try to update status, but check if offer is complete first (for accepting)
+  void _tryUpdateStatus(OrderStatus newStatus) {
+    if (newStatus == OrderStatus.accepted && !_isOfferComplete()) {
+      _showOfferIncompleteMessage();
+      return;
+    }
+    _updateStatus(newStatus);
+  }
+
   Future<void> _triggerMicrosoftIntegration() async {
     if (!microsoftGraphService.isSupported) return;
 
@@ -442,6 +475,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Widget _buildStatusCard() {
+    final isComplete = _isOfferComplete();
+    
     return Card(
       color: statusColor(_currentStatus).withValues(alpha: 0.1),
       child: Padding(
@@ -465,51 +500,74 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               ],
             ),
             const SizedBox(height: 12),
-            Text('orders.change_status'.tr(),
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                if (_currentStatus != OrderStatus.accepted)
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => _updateStatus(OrderStatus.accepted),
-                      icon: const Icon(Icons.check),
-                      label: Text('orders.accept'.tr()),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.green,
+            // Show "Complete Offer" button if offer is incomplete and status is quote
+            if (!isComplete && _currentStatus == OrderStatus.quote) ...[
+              Text('orders.offer_incomplete'.tr(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.orange,
+                  )),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    context.push('/create-offer', extra: widget.order);
+                  },
+                  icon: const Icon(Icons.edit_document),
+                  label: Text('orders.complete_offer'.tr()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                  ),
+                ),
+              ),
+            ] else ...[
+              Text('orders.change_status'.tr(),
+                  style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (_currentStatus != OrderStatus.accepted)
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _tryUpdateStatus(OrderStatus.accepted),
+                        icon: const Icon(Icons.check),
+                        label: Text('orders.accept'.tr()),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.green,
+                        ),
                       ),
                     ),
-                  ),
-                if (_currentStatus != OrderStatus.accepted &&
-                    _currentStatus != OrderStatus.declined)
-                  const SizedBox(width: 8),
-                if (_currentStatus != OrderStatus.declined)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _updateStatus(OrderStatus.declined),
-                      icon: const Icon(Icons.close),
-                      label: Text('orders.decline'.tr()),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
+                  if (_currentStatus != OrderStatus.accepted &&
+                      _currentStatus != OrderStatus.declined)
+                    const SizedBox(width: 8),
+                  if (_currentStatus != OrderStatus.declined)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _updateStatus(OrderStatus.declined),
+                        icon: const Icon(Icons.close),
+                        label: Text('orders.decline'.tr()),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
                       ),
                     ),
-                  ),
-                if (_currentStatus != OrderStatus.quote) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _updateStatus(OrderStatus.quote),
-                      icon: const Icon(Icons.undo),
-                      label: Text('orders.status_quote'.tr()),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange,
+                  if (_currentStatus != OrderStatus.quote) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _updateStatus(OrderStatus.quote),
+                        icon: const Icon(Icons.undo),
+                        label: Text('orders.status_quote'.tr()),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),

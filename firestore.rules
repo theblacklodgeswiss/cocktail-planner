@@ -51,7 +51,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isAdmin() || resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || isSuperAdmin() || resource.data.userId == request.auth.uid;
     }
     
     // Users collection - for user profiles

@@ -232,7 +232,9 @@
     "ms_step_uploading_invoice": "Uploading order confirmation...",
     "ms_step_creating_calendar": "Creating calendar event...",
     "ms_step_adding_attachments": "Adding attachments...",
-    "ms_step_complete": "Complete!"
+    "ms_step_complete": "Complete!",
+    "offer_incomplete": "Please complete the offer first",
+    "complete_offer": "Open Offer"
   },
   "settings": {
     "title": "Settings",

@@ -232,7 +232,9 @@
     "ms_step_uploading_invoice": "Auftragsbestätigung wird hochgeladen...",
     "ms_step_creating_calendar": "Kalendereintrag wird erstellt...",
     "ms_step_adding_attachments": "Anhänge werden hinzugefügt...",
-    "ms_step_complete": "Fertig!"
+    "ms_step_complete": "Fertig!",
+    "offer_incomplete": "Bitte zuerst Angebot fertigstellen",
+    "complete_offer": "Angebot öffnen"
   },
   "settings": {
     "title": "Einstellungen",
