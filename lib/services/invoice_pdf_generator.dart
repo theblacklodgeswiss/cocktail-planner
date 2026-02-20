@@ -22,10 +22,20 @@ class InvoicePdfGenerator {
   static const _twintNumber = '+41 79 778 48 61';
 
   /// Generates and shares an invoice PDF from an accepted order.
-  static Future<void> generateAndDownload(SavedOrder order) async {
-    final pdf = pw.Document();
+  /// [language] overrides order.offerLanguage if provided ('de' or 'en').
+  static Future<void> generateAndDownload(SavedOrder order, {String? language}) async {
+    // Load Unicode-compatible fonts
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold = await PdfGoogleFonts.notoSansBold();
+    
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: fontRegular,
+        bold: fontBold,
+      ),
+    );
     final curr = Currency.fromCode(order.currency);
-    final isEn = order.offerLanguage == 'en';
+    final isEn = (language ?? order.offerLanguage) == 'en';
 
     // Load logo image
     pw.ImageProvider? logoImage;
@@ -177,7 +187,7 @@ class InvoicePdfGenerator {
                 style: const pw.TextStyle(fontSize: 9),
               ),
               pw.Text(
-                '${isEn ? 'Order Date' : 'Auftragsdatum'}: $eventDateStr',
+                '${isEn ? 'Event Date' : 'Eventdatum'}: $eventDateStr',
                 style: const pw.TextStyle(fontSize: 9),
               ),
             ],

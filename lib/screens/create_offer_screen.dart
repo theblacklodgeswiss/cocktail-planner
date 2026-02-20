@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
 
 import '../data/cocktail_repository.dart';
 import '../models/offer.dart';
@@ -23,6 +24,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   // Language
   String _language = 'de';
+
+  // Event date (editable)
+  late DateTime _eventDate;
 
   // Bearbeiter
   final _editorNameCtrl =
@@ -57,6 +61,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   @override
   void initState() {
     super.initState();
+    _eventDate = widget.order.date;
     _guestCountCtrl =
         TextEditingController(text: widget.order.personCount.toString());
     _orderTotalCtrl =
@@ -138,7 +143,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
     return OfferData(
       orderName: widget.order.name,
-      eventDate: widget.order.date,
+      eventDate: _eventDate,
       eventTime: _eventTimeCtrl.text.trim(),
       currency: widget.order.currency,
       guestCount: int.tryParse(_guestCountCtrl.text.trim()) ??
@@ -162,26 +167,61 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     );
   }
 
+  Future<void> _saveOfferData() async {
+    await cocktailRepository.updateOrderOfferData(
+      orderId: widget.order.id,
+      clientName: _clientNameCtrl.text.trim(),
+      clientContact: _clientContactCtrl.text.trim(),
+      eventTime: _eventTimeCtrl.text.trim(),
+      eventTypes: _eventTypes.map((e) => e.name).toList(),
+      discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
+      language: _language,
+    );
+  }
+
+  Future<void> _previewPdf() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isGenerating = true);
+    try {
+      await _saveOfferData();
+      final offer = _buildOfferData();
+      final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
+      if (mounted) {
+        await Printing.layoutPdf(onLayout: (_) async => pdfBytes);
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
   Future<void> _generatePdf() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
     try {
-      // Save offer data to order first
-      await cocktailRepository.updateOrderOfferData(
-        orderId: widget.order.id,
-        clientName: _clientNameCtrl.text.trim(),
-        clientContact: _clientContactCtrl.text.trim(),
-        eventTime: _eventTimeCtrl.text.trim(),
-        eventTypes: _eventTypes.map((e) => e.name).toList(),
-        discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
-        language: _language,
-      );
-      
+      await _saveOfferData();
       final offer = _buildOfferData();
       await OfferPdfGenerator.generateAndDownload(offer);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('offer.pdf_created'.tr())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  Future<void> _printPdf() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isGenerating = true);
+    try {
+      await _saveOfferData();
+      final offer = _buildOfferData();
+      final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
+      if (mounted) {
+        await Printing.layoutPdf(
+          onLayout: (_) async => pdfBytes,
+          name: 'angebot_${offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}.pdf',
         );
       }
     } finally {
@@ -300,7 +340,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   const SizedBox(height: 8),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 500;
+                      final wide = constraints.maxWidth >= 600;
                       final fields = [
                         SizedBox(
                           width: 200,
@@ -320,6 +360,33 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                             controller: _eventTimeCtrl,
                             label: 'offer.event_time'.tr(),
                             hint: '17:30',
+                          ),
+                        ),
+                        // Event date picker
+                        SizedBox(
+                          width: 200,
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _eventDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2030),
+                              );
+                              if (picked != null) {
+                                setState(() => _eventDate = picked);
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'offer.event_date'.tr(),
+                                border: const OutlineInputBorder(),
+                                suffixIcon: const Icon(Icons.calendar_today),
+                              ),
+                              child: Text(
+                                '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}',
+                              ),
+                            ),
                           ),
                         ),
                       ];
@@ -476,23 +543,49 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // ── Generate PDF ──────────────────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _isGenerating ? null : _generatePdf,
-                      icon: _isGenerating
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.picture_as_pdf),
-                      label: Text('offer.generate_pdf'.tr()),
-                    ),
+                  // ── Action Buttons ────────────────────────────────────────
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      // Vorschau / Preview
+                      OutlinedButton.icon(
+                        onPressed: _isGenerating ? null : _previewPdf,
+                        icon: const Icon(Icons.visibility),
+                        label: Text('offer.preview'.tr()),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        ),
+                      ),
+                      // PDF Speichern / Download
+                      FilledButton.icon(
+                        onPressed: _isGenerating ? null : _generatePdf,
+                        icon: _isGenerating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.picture_as_pdf),
+                        label: Text('offer.generate_pdf'.tr()),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        ),
+                      ),
+                      // Drucken / Print
+                      OutlinedButton.icon(
+                        onPressed: _isGenerating ? null : _printPdf,
+                        icon: const Icon(Icons.print),
+                        label: Text('offer.print'.tr()),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 32),
                 ],

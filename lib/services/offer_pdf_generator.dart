@@ -17,9 +17,37 @@ class OfferPdfGenerator {
     'E-Mail: the.blacklodge@outlook.com',
   ];
 
+  /// Generates PDF bytes from offer data (for preview/print).
+  static Future<Uint8List> generatePdfBytes(OfferData offer) async {
+    final pdf = await _buildPdfDocument(offer);
+    return pdf.save();
+  }
+
   /// Generates and shares an offer PDF.
   static Future<void> generateAndDownload(OfferData offer) async {
-    final pdf = pw.Document();
+    final pdfBytes = await generatePdfBytes(offer);
+    final dateTag =
+        '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
+    final safeName =
+        offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+    await Printing.sharePdf(
+      bytes: pdfBytes,
+      filename: 'angebot_${safeName}_$dateTag.pdf',
+    );
+  }
+
+  /// Builds the PDF document.
+  static Future<pw.Document> _buildPdfDocument(OfferData offer) async {
+    // Load Unicode-compatible fonts
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold = await PdfGoogleFonts.notoSansBold();
+    
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: fontRegular,
+        bold: fontBold,
+      ),
+    );
     final curr = Currency.fromCode(offer.currency);
     final isEn = offer.language == 'en';
 
@@ -58,14 +86,7 @@ class OfferPdfGenerator {
       ),
     );
 
-    final dateTag =
-        '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
-    final safeName =
-        offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
-    await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename: 'angebot_${safeName}_$dateTag.pdf',
-    );
+    return pdf;
   }
 
   // ── Company header ────────────────────────────────────────────────────────
@@ -133,7 +154,9 @@ class OfferPdfGenerator {
   // ── Bearbeiter & Auftraggeber ─────────────────────────────────────────────
 
   static pw.Widget _buildEditorAndClient(OfferData offer, bool isEn) {
-    final dateStr =
+    final createdDateStr =
+        '${DateTime.now().day.toString().padLeft(2, '0')}.${DateTime.now().month.toString().padLeft(2, '0')}.${DateTime.now().year}';
+    final eventDateStr =
         '${offer.eventDate.day.toString().padLeft(2, '0')}.${offer.eventDate.month.toString().padLeft(2, '0')}.${offer.eventDate.year}';
 
     return pw.Row(
@@ -154,7 +177,11 @@ class OfferPdfGenerator {
                 style: const pw.TextStyle(fontSize: 9),
               ),
               pw.Text(
-                '${isEn ? 'Date' : 'Datum'}: $dateStr',
+                '${isEn ? 'Date' : 'Datum'}: $createdDateStr',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+              pw.Text(
+                '${isEn ? 'Event Date' : 'Eventdatum'}: $eventDateStr',
                 style: const pw.TextStyle(fontSize: 9),
               ),
             ],
@@ -178,6 +205,11 @@ class OfferPdfGenerator {
                 '${isEn ? 'Contact' : 'Kontakt'}: ${offer.clientContact}',
                 style: const pw.TextStyle(fontSize: 9),
               ),
+              if (offer.eventTime.isNotEmpty)
+                pw.Text(
+                  '${isEn ? 'Time' : 'Uhrzeit'}: ${offer.eventTime}',
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
             ],
           ),
         ),
