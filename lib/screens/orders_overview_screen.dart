@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../data/cocktail_repository.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
+import '../services/invoice_pdf_generator.dart';
 import '../services/pdf_generator.dart';
 import '../utils/currency.dart';
 
@@ -122,6 +123,19 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                     icon: const Icon(Icons.description_outlined),
                     tooltip: 'offer.create_offer'.tr(),
                   ),
+                  if (currentStatus == OrderStatus.accepted)
+                    IconButton(
+                      onPressed: () async {
+                        await InvoicePdfGenerator.generateAndDownload(order);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('orders.invoice_created'.tr())),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.receipt_long),
+                      tooltip: 'orders.create_invoice'.tr(),
+                    ),
                   FilledButton.icon(
                     onPressed: () async {
                       await PdfGenerator.generateFromSavedOrder(order);

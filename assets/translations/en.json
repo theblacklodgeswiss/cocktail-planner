@@ -148,6 +148,8 @@
     "deleted": "Order deleted",
     "delete_failed": "Deletion failed",
     "pdf_created": "PDF created!",
+    "create_invoice": "Create Order Confirmation",
+    "invoice_created": "Order Confirmation created!",
     "drinker_light": "Light",
     "drinker_normal": "Normal",
     "drinker_heavy": "Heavy",

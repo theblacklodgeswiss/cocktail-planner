@@ -148,6 +148,8 @@
     "deleted": "Bestellung gelöscht",
     "delete_failed": "Löschen fehlgeschlagen",
     "pdf_created": "PDF erstellt!",
+    "create_invoice": "Auftragsbestätigung erstellen",
+    "invoice_created": "Auftragsbestätigung erstellt!",
     "drinker_light": "Wenig",
     "drinker_normal": "Normal",
     "drinker_heavy": "Viel",
