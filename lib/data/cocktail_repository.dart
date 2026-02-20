@@ -346,6 +346,30 @@ class CocktailRepository {
     }
   }
 
+  /// Watch orders as a real-time stream from Firestore.
+  /// Returns an empty stream if Firebase is unavailable.
+  Stream<List<SavedOrder>> watchOrders({int? year}) {
+    if (!_firebaseAvailable) {
+      return Stream.value([]);
+    }
+
+    return _ordersCollection
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      final orders = snapshot.docs
+          .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+          .toList();
+      if (year != null) {
+        return orders.where((o) => o.year == year).toList();
+      }
+      return orders;
+    }).handleError((e) {
+      debugPrint('Failed to watch orders: $e');
+      return <SavedOrder>[];
+    });
+  }
+
   /// Delete an order from Firestore (super admin only)
   Future<bool> deleteOrder(String orderId) async {
     if (!_firebaseAvailable) return false;

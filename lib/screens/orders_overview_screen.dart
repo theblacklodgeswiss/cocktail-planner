@@ -17,18 +17,14 @@ class OrdersOverviewScreen extends StatefulWidget {
 }
 
 class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
-  late Future<List<SavedOrder>> _ordersFuture;
   int _selectedYear = DateTime.now().year;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadOrders();
-  }
+  Stream<List<SavedOrder>> get _ordersStream =>
+      cocktailRepository.watchOrders(year: _selectedYear);
 
-  void _loadOrders() {
+  void _changeYear(int year) {
     setState(() {
-      _ordersFuture = cocktailRepository.getOrders(year: _selectedYear);
+      _selectedYear = year;
     });
   }
 
@@ -93,7 +89,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
             final success = await cocktailRepository.updateOrderStatus(order.id, newStatus.value);
             if (success) {
               setSheetState(() => currentStatus = newStatus);
-              _loadOrders(); // Refresh the list
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('orders.status_changed'.tr(namedArgs: {'status': _statusLabel(newStatus)}))),
@@ -413,7 +408,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('orders.deleted'.tr())),
                                 );
-                                _loadOrders();
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('orders.delete_failed'.tr())),
@@ -456,8 +450,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               selected: isSelected,
               onSelected: (_) {
                 if (_selectedYear != year) {
-                  _selectedYear = year;
-                  _loadOrders();
+                  _changeYear(year);
                 }
               },
             ),
@@ -737,10 +730,11 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       appBar: AppBar(
         title: Text('orders.title'.tr()),
       ),
-      body: FutureBuilder<List<SavedOrder>>(
-        future: _ordersFuture,
+      body: StreamBuilder<List<SavedOrder>>(
+        stream: _ordersStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
