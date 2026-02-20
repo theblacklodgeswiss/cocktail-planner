@@ -8,7 +8,7 @@ import '../screens/create_offer_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/orders_overview_screen.dart';
-import '../screens/shopping_list_screen.dart';
+import '../screens/shopping_list/shopping_list_screen.dart';
 
 /// Notifier that listens to Firebase Auth state changes
 class AuthNotifier extends ChangeNotifier {

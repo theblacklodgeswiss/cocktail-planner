@@ -5,7 +5,7 @@ import 'package:shopping_list/models/cocktail_data.dart';
 import 'package:shopping_list/models/material_item.dart';
 import 'package:shopping_list/models/recipe.dart';
 import 'package:shopping_list/screens/dashboard_screen.dart';
-import 'package:shopping_list/screens/shopping_list_screen.dart';
+import 'package:shopping_list/screens/shopping_list/shopping_list_screen.dart';
 import 'package:shopping_list/state/app_state.dart';
 import 'package:shopping_list/widgets/recipe_selection_dialog.dart';
 
