@@ -86,7 +86,7 @@ class GeminiService {
     if (apiKey.isEmpty) return;
     _apiKey = apiKey;
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       apiKey: apiKey,
     );
     debugPrint('Gemini API key configured');
@@ -146,6 +146,7 @@ class GeminiService {
     required String eventType,
     required String drinkerType,
     required List<Map<String, dynamic>> availableMaterials,
+    required List<String> availableCocktails,
   }) async {
     if (!isConfigured || _model == null) {
       debugPrint('Gemini not configured');
@@ -164,6 +165,7 @@ class GeminiService {
         eventType: eventType,
         drinkerType: drinkerType,
         availableMaterials: availableMaterials,
+        availableCocktails: availableCocktails,
         trainingData: trainingData,
       );
 
@@ -195,11 +197,10 @@ class GeminiService {
     required String eventType,
     required String drinkerType,
     required List<Map<String, dynamic>> availableMaterials,
+    required List<String> availableCocktails,
     required List<Map<String, dynamic>> trainingData,
   }) {
-    final materialsList = availableMaterials
-        .map((m) => '- ${m['name']} (${m['unit']}): ${m['price']} ${m['currency']}')
-        .join('\n');
+    final cocktailsList = availableCocktails.join(', ');
 
     final trainingDataJson = trainingData.isNotEmpty
         ? jsonEncode(trainingData)
@@ -209,7 +210,7 @@ class GeminiService {
 Du bist ein Experte für Cocktail-Catering und Eventplanung in der Schweiz.
 
 AUFGABE:
-Erstelle eine Einkaufsliste für folgendes Event basierend auf den Erfahrungswerten und verfügbaren Materialien.
+Schlage passende Cocktails für das Event vor.
 
 EVENT-DETAILS:
 - Gästeanzahl: $guestCount (Bereich: $guestRange)
@@ -217,29 +218,27 @@ EVENT-DETAILS:
 - Event-Typ: $eventType
 - Trinkverhalten: $drinkerType (light/normal/heavy)
 
-VERFÜGBARE MATERIALIEN UND PREISE:
-$materialsList
+VERFÜGBARE COCKTAILS (verwende NUR diese Namen exakt):
+$cocktailsList
 
 HISTORISCHE DATEN VON FRÜHEREN EVENTS (für Lernzwecke):
 $trainingDataJson
 
 REGELN:
-1. Berechne Mengen basierend auf Gästeanzahl und Trinkverhalten
-2. Bei "heavy" Trinkern: +30% mehr Material
-3. Bei "light" Trinkern: -20% weniger Material
-4. Berücksichtige die angefragten Cocktails und deren typische Zutaten
-5. Wenn historische Daten vorhanden sind, lerne von den Mustern
-6. Schlage passende Cocktails vor, falls keine spezifiziert wurden
-7. Füge immer Fixkosten wie Fahrtkosten, Barkeeper etc. hinzu
+1. Wähle 4-8 passende Cocktails aus der Liste VERFÜGBARE COCKTAILS
+2. Berücksichtige Event-Typ und Gästezahl
+3. Bei Hochzeiten: elegante, klassische Cocktails
+4. Bei Geburtstagen: bunte, fruchtige Cocktails
+5. Mische alkoholische mit alkoholfreien Optionen
+6. Wenn Cocktails angefragt wurden, inkludiere diese (wenn verfügbar)
 
 WICHTIG: Antworte NUR mit validem JSON im folgenden Format:
 {
-  "items": [
-    {"name": "Artikelname", "unit": "Einheit", "quantity": 10, "reason": "Kurze Begründung"}
-  ],
-  "suggestedCocktails": ["Cocktail1", "Cocktail2"],
-  "explanation": "Kurze Erklärung der Berechnung"
+  "suggestedCocktails": ["Cocktailname1", "Cocktailname2", "Cocktailname3"],
+  "explanation": "Kurze Erklärung warum diese Cocktails gewählt wurden"
 }
+
+Die Namen in "suggestedCocktails" MÜSSEN exakt aus der Liste VERFÜGBARE COCKTAILS stammen!
 ''';
   }
 

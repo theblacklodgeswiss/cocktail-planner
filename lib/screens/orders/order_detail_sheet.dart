@@ -890,6 +890,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           })
           .toList();
       
+      // Get available cocktail names
+      final availableCocktails = cocktailData.recipes
+          .map((r) => r.name)
+          .toList();
+      
       // Generate suggestions
       final suggestion = await geminiService.generateSuggestions(
         guestCount: order.personCount,
@@ -898,6 +903,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         eventType: order.eventType,
         drinkerType: order.drinkerType,
         availableMaterials: materials,
+        availableCocktails: availableCocktails,
       );
 
       // Close loading dialog
