@@ -62,6 +62,46 @@
   <div id="loading" class="loading">
     <img src="icons/Icon-192.png" alt="BlackLodge Logo">
   </div>
+  <!-- Microsoft Authentication Library (MSAL.js) with fallback -->
+  <script>
+    // Load MSAL with fallback CDNs
+    function loadMsalScript(url) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    const msalCDNs = [
+      'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js',
+      'https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js',
+      'https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js'
+    ];
+
+    async function loadMsal() {
+      for (const cdn of msalCDNs) {
+        try {
+          await loadMsalScript(cdn);
+          console.log('[MSAL] Loaded from:', cdn);
+          return true;
+        } catch (e) {
+          console.warn('[MSAL] Failed to load from:', cdn);
+        }
+      }
+      console.error('[MSAL] All CDNs failed - Microsoft integration unavailable');
+      return false;
+    }
+
+    // Load MSAL then config
+    loadMsal().then(() => {
+      const configScript = document.createElement('script');
+      configScript.src = 'msal_config.js';
+      document.body.appendChild(configScript);
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

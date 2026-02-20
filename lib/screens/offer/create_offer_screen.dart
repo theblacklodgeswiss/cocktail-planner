@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../../data/order_repository.dart';
 import '../../models/offer.dart';
 import '../../models/order.dart';
+import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
 import '../../utils/currency.dart';
 import 'widgets/event_type_selector.dart';
@@ -175,6 +176,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       eventTypes: _eventTypes.map((e) => e.name).toList(),
       discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
       language: _language,
+      eventDate: _eventDate,
     );
   }
 
@@ -199,7 +201,31 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     try {
       await _saveOfferData();
       final offer = _buildOfferData();
-      await OfferPdfGenerator.generateAndDownload(offer);
+      final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
+      
+      // Upload to OneDrive if supported
+      final safeName = offer.orderName.replaceAll(' ', '_');
+      final dateTag = '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
+      if (microsoftGraphService.isSupported) {
+        final fileName = 'Angebot_${safeName}_$dateTag.pdf';
+        final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
+          rootFolder: 'Angebote',
+          date: offer.eventDate,
+          fileName: fileName,
+        );
+        await microsoftGraphService.uploadToOneDrive(
+          oneDrivePath: oneDrivePath,
+          bytes: pdfBytes,
+        );
+      }
+      
+      // Share/download the PDF
+      final safeNameLower = offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: 'angebot_${safeNameLower}_$dateTag.pdf',
+      );
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('offer.pdf_created'.tr())),

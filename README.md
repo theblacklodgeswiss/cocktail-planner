@@ -1,16 +1,22 @@
-# Shopping List
+# Cocktail Planner
 
-A Flutter web application with Progressive Web App (PWA) support for managing shopping lists.
+A Flutter web application for managing cocktail orders, generating shopping lists, and integrating with Microsoft 365 services.
 
 ## Features
 
 - ✨ Modern Material Design 3 UI
 - 📱 Progressive Web App (PWA) - installable on mobile and desktop
 - 🌓 Light and dark theme support
-- ✅ Check/uncheck items
-- 🗑️ Swipe to delete items
-- 📊 Progress indicator showing completion status
-- 🎨 Clean and intuitive interface
+- 🍹 Cocktail recipe management
+- 📝 Shopping list generation
+- 💼 Order management with PDF export
+- 👥 **Employee Management** (NEW)
+- 📊 **Employee Assignment to Orders** (NEW)
+- ☁️ **OneDrive Integration** - Auto-upload PDFs (NEW)
+- 📅 **Outlook Calendar Integration** - Auto-create events (NEW)
+- 🌍 Multi-language support (German & English)
+- 🔥 Firebase/Firestore backend
+- 🎨 Responsive design for iPhone, iPad, and Desktop
 
 ## Getting Started
 
@@ -21,15 +27,20 @@ A Flutter web application with Progressive Web App (PWA) support for managing sh
 
 ### Installation
 
-1. Clone the repository (if applicable) or navigate to the project directory:
+1. Clone the repository:
 ```bash
-cd shopping_list
+git clone <repository-url>
+cd cocktail-planner
 ```
 
 2. Install dependencies:
 ```bash
 flutter pub get
 ```
+
+3. (Optional) Configure Microsoft Graph integration:
+   - See `MICROSOFT_GRAPH_SETUP.md` for Azure AD configuration
+   - Update `web/msal_config.js` with your credentials
 
 ### Running the App
 
@@ -61,6 +72,27 @@ After building, you can deploy the contents of `build/web` to any static hosting
 - **Vercel**: Great for modern web apps
 - **AWS S3**: For enterprise solutions
 
+## New Features (v2.0)
+
+### Employee Management
+- Add and manage employees with names and emails
+- Real-time employee list with Firestore sync
+- Responsive UI for all device sizes
+
+### Employee Assignment
+- Assign multiple employees to orders
+- Visual multi-select chips with avatars
+- Auto-save on selection change
+
+### Microsoft 365 Integration
+- **OneDrive**: Automatically uploads order PDFs when accepted
+  - Structured folder path: `Aufträge/YYYY/MM Month/filename.pdf`
+- **Outlook Calendar**: Automatically creates calendar events
+  - Includes order details, date, and duration
+- **Graceful Degradation**: Works without Microsoft integration if not configured
+
+For setup instructions, see the **Microsoft Graph Setup** section in this README.
+
 ## PWA Features
 
 The app includes full PWA support:
@@ -80,17 +112,23 @@ The app includes full PWA support:
 ## Project Structure
 
 ```
-shopping_list/
+cocktail-planner/
 ├── lib/
-│   └── main.dart          # Main application code
+│   ├── data/              # Repositories and Firestore service
+│   ├── models/            # Data models (Order, Employee, etc.)
+│   ├── screens/           # UI screens
+│   ├── services/          # Business logic (PDF, Microsoft Graph)
+│   ├── utils/             # Utilities and helpers
+│   └── main.dart          # Main application entry
 ├── web/
 │   ├── icons/             # PWA icons
 │   ├── index.html         # Entry HTML file
 │   ├── manifest.json      # PWA manifest
+│   ├── msal_config.js     # Microsoft Graph configuration (NEW)
 │   └── favicon.png        # Browser favicon
-├── .github/
-│   └── copilot-instructions.md  # GitHub Copilot guidance
-└── .gitignore             # Git ignore rules
+├── assets/
+│   └── translations/      # i18n translations (de, en)
+└── README.md              # This file
 ```
 
 ## Development
@@ -109,6 +147,31 @@ dart format .
 ```bash
 flutter analyze
 ```
+
+### Build for Production
+```bash
+flutter build web --release
+```
+
+## Microsoft Graph Setup
+
+To enable OneDrive and Outlook calendar integration:
+1. Register an Azure AD application in the [Azure Portal](https://portal.azure.com)
+2. Add required permissions: `Files.ReadWrite`, `Calendars.ReadWrite`
+3. Set the redirect URI to your hosted app URL
+4. Update `web/msal_config.js` with your `MSAL_CLIENT_ID` and `MSAL_TENANT_ID`
+
+Without configuration, the app works normally – Microsoft features are gracefully disabled.
+
+## Technologies Used
+
+- **Flutter** 3.10+ - Cross-platform framework
+- **Firebase/Firestore** - Backend database
+- **Microsoft Graph API** - OneDrive and Outlook integration
+- **MSAL.js** - Microsoft Authentication Library
+- **easy_localization** - Internationalization
+- **go_router** - Navigation
+- **pdf** - PDF generation
 
 ## Contributing
 

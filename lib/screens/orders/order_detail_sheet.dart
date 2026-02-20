@@ -2,10 +2,13 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
+import '../../models/employee.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../services/invoice_pdf_generator.dart';
+import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
 import 'order_status_helpers.dart';
@@ -45,11 +48,13 @@ class _OrderDetailSheet extends StatefulWidget {
 
 class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   late OrderStatus _currentStatus;
+  late List<String> _assignedEmployees;
 
   @override
   void initState() {
     super.initState();
     _currentStatus = widget.order.status;
+    _assignedEmployees = List.from(widget.order.assignedEmployees);
   }
 
   Future<void> _updateStatus(OrderStatus newStatus) async {
@@ -63,6 +68,179 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               .tr(namedArgs: {'status': statusLabel(newStatus)})),
         ),
       );
+      
+      // Trigger Microsoft integration when status becomes accepted
+      if (newStatus == OrderStatus.accepted) {
+        _triggerMicrosoftIntegration();
+      }
+    }
+  }
+
+  Future<void> _updateAssignedEmployees(List<String> employeeIds) async {
+    final success = await orderRepository.updateAssignedEmployees(
+      widget.order.id,
+      employeeIds,
+    );
+    if (success && mounted) {
+      setState(() => _assignedEmployees = employeeIds);
+    }
+  }
+
+  Future<void> _triggerMicrosoftIntegration() async {
+    if (!microsoftGraphService.isSupported) return;
+
+    final statusNotifier = ValueNotifier<String>('orders.ms_step_generating_shopping_list'.tr());
+    
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: ValueListenableBuilder<String>(
+            valueListenable: statusNotifier,
+            builder: (_, status, child) => Row(
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(width: 20),
+                Expanded(child: Text(status)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Fetch fresh order data to get the current event date
+      final freshOrder = await orderRepository.getOrderById(widget.order.id);
+      final order = freshOrder ?? widget.order;
+      
+      final safeName = order.name.replaceAll(' ', '_');
+      final dateTag = '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
+      String? einkaufslisteUrl;
+      String? auftragsbestaetigungUrl;
+      
+      // 1. Generate Einkaufsliste (Shopping List) PDF
+      final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(order);
+      final shoppingListFileName = 'Einkaufsliste_${safeName}_$dateTag.pdf';
+      
+      // 2. Upload Einkaufsliste to OneDrive
+      statusNotifier.value = 'orders.ms_step_uploading_shopping_list'.tr();
+      final shoppingListPath = MicrosoftGraphService.buildOneDrivePath(
+        rootFolder: 'Aufträge',
+        date: order.date,
+        fileName: shoppingListFileName,
+      );
+      einkaufslisteUrl = await microsoftGraphService.uploadToOneDrive(
+        oneDrivePath: shoppingListPath,
+        bytes: shoppingListBytes,
+      );
+      
+      // 3. Generate Auftragsbestätigung (Order Confirmation) PDF
+      statusNotifier.value = 'orders.ms_step_generating_invoice'.tr();
+      final invoiceBytes = await InvoicePdfGenerator.generateBytes(order);
+      final invoiceFileName = InvoicePdfGenerator.getFilename(order);
+      
+      // 4. Upload Auftragsbestätigung to OneDrive
+      statusNotifier.value = 'orders.ms_step_uploading_invoice'.tr();
+      final invoicePath = MicrosoftGraphService.buildOneDrivePath(
+        rootFolder: 'Aufträge',
+        date: order.date,
+        fileName: invoiceFileName,
+      );
+      auftragsbestaetigungUrl = await microsoftGraphService.uploadToOneDrive(
+        oneDrivePath: invoicePath,
+        bytes: invoiceBytes,
+      );
+      
+      // 5. Create calendar event with document links
+      statusNotifier.value = 'orders.ms_step_creating_calendar'.tr();
+      
+      // Parse event time (e.g. "17:30") and combine with date
+      DateTime eventStart = order.date;
+      if (order.offerEventTime.isNotEmpty) {
+        final timeParts = order.offerEventTime.split(':');
+        if (timeParts.length >= 2) {
+          final hour = int.tryParse(timeParts[0]) ?? 0;
+          final minute = int.tryParse(timeParts[1]) ?? 0;
+          eventStart = DateTime(
+            order.date.year,
+            order.date.month,
+            order.date.day,
+            hour,
+            minute,
+          );
+        }
+      }
+      final eventEnd = eventStart.add(const Duration(hours: 5));
+      final employeeNames = _assignedEmployees.isNotEmpty
+          ? _assignedEmployees.join(', ')
+          : 'TBD';
+      
+      // Build event body with document links
+      final bodyLines = <String>[
+        'Auftrag: ${order.name}',
+        'Personen: ${order.personCount}',
+        'Mitarbeiter: $employeeNames',
+        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total)}',
+        '',
+        '--- Dokumente ---',
+      ];
+      if (einkaufslisteUrl != null) {
+        bodyLines.add('Einkaufsliste: $einkaufslisteUrl');
+      }
+      if (auftragsbestaetigungUrl != null) {
+        bodyLines.add('Auftragsbestätigung: $auftragsbestaetigungUrl');
+      }
+      
+      final eventId = await microsoftGraphService.createCalendarEvent(
+        subject: order.name,
+        start: eventStart,
+        end: eventEnd,
+        bodyContent: bodyLines.join('\n'),
+      );
+      
+      // 6. Add PDF attachments to calendar event
+      if (eventId != null && eventId != 'unknown') {
+        statusNotifier.value = 'orders.ms_step_adding_attachments'.tr();
+        await microsoftGraphService.addCalendarAttachment(
+          eventId: eventId,
+          fileName: shoppingListFileName,
+          bytes: shoppingListBytes,
+        );
+        await microsoftGraphService.addCalendarAttachment(
+          eventId: eventId,
+          fileName: invoiceFileName,
+          bytes: invoiceBytes,
+        );
+      }
+      
+      final uploadSuccess = einkaufslisteUrl != null || auftragsbestaetigungUrl != null;
+      final calendarSuccess = eventId != null;
+      
+      // Close progress dialog
+      if (mounted) Navigator.of(context).pop();
+      
+      if (mounted && (uploadSuccess || calendarSuccess)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('orders.microsoft_integration_success'.tr())),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('orders.microsoft_integration_failed'.tr())),
+        );
+      }
+    } catch (e) {
+      debugPrint('Microsoft integration error: $e');
+      // Close progress dialog
+      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('orders.microsoft_integration_failed'.tr())),
+        );
+      }
     }
   }
 
@@ -73,8 +251,32 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     _showLoadingDialog();
 
     try {
+      // Generate invoice PDF bytes
+      final pdfBytes = await InvoicePdfGenerator.generateBytes(widget.order,
+          language: language);
+      final fileName = InvoicePdfGenerator.getFilename(widget.order);
+
+      // Download locally
       await InvoicePdfGenerator.generateAndDownload(widget.order,
           language: language);
+
+      // Upload to OneDrive if available
+      if (microsoftGraphService.isLoggedIn) {
+        try {
+          final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
+            rootFolder: 'Aufträge',
+            date: widget.order.date,
+            fileName: fileName,
+          );
+          await microsoftGraphService.uploadToOneDrive(
+            oneDrivePath: oneDrivePath,
+            bytes: pdfBytes,
+          );
+        } catch (e) {
+          debugPrint('Invoice OneDrive upload failed: $e');
+        }
+      }
+
       if (mounted) {
         Navigator.pop(context); // Close loading
         ScaffoldMessenger.of(context).showSnackBar(
@@ -362,6 +564,13 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            _EmployeeAssignmentWidget(
+              assignedEmployeeIds: _assignedEmployees,
+              onAssignmentChanged: _updateAssignedEmployees,
+            ),
           ],
         ),
       ),
@@ -430,6 +639,132 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Widget for assigning employees to an order with multi-select chips
+class _EmployeeAssignmentWidget extends StatefulWidget {
+  const _EmployeeAssignmentWidget({
+    required this.assignedEmployeeIds,
+    required this.onAssignmentChanged,
+  });
+
+  final List<String> assignedEmployeeIds;
+  final Function(List<String>) onAssignmentChanged;
+
+  @override
+  State<_EmployeeAssignmentWidget> createState() =>
+      _EmployeeAssignmentWidgetState();
+}
+
+class _EmployeeAssignmentWidgetState
+    extends State<_EmployeeAssignmentWidget> {
+  late Set<String> _selectedIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIds = Set.from(widget.assignedEmployeeIds);
+  }
+
+  @override
+  void didUpdateWidget(_EmployeeAssignmentWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.assignedEmployeeIds != widget.assignedEmployeeIds) {
+      _selectedIds = Set.from(widget.assignedEmployeeIds);
+    }
+  }
+
+  void _toggleEmployee(String employeeId) {
+    setState(() {
+      if (_selectedIds.contains(employeeId)) {
+        _selectedIds.remove(employeeId);
+      } else {
+        _selectedIds.add(employeeId);
+      }
+    });
+    widget.onAssignmentChanged(_selectedIds.toList());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Employee>>(
+      stream: employeeRepository.watchEmployees(),
+      builder: (context, snapshot) {
+        final employees = snapshot.data ?? [];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.assignment_ind,
+                    size: 16, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'orders.assigned_employees'.tr(),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (employees.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'orders.no_employees_assigned'.tr(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                ),
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isSmall = constraints.maxWidth < 400;
+                  return Wrap(
+                    spacing: isSmall ? 6 : 8,
+                    runSpacing: isSmall ? 6 : 8,
+                    children: employees.map((employee) {
+                      final isSelected = _selectedIds.contains(employee.name);
+                      return FilterChip(
+                        selected: isSelected,
+                        label: Text(
+                          employee.name,
+                          style: TextStyle(
+                            fontSize: isSmall ? 12 : 14,
+                          ),
+                        ),
+                        avatar: CircleAvatar(
+                          backgroundColor: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey,
+                          child: Text(
+                            employee.name.isNotEmpty
+                                ? employee.name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              fontSize: isSmall ? 10 : 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        onSelected: (_) => _toggleEmployee(employee.name),
+                        selectedColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor:
+                            Theme.of(context).colorScheme.primary,
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 }

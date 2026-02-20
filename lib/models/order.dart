@@ -40,6 +40,7 @@ class SavedOrder {
     this.offerEventTypes = const [],
     this.offerDiscount = 0,
     this.offerLanguage = 'de',
+    this.assignedEmployees = const [],
   });
 
   final String id;
@@ -64,6 +65,7 @@ class SavedOrder {
   final List<String> offerEventTypes;
   final double offerDiscount;
   final String offerLanguage;
+  final List<String> assignedEmployees;
 
   int get year => date.year;
   
@@ -97,6 +99,7 @@ class SavedOrder {
       offerEventTypes: (data['offerEventTypes'] as List<dynamic>?)?.cast<String>() ?? [],
       offerDiscount: (data['offerDiscount'] as num?)?.toDouble() ?? 0,
       offerLanguage: data['offerLanguage'] as String? ?? 'de',
+      assignedEmployees: (data['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
     );
   }
 }

@@ -9,6 +9,7 @@ import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
 import '../screens/settings/admin_settings_screen.dart';
+import '../screens/settings/employees_screen.dart';
 import '../screens/settings/legal_info_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/settings/user_management_screen.dart';
@@ -86,6 +87,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/settings/users',
       builder: (context, state) => const UserManagementScreen(),
+    ),
+    GoRoute(
+      path: '/settings/employees',
+      builder: (context, state) => const EmployeesScreen(),
     ),
     GoRoute(
       path: '/orders',
