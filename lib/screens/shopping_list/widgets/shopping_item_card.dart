@@ -14,6 +14,7 @@ class ShoppingItemCard extends StatelessWidget {
     required this.isSelected,
     required this.cocktails,
     required this.onQuantityChanged,
+    this.totalSelected = 0,
   });
 
   final MaterialItem item;
@@ -22,6 +23,7 @@ class ShoppingItemCard extends StatelessWidget {
   final bool isSelected;
   final List<String> cocktails;
   final void Function(int newQuantity) onQuantityChanged;
+  final int totalSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -44,10 +46,34 @@ class ShoppingItemCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
+            if (totalSelected > 0) ...[
+              _buildTotalBadge(context, colorScheme),
+              const SizedBox(width: 12),
+            ],
             Expanded(child: _buildItemInfo(context, colorScheme)),
             const SizedBox(width: 12),
             _buildQuantityStepper(context, colorScheme),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTotalBadge(BuildContext context, ColorScheme colorScheme) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Center(
+        child: Text(
+          totalSelected.toString(),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onPrimaryContainer,
+              ),
         ),
       ),
     );

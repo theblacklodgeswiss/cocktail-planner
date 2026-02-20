@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/material_item.dart';
+import '../shopping_list_logic.dart';
 import 'shopping_item_card.dart';
 
 /// Page displaying ingredients for a specific cocktail.
@@ -13,6 +14,7 @@ class CocktailPage extends StatelessWidget {
     required this.quantities,
     required this.controllers,
     required this.onQuantityChanged,
+    required this.allCocktailNames,
   });
 
   final String cocktailName;
@@ -21,8 +23,10 @@ class CocktailPage extends StatelessWidget {
   final Map<String, int> quantities;
   final Map<String, TextEditingController> controllers;
   final void Function(String key, int quantity) onQuantityChanged;
+  final List<String> allCocktailNames;
 
-  String _itemKey(MaterialItem item) => '${item.name}|${item.unit}';
+  String _cocktailItemKey(MaterialItem item) =>
+      ShoppingListLogic.cocktailItemKey(item, cocktailName);
 
   @override
   Widget build(BuildContext context) {
@@ -38,14 +42,20 @@ class CocktailPage extends StatelessWidget {
           _buildHeader(context, colorScheme, isShot),
           const SizedBox(height: 32),
           ...items.map((item) {
-            final key = _itemKey(item);
+            final key = _cocktailItemKey(item);
             final qty = quantities[key] ?? 0;
+            final totalSelected = ShoppingListLogic.getTotalQuantity(
+              item,
+              quantities,
+              allCocktailNames,
+            );
             return ShoppingItemCard(
               item: item,
               controller: controllers[key]!,
               quantity: qty,
               isSelected: qty > 0,
               cocktails: ingredientToCocktails[item.name] ?? [],
+              totalSelected: totalSelected,
               onQuantityChanged: (newQty) => onQuantityChanged(key, newQty),
             );
           }),

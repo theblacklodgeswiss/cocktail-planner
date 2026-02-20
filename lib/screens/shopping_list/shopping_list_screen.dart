@@ -109,11 +109,16 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
-  Future<void> _export(List<MaterialItem> allItems, double total) async {
+  Future<void> _export(
+    List<MaterialItem> allItems,
+    double total,
+    Map<String, int> aggregatedQuantities,
+    Set<String> aggregatedSelected,
+  ) async {
     final selectedOrderItems = ShoppingListLogic.getSelectedOrderItems(
       allItems,
-      _quantities,
-      _selectedItems,
+      aggregatedQuantities,
+      aggregatedSelected,
     );
 
     if (selectedOrderItems.isEmpty) {
@@ -238,27 +243,58 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
     final allIngredients =
         separated.ingredientsByCocktail.values.expand((i) => i).toList();
+    final cocktailNames = separated.ingredientsByCocktail.keys.toList();
+
+    // Aggregate quantities from cocktail-specific keys to base keys
+    final aggregatedQuantities = ShoppingListLogic.aggregateQuantities(
+      _quantities,
+      allIngredients,
+      cocktailNames,
+    );
+
+    // Merge fixed values quantities (they use base keys)
+    final mergedQuantities = Map<String, int>.from(aggregatedQuantities);
+    for (final item in separated.fixedValues) {
+      final key = ShoppingListLogic.itemKey(item);
+      if (_quantities.containsKey(key)) {
+        mergedQuantities[key] = _quantities[key]!;
+      }
+    }
+
+    // Build selected items set from aggregated keys
+    final aggregatedSelected = <String>{};
+    for (final entry in mergedQuantities.entries) {
+      if (entry.value > 0) {
+        aggregatedSelected.add(entry.key);
+      }
+    }
+
     final allItems = [...allIngredients, ...separated.fixedValues];
     final total = ShoppingListLogic.calculateTotal(
       allItems,
-      _quantities,
-      _selectedItems,
+      mergedQuantities,
+      aggregatedSelected,
     );
 
     if (allItems.isEmpty) return const ShoppingEmptyState();
 
-    // Ensure controllers exist for all items
-    for (final item in allItems) {
+    // Ensure controllers exist for cocktail-specific keys
+    for (final cocktailName in cocktailNames) {
+      for (final item in separated.ingredientsByCocktail[cocktailName]!) {
+        _ensureController(ShoppingListLogic.cocktailItemKey(item, cocktailName));
+      }
+    }
+    // Ensure controllers exist for fixed values (base keys)
+    for (final item in separated.fixedValues) {
       _ensureController(ShoppingListLogic.itemKey(item));
     }
 
-    final cocktailNames = separated.ingredientsByCocktail.keys.toList();
     final totalPages =
         cocktailNames.length + (separated.fixedValues.isNotEmpty ? 1 : 0) + 1;
     final selectedItems = ShoppingListLogic.getSelectedOrderItems(
       allItems,
-      _quantities,
-      _selectedItems,
+      mergedQuantities,
+      aggregatedSelected,
     );
 
     return Scaffold(
@@ -288,7 +324,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               hasSelectedItems: selectedItems.isNotEmpty,
               onBack: () => _goToPage(_currentPage - 1),
               onNext: () => _goToPage(_currentPage + 1),
-              onExport: () => _export(allItems, total),
+              onExport: () => _export(
+                allItems,
+                total,
+                mergedQuantities,
+                aggregatedSelected,
+              ),
             ),
           ],
         ),
@@ -313,6 +354,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         quantities: _quantities,
         controllers: _controllers,
         onQuantityChanged: _onQuantityChanged,
+        allCocktailNames: cocktailNames,
       );
     } else if (index == cocktailNames.length &&
         separated.fixedValues.isNotEmpty) {

@@ -13,6 +13,7 @@ typedef SeparatedItems = ({
 /// Business logic for the shopping list screen.
 class ShoppingListLogic {
   /// Builds separated items from cocktail data and selected recipes.
+  /// Each cocktail shows ALL its ingredients (no deduplication).
   static SeparatedItems buildSeparatedItems(
     CocktailData data,
     List<Recipe> selectedRecipes,
@@ -35,17 +36,13 @@ class ShoppingListLogic {
       }
     }
 
-    // Group ingredients by cocktail
-    final usedIngredients = <String>{};
+    // Show ALL ingredients for each cocktail (no deduplication)
     final ingredientsByCocktail = <String, List<MaterialItem>>{};
-
     for (final recipe in selectedRecipes) {
       final cocktailItems = <MaterialItem>[];
       for (final ingredientName in recipe.ingredients) {
-        if (!usedIngredients.contains(ingredientName) &&
-            materialByName.containsKey(ingredientName)) {
+        if (materialByName.containsKey(ingredientName)) {
           cocktailItems.add(materialByName[ingredientName]!);
-          usedIngredients.add(ingredientName);
         }
       }
       if (cocktailItems.isNotEmpty) {
@@ -81,18 +78,66 @@ class ShoppingListLogic {
     );
   }
 
-  /// Generates a unique key for a material item.
+  /// Generates a unique key for a material item (base key without cocktail).
   static String itemKey(MaterialItem item) => '${item.name}|${item.unit}';
 
-  /// Calculates total price from selected items.
+  /// Generates a cocktail-specific key for tracking quantities per cocktail.
+  static String cocktailItemKey(MaterialItem item, String cocktailName) =>
+      '${item.name}|${item.unit}|$cocktailName';
+
+  /// Gets the total quantity for an item across all cocktails.
+  static int getTotalQuantity(
+    MaterialItem item,
+    Map<String, int> quantities,
+    List<String> cocktailNames,
+  ) {
+    int total = 0;
+    for (final cocktailName in cocktailNames) {
+      final key = cocktailItemKey(item, cocktailName);
+      total += quantities[key] ?? 0;
+    }
+    return total;
+  }
+
+  /// Aggregates quantities by item (summing across all cocktails).
+  /// Returns a map of base keys to total quantities.
+  static Map<String, int> aggregateQuantities(
+    Map<String, int> quantities,
+    List<MaterialItem> allIngredients,
+    List<String> cocktailNames,
+  ) {
+    final aggregated = <String, int>{};
+    final seen = <String>{};
+
+    for (final item in allIngredients) {
+      final baseKey = itemKey(item);
+      if (seen.contains(baseKey)) continue;
+      seen.add(baseKey);
+
+      int total = 0;
+      for (final cocktailName in cocktailNames) {
+        final cocktailKey = cocktailItemKey(item, cocktailName);
+        total += quantities[cocktailKey] ?? 0;
+      }
+      if (total > 0) {
+        aggregated[baseKey] = total;
+      }
+    }
+    return aggregated;
+  }
+
+  /// Calculates total price from selected items (using aggregated quantities).
   static double calculateTotal(
     List<MaterialItem> items,
     Map<String, int> quantities,
     Set<String> selectedItems,
   ) {
     double total = 0;
+    final seen = <String>{};
     for (final item in items) {
       final key = itemKey(item);
+      if (seen.contains(key)) continue;
+      seen.add(key);
       final qty = quantities[key] ?? 0;
       if (qty > 0 && selectedItems.contains(key)) {
         total += item.price * qty;
@@ -101,15 +146,18 @@ class ShoppingListLogic {
     return total;
   }
 
-  /// Gets selected order items for export.
+  /// Gets selected order items for export (using aggregated quantities).
   static List<OrderItem> getSelectedOrderItems(
     List<MaterialItem> allItems,
     Map<String, int> quantities,
     Set<String> selectedItems,
   ) {
     final result = <OrderItem>[];
+    final seen = <String>{};
     for (final item in allItems) {
       final key = itemKey(item);
+      if (seen.contains(key)) continue;
+      seen.add(key);
       final qty = quantities[key] ?? 0;
       if (qty > 0 && selectedItems.contains(key)) {
         result.add(OrderItem(item: item, quantity: qty));
