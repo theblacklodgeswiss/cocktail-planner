@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shopping_list/models/cocktail_data.dart';
+import 'package:shopping_list/models/employee.dart';
 import 'package:shopping_list/models/material_item.dart';
 import 'package:shopping_list/models/offer.dart';
 import 'package:shopping_list/models/recipe.dart';
@@ -154,6 +155,37 @@ void main() {
 
     test('default additional info EN is not empty', () {
       expect(OfferData.defaultAdditionalInfoEn, isNotEmpty);
+    });
+  });
+
+  group('Employee', () {
+    test('parses employee from firestore data', () {
+      final employee = Employee.fromFirestore('emp_1', {
+        'name': 'Mario Kantharoobarajah',
+        'email': 'mario@blacklodge.ch',
+      });
+
+      expect(employee.id, 'emp_1');
+      expect(employee.name, 'Mario Kantharoobarajah');
+      expect(employee.email, 'mario@blacklodge.ch');
+    });
+
+    test('employee defaults email to empty string when missing', () {
+      final employee = Employee.fromFirestore('emp_2', {'name': 'Test'});
+      expect(employee.email, '');
+    });
+
+    test('employee toMap returns correct data', () {
+      const employee = Employee(
+        id: 'emp_3',
+        name: 'Virusan Sinnathurai',
+        email: 'virusan@blacklodge.ch',
+      );
+
+      final map = employee.toMap();
+      expect(map['name'], 'Virusan Sinnathurai');
+      expect(map['email'], 'virusan@blacklodge.ch');
+      expect(map.containsKey('id'), isFalse);
     });
   });
 }

@@ -62,7 +62,18 @@
     "access_denied": "Zugriff verweigert - nur für Admins",
     "tab_materials": "Materialien",
     "tab_fixed": "Verbrauch",
-    "tab_recipes": "Rezepte"
+    "tab_recipes": "Rezepte",
+    "tab_employees": "Mitarbeiter",
+    "employees_title": "Keine Mitarbeiter vorhanden",
+    "add_employee": "Mitarbeiter hinzufügen",
+    "employee_name": "Name",
+    "employee_email": "E-Mail",
+    "employee_name_hint": "Max Mustermann",
+    "employee_email_hint": "max@example.com",
+    "employee_added": "Mitarbeiter hinzugefügt!",
+    "employee_deleted": "Mitarbeiter gelöscht!",
+    "delete_employee_confirm_title": "Mitarbeiter löschen?",
+    "delete_employee_confirm_message": "Möchtest du {name} wirklich löschen?"
   },
   "admin_panel": {
     "title": "Benutzer verwalten",
@@ -185,6 +196,13 @@
     "drinker_light": "Wenig",
     "drinker_normal": "Normal",
     "drinker_heavy": "Viel",
-    "no_orders": "Keine Bestellungen"
+    "no_orders": "Keine Bestellungen",
+    "assigned_employees": "Zugewiesene Mitarbeiter",
+    "assign_employees": "Mitarbeiter zuweisen",
+    "no_employees_assigned": "Keine Mitarbeiter zugewiesen",
+    "upload_to_onedrive": "Auf OneDrive hochladen",
+    "create_calendar_event": "Kalendereintrag erstellen",
+    "microsoft_integration_success": "Microsoft Integration erfolgreich!",
+    "microsoft_integration_failed": "Microsoft Integration fehlgeschlagen"
   }
 }

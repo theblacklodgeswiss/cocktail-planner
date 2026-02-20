@@ -29,6 +29,9 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get ordersCollection =>
       firestore.collection('orders');
 
+  CollectionReference<Map<String, dynamic>> get employeesCollection =>
+      firestore.collection('employees');
+
   /// Initialize Firestore connection.
   Future<bool> initialize() async {
     try {

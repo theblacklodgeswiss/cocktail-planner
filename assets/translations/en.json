@@ -62,7 +62,18 @@
     "access_denied": "Access denied - admins only",
     "tab_materials": "Materials",
     "tab_fixed": "Supplies",
-    "tab_recipes": "Recipes"
+    "tab_recipes": "Recipes",
+    "tab_employees": "Employees",
+    "employees_title": "No employees available",
+    "add_employee": "Add Employee",
+    "employee_name": "Name",
+    "employee_email": "Email",
+    "employee_name_hint": "John Doe",
+    "employee_email_hint": "john@example.com",
+    "employee_added": "Employee added!",
+    "employee_deleted": "Employee deleted!",
+    "delete_employee_confirm_title": "Delete Employee?",
+    "delete_employee_confirm_message": "Do you really want to delete {name}?"
   },
   "admin_panel": {
     "title": "Manage Users",
@@ -185,6 +196,13 @@
     "drinker_light": "Light",
     "drinker_normal": "Normal",
     "drinker_heavy": "Heavy",
-    "no_orders": "No orders"
+    "no_orders": "No orders",
+    "assigned_employees": "Assigned Employees",
+    "assign_employees": "Assign Employees",
+    "no_employees_assigned": "No employees assigned",
+    "upload_to_onedrive": "Upload to OneDrive",
+    "create_calendar_event": "Create Calendar Event",
+    "microsoft_integration_success": "Microsoft Integration successful!",
+    "microsoft_integration_failed": "Microsoft Integration failed"
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -109,6 +111,15 @@ class PdfGenerator {
 
   /// Generate and download PDF from a saved order
   static Future<void> generateFromSavedOrder(SavedOrder order) async {
+    final bytes = await generateBytesFromSavedOrder(order);
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'einkaufsliste_${_sanitizeFilename(order.name)}_${_formatDate(order.date)}.pdf',
+    );
+  }
+
+  /// Generate PDF bytes from a saved order without downloading
+  static Future<Uint8List> generateBytesFromSavedOrder(SavedOrder order) async {
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
@@ -168,11 +179,8 @@ class PdfGenerator {
       ),
     );
 
-    // Download the PDF
-    await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename: 'einkaufsliste_${_sanitizeFilename(order.name)}_${_formatDate(order.date)}.pdf',
-    );
+    // Return the PDF bytes
+    return await pdf.save();
   }
 
   static pw.Widget _buildSimpleItemsTable(List<_SimpleOrderItem> items, Currency currency) {

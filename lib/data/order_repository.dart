@@ -143,6 +143,22 @@ class OrderRepository {
     });
   }
 
+  /// Update the assigned employees for an order.
+  Future<bool> updateAssignedEmployees(
+      String orderId, List<String> employees) async {
+    if (!firestoreService.isAvailable) return false;
+    try {
+      await firestoreService.ordersCollection.doc(orderId).update({
+        'assignedEmployees': employees,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update assigned employees: $e');
+      return false;
+    }
+  }
+
   /// Delete an order (super admin only).
   Future<bool> deleteOrder(String orderId) async {
     if (!firestoreService.isAvailable) return false;
