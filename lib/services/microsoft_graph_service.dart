@@ -588,12 +588,71 @@ class MicrosoftGraphService {
       ..sort();
   }
 
+  /// Find event file pairs (Auftrag + Einkaufsliste) from Aufträge folder.
+  /// Returns list of maps with 'folder', 'auftragFile', and 'einkaufslisteFile'.
+  /// Only imports from 2025 and 2026.
+  Future<List<Map<String, String?>>> findEventFilePairs() async {
+    final pairs = <Map<String, String?>>[];
+    
+    final allYears = await getAuftraegeYears();
+    final years = allYears.where((y) => y == '2025' || y == '2026').toList();
+    debugPrint('Scanning years: $years (filtered from $allYears)');
+    
+    for (final year in years) {
+      final months = await listOneDriveFolder('Aufträge/$year');
+      if (months == null) continue;
+      
+      for (final month in months.where((m) => m['isFolder'] == true)) {
+        final monthName = month['name'] as String;
+        final folderPath = 'Aufträge/$year/$monthName';
+        final monthFiles = await listOneDriveFolder(folderPath);
+        if (monthFiles == null) continue;
+        
+        String? auftragFile;
+        String? einkaufslisteFile;
+        
+        for (final file in monthFiles.where((f) => f['isFolder'] != true)) {
+          final fileName = file['name'] as String? ?? '';
+          final lower = fileName.toLowerCase();
+          
+          // Check for supported file types
+          final isSupported = lower.endsWith('.pdf') || 
+              lower.endsWith('.png') || 
+              lower.endsWith('.jpg');
+          if (!isSupported) continue;
+          
+          if (lower.contains('auftrag') && !lower.contains('einkauf')) {
+            auftragFile = '$folderPath/$fileName';
+          } else if (lower.contains('einkaufsliste') || lower.contains('einkaufslist')) {
+            einkaufslisteFile = '$folderPath/$fileName';
+          }
+        }
+        
+        // Only add if we have at least one file
+        if (auftragFile != null || einkaufslisteFile != null) {
+          pairs.add({
+            'folder': folderPath,
+            'auftragFile': auftragFile,
+            'einkaufslisteFile': einkaufslisteFile,
+          });
+        }
+      }
+    }
+    
+    debugPrint('Found ${pairs.length} event pairs');
+    return pairs;
+  }
+
   /// Get all Einkaufsliste files from Aufträge folder structure.
   /// Returns list of file paths.
+  /// Only imports from 2025 and 2026.
   Future<List<String>> findEinkaufslistenFiles() async {
     final files = <String>[];
     
-    final years = await getAuftraegeYears();
+    final allYears = await getAuftraegeYears();
+    // Only import from 2025 and 2026
+    final years = allYears.where((y) => y == '2025' || y == '2026').toList();
+    debugPrint('Importing from years: $years (filtered from $allYears)');
     for (final year in years) {
       final months = await listOneDriveFolder('Aufträge/$year');
       if (months == null) continue;

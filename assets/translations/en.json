@@ -355,7 +355,7 @@
     "gemini_from_env": "API key loaded from build configuration",
     "gemini_override_hint": "Key is automatically set during build (--dart-define=GEMINI_API_KEY)",
     "gemini_usage": "Usage Statistics (Session)",
-    "gemini_usage_hint": "Shows usage since app start. For complete statistics see AI Studio.",
+    "gemini_usage_hint": "Free Tier: 20 requests/day, 1M tokens/day. Resets at midnight PT (approx. 9:00 CET).",
     "gemini_open_studio": "Open AI Studio",
     "gemini_requests_today": "Requests",
     "gemini_tokens_today": "Tokens"

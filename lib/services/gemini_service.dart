@@ -64,9 +64,36 @@ class GeminiService {
   /// Check if environment API key is available.
   static bool get hasEnvKey => _envApiKey.isNotEmpty;
   
-  /// Free tier daily limits for gemini-2.5-flash
-  static const int dailyRequestLimit = 500; // RPD (Requests Per Day)
+  /// Free tier limits for gemini-2.5-flash
+  /// Note: Free tier has 20 RPD (not 500 as in paid tiers)
+  /// Resets daily at midnight Pacific Time (PT)
+  static const int dailyRequestLimit = 20; // RPD (Requests Per Day) - Free tier
   static const int dailyTokenLimit = 1000000; // TPD (Tokens Per Day)
+  
+  /// Get time until daily limit resets (midnight PT = UTC-8)
+  static Duration get timeUntilReset {
+    final now = DateTime.now().toUtc();
+    // Midnight PT is 8:00 UTC (or 7:00 UTC during daylight saving)
+    final ptOffset = 8; // Using standard time (PST)
+    final nextResetUtc = DateTime.utc(
+      now.hour >= ptOffset ? now.year : now.year,
+      now.hour >= ptOffset ? now.month : now.month,
+      now.hour >= ptOffset ? now.day + 1 : now.day,
+      ptOffset,
+    );
+    return nextResetUtc.difference(now);
+  }
+  
+  /// Get formatted reset time string
+  static String get resetTimeFormatted {
+    final duration = timeUntilReset;
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
+  }
   
   String? _apiKey;
   GenerativeModel? _model;
@@ -542,19 +569,14 @@ Antworte NUR mit validem JSON:
 Du siehst eine Einkaufsliste für ein Cocktail-Catering-Event.
 
 AUFGABE:
-Extrahiere alle relevanten Daten aus diesem Dokument.
+Extrahiere NUR die Einkaufsartikel/Zutaten aus diesem Dokument.
 
 Antworte NUR mit validem JSON im folgenden Format:
 {
-  "eventName": "Name des Events/Kunden (falls erkennbar)",
-  "guestCount": 100,
-  "eventDate": "2025-04-15",
-  "cocktails": ["Cocktail Name 1", "Cocktail Name 2"],
   "items": [
     {"name": "Artikelname", "quantity": 10, "unit": "Stück/Liter/etc"}
   ],
-  "totalPrice": 1234.50,
-  "notes": "Weitere relevante Infos"
+  "totalPrice": 1234.50
 }
 
 Falls ein Wert nicht erkennbar ist, setze null.
@@ -585,7 +607,7 @@ Falls ein Wert nicht erkennbar ist, setze null.
       }
 
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      debugPrint('Parsed shopping list: ${data['eventName']}');
+      debugPrint('Parsed shopping list items: ${(data['items'] as List?)?.length ?? 0} items');
       return data;
     } catch (e) {
       debugPrint('Gemini image parsing failed: $e');
@@ -593,60 +615,159 @@ Falls ein Wert nicht erkennbar ist, setze null.
     }
   }
 
-  /// Import historical shopping lists from OneDrive and save to Firestore.
-  /// Returns number of successfully imported lists.
+  /// Parse an Auftrag document and extract event metadata.
+  /// Returns extracted data or null on failure.
+  Future<Map<String, dynamic>?> parseAuftragDocument({
+    required Uint8List imageBytes,
+    required String fileName,
+  }) async {
+    if (!isConfigured || _model == null) {
+      debugPrint('Gemini not configured for document parsing');
+      return null;
+    }
+
+    try {
+      // Determine MIME type from file name
+      String mimeType = 'image/png';
+      final lowerName = fileName.toLowerCase();
+      if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+        mimeType = 'image/jpeg';
+      } else if (lowerName.endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      }
+
+      final prompt = '''
+Du siehst einen Auftrag/Bestellformular für ein Cocktail-Catering-Event.
+
+AUFGABE:
+Extrahiere die Event-Metadaten aus diesem Dokument.
+
+Antworte NUR mit validem JSON im folgenden Format:
+{
+  "eventName": "Name des Events oder Kundenname",
+  "guestCount": 100,
+  "eventDate": "2025-04-15",
+  "cocktails": ["Cocktail Name 1", "Cocktail Name 2"],
+  "notes": "Weitere relevante Infos (Ort, Uhrzeit, etc.)"
+}
+
+Falls ein Wert nicht erkennbar ist, setze null.
+Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
+''';
+
+      debugPrint('Parsing Auftrag document: $fileName');
+      
+      final response = await _model!.generateContent([
+        Content.multi([
+          TextPart(prompt),
+          DataPart(mimeType, imageBytes),
+        ]),
+      ]);
+      _trackUsage(response);
+
+      final responseText = response.text;
+      if (responseText == null || responseText.isEmpty) {
+        debugPrint('Empty response from Gemini for Auftrag parsing');
+        return null;
+      }
+
+      // Parse JSON response
+      var jsonStr = responseText;
+      if (jsonStr.contains('```json')) {
+        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+      } else if (jsonStr.contains('```')) {
+        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+      }
+
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      debugPrint('Parsed Auftrag: ${data['eventName']} - ${data['guestCount']} guests');
+      return data;
+    } catch (e) {
+      debugPrint('Gemini Auftrag parsing failed: $e');
+      return null;
+    }
+  }
+
+  /// Import historical data from OneDrive and save to Firestore.
+  /// Combines Auftrag (metadata) and Einkaufsliste (items) files.
+  /// Returns number of successfully imported events.
   Future<int> importHistoricalShoppingLists({
-    required Future<List<String>> Function() findFiles,
+    required Future<List<Map<String, String?>>> Function() findEventPairs,
     required Future<Uint8List?> Function(String path) downloadFile,
   }) async {
     int imported = 0;
 
     try {
-      final files = await findFiles();
-      debugPrint('Found ${files.length} historical shopping list files');
+      final pairs = await findEventPairs();
+      debugPrint('Found ${pairs.length} event pairs to import');
 
-      for (final filePath in files) {
+      for (final pair in pairs) {
         try {
-          final bytes = await downloadFile(filePath);
-          if (bytes == null) {
-            debugPrint('Could not download: $filePath');
+          final folder = pair['folder'] ?? '';
+          final auftragFile = pair['auftragFile'];
+          final einkaufslisteFile = pair['einkaufslisteFile'];
+          
+          Map<String, dynamic>? auftragData;
+          Map<String, dynamic>? einkaufslisteData;
+          
+          // Parse Auftrag file for metadata
+          if (auftragFile != null) {
+            final bytes = await downloadFile(auftragFile);
+            if (bytes != null) {
+              final fileName = auftragFile.split('/').last;
+              auftragData = await parseAuftragDocument(
+                imageBytes: bytes,
+                fileName: fileName,
+              );
+            }
+          }
+          
+          // Parse Einkaufsliste file for items
+          if (einkaufslisteFile != null) {
+            final bytes = await downloadFile(einkaufslisteFile);
+            if (bytes != null) {
+              final fileName = einkaufslisteFile.split('/').last;
+              einkaufslisteData = await parseShoppingListImage(
+                imageBytes: bytes,
+                fileName: fileName,
+              );
+            }
+          }
+          
+          // Skip if we couldn't parse anything useful
+          if (auftragData == null && einkaufslisteData == null) {
+            debugPrint('Could not parse any files in: $folder');
             continue;
           }
-
-          final fileName = filePath.split('/').last;
-          final data = await parseShoppingListImage(
-            imageBytes: bytes,
-            fileName: fileName,
-          );
-
-          if (data == null) {
-            debugPrint('Could not parse: $filePath');
-            continue;
-          }
-
+          
+          // Combine data: metadata from Auftrag, items from Einkaufsliste
+          final combinedData = <String, dynamic>{
+            'folder': folder,
+            'auftragFile': auftragFile,
+            'einkaufslisteFile': einkaufslisteFile,
+            'eventName': auftragData?['eventName'],
+            'guestCount': auftragData?['guestCount'],
+            'eventDate': auftragData?['eventDate'],
+            'cocktails': auftragData?['cocktails'],
+            'notes': auftragData?['notes'],
+            'items': einkaufslisteData?['items'],
+            'totalPrice': einkaufslisteData?['totalPrice'],
+            'importedAt': FieldValue.serverTimestamp(),
+          };
+          
           // Save to Firestore as training data
           await FirebaseFirestore.instance
               .collection('historical_shopping_lists')
-              .add({
-            'filePath': filePath,
-            'eventName': data['eventName'],
-            'guestCount': data['guestCount'],
-            'eventDate': data['eventDate'],
-            'cocktails': data['cocktails'],
-            'items': data['items'],
-            'totalPrice': data['totalPrice'],
-            'notes': data['notes'],
-            'importedAt': FieldValue.serverTimestamp(),
-          });
+              .add(combinedData);
 
           imported++;
-          debugPrint('Imported: $filePath');
+          debugPrint('Imported event: ${combinedData['eventName']} from $folder');
         } catch (e) {
-          debugPrint('Failed to import $filePath: $e');
+          debugPrint('Failed to import pair: $e');
         }
       }
 
-      debugPrint('Successfully imported $imported shopping lists');
+      debugPrint('Successfully imported $imported events');
       return imported;
     } catch (e) {
       debugPrint('Import failed: $e');

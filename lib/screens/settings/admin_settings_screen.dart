@@ -460,6 +460,31 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             ],
           ),
           const SizedBox(height: 12),
+          // Reset time info
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Reset in ${GeminiService.resetTimeFormatted} (Mitternacht PT)',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Text(
             'settings.gemini_usage_hint'.tr(),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -542,7 +567,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Historische Daten importieren',
+                  'Historische Daten importieren (2025/2026)',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
@@ -550,7 +575,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Importiert Einkaufslisten (PNG/PDF) aus OneDrive/Aufträge und nutzt Gemini AI um die Daten zu extrahieren.',
+            'Kombiniert Auftrag (Metadaten: Name, Datum, Gäste, Cocktails) und Einkaufsliste (Zutaten) aus OneDrive/Aufträge. Gemini AI extrahiert die Daten.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
@@ -585,13 +610,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     
     try {
       final count = await GeminiService().importHistoricalShoppingLists(
-        findFiles: microsoftGraphService.findEinkaufslistenFiles,
+        findEventPairs: microsoftGraphService.findEventFilePairs,
         downloadFile: microsoftGraphService.downloadFromOneDrive,
       );
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$count Einkaufslisten importiert')),
+          SnackBar(content: Text('$count Events importiert')),
         );
       }
     } catch (e) {
