@@ -186,6 +186,8 @@
     "preview": "Vorschau",
     "print": "Drucken",
     "generate_pdf": "PDF speichern",
+    "save_only": "Nur speichern",
+    "saved": "Angebot gespeichert!",
     "pdf_created": "Angebot PDF erstellt!",
     "field_required": "Pflichtfeld",
     "create_offer": "Angebot erstellen",
@@ -315,7 +317,7 @@
     "user_id": "Benutzer-ID",
     "admin_section": "Admin-Einstellungen",
     "admin_settings_subtitle": "Langstrecken-Schwellenwert konfigurieren",
-    "distance_section": "Entfernungseinstellungen",
+    "distance_section": "Admin Einstellungen",
     "distance_description": "Schwellenwert für Langstrecken-Reisekosten. Bei Überschreitung werden alternative Preise berechnet.",
     "long_distance_threshold": "Langstrecken-Schwellenwert",
     "invalid_distance": "Bitte eine gültige Entfernung eingeben",
@@ -345,7 +347,12 @@
     "gemini_hint": "Hole deinen API Key von ai.google.dev/gemini-api",
     "gemini_active": "Aktiv",
     "gemini_from_env": "API Key aus Build-Konfiguration geladen",
-    "gemini_override_hint": "Key wird automatisch beim Build gesetzt (--dart-define=GEMINI_API_KEY)"
+    "gemini_override_hint": "Key wird automatisch beim Build gesetzt (--dart-define=GEMINI_API_KEY)",
+    "gemini_usage": "Nutzungsstatistiken (Session)",
+    "gemini_usage_hint": "Zeigt die Nutzung seit App-Start. Für vollständige Statistiken siehe AI Studio.",
+    "gemini_open_studio": "AI Studio öffnen",
+    "gemini_requests_today": "Anfragen",
+    "gemini_tokens_today": "Tokens"
   },
   "legal": {
     "imprint_title": "Impressum",

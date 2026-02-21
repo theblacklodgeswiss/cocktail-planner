@@ -7,6 +7,7 @@ import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
+import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
 import '../../services/gemini_service.dart';
 import '../../services/invoice_pdf_generator.dart';
@@ -665,8 +666,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: () {
-                        // Link this order to the shopping list
-                        appState.setLinkedOrder(order.id, order.name);
+                        // Link this order to the shopping list with requested cocktails
+                        appState.setLinkedOrder(
+                          order.id,
+                          order.name,
+                          requestedCocktails: order.requestedCocktails,
+                        );
                         Navigator.pop(context);
                         context.go('/');
                       },
@@ -890,10 +895,50 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           .toList();
       
       // Get recipe ingredients for the requested cocktails
-      final recipeIngredients = cocktailData.recipes
-          .where((r) => order.requestedCocktails.any(
-            (c) => c.toLowerCase() == r.name.toLowerCase(),
-          ))
+      final matchedRecipes = <Recipe>[];
+      final unmatchedNames = <String>[];
+      
+      // First try exact match (case-insensitive)
+      for (final cocktailName in order.requestedCocktails) {
+        final lower = cocktailName.toLowerCase().trim();
+        final recipe = cocktailData.recipes.firstWhere(
+          (r) => r.name.toLowerCase().trim() == lower,
+          orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+        );
+        if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+          matchedRecipes.add(recipe);
+        } else if (recipe.id.isEmpty) {
+          unmatchedNames.add(cocktailName);
+        }
+      }
+      
+      // Use Gemini AI for fuzzy matching of unmatched names
+      if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
+        try {
+          final availableNames = cocktailData.recipes.map((r) => r.name).toList();
+          final aiMatches = await geminiService.matchCocktailNames(
+            requestedNames: unmatchedNames,
+            availableRecipeNames: availableNames,
+          );
+          
+          for (final entry in aiMatches.entries) {
+            final matchedName = entry.value;
+            if (matchedName != null) {
+              final recipe = cocktailData.recipes.firstWhere(
+                (r) => r.name == matchedName,
+                orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+              );
+              if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+                matchedRecipes.add(recipe);
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Gemini cocktail matching failed: $e');
+        }
+      }
+      
+      final recipeIngredients = matchedRecipes
           .map((r) => {
             'cocktail': r.name,
             'ingredients': r.ingredients,
@@ -928,7 +973,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
       // Show material suggestion review dialog
       if (mounted) {
-        _showMaterialSuggestionDialog(order, suggestion);
+        _showMaterialSuggestionDialog(order, suggestion, matchedRecipes);
       }
     } catch (e) {
       // Close loading dialog
@@ -948,6 +993,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   void _showMaterialSuggestionDialog(
     SavedOrder order,
     GeminiMaterialSuggestion suggestion,
+    List<Recipe> matchedRecipes,
   ) {
     showDialog(
       context: context,
@@ -966,7 +1012,16 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             );
           }).toList();
           
-          appState.setLinkedOrder(order.id, order.name);
+          // Set selected recipes FIRST (before navigating)
+          if (matchedRecipes.isNotEmpty) {
+            appState.setSelectedRecipes(matchedRecipes);
+          }
+          
+          appState.setLinkedOrder(
+            order.id,
+            order.name,
+            requestedCocktails: order.requestedCocktails,
+          );
           appState.setMaterialSuggestions(suggestions, explanation);
           Navigator.pop(context);
           context.go('/');

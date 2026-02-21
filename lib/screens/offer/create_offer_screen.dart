@@ -190,6 +190,21 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     );
   }
 
+  Future<void> _saveOnly() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isGenerating = true);
+    try {
+      await _saveOfferData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('offer.saved'.tr())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
   Future<void> _previewPdf() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
@@ -318,6 +333,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   const SizedBox(height: 32),
                   OfferActionButtons(
                     isGenerating: _isGenerating,
+                    onSaveOnly: _saveOnly,
                     onPreview: _previewPdf,
                     onGeneratePdf: _generatePdf,
                     onPrint: _printPdf,

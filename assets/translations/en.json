@@ -186,6 +186,8 @@
     "preview": "Preview",
     "print": "Print",
     "generate_pdf": "Save PDF",
+    "save_only": "Save only",
+    "saved": "Offer saved!",
     "pdf_created": "Offer PDF created!",
     "field_required": "Required field",
     "create_offer": "Create Offer",
@@ -315,7 +317,7 @@
     "user_id": "User ID",
     "admin_section": "Admin Settings",
     "admin_settings_subtitle": "Configure long distance threshold",
-    "distance_section": "Distance Settings",
+    "distance_section": "Admin Settings",
     "distance_description": "Threshold for long-distance travel costs. When exceeded, alternative pricing applies.",
     "long_distance_threshold": "Long Distance Threshold",
     "invalid_distance": "Please enter a valid distance",
@@ -345,7 +347,12 @@
     "gemini_hint": "Get your API key from ai.google.dev/gemini-api",
     "gemini_active": "Active",
     "gemini_from_env": "API key loaded from build configuration",
-    "gemini_override_hint": "Key is automatically set during build (--dart-define=GEMINI_API_KEY)"
+    "gemini_override_hint": "Key is automatically set during build (--dart-define=GEMINI_API_KEY)",
+    "gemini_usage": "Usage Statistics (Session)",
+    "gemini_usage_hint": "Shows usage since app start. For complete statistics see AI Studio.",
+    "gemini_open_studio": "Open AI Studio",
+    "gemini_requests_today": "Requests",
+    "gemini_tokens_today": "Tokens"
   },
   "legal": {
     "imprint_title": "Imprint",

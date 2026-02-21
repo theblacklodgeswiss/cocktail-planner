@@ -1,17 +1,19 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
-/// Action buttons for the offer form (preview, generate PDF, print).
+/// Action buttons for the offer form (save, preview, generate PDF, print).
 class OfferActionButtons extends StatelessWidget {
   const OfferActionButtons({
     super.key,
     required this.isGenerating,
+    required this.onSaveOnly,
     required this.onPreview,
     required this.onGeneratePdf,
     required this.onPrint,
   });
 
   final bool isGenerating;
+  final VoidCallback? onSaveOnly;
   final VoidCallback? onPreview;
   final VoidCallback? onGeneratePdf;
   final VoidCallback? onPrint;
@@ -23,6 +25,15 @@ class OfferActionButtons extends StatelessWidget {
       runSpacing: 12,
       alignment: WrapAlignment.center,
       children: [
+        // Nur Speichern / Save Only
+        OutlinedButton.icon(
+          onPressed: isGenerating ? null : onSaveOnly,
+          icon: const Icon(Icons.save_outlined),
+          label: Text('offer.save_only'.tr()),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+        ),
         // Vorschau / Preview
         OutlinedButton.icon(
           onPressed: isGenerating ? null : onPreview,

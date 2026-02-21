@@ -28,6 +28,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, int> _quantities = {};
   final Set<String> _selectedItems = {};
+  bool _suggestionsApplied = false;
+  bool _defaultsApplied = false;
 
   late PageController _pageController;
   int _currentPage = 0;
@@ -86,56 +88,148 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       _controllers[fahrtkosten]?.text = result.distanceKm.toString();
     });
     
-    // Apply Gemini material suggestions if available
-    _applyMaterialSuggestions();
+    // Note: Material suggestions are applied in _buildContent when data is available
   }
   
   /// Apply material suggestions from Gemini AI to the shopping list.
-  void _applyMaterialSuggestions() {
+  /// Must be called after CocktailData is available.
+  void _applyMaterialSuggestions(CocktailData data) {
+    if (_suggestionsApplied) return;
     if (!appState.hasMaterialSuggestions) return;
     
+    _suggestionsApplied = true;
     final suggestions = appState.materialSuggestions!;
+    
+    // Build a map of ingredient name -> list of cocktails that use it
+    final ingredientToCocktails = <String, List<String>>{};
+    for (final recipe in appState.selectedRecipes) {
+      for (final ingredient in recipe.ingredients) {
+        ingredientToCocktails.putIfAbsent(ingredient, () => []).add(recipe.name);
+      }
+    }
+    
+    // Build a map of material name+unit -> MaterialItem
+    final materialByKey = <String, MaterialItem>{};
+    for (final item in data.materials) {
+      materialByKey['${item.name}|${item.unit}'] = item;
+    }
+    for (final item in data.fixedValues) {
+      materialByKey['${item.name}|${item.unit}'] = item;
+    }
+    
+    int appliedCount = 0;
+    
     for (final suggestion in suggestions) {
-      final key = suggestion.key;
-      setState(() {
-        _quantities[key] = suggestion.quantity;
-        _selectedItems.add(key);
-        // Update or create controller
-        if (_controllers.containsKey(key)) {
-          _controllers[key]?.text = suggestion.quantity.toString();
+      final baseKey = suggestion.key; // name|unit
+      final item = materialByKey[baseKey];
+      
+      if (item == null) {
+        // Item not found, skip
+        continue;
+      }
+      
+      // Check if this is a fixed value (no cocktail association)
+      final cocktails = ingredientToCocktails[suggestion.name];
+      
+      if (cocktails == null || cocktails.isEmpty) {
+        // This is a fixed value or ingredient not used by any cocktail
+        // Apply with base key
+        _quantities[baseKey] = suggestion.quantity;
+        _selectedItems.add(baseKey);
+        if (_controllers.containsKey(baseKey)) {
+          _controllers[baseKey]?.text = suggestion.quantity.toString();
         }
-      });
+        appliedCount++;
+      } else {
+        // Distribute quantity across cocktails that use this ingredient
+        // For now, assign full quantity to the first cocktail
+        final cocktailName = cocktails.first;
+        final cocktailKey = ShoppingListLogic.cocktailItemKey(item, cocktailName);
+        
+        _quantities[cocktailKey] = suggestion.quantity;
+        _selectedItems.add(cocktailKey);
+        if (_controllers.containsKey(cocktailKey)) {
+          _controllers[cocktailKey]?.text = suggestion.quantity.toString();
+        }
+        appliedCount++;
+      }
     }
     
     // Show a snackbar that suggestions were applied
-    if (mounted && suggestions.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('shopping.gemini_suggestions_applied'.tr(
-            namedArgs: {'count': suggestions.length.toString()},
-          )),
-          backgroundColor: Colors.deepPurple,
-          action: SnackBarAction(
-            label: 'common.undo'.tr(),
-            textColor: Colors.white,
-            onPressed: () {
-              // Remove all suggested items
-              setState(() {
-                for (final suggestion in suggestions) {
-                  final key = suggestion.key;
-                  _quantities.remove(key);
-                  _selectedItems.remove(key);
-                  _controllers[key]?.text = '';
-                }
-              });
-            },
+    if (mounted && appliedCount > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('shopping.gemini_suggestions_applied'.tr(
+              namedArgs: {'count': appliedCount.toString()},
+            )),
+            backgroundColor: Colors.deepPurple,
+            action: SnackBarAction(
+              label: 'common.undo'.tr(),
+              textColor: Colors.white,
+              onPressed: () {
+                // Clear all quantities and rebuild
+                setState(() {
+                  _quantities.clear();
+                  _selectedItems.clear();
+                  for (final controller in _controllers.values) {
+                    controller.text = '';
+                  }
+                });
+              },
+            ),
           ),
-        ),
-      );
+        );
+      });
     }
     
     // Clear suggestions so they don't get applied again
     appState.clearMaterialSuggestions();
+  }
+
+  /// Apply default quantities for commonly used fixed items.
+  /// Called once when the shopping list is first built.
+  void _applyDefaultFixedValues(CocktailData data) {
+    if (_defaultsApplied) return;
+    _defaultsApplied = true;
+
+    // Default fixed items with their quantities
+    // Hartplastikbecher = 15, all others = 1
+    const defaultFixedItems = <String, int>{
+      'Theken|Stk': 1,
+      'Reinvstement|Stk': 1,
+      'Einkaufsentschädigung|Stk': 1,
+      'Hartplastikbecher 0.3L|30er Packung': 15,
+      'Strohhalme|500er Packung': 1,
+      'Schwarze Handschuhe|100er Packung': 1,
+      'Servietten|250er Packung': 1,
+      'Küchenpapier|4er Packung': 1,
+      'BL Box|Stk': 1,
+      'Smoothie Maker|Stk': 1,
+    };
+
+    // Build a set of available fixed value keys
+    final availableFixedKeys = <String>{};
+    for (final item in data.fixedValues) {
+      availableFixedKeys.add('${item.name}|${item.unit}');
+    }
+
+    // Apply defaults only for items that exist in the data
+    for (final entry in defaultFixedItems.entries) {
+      final key = entry.key;
+      final quantity = entry.value;
+
+      if (!availableFixedKeys.contains(key)) continue;
+      // Don't override if already set (e.g., by Gemini suggestions)
+      if (_quantities.containsKey(key) && _quantities[key]! > 0) continue;
+
+      _quantities[key] = quantity;
+      _selectedItems.add(key);
+      if (_controllers.containsKey(key)) {
+        _controllers[key]?.text = quantity.toString();
+      }
+    }
   }
 
   @override
@@ -340,6 +434,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   }
 
   Widget _buildContent(CocktailData data, ColorScheme colorScheme) {
+    // Apply Gemini material suggestions if available (once)
+    _applyMaterialSuggestions(data);
+    // Apply default fixed value quantities (once)
+    _applyDefaultFixedValues(data);
+    
     final separated = ShoppingListLogic.buildSeparatedItems(
       data,
       appState.selectedRecipes,

@@ -495,6 +495,134 @@ class MicrosoftGraphService {
     ];
     return months[month - 1];
   }
+
+  /// List files in a OneDrive folder.
+  /// Returns list of file info maps with 'name', 'id', 'isFolder', 'size'.
+  Future<List<Map<String, dynamic>>?> listOneDriveFolder(String folderPath) async {
+    if (!kIsWeb) return null;
+    final token = await _getToken(_oneDriveScope);
+    if (token == null) return null;
+
+    try {
+      final encodedPath = Uri.encodeFull(folderPath);
+      final url = Uri.parse(
+          '$_graphBaseUrl/me/drive/root:/$encodedPath:/children?\$select=id,name,size,folder&\$top=200');
+      debugPrint('Listing folder: $folderPath');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = data['value'] as List<dynamic>?;
+
+        if (items == null) return [];
+
+        return items.map((item) {
+          final itemMap = item as Map<String, dynamic>;
+          return {
+            'id': itemMap['id'] as String?,
+            'name': itemMap['name'] as String?,
+            'isFolder': itemMap['folder'] != null,
+            'size': itemMap['size'] as int? ?? 0,
+          };
+        }).toList();
+      }
+
+      debugPrint('List folder failed: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('List folder error: $e');
+      return null;
+    }
+  }
+
+  /// Download a file from OneDrive by path.
+  /// Returns the file bytes, or null on failure.
+  Future<Uint8List?> downloadFromOneDrive(String filePath) async {
+    if (!kIsWeb) return null;
+    final token = await _getToken(_oneDriveScope);
+    if (token == null) return null;
+
+    try {
+      final encodedPath = Uri.encodeFull(filePath);
+      final url = Uri.parse(
+          '$_graphBaseUrl/me/drive/root:/$encodedPath:/content');
+      debugPrint('Downloading: $filePath');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('Downloaded ${response.bodyBytes.length} bytes');
+        return response.bodyBytes;
+      }
+
+      debugPrint('Download failed: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('Download error: $e');
+      return null;
+    }
+  }
+
+  /// Get list of year folders in Aufträge.
+  Future<List<String>> getAuftraegeYears() async {
+    final items = await listOneDriveFolder('Aufträge');
+    if (items == null) return [];
+    
+    return items
+        .where((item) => item['isFolder'] == true)
+        .map((item) => item['name'] as String)
+        .where((name) => RegExp(r'^\d{4}$').hasMatch(name))
+        .toList()
+      ..sort();
+  }
+
+  /// Get all Einkaufsliste files from Aufträge folder structure.
+  /// Returns list of file paths.
+  Future<List<String>> findEinkaufslistenFiles() async {
+    final files = <String>[];
+    
+    final years = await getAuftraegeYears();
+    for (final year in years) {
+      final months = await listOneDriveFolder('Aufträge/$year');
+      if (months == null) continue;
+      
+      for (final month in months.where((m) => m['isFolder'] == true)) {
+        final monthName = month['name'] as String;
+        final monthFiles = await listOneDriveFolder('Aufträge/$year/$monthName');
+        if (monthFiles == null) continue;
+        
+        for (final file in monthFiles.where((f) => f['isFolder'] != true)) {
+          final fileName = file['name'] as String? ?? '';
+          // Look for Einkaufsliste files (PDF or PNG)
+          if (fileName.toLowerCase().contains('einkaufsliste') ||
+              fileName.toLowerCase().contains('einkaufslist')) {
+            if (fileName.endsWith('.pdf') || 
+                fileName.endsWith('.png') || 
+                fileName.endsWith('.jpg') ||
+                fileName.endsWith('.PNG') ||
+                fileName.endsWith('.PDF')) {
+              files.add('Aufträge/$year/$monthName/$fileName');
+            }
+          }
+        }
+      }
+    }
+    
+    debugPrint('Found ${files.length} Einkaufsliste files');
+    return files;
+  }
 }
 
 final microsoftGraphService = MicrosoftGraphService();

@@ -27,6 +27,8 @@ class AppState extends ChangeNotifier {
   String? linkedOrderId;
   /// Pre-filled name for the order.
   String? linkedOrderName;
+  /// Requested cocktails from linked order (names).
+  List<String>? linkedOrderRequestedCocktails;
   
   /// Gemini-suggested recipes with quantities (cocktailName -> quantity).
   @Deprecated('Use materialSuggestions instead')
@@ -55,9 +57,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// Set linked order for shopping list creation.
-  void setLinkedOrder(String orderId, String orderName) {
+  void setLinkedOrder(String orderId, String orderName, {List<String>? requestedCocktails}) {
     linkedOrderId = orderId;
     linkedOrderName = orderName;
+    linkedOrderRequestedCocktails = requestedCocktails;
     notifyListeners();
   }
 
@@ -65,6 +68,7 @@ class AppState extends ChangeNotifier {
   void clearLinkedOrder() {
     linkedOrderId = null;
     linkedOrderName = null;
+    linkedOrderRequestedCocktails = null;
     // ignore: deprecated_member_use_from_same_package
     geminiSuggestions = null;
     materialSuggestions = null;

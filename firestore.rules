@@ -92,5 +92,17 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
+    
+    // Gemini usage tracking - authenticated can read, admin can write
+    match /gemini_usage/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Historical shopping lists (imported from OneDrive)
+    match /historical_shopping_lists/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
   }
 }

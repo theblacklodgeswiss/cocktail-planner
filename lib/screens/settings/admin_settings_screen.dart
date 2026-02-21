@@ -2,11 +2,13 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/settings_repository.dart';
 import '../../models/app_settings.dart';
 import '../../services/auth_service.dart';
 import '../../services/gemini_service.dart';
+import '../../services/microsoft_graph_service.dart';
 
 /// Admin settings screen for configuring app-wide settings.
 class AdminSettingsScreen extends StatefulWidget {
@@ -21,6 +23,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   late TextEditingController _geminiKeyController;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isImporting = false;
   AppSettings _settings = const AppSettings();
   bool _showGeminiKey = false;
 
@@ -41,6 +44,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
   Future<void> _loadSettings() async {
     final settings = await settingsRepository.load();
+    // Also reload Gemini usage from Firestore
+    await GeminiService().reloadUsage();
     if (!mounted) return;
     setState(() {
       _settings = settings;
@@ -205,6 +210,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
+                // Usage statistics
+                if (geminiService.isConfigured) ...[
+                  _buildGeminiUsageSection(),
+                  const SizedBox(height: 16),
+                  _buildHistoricalImportSection(),
+                  const SizedBox(height: 16),
+                ],
                 // Show env key status
                 if (GeminiService.hasEnvKey) ...[  
                   Container(
@@ -265,5 +277,212 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildGeminiUsageSection() {
+    final geminiService = GeminiService();
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.bar_chart,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'settings.gemini_usage'.tr(),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Today's usage stats
+          _buildUsageStat(
+            'Anfragen',
+            '${geminiService.requestsToday} / ${GeminiService.dailyRequestLimit}',
+            geminiService.requestUsagePercentage,
+          ),
+          const SizedBox(height: 8),
+          _buildUsageStat(
+            'Tokens',
+            '${_formatNumber(geminiService.totalTokensToday)} / ${_formatNumber(GeminiService.dailyTokenLimit)}',
+            geminiService.tokenUsagePercentage,
+          ),
+          const SizedBox(height: 8),
+          // Token breakdown
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '↓ ${_formatNumber(geminiService.inputTokensToday)} input',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                ),
+              ),
+              Text(
+                '↑ ${_formatNumber(geminiService.outputTokensToday)} output',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'settings.gemini_usage_hint'.tr(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+          ),
+          const SizedBox(height: 8),
+          // Link to Google AI Studio
+          OutlinedButton.icon(
+            onPressed: _openAiStudio,
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: Text('settings.gemini_open_studio'.tr()),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildUsageStat(String label, String value, double percentage) {
+    final color = percentage > 0.9 
+        ? Colors.red 
+        : percentage > 0.7 
+            ? Colors.orange 
+            : Theme.of(context).colorScheme.primary;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text(value, style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            )),
+          ],
+        ),
+        const SizedBox(height: 4),
+        LinearProgressIndicator(
+          value: percentage,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+      ],
+    );
+  }
+  
+  String _formatNumber(int number) {
+    if (number >= 1000000) {
+      return '${(number / 1000000).toStringAsFixed(1)}M';
+    } else if (number >= 1000) {
+      return '${(number / 1000).toStringAsFixed(1)}K';
+    }
+    return number.toString();
+  }
+  
+  void _openAiStudio() {
+    // Open Google AI Studio in browser
+    // ignore: deprecated_member_use
+    launchUrl(Uri.parse('https://aistudio.google.com/apikey'));
+  }
+  
+  Widget _buildHistoricalImportSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.cloud_download,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Historische Daten importieren',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Importiert Einkaufslisten (PNG/PDF) aus OneDrive/Aufträge und nutzt Gemini AI um die Daten zu extrahieren.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+          ),
+          const SizedBox(height: 12),
+          if (!microsoftGraphService.isLoggedIn)
+            Text(
+              'Bitte zuerst bei Microsoft anmelden.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.orange,
+                  ),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: _isImporting ? null : _importHistoricalData,
+              icon: _isImporting 
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file, size: 18),
+              label: Text(_isImporting ? 'Importiere...' : 'Import starten'),
+            ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _importHistoricalData() async {
+    setState(() => _isImporting = true);
+    
+    try {
+      final count = await GeminiService().importHistoricalShoppingLists(
+        findFiles: microsoftGraphService.findEinkaufslistenFiles,
+        downloadFile: microsoftGraphService.downloadFromOneDrive,
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$count Einkaufslisten importiert')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import fehlgeschlagen: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
   }
 }

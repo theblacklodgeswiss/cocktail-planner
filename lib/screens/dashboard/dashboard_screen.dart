@@ -6,6 +6,7 @@ import '../../data/cocktail_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
+import '../../services/gemini_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
 import 'user_menu_sheet.dart';
@@ -24,6 +25,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Future<CocktailData>? _dataFuture;
   bool _initialized = false;
+  bool _cocktailMatchingDone = false;
 
   @override
   void initState() {
@@ -44,6 +46,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _dataFuture = (widget.loadData ?? cocktailRepository.load)();
     });
+  }
+
+  /// Auto-select recipes from linked order if available.
+  /// Uses Gemini AI for fuzzy matching if exact match fails.
+  Future<void> _applyLinkedOrderCocktails(List<Recipe> allRecipes) async {
+    final requested = appState.linkedOrderRequestedCocktails;
+    if (requested == null || requested.isEmpty) return;
+    if (appState.selectedRecipes.isNotEmpty) return; // Already has selection
+    
+    final matchedRecipes = <Recipe>[];
+    final unmatchedNames = <String>[];
+    
+    // First try exact match (case-insensitive)
+    for (final cocktailName in requested) {
+      final lower = cocktailName.toLowerCase().trim();
+      final recipe = allRecipes.firstWhere(
+        (r) => r.name.toLowerCase().trim() == lower,
+        orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+      );
+      if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+        matchedRecipes.add(recipe);
+      } else if (recipe.id.isEmpty) {
+        unmatchedNames.add(cocktailName);
+      }
+    }
+    
+    // Use Gemini AI for fuzzy matching of unmatched names
+    if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
+      try {
+        final availableNames = allRecipes.map((r) => r.name).toList();
+        final aiMatches = await geminiService.matchCocktailNames(
+          requestedNames: unmatchedNames,
+          availableRecipeNames: availableNames,
+        );
+        
+        for (final entry in aiMatches.entries) {
+          final matchedName = entry.value;
+          if (matchedName != null) {
+            final recipe = allRecipes.firstWhere(
+              (r) => r.name == matchedName,
+              orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+            );
+            if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+              matchedRecipes.add(recipe);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Gemini cocktail matching failed: $e');
+      }
+    }
+    
+    if (matchedRecipes.isNotEmpty) {
+      appState.setSelectedRecipes(matchedRecipes);
+    }
   }
 
   Future<void> _openRecipeSelection(List<Recipe> allRecipes) async {
@@ -114,6 +171,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         final data = snapshot.data!;
+        
+        // Auto-apply linked order cocktails after data loads (only once)
+        if (!_cocktailMatchingDone && appState.linkedOrderRequestedCocktails != null) {
+          _cocktailMatchingDone = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _applyLinkedOrderCocktails(data.recipes);
+          });
+        }
 
         return AnimatedBuilder(
           animation: appState,
