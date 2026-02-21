@@ -13,13 +13,7 @@
     "cocktails_section": "Cocktails",
     "shots_section": "Shots",
     "generate_list": "Einkaufsliste generieren",
-    "sync_tooltip": "Daten neu laden",
     "user_tooltip": "Benutzer",
-    "reseed_title": "Daten aktualisieren?",
-    "reseed_message": "Dies lädt alle Materialien und Rezepte neu aus der lokalen Datei. Bestehende Firebase-Daten werden überschrieben.",
-    "reseed_confirm": "Aktualisieren",
-    "reseed_progress": "Daten werden aktualisiert...",
-    "reseed_success": "Daten erfolgreich aktualisiert!",
     "linked_order": "Einkaufsliste für: {}",
     "unlink_order": "Verknüpfung aufheben"
   },
@@ -98,7 +92,15 @@
     "twint_number": "TWINT Nummer",
     "company_saved": "Firmendaten gespeichert!",
     "company_save_failed": "Speichern fehlgeschlagen",
-    "field_required": "Pflichtfeld"
+    "field_required": "Pflichtfeld",
+    "firebase_sync_title": "Daten mit Firebase synchronisieren",
+    "firebase_sync_description": "Lokale JSON-Daten (Materialien, Rezepte, Fixkosten) werden in Firebase hochgeladen und überschreiben bestehende Daten.",
+    "firebase_sync_button": "Jetzt synchronisieren",
+    "firebase_sync_confirm_title": "Daten synchronisieren?",
+    "firebase_sync_confirm_message": "Dies lädt alle Materialien und Rezepte aus der lokalen JSON-Datei in Firebase hoch. Bestehende Firebase-Daten werden überschrieben.",
+    "firebase_sync_confirm": "Synchronisieren",
+    "firebase_sync_progress": "Daten werden synchronisiert...",
+    "firebase_sync_success": "Daten erfolgreich mit Firebase synchronisiert!"
   },
   "admin_panel": {
     "title": "Benutzer verwalten",
@@ -145,7 +147,11 @@
     "drinker_type": "Trinkverhalten:",
     "no_ingredients": "Keine Zutaten gefunden",
     "step_of": "Schritt {current} von {total}",
-    "gemini_suggestions_applied": "{count} KI-Vorschläge übernommen"
+    "gemini_suggestions_applied": "{count} KI-Vorschläge übernommen",
+    "ingredients": "Zutaten",
+    "not_in_inventory": "Nicht im Inventar",
+    "search_ingredient": "Zutat suchen...",
+    "add_ingredient": "Zutat hinzufügen"
   },
   "offer": {
     "title": "Angebot erstellen",

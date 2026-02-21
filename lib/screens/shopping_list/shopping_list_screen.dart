@@ -6,6 +6,7 @@ import '../../data/order_repository.dart';
 import '../../data/settings_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/material_item.dart';
+import '../../models/recipe.dart';
 import '../../services/pdf_generator.dart';
 import '../../state/app_state.dart';
 import '../../utils/currency.dart';
@@ -519,6 +520,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   allItems,
                   total,
                   selectedItems,
+                  data,
                 ),
               ),
             ),
@@ -541,6 +543,24 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
+  void _onIngredientsChanged(String cocktailName, List<String> newIngredients) {
+    // Find and update the recipe in appState
+    final recipeIndex = appState.selectedRecipes
+        .indexWhere((r) => r.name == cocktailName);
+    if (recipeIndex != -1) {
+      final oldRecipe = appState.selectedRecipes[recipeIndex];
+      final updatedRecipe = Recipe(
+        id: oldRecipe.id,
+        name: oldRecipe.name,
+        ingredients: newIngredients,
+        type: oldRecipe.type,
+      );
+      appState.selectedRecipes[recipeIndex] = updatedRecipe;
+      // Trigger rebuild
+      setState(() {});
+    }
+  }
+
   Widget _buildPage(
     int index,
     List<String> cocktailNames,
@@ -548,6 +568,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     List<MaterialItem> allItems,
     double total,
     List<OrderItem> selectedItems,
+    CocktailData data,
   ) {
     if (index < cocktailNames.length) {
       final cocktailName = cocktailNames[index];
@@ -559,6 +580,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         controllers: _controllers,
         onQuantityChanged: _onQuantityChanged,
         allCocktailNames: cocktailNames,
+        availableMaterials: data.materials,
+        onIngredientsChanged: _onIngredientsChanged,
       );
     } else if (index == cocktailNames.length &&
         separated.fixedValues.isNotEmpty) {

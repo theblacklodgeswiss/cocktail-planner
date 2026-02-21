@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/material_item.dart';
 import '../shopping_list_logic.dart';
+import 'recipe_ingredient_edit_dialog.dart';
 import 'shopping_item_card.dart';
 
 /// Page displaying ingredients for a specific cocktail.
@@ -15,6 +16,8 @@ class CocktailPage extends StatelessWidget {
     required this.controllers,
     required this.onQuantityChanged,
     required this.allCocktailNames,
+    this.availableMaterials = const [],
+    this.onIngredientsChanged,
   });
 
   final String cocktailName;
@@ -24,6 +27,9 @@ class CocktailPage extends StatelessWidget {
   final Map<String, TextEditingController> controllers;
   final void Function(String key, int quantity) onQuantityChanged;
   final List<String> allCocktailNames;
+  final List<MaterialItem> availableMaterials;
+  final void Function(String cocktailName, List<String> newIngredients)?
+      onIngredientsChanged;
 
   String _cocktailItemKey(MaterialItem item) =>
       ShoppingListLogic.cocktailItemKey(item, cocktailName);
@@ -104,7 +110,27 @@ class CocktailPage extends StatelessWidget {
             ],
           ),
         ),
+        if (onIngredientsChanged != null)
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Zutaten bearbeiten',
+            onPressed: () => _showEditDialog(context),
+          ),
       ],
     );
+  }
+
+  Future<void> _showEditDialog(BuildContext context) async {
+    final currentIngredients = items.map((item) => item.name).toList();
+    final result = await RecipeIngredientEditDialog.show(
+      context: context,
+      recipeName: cocktailName,
+      currentIngredients: currentIngredients,
+      availableMaterials: availableMaterials,
+    );
+
+    if (result != null && onIngredientsChanged != null) {
+      onIngredientsChanged!(cocktailName, result);
+    }
   }
 }

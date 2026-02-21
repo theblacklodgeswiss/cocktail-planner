@@ -13,13 +13,7 @@
     "cocktails_section": "Cocktails",
     "shots_section": "Shots",
     "generate_list": "Generate Shopping List",
-    "sync_tooltip": "Reload data",
     "user_tooltip": "User",
-    "reseed_title": "Update data?",
-    "reseed_message": "This will reload all materials and recipes from the local file. Existing Firebase data will be overwritten.",
-    "reseed_confirm": "Update",
-    "reseed_progress": "Updating data...",
-    "reseed_success": "Data successfully updated!",
     "linked_order": "Shopping list for: {}",
     "unlink_order": "Unlink order"
   },
@@ -98,7 +92,15 @@
     "twint_number": "TWINT Number",
     "company_saved": "Company data saved!",
     "company_save_failed": "Save failed",
-    "field_required": "Required field"
+    "field_required": "Required field",
+    "firebase_sync_title": "Sync Data with Firebase",
+    "firebase_sync_description": "Local JSON data (materials, recipes, fixed costs) will be uploaded to Firebase and overwrite existing data.",
+    "firebase_sync_button": "Sync Now",
+    "firebase_sync_confirm_title": "Sync Data?",
+    "firebase_sync_confirm_message": "This will upload all materials and recipes from the local JSON file to Firebase. Existing Firebase data will be overwritten.",
+    "firebase_sync_confirm": "Sync",
+    "firebase_sync_progress": "Syncing data...",
+    "firebase_sync_success": "Data successfully synced with Firebase!"
   },
   "admin_panel": {
     "title": "Manage Users",
@@ -145,7 +147,11 @@
     "drinker_type": "Drinking behavior:",
     "no_ingredients": "No ingredients found",
     "step_of": "Step {current} of {total}",
-    "gemini_suggestions_applied": "{count} AI suggestions applied"
+    "gemini_suggestions_applied": "{count} AI suggestions applied",
+    "ingredients": "Ingredients",
+    "not_in_inventory": "Not in inventory",
+    "search_ingredient": "Search ingredient...",
+    "add_ingredient": "Add ingredient"
   },
   "offer": {
     "title": "Create Offer",

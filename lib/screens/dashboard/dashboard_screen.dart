@@ -116,40 +116,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     appState.setSelectedRecipes(result);
   }
 
-  Future<void> _confirmReseed() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('dashboard.reseed_title'.tr()),
-        content: Text('dashboard.reseed_message'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('dashboard.reseed_confirm'.tr()),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true && mounted) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('dashboard.reseed_progress'.tr())),
-      );
-      await cocktailRepository.forceReseed();
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('dashboard.reseed_success'.tr())),
-        );
-        setState(() => _loadData());
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_dataFuture == null) {
@@ -215,12 +181,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return AppBar(
       title: Text('dashboard.title'.tr()),
       actions: [
-        if (cocktailRepository.isUsingFirebase)
-          IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'dashboard.sync_tooltip'.tr(),
-            onPressed: _confirmReseed,
-          ),
         _DataSourceChip(),
         _UserMenuButton(onPressed: () => showUserMenu(context)),
         const SizedBox(width: 8),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../data/cocktail_repository.dart';
 import '../../data/settings_repository.dart';
 import '../../models/app_settings.dart';
 import '../../services/auth_service.dart';
@@ -210,6 +211,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
+                // Firebase Sync
+                _buildFirebaseSyncSection(),
+                const SizedBox(height: 16),
                 // Usage statistics
                 if (geminiService.isConfigured) ...[
                   _buildGeminiUsageSection(),
@@ -277,6 +281,121 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildFirebaseSyncSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.cloud_sync,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'admin.firebase_sync_title'.tr(),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              if (cocktailRepository.isUsingFirebase)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.cloud_done, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Firebase',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.folder, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Lokal',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'admin.firebase_sync_description'.tr(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _syncFirebaseData,
+            icon: const Icon(Icons.sync, size: 18),
+            label: Text('admin.firebase_sync_button'.tr()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _syncFirebaseData() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('admin.firebase_sync_confirm_title'.tr()),
+        content: Text('admin.firebase_sync_confirm_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('admin.firebase_sync_confirm'.tr()),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('admin.firebase_sync_progress'.tr())),
+      );
+      await cocktailRepository.forceReseed();
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('admin.firebase_sync_success'.tr())),
+        );
+      }
+    }
   }
 
   Widget _buildGeminiUsageSection() {
