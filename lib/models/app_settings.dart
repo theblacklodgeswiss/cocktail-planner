@@ -13,6 +13,7 @@ class AppSettings {
     this.companyEmail = 'the.blacklodge@outlook.com',
     this.bankIban = 'CH86 0020 8208 1176 8440 B',
     this.twintNumber = '+41 79 778 48 61',
+    this.geminiApiKey,
   });
 
   /// Distance threshold in km for long distance pricing.
@@ -33,6 +34,9 @@ class AppSettings {
   final String companyEmail;
   final String bankIban;
   final String twintNumber;
+
+  /// Gemini API key for AI-powered shopping list generation.
+  final String? geminiApiKey;
 
   /// Returns the full company address as a list of lines (for PDF).
   List<String> get addressLines => [
@@ -57,6 +61,7 @@ class AppSettings {
       companyEmail: json['companyEmail'] as String? ?? 'the.blacklodge@outlook.com',
       bankIban: json['bankIban'] as String? ?? 'CH86 0020 8208 1176 8440 B',
       twintNumber: json['twintNumber'] as String? ?? '+41 79 778 48 61',
+      geminiApiKey: json['geminiApiKey'] as String?,
     );
   }
 
@@ -72,6 +77,7 @@ class AppSettings {
         'companyEmail': companyEmail,
         'bankIban': bankIban,
         'twintNumber': twintNumber,
+        if (geminiApiKey != null) 'geminiApiKey': geminiApiKey,
       };
 
   AppSettings copyWith({
@@ -86,6 +92,7 @@ class AppSettings {
     String? companyEmail,
     String? bankIban,
     String? twintNumber,
+    String? geminiApiKey,
   }) {
     return AppSettings(
       longDistanceThresholdKm: longDistanceThresholdKm ?? this.longDistanceThresholdKm,
@@ -99,6 +106,7 @@ class AppSettings {
       companyEmail: companyEmail ?? this.companyEmail,
       bankIban: bankIban ?? this.bankIban,
       twintNumber: twintNumber ?? this.twintNumber,
+      geminiApiKey: geminiApiKey ?? this.geminiApiKey,
     );
   }
 }

@@ -202,6 +202,187 @@ class MicrosoftGraphService {
     }
   }
 
+  /// Find a file in OneDrive by name and return its item ID.
+  /// Lists folder contents to find the file (more reliable than search).
+  Future<String?> _findFileId(String fileName, String token) async {
+    try {
+      // List files in root folder (where the Excel file is)
+      final listUrl = Uri.parse(
+          '$_graphBaseUrl/me/drive/root/children?\$select=id,name&\$top=200');
+      debugPrint('Listing root files to find: $fileName');
+      
+      final response = await http.get(
+        listUrl,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = data['value'] as List<dynamic>?;
+        
+        if (items != null && items.isNotEmpty) {
+          // Find exact match by name
+          for (final item in items) {
+            final itemName = item['name'] as String?;
+            debugPrint('Found file: $itemName');
+            if (itemName == fileName) {
+              final id = item['id'] as String?;
+              debugPrint('Matched! File ID: $id');
+              return id;
+            }
+          }
+          // Try partial match (in case of encoding issues)
+          for (final item in items) {
+            final itemName = item['name'] as String?;
+            if (itemName != null && 
+                itemName.toLowerCase().contains('cocktail') && 
+                itemName.toLowerCase().endsWith('.xlsx')) {
+              final id = item['id'] as String?;
+              debugPrint('Partial match! $itemName -> ID: $id');
+              return id;
+            }
+          }
+        }
+        debugPrint('File not found in ${items?.length ?? 0} items');
+      } else {
+        debugPrint('List files failed: ${response.statusCode} ${response.body}');
+      }
+      
+      return null;
+    } catch (e) {
+      debugPrint('File find error: $e');
+      return null;
+    }
+  }
+
+  /// Read Excel file rows from OneDrive.
+  /// 
+  /// [oneDrivePath] is the path/name of the Excel file (e.g. "Cocktail- & Barservice Anftragformular.xlsx")
+  /// [worksheetName] is optional - if null, uses the first worksheet.
+  /// [startRow] is the first row to read (1-indexed, typically 2 to skip header).
+  /// 
+  /// Returns a list of row data as `List<List<String>>`, or null on failure.
+  Future<List<List<String>>?> readExcelFromOneDrive({
+    required String oneDrivePath,
+    String? worksheetName,
+    int startRow = 2,
+  }) async {
+    if (!kIsWeb) return null;
+    final token = await _getToken(_oneDriveScope);
+    if (token == null) return null;
+
+    try {
+      // Extract file name from path
+      final fileName = oneDrivePath.split('/').last;
+      
+      // Find file ID first (handles special characters better)
+      final fileId = await _findFileId(fileName, token);
+      if (fileId == null) {
+        debugPrint('Could not find file: $fileName');
+        return null;
+      }
+      debugPrint('Found file with ID: $fileId');
+      
+      // Get worksheet name
+      String worksheetPath;
+      if (worksheetName == null) {
+        // Get first worksheet name
+        final sheetsUrl = Uri.parse(
+            '$_graphBaseUrl/me/drive/items/$fileId/workbook/worksheets');
+        debugPrint('Fetching worksheets from: $sheetsUrl');
+        
+        final sheetsResponse = await http.get(
+          sheetsUrl,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        );
+        
+        if (sheetsResponse.statusCode == 200) {
+          final sheetsData = jsonDecode(sheetsResponse.body) as Map<String, dynamic>;
+          final sheets = sheetsData['value'] as List<dynamic>?;
+          if (sheets != null && sheets.isNotEmpty) {
+            final firstSheet = sheets.first as Map<String, dynamic>;
+            final sheetName = firstSheet['name'] as String? ?? 'Sheet1';
+            worksheetPath = "/workbook/worksheets('${Uri.encodeComponent(sheetName)}')/usedRange";
+            debugPrint('Using worksheet: $sheetName');
+          } else {
+            debugPrint('No worksheets found');
+            return null;
+          }
+        } else {
+          debugPrint('Failed to get worksheets: ${sheetsResponse.statusCode} ${sheetsResponse.body}');
+          return null;
+        }
+      } else {
+        worksheetPath = "/workbook/worksheets('${Uri.encodeComponent(worksheetName)}')/usedRange";
+      }
+      
+      final url = Uri.parse('$_graphBaseUrl/me/drive/items/$fileId$worksheetPath');
+      debugPrint('Reading Excel from: $url');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final values = data['values'] as List<dynamic>?;
+        
+        if (values == null || values.isEmpty) {
+          debugPrint('Excel file is empty');
+          return [];
+        }
+        
+        // Convert to List<List<String>> and skip header rows
+        final rows = <List<String>>[];
+        for (int i = startRow - 1; i < values.length; i++) {
+          final row = values[i] as List<dynamic>;
+          // Convert each cell to string, handling null values
+          final stringRow = row.map((cell) => cell?.toString() ?? '').toList();
+          // Skip completely empty rows
+          if (stringRow.any((cell) => cell.isNotEmpty)) {
+            rows.add(stringRow);
+          }
+        }
+        
+        debugPrint('Read ${rows.length} rows from Excel file');
+        return rows;
+      }
+      
+      debugPrint('Excel read failed: ${response.statusCode} ${response.body}');
+      return null;
+    } catch (e) {
+      debugPrint('Excel read error: $e');
+      return null;
+    }
+  }
+
+  /// Read header row from Excel file.
+  Future<List<String>?> readExcelHeaders({
+    required String oneDrivePath,
+    String? worksheetName,
+  }) async {
+    // Use readExcelFromOneDrive with startRow 1 and return first row
+    final rows = await readExcelFromOneDrive(
+      oneDrivePath: oneDrivePath,
+      worksheetName: worksheetName,
+      startRow: 1,
+    );
+    if (rows != null && rows.isNotEmpty) {
+      return rows.first;
+    }
+    return null;
+  }
+
   /// Create an Outlook calendar event.
   /// Returns the event ID on success, null on failure.
   Future<String?> createCalendarEvent({
@@ -313,6 +494,193 @@ class MicrosoftGraphService {
       '09 September', '10 Oktober', '11 November', '12 Dezember',
     ];
     return months[month - 1];
+  }
+
+  /// List files in a OneDrive folder.
+  /// Returns list of file info maps with 'name', 'id', 'isFolder', 'size'.
+  Future<List<Map<String, dynamic>>?> listOneDriveFolder(String folderPath) async {
+    if (!kIsWeb) return null;
+    final token = await _getToken(_oneDriveScope);
+    if (token == null) return null;
+
+    try {
+      final encodedPath = Uri.encodeFull(folderPath);
+      final url = Uri.parse(
+          '$_graphBaseUrl/me/drive/root:/$encodedPath:/children?\$select=id,name,size,folder&\$top=200');
+      debugPrint('Listing folder: $folderPath');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = data['value'] as List<dynamic>?;
+
+        if (items == null) return [];
+
+        return items.map((item) {
+          final itemMap = item as Map<String, dynamic>;
+          return {
+            'id': itemMap['id'] as String?,
+            'name': itemMap['name'] as String?,
+            'isFolder': itemMap['folder'] != null,
+            'size': itemMap['size'] as int? ?? 0,
+          };
+        }).toList();
+      }
+
+      debugPrint('List folder failed: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('List folder error: $e');
+      return null;
+    }
+  }
+
+  /// Download a file from OneDrive by path.
+  /// Returns the file bytes, or null on failure.
+  Future<Uint8List?> downloadFromOneDrive(String filePath) async {
+    if (!kIsWeb) return null;
+    final token = await _getToken(_oneDriveScope);
+    if (token == null) return null;
+
+    try {
+      final encodedPath = Uri.encodeFull(filePath);
+      final url = Uri.parse(
+          '$_graphBaseUrl/me/drive/root:/$encodedPath:/content');
+      debugPrint('Downloading: $filePath');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('Downloaded ${response.bodyBytes.length} bytes');
+        return response.bodyBytes;
+      }
+
+      debugPrint('Download failed: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('Download error: $e');
+      return null;
+    }
+  }
+
+  /// Get list of year folders in Aufträge.
+  Future<List<String>> getAuftraegeYears() async {
+    final items = await listOneDriveFolder('Aufträge');
+    if (items == null) return [];
+    
+    return items
+        .where((item) => item['isFolder'] == true)
+        .map((item) => item['name'] as String)
+        .where((name) => RegExp(r'^\d{4}$').hasMatch(name))
+        .toList()
+      ..sort();
+  }
+
+  /// Find event file pairs (Auftrag + Einkaufsliste) from Aufträge folder.
+  /// Returns list of maps with 'folder', 'auftragFile', and 'einkaufslisteFile'.
+  /// Only imports from 2025 and 2026.
+  Future<List<Map<String, String?>>> findEventFilePairs() async {
+    final pairs = <Map<String, String?>>[];
+    
+    final allYears = await getAuftraegeYears();
+    final years = allYears.where((y) => y == '2025' || y == '2026').toList();
+    debugPrint('Scanning years: $years (filtered from $allYears)');
+    
+    for (final year in years) {
+      final months = await listOneDriveFolder('Aufträge/$year');
+      if (months == null) continue;
+      
+      for (final month in months.where((m) => m['isFolder'] == true)) {
+        final monthName = month['name'] as String;
+        final folderPath = 'Aufträge/$year/$monthName';
+        final monthFiles = await listOneDriveFolder(folderPath);
+        if (monthFiles == null) continue;
+        
+        String? auftragFile;
+        String? einkaufslisteFile;
+        
+        for (final file in monthFiles.where((f) => f['isFolder'] != true)) {
+          final fileName = file['name'] as String? ?? '';
+          final lower = fileName.toLowerCase();
+          
+          // Check for supported file types
+          final isSupported = lower.endsWith('.pdf') || 
+              lower.endsWith('.png') || 
+              lower.endsWith('.jpg');
+          if (!isSupported) continue;
+          
+          if (lower.contains('auftrag') && !lower.contains('einkauf')) {
+            auftragFile = '$folderPath/$fileName';
+          } else if (lower.contains('einkaufsliste') || lower.contains('einkaufslist')) {
+            einkaufslisteFile = '$folderPath/$fileName';
+          }
+        }
+        
+        // Only add if we have at least one file
+        if (auftragFile != null || einkaufslisteFile != null) {
+          pairs.add({
+            'folder': folderPath,
+            'auftragFile': auftragFile,
+            'einkaufslisteFile': einkaufslisteFile,
+          });
+        }
+      }
+    }
+    
+    debugPrint('Found ${pairs.length} event pairs');
+    return pairs;
+  }
+
+  /// Get all Einkaufsliste files from Aufträge folder structure.
+  /// Returns list of file paths.
+  /// Only imports from 2025 and 2026.
+  Future<List<String>> findEinkaufslistenFiles() async {
+    final files = <String>[];
+    
+    final allYears = await getAuftraegeYears();
+    // Only import from 2025 and 2026
+    final years = allYears.where((y) => y == '2025' || y == '2026').toList();
+    debugPrint('Importing from years: $years (filtered from $allYears)');
+    for (final year in years) {
+      final months = await listOneDriveFolder('Aufträge/$year');
+      if (months == null) continue;
+      
+      for (final month in months.where((m) => m['isFolder'] == true)) {
+        final monthName = month['name'] as String;
+        final monthFiles = await listOneDriveFolder('Aufträge/$year/$monthName');
+        if (monthFiles == null) continue;
+        
+        for (final file in monthFiles.where((f) => f['isFolder'] != true)) {
+          final fileName = file['name'] as String? ?? '';
+          // Look for Einkaufsliste files (PDF or PNG)
+          if (fileName.toLowerCase().contains('einkaufsliste') ||
+              fileName.toLowerCase().contains('einkaufslist')) {
+            if (fileName.endsWith('.pdf') || 
+                fileName.endsWith('.png') || 
+                fileName.endsWith('.jpg') ||
+                fileName.endsWith('.PNG') ||
+                fileName.endsWith('.PDF')) {
+              files.add('Aufträge/$year/$monthName/$fileName');
+            }
+          }
+        }
+      }
+    }
+    
+    debugPrint('Found ${files.length} Einkaufsliste files');
+    return files;
   }
 }
 

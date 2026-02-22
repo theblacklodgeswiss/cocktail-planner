@@ -177,17 +177,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Handle the distance dialog that appears on screen load
+    // Handle the initial setup dialog that appears on screen load
     // Find the AlertDialog by type (text is localized)
     expect(find.byType(AlertDialog), findsOneWidget);
     
-    // Find the distance TextField inside the dialog
-    final distanceField = find.descendant(
+    // Find all TextFields inside the dialog (name, personCount, distance)
+    final dialogFields = find.descendant(
       of: find.byType(AlertDialog),
       matching: find.byType(TextField),
     );
-    expect(distanceField, findsOneWidget);
-    await tester.enterText(distanceField, '100');
+    expect(dialogFields, findsNWidgets(3));
+    
+    // Enter data in all 3 fields (order: name, personCount, distance)
+    await tester.enterText(dialogFields.at(0), 'Test Event');
+    await tester.pump();
+    await tester.enterText(dialogFields.at(1), '50');
+    await tester.pump();
+    await tester.enterText(dialogFields.at(2), '100');
     await tester.pump();
     
     // Tap the FilledButton inside the dialog to proceed

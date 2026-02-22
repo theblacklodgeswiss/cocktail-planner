@@ -6,6 +6,7 @@ import '../../data/cocktail_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
+import '../../services/gemini_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
 import 'user_menu_sheet.dart';
@@ -24,6 +25,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Future<CocktailData>? _dataFuture;
   bool _initialized = false;
+  bool _cocktailMatchingDone = false;
 
   @override
   void initState() {
@@ -46,6 +48,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  /// Auto-select recipes from linked order if available.
+  /// Uses Gemini AI for fuzzy matching if exact match fails.
+  Future<void> _applyLinkedOrderCocktails(List<Recipe> allRecipes) async {
+    final requested = appState.linkedOrderRequestedCocktails;
+    if (requested == null || requested.isEmpty) return;
+    if (appState.selectedRecipes.isNotEmpty) return; // Already has selection
+    
+    final matchedRecipes = <Recipe>[];
+    final unmatchedNames = <String>[];
+    
+    // First try exact match (case-insensitive)
+    for (final cocktailName in requested) {
+      final lower = cocktailName.toLowerCase().trim();
+      final recipe = allRecipes.firstWhere(
+        (r) => r.name.toLowerCase().trim() == lower,
+        orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+      );
+      if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+        matchedRecipes.add(recipe);
+      } else if (recipe.id.isEmpty) {
+        unmatchedNames.add(cocktailName);
+      }
+    }
+    
+    // Use Gemini AI for fuzzy matching of unmatched names
+    if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
+      try {
+        final availableNames = allRecipes.map((r) => r.name).toList();
+        final aiMatches = await geminiService.matchCocktailNames(
+          requestedNames: unmatchedNames,
+          availableRecipeNames: availableNames,
+        );
+        
+        for (final entry in aiMatches.entries) {
+          final matchedName = entry.value;
+          if (matchedName != null) {
+            final recipe = allRecipes.firstWhere(
+              (r) => r.name == matchedName,
+              orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+            );
+            if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+              matchedRecipes.add(recipe);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Gemini cocktail matching failed: $e');
+      }
+    }
+    
+    if (matchedRecipes.isNotEmpty) {
+      appState.setSelectedRecipes(matchedRecipes);
+    }
+  }
+
   Future<void> _openRecipeSelection(List<Recipe> allRecipes) async {
     final result = await showDialog<List<Recipe>>(
       context: context,
@@ -57,40 +114,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (!mounted || result == null) return;
     appState.setSelectedRecipes(result);
-  }
-
-  Future<void> _confirmReseed() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('dashboard.reseed_title'.tr()),
-        content: Text('dashboard.reseed_message'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('dashboard.reseed_confirm'.tr()),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true && mounted) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('dashboard.reseed_progress'.tr())),
-      );
-      await cocktailRepository.forceReseed();
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('dashboard.reseed_success'.tr())),
-        );
-        setState(() => _loadData());
-      }
-    }
   }
 
   @override
@@ -114,22 +137,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         final data = snapshot.data!;
+        
+        // Auto-apply linked order cocktails after data loads (only once)
+        if (!_cocktailMatchingDone && appState.linkedOrderRequestedCocktails != null) {
+          _cocktailMatchingDone = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _applyLinkedOrderCocktails(data.recipes);
+          });
+        }
 
         return AnimatedBuilder(
           animation: appState,
           builder: (context, _) {
             final hasSelection = appState.selectedRecipes.isNotEmpty;
+            final hasLinkedOrder = appState.linkedOrderId != null;
 
             return Scaffold(
               appBar: _buildAppBar(),
-              body: hasSelection
-                  ? SelectedCocktails(
-                      recipes: appState.selectedRecipes,
-                      onEdit: () => _openRecipeSelection(data.recipes),
-                    )
-                  : DashboardEmptyState(
-                      onAdd: () => _openRecipeSelection(data.recipes),
-                    ),
+              body: Column(
+                children: [
+                  if (hasLinkedOrder) _buildLinkedOrderBanner(),
+                  Expanded(
+                    child: hasSelection
+                        ? SelectedCocktails(
+                            recipes: appState.selectedRecipes,
+                            onEdit: () => _openRecipeSelection(data.recipes),
+                          )
+                        : DashboardEmptyState(
+                            onAdd: () => _openRecipeSelection(data.recipes),
+                          ),
+                  ),
+                ],
+              ),
               bottomNavigationBar: hasSelection ? _buildBottomBar() : null,
             );
           },
@@ -142,12 +181,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return AppBar(
       title: Text('dashboard.title'.tr()),
       actions: [
-        if (cocktailRepository.isUsingFirebase)
-          IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'dashboard.sync_tooltip'.tr(),
-            onPressed: _confirmReseed,
-          ),
         _DataSourceChip(),
         _UserMenuButton(onPressed: () => showUserMenu(context)),
         const SizedBox(width: 8),
@@ -177,6 +210,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
             minimumSize: const Size(double.infinity, 56),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLinkedOrderBanner() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: colorScheme.primaryContainer,
+      child: Row(
+        children: [
+          Icon(Icons.link, color: colorScheme.onPrimaryContainer, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'dashboard.linked_order'.tr(args: [appState.linkedOrderName ?? '']),
+              style: TextStyle(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, color: colorScheme.onPrimaryContainer, size: 20),
+            onPressed: () => appState.clearLinkedOrder(),
+            visualDensity: VisualDensity.compact,
+            tooltip: 'dashboard.unlink_order'.tr(),
+          ),
+        ],
       ),
     );
   }

@@ -2,14 +2,18 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/cocktail_repository.dart';
 import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
+import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
+import '../../services/gemini_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
+import '../../state/app_state.dart';
 import '../../utils/currency.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -423,6 +427,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           children: [
             _buildStatusCard(),
             const SizedBox(height: 16),
+            if (widget.order.isFromForm) ...[
+              _buildFormDetailsCard(),
+              const SizedBox(height: 16),
+            ],
             _buildInfoCard(),
             const SizedBox(height: 16),
             _buildItemsHeader(),
@@ -574,6 +582,149 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     );
   }
 
+  Widget _buildFormDetailsCard() {
+    final order = widget.order;
+    return Card(
+      color: order.needsShoppingList
+          ? Colors.orange.withValues(alpha: 0.1)
+          : Colors.blue.withValues(alpha: 0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.description_outlined,
+                  color: order.needsShoppingList ? Colors.orange : Colors.blue,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'orders.form_details'.tr(),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: order.needsShoppingList ? Colors.orange : Colors.blue,
+                    fontSize: 16,
+                  ),
+                ),
+                const Spacer(),
+                if (order.needsShoppingList)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'orders.no_shopping_list'.tr(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildFormDetailRow(
+              Icons.phone,
+              'orders.phone'.tr(),
+              order.phone.isNotEmpty ? order.phone : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.location_on,
+              'orders.location'.tr(),
+              order.location.isNotEmpty ? order.location : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.people,
+              'orders.guests'.tr(),
+              order.guestCountRange.isNotEmpty ? order.guestCountRange : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.local_bar,
+              'orders.mobile_bar'.tr(),
+              order.mobileBar ? 'orders.yes'.tr() : 'orders.no'.tr(),
+            ),
+            _buildFormDetailRow(
+              Icons.celebration,
+              'orders.event_type'.tr(),
+              order.eventType.isNotEmpty ? order.eventType : '-',
+            ),
+            _buildFormDetailRow(
+              Icons.room_service,
+              'orders.service_type'.tr(),
+              order.serviceType.isNotEmpty ? order.serviceType : '-',
+            ),
+            if (order.needsShoppingList) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        // Link this order to the shopping list with requested cocktails
+                        appState.setLinkedOrder(
+                          order.id,
+                          order.name,
+                          requestedCocktails: order.requestedCocktails,
+                        );
+                        Navigator.pop(context);
+                        context.go('/');
+                      },
+                      icon: const Icon(Icons.shopping_cart),
+                      label: Text('orders.create_shopping_list'.tr()),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _showGeminiSuggestions(order),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: Text('orders.generate_with_gemini'.tr()),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: widget.colorScheme.outline),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: TextStyle(color: widget.colorScheme.outline),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoCard() {
     return Card(
       child: Padding(
@@ -697,6 +848,185 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showGeminiSuggestions(SavedOrder order) async {
+    // Check if Gemini API is configured
+    if (!geminiService.isConfigured) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_not_configured'.tr()),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('orders.gemini_generating'.tr()),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Fetch cocktails and materials for the order
+      final cocktailData = await cocktailRepository.load();
+      final materials = cocktailData.materials
+          .where((m) => m.visible)
+          .map((m) => {
+            'name': m.name,
+            'unit': m.unit,
+            'price': m.price,
+            'currency': m.currency,
+          })
+          .toList();
+      
+      // Get recipe ingredients for the requested cocktails
+      final matchedRecipes = <Recipe>[];
+      final unmatchedNames = <String>[];
+      
+      // First try exact match (case-insensitive)
+      for (final cocktailName in order.requestedCocktails) {
+        final lower = cocktailName.toLowerCase().trim();
+        final recipe = cocktailData.recipes.firstWhere(
+          (r) => r.name.toLowerCase().trim() == lower,
+          orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+        );
+        if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+          matchedRecipes.add(recipe);
+        } else if (recipe.id.isEmpty) {
+          unmatchedNames.add(cocktailName);
+        }
+      }
+      
+      // Use Gemini AI for fuzzy matching of unmatched names
+      if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
+        try {
+          final availableNames = cocktailData.recipes.map((r) => r.name).toList();
+          final aiMatches = await geminiService.matchCocktailNames(
+            requestedNames: unmatchedNames,
+            availableRecipeNames: availableNames,
+          );
+          
+          for (final entry in aiMatches.entries) {
+            final matchedName = entry.value;
+            if (matchedName != null) {
+              final recipe = cocktailData.recipes.firstWhere(
+                (r) => r.name == matchedName,
+                orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+              );
+              if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+                matchedRecipes.add(recipe);
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Gemini cocktail matching failed: $e');
+        }
+      }
+      
+      final recipeIngredients = matchedRecipes
+          .map((r) => {
+            'cocktail': r.name,
+            'ingredients': r.ingredients,
+          })
+          .toList();
+      
+      // Generate material suggestions
+      final suggestion = await geminiService.generateMaterialSuggestions(
+        guestCount: order.personCount,
+        guestRange: order.guestCountRange,
+        requestedCocktails: order.requestedCocktails,
+        eventType: order.eventType,
+        drinkerType: order.drinkerType,
+        availableMaterials: materials,
+        recipeIngredients: recipeIngredients,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (suggestion == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('orders.gemini_error'.tr()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show material suggestion review dialog
+      if (mounted) {
+        _showMaterialSuggestionDialog(order, suggestion, matchedRecipes);
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_error'.tr()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showMaterialSuggestionDialog(
+    SavedOrder order,
+    GeminiMaterialSuggestion suggestion,
+    List<Recipe> matchedRecipes,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _GeminiMaterialDialog(
+        order: order,
+        suggestion: suggestion,
+        onConfirm: (confirmedMaterials, explanation) {
+          // Convert to MaterialSuggestion and store in app state
+          final suggestions = confirmedMaterials.entries.map((e) {
+            final parts = e.key.split('|');
+            return MaterialSuggestion(
+              name: parts[0],
+              unit: parts.length > 1 ? parts[1] : '',
+              quantity: e.value,
+              reason: '',
+            );
+          }).toList();
+          
+          // Set selected recipes FIRST (before navigating)
+          if (matchedRecipes.isNotEmpty) {
+            appState.setSelectedRecipes(matchedRecipes);
+          }
+          
+          appState.setLinkedOrder(
+            order.id,
+            order.name,
+            requestedCocktails: order.requestedCocktails,
+          );
+          appState.setMaterialSuggestions(suggestions, explanation);
+          Navigator.pop(context);
+          context.go('/');
+        },
+      ),
     );
   }
 }
@@ -823,6 +1153,258 @@ class _EmployeeAssignmentWidgetState
           ],
         );
       },
+    );
+  }
+}
+
+/// Dialog to review and confirm Gemini material suggestions
+class _GeminiMaterialDialog extends StatefulWidget {
+  const _GeminiMaterialDialog({
+    required this.order,
+    required this.suggestion,
+    required this.onConfirm,
+  });
+
+  final SavedOrder order;
+  final GeminiMaterialSuggestion suggestion;
+  final void Function(Map<String, int> materials, String explanation) onConfirm;
+
+  @override
+  State<_GeminiMaterialDialog> createState() => _GeminiMaterialDialogState();
+}
+
+class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
+  late Map<String, int> _editableMaterials;
+  late Map<String, String> _materialReasons;
+
+  @override
+  void initState() {
+    super.initState();
+    _editableMaterials = {};
+    _materialReasons = {};
+    for (final material in widget.suggestion.materials) {
+      _editableMaterials[material.key] = material.quantity;
+      _materialReasons[material.key] = material.reason;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.auto_awesome, color: Colors.deepPurple),
+          const SizedBox(width: 8),
+          Expanded(child: Text('orders.gemini_material_suggestions'.tr())),
+        ],
+      ),
+      content: SizedBox(
+        width: 500,
+        height: 500,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Info section
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${'orders.guests'.tr()}: ${widget.order.personCount}',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    if (widget.order.requestedCocktails.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${'orders.requested_cocktails'.tr()}: ${widget.order.requestedCocktails.join(", ")}',
+                        style: TextStyle(color: colorScheme.outline),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '${'orders.event_type'.tr()}: ${widget.order.eventType}',
+                      style: TextStyle(color: colorScheme.outline),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Reasoning
+              if (widget.suggestion.explanation.isNotEmpty) ...[
+                Text(
+                  'orders.gemini_reasoning'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.suggestion.explanation,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              // Suggested materials header
+              Row(
+                children: [
+                  Text(
+                    'orders.suggested_materials'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_editableMaterials.length} ${'orders.items'.tr()}',
+                    style: TextStyle(color: colorScheme.outline, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Material list
+              ..._editableMaterials.entries.map((entry) {
+                final parts = entry.key.split('|');
+                final name = parts[0];
+                final unit = parts.length > 1 ? parts[1] : '';
+                final reason = _materialReasons[entry.key] ?? '';
+                
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
+                                  if (unit.isNotEmpty)
+                                    Text(
+                                      unit,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colorScheme.outline,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              iconSize: 20,
+                              onPressed: () {
+                                setState(() {
+                                  if (entry.value > 1) {
+                                    _editableMaterials[entry.key] = entry.value - 1;
+                                  } else {
+                                    _editableMaterials.remove(entry.key);
+                                    _materialReasons.remove(entry.key);
+                                  }
+                                });
+                              },
+                            ),
+                            SizedBox(
+                              width: 50,
+                              child: Text(
+                                '${entry.value}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline),
+                              iconSize: 20,
+                              onPressed: () {
+                                setState(() {
+                                  _editableMaterials[entry.key] = entry.value + 1;
+                                });
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              iconSize: 20,
+                              color: colorScheme.error,
+                              onPressed: () {
+                                setState(() {
+                                  _editableMaterials.remove(entry.key);
+                                  _materialReasons.remove(entry.key);
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        if (reason.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            reason,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.outline,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              
+              if (_editableMaterials.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'orders.no_material_suggestions'.tr(),
+                    style: TextStyle(color: colorScheme.outline),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('common.cancel'.tr()),
+        ),
+        FilledButton.icon(
+          onPressed: _editableMaterials.isNotEmpty
+              ? () {
+                  Navigator.pop(context);
+                  widget.onConfirm(
+                    _editableMaterials,
+                    widget.suggestion.explanation,
+                  );
+                }
+              : null,
+          icon: const Icon(Icons.shopping_cart),
+          label: Text('orders.apply_to_shopping_list'.tr()),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+          ),
+        ),
+      ],
     );
   }
 }

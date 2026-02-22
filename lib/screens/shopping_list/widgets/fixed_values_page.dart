@@ -24,6 +24,16 @@ class FixedValuesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // Sort items: unselected (qty=0) first, then selected
+    final sortedItems = List<MaterialItem>.from(items);
+    sortedItems.sort((a, b) {
+      final qtyA = quantities[_itemKey(a)] ?? 0;
+      final qtyB = quantities[_itemKey(b)] ?? 0;
+      final isSelectedA = qtyA > 0 ? 1 : 0;
+      final isSelectedB = qtyB > 0 ? 1 : 0;
+      return isSelectedA.compareTo(isSelectedB);
+    });
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -32,7 +42,7 @@ class FixedValuesPage extends StatelessWidget {
           const SizedBox(height: 20),
           _buildHeader(context, colorScheme),
           const SizedBox(height: 32),
-          ...items.map((item) {
+          ...sortedItems.map((item) {
             final key = _itemKey(item);
             final qty = quantities[key] ?? 0;
             return ShoppingItemCard(

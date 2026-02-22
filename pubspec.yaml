@@ -46,6 +46,9 @@ dependencies:
   google_sign_in: ^6.2.2
   http: ^1.2.2
   
+  # Gemini AI
+  google_generative_ai: ^0.4.7
+  
   # PDF generation
   pdf: ^3.11.2
   printing: ^5.14.2
@@ -55,6 +58,9 @@ dependencies:
   
   # Package info
   package_info_plus: ^8.0.0
+  
+  # URL launcher
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:

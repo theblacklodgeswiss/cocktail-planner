@@ -83,11 +83,35 @@ class OrdersTable extends StatelessWidget {
       cells: [
         DataCell(_buildStatusBadge(order.status)),
         DataCell(Text(dateStr)),
-        DataCell(Text(order.name)),
+        DataCell(_buildNameCell(order)),
         DataCell(Text(order.personCount.toString())),
         DataCell(Text(order.items.length.toString())),
         DataCell(
             Text('${order.total.toStringAsFixed(2)} ${order.currency}')),
+      ],
+    );
+  }
+
+  Widget _buildNameCell(SavedOrder order) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: Text(order.name)),
+        if (order.isFromForm) ...[
+          const SizedBox(width: 4),
+          Tooltip(
+            message: order.needsShoppingList
+                ? 'orders.no_shopping_list'.tr()
+                : 'orders.from_form'.tr(),
+            child: Icon(
+              order.needsShoppingList
+                  ? Icons.shopping_cart_outlined
+                  : Icons.description_outlined,
+              size: 16,
+              color: order.needsShoppingList ? Colors.orange : Colors.blue,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -149,12 +173,57 @@ class OrdersTable extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // Name
-              Text(
-                order.name,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+              // Name with form indicator
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      order.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
+                  ),
+                  if (order.isFromForm) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: order.needsShoppingList
+                            ? Colors.orange.withValues(alpha: 0.1)
+                            : Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            order.needsShoppingList
+                                ? Icons.shopping_cart_outlined
+                                : Icons.description_outlined,
+                            size: 14,
+                            color: order.needsShoppingList
+                                ? Colors.orange
+                                : Colors.blue,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            order.needsShoppingList
+                                ? 'orders.no_shopping_list'.tr()
+                                : 'orders.from_form'.tr(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: order.needsShoppingList
+                                  ? Colors.orange
+                                  : Colors.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 12),
               Row(

@@ -136,7 +136,7 @@ class _EmployeesTabState extends State<EmployeesTab> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<EmployeeRole>(
-                    value: selectedRole,
+                    initialValue: selectedRole,
                     decoration: InputDecoration(
                       labelText: 'admin.employee_role'.tr(),
                       border: const OutlineInputBorder(),
@@ -336,7 +336,7 @@ class _EmployeesTabState extends State<EmployeesTab> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<EmployeeRole>(
-                value: _selectedRole,
+                initialValue: _selectedRole,
                 decoration: InputDecoration(
                   labelText: 'admin.employee_role'.tr(),
                   border: const OutlineInputBorder(),
