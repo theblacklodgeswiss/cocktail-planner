@@ -25,7 +25,7 @@ class InvoicePdfGenerator {
     final dateTag =
         '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
     final safeName = order.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
-    return 'auftragsbestaetigung_${safeName}_$dateTag.pdf';
+    return 'Auftragsbestaetigung_${safeName}_$dateTag.pdf';
   }
 
   /// Generates and shares an invoice PDF from an accepted order.

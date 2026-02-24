@@ -1275,33 +1275,78 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   Widget _buildActionButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        OutlinedButton.icon(
-          onPressed: _isGenerating ? null : _saveOnly,
-          icon: const Icon(Icons.save_outlined),
-          label: Text('invoice.save'.tr()),
-        ),
-        const SizedBox(width: 12),
-        OutlinedButton.icon(
-          onPressed: _isGenerating ? null : _previewPdf,
-          icon: const Icon(Icons.visibility),
-          label: Text('invoice.preview'.tr()),
-        ),
-        const SizedBox(width: 12),
-        FilledButton.icon(
-          onPressed: _isGenerating ? null : _confirmGeneratePdf,
-          icon: _isGenerating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.picture_as_pdf),
-          label: Text('invoice.generate_pdf'.tr()),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 500;
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isGenerating ? null : _saveOnly,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text('invoice.save'.tr()),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isGenerating ? null : _previewPdf,
+                      icon: const Icon(Icons.visibility),
+                      label: Text('invoice.preview'.tr()),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _isGenerating ? null : _confirmGeneratePdf,
+                icon: _isGenerating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.picture_as_pdf),
+                label: Text('invoice.generate_pdf'.tr()),
+              ),
+            ],
+          );
+        } else {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _isGenerating ? null : _saveOnly,
+                icon: const Icon(Icons.save_outlined),
+                label: Text('invoice.save'.tr()),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: _isGenerating ? null : _previewPdf,
+                icon: const Icon(Icons.visibility),
+                label: Text('invoice.preview'.tr()),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: _isGenerating ? null : _confirmGeneratePdf,
+                icon: _isGenerating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.picture_as_pdf),
+                label: Text('invoice.generate_pdf'.tr()),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 

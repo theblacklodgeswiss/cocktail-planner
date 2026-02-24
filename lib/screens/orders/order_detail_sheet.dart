@@ -62,8 +62,28 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _updateStatus(OrderStatus newStatus) async {
-    final success =
-        await orderRepository.updateStatus(widget.order.id, newStatus.value);
+    // If accepting, show confirmation dialog first
+    if (newStatus == OrderStatus.accepted) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('invoice.confirm_save_title'.tr()),
+          content: Text('invoice.confirm_save_msg'.tr()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('common.save'.tr()),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    final success = await orderRepository.updateStatus(widget.order.id, newStatus.value);
     if (success && mounted) {
       setState(() => _currentStatus = newStatus);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,7 +92,6 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               .tr(namedArgs: {'status': statusLabel(newStatus)})),
         ),
       );
-      
       // Trigger Microsoft integration when status becomes accepted
       if (newStatus == OrderStatus.accepted) {
         _triggerMicrosoftIntegration();

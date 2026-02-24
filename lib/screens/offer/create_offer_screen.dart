@@ -25,6 +25,29 @@ class CreateOfferScreen extends StatefulWidget {
 }
 
 class _CreateOfferScreenState extends State<CreateOfferScreen> {
+    /// Confirmation dialog for PDF save (used when offer is accepted)
+    Future<void> _confirmGeneratePdf() async {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('invoice.confirm_save_title'.tr()),
+          content: Text('invoice.confirm_save_msg'.tr()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('common.save'.tr()),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await _generatePdf();
+      }
+    }
   final _formKey = GlobalKey<FormState>();
 
   // Language
@@ -335,7 +358,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                     isGenerating: _isGenerating,
                     onSaveOnly: _saveOnly,
                     onPreview: _previewPdf,
-                    onGeneratePdf: _generatePdf,
+                    onGeneratePdf: _confirmGeneratePdf,
                     onPrint: _printPdf,
                   ),
                   const SizedBox(height: 32),

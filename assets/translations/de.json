@@ -194,7 +194,7 @@
     "generate_pdf": "PDF speichern",
     "save_only": "Nur speichern",
     "saved": "Angebot gespeichert!",
-    "pdf_created": "Angebot PDF erstellt!",
+    "pdf_created": "Angebot PDF erstellt! (OneDrive Upload & Kalendereintrag)",
     "field_required": "Pflichtfeld",
     "create_offer": "Angebot erstellen",
     "extra_positions": "Extra Positionen",
@@ -242,7 +242,7 @@
     "grand_total": "Gesamtbetrag",
     "preview": "Vorschau",
     "print": "Drucken",
-    "generate_pdf": "PDF speichern",
+    "generate_pdf": "Auftragsbestätigung speichern",
     "save": "Speichern",
     "saved": "Auftragsbestätigung gespeichert!",
     "pdf_created": "Auftragsbestätigung PDF erstellt!",
@@ -264,7 +264,7 @@
     "employees": "Mitarbeiter",
     "extra_hours_label": "Extrastunden",
     "confirm_save_title": "PDF speichern?",
-    "confirm_save_msg": "Möchtest du die Auftragsbestätigung als PDF speichern und teilen?"
+    "confirm_save_msg": "Möchtest du die Auftragsbestätigung als PDF speichern, auf OneDrive hochladen und einen Kalendereintrag erstellen?"
   },
   "orders": {
     "title": "Bestellungsübersicht",

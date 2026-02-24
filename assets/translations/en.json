@@ -194,7 +194,7 @@
     "generate_pdf": "Save PDF",
     "save_only": "Save only",
     "saved": "Offer saved!",
-    "pdf_created": "Offer PDF created!",
+    "pdf_created": "Offer PDF created! (Uploaded to OneDrive & calendar entry created)",
     "field_required": "Required field",
     "create_offer": "Create Offer",
     "extra_positions": "Extra Positions",
@@ -242,7 +242,7 @@
     "grand_total": "Grand Total",
     "preview": "Preview",
     "print": "Print",
-    "generate_pdf": "Save PDF",
+    "generate_pdf": "Save invoice",
     "save": "Save",
     "saved": "Order confirmation saved!",
     "pdf_created": "Order confirmation PDF created!",
@@ -264,7 +264,7 @@
     "employees": "employees",
     "extra_hours_label": "Extra Hours",
     "confirm_save_title": "Save PDF?",
-    "confirm_save_msg": "Do you want to save and share the order confirmation as PDF?"
+    "confirm_save_msg": "Do you want to save the order confirmation as PDF, upload to OneDrive, and create a calendar entry?"
   },
   "orders": {
     "title": "Orders Overview",
