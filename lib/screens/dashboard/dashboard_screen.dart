@@ -152,24 +152,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final hasSelection = appState.selectedRecipes.isNotEmpty;
             final hasLinkedOrder = appState.linkedOrderId != null;
 
-            return Scaffold(
-              appBar: _buildAppBar(),
-              body: Column(
-                children: [
-                  if (hasLinkedOrder) _buildLinkedOrderBanner(),
-                  Expanded(
-                    child: hasSelection
-                        ? SelectedCocktails(
-                            recipes: appState.selectedRecipes,
-                            onEdit: () => _openRecipeSelection(data.recipes),
-                          )
-                        : DashboardEmptyState(
-                            onAdd: () => _openRecipeSelection(data.recipes),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop = constraints.maxWidth >= 900;
+                return Scaffold(
+                  appBar: _buildAppBar(),
+                  body: Column(
+                    children: [
+                      if (hasLinkedOrder) _buildLinkedOrderBanner(),
+                      if (hasSelection && isDesktop)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 24, right: 32, bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: () => context.push('/shopping-list'),
+                                icon: const Icon(Icons.shopping_cart),
+                                label: Text('dashboard.generate_list'.tr()),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                      Expanded(
+                        child: hasSelection
+                            ? SelectedCocktails(
+                                recipes: appState.selectedRecipes,
+                                onEdit: () => _openRecipeSelection(data.recipes),
+                              )
+                            : DashboardEmptyState(
+                                onAdd: () => _openRecipeSelection(data.recipes),
+                              ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              bottomNavigationBar: hasSelection ? _buildBottomBar() : null,
+                  bottomNavigationBar: hasSelection && !isDesktop ? _buildBottomBar() : null,
+                );
+              },
             );
           },
         );
@@ -181,6 +203,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return AppBar(
       title: Text('dashboard.title'.tr()),
       actions: [
+        AnimatedBuilder(
+          animation: appState,
+          builder: (context, _) {
+            if (appState.selectedRecipes.isEmpty) return const SizedBox.shrink();
+            return IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Reset',
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text('Reset?'),
+                    content: Text('Do you want to reset your selection and start over?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: Text('Reset'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  appState.setSelectedRecipes([]);
+                  appState.clearLinkedOrder();
+                }
+              },
+            );
+          },
+        ),
         _DataSourceChip(),
         _UserMenuButton(onPressed: () => showUserMenu(context)),
         const SizedBox(width: 8),
