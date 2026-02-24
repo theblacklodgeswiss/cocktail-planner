@@ -262,7 +262,9 @@
     "extra_hours": "Extrastunden",
     "extra_hour_rate": "Stundensatz pro Mitarbeiter",
     "employees": "Mitarbeiter",
-    "extra_hours_label": "Extrastunden"
+    "extra_hours_label": "Extrastunden",
+    "confirm_save_title": "PDF speichern?",
+    "confirm_save_msg": "Möchtest du die Auftragsbestätigung als PDF speichern und teilen?"
   },
   "orders": {
     "title": "Bestellungsübersicht",

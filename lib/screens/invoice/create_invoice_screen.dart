@@ -26,6 +26,29 @@ class CreateInvoiceScreen extends StatefulWidget {
 }
 
 class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
+    // Confirmation dialog for PDF save
+    Future<void> _confirmGeneratePdf() async {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('invoice.confirm_save_title'.tr()),
+          content: Text('invoice.confirm_save_msg'.tr()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('common.save'.tr()),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await _generatePdf();
+      }
+    }
   final _formKey = GlobalKey<FormState>();
 
   // Language
@@ -1268,7 +1291,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ),
         const SizedBox(width: 12),
         FilledButton.icon(
-          onPressed: _isGenerating ? null : _generatePdf,
+          onPressed: _isGenerating ? null : _confirmGeneratePdf,
           icon: _isGenerating
               ? const SizedBox(
                   width: 16,

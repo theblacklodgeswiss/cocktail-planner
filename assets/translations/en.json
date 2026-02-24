@@ -262,7 +262,9 @@
     "extra_hours": "Extra hours",
     "extra_hour_rate": "Rate per employee",
     "employees": "employees",
-    "extra_hours_label": "Extra Hours"
+    "extra_hours_label": "Extra Hours",
+    "confirm_save_title": "Save PDF?",
+    "confirm_save_msg": "Do you want to save and share the order confirmation as PDF?"
   },
   "orders": {
     "title": "Orders Overview",
