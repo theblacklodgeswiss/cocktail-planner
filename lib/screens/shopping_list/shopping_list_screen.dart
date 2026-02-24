@@ -13,7 +13,7 @@ import '../../utils/currency.dart';
 import 'shopping_list_dialogs.dart';
 import 'shopping_list_logic.dart';
 import 'widgets/widgets.dart';
-
+import 'package:go_router/go_router.dart';
 /// Shopping list screen with wizard-style navigation.
 class ShoppingListScreen extends StatefulWidget {
   final dynamic orderSetup;
@@ -413,6 +413,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('orders.pdf_created'.tr())),
     );
+    // push and remove until dashboard to prevent going back to empty shopping list
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    context.push('/');
   }
 
   void _showError(String message) {

@@ -30,7 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<CocktailData>? _dataFuture;
   bool _initialized = false;
   bool _cocktailMatchingDone = false;
-  OrderSetupData? _orderSetup; // Ensure _orderSetup is a member of _DashboardScreenState
+  OrderSetupData? _orderSetup; 
 
   @override
   void initState() {
