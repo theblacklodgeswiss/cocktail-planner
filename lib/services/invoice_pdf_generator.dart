@@ -1,4 +1,3 @@
-import 'package:barcode/barcode.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -41,6 +40,14 @@ class InvoicePdfGenerator {
 
   /// Builds the PDF document and returns bytes.
   static Future<Uint8List> _buildPdf(SavedOrder order, {String? language}) async {
+        // Load payment info image
+        pw.ImageProvider? paymentInfoImage;
+        try {
+          final paymentInfoBytes = await rootBundle.load('assets/images/paymentinfo.png');
+          paymentInfoImage = pw.MemoryImage(paymentInfoBytes.buffer.asUint8List());
+        } catch (e) {
+          // Payment info image not available
+        }
     // Load settings
     final settings = settingsRepository.current;
     
@@ -115,7 +122,7 @@ class InvoicePdfGenerator {
             remainingAmount: remainingAmount,
           ),
           pw.SizedBox(height: 30),
-          _buildSwissQrBill(order, settings, grandTotal, isEn),
+          _buildSwissQrBill(order, settings, grandTotal, isEn, paymentInfoImage),
         ],
         footer: (context) => _buildFooter(context, isEn),
       ),
@@ -230,6 +237,7 @@ class InvoicePdfGenerator {
                 'Name: ${order.offerClientName.isNotEmpty ? order.offerClientName : order.name}',
                 style: const pw.TextStyle(fontSize: 9),
               ),
+              pw.SizedBox(height: 4),
               pw.Text(
                 '${isEn ? 'Contact' : 'Kontakt'}: ${order.offerClientContact}',
                 style: const pw.TextStyle(fontSize: 9),
@@ -646,68 +654,9 @@ If the order is cancelled by the client after the deposit has been made, they ar
     AppSettings settings,
     double amount,
     bool isEn,
+    pw.ImageProvider? paymentInfoImage,
   ) {
-    final eventDateStr =
-        '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
-    final amountFormatted = amount.toStringAsFixed(2);
-    final iban = settings.bankIban.replaceAll(' ', '');
-    
-    // Parse companyCity (format: "CH-4123 Allschwil" or "4123 Allschwil")
-    final cityParts = settings.companyCity.split(' ');
-    final postalCodeRaw = cityParts.isNotEmpty ? cityParts[0] : '4123';
-    final postalCode = postalCodeRaw.replaceAll(RegExp(r'^CH-?'), ''); // Remove CH- prefix
-    final city = cityParts.length > 1 ? cityParts.sublist(1).join(' ') : 'Allschwil';
-    
     // Swiss QR Code data (SPC format)
-    final qrData = '''
-SPC
-0200
-1
-$iban
-K
-${settings.companyOwner}
-${settings.companyStreet}
-$postalCode $city
-
-
-CH
-
-
-
-
-
-
-$amountFormatted
-CHF
-
-
-
-
-NON
-
-${order.name} - $eventDateStr
-EPD'''.trim();
-
-    final labelStyle = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold);
-    final valueStyle = const pw.TextStyle(fontSize: 8);
-    final smallValueStyle = const pw.TextStyle(fontSize: 7);
-
-    // Corner markers for "Zahlbar durch" field
-    pw.Widget cornerBox({double width = 100, double height = 50}) {
-      return pw.Container(
-        width: width,
-        height: height,
-        decoration: pw.BoxDecoration(
-          border: pw.Border(
-            left: const pw.BorderSide(color: PdfColors.black, width: 0.5),
-            right: const pw.BorderSide(color: PdfColors.black, width: 0.5),
-            top: const pw.BorderSide(color: PdfColors.black, width: 0.5),
-            bottom: const pw.BorderSide(color: PdfColors.black, width: 0.5),
-          ),
-        ),
-      );
-    }
-
     return pw.Container(
       decoration: pw.BoxDecoration(
         border: pw.Border(
@@ -716,151 +665,25 @@ EPD'''.trim();
       ),
       child: pw.Column(
         children: [
-          // Scissors icon and perforation line
-          pw.Row(
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: pw.Text('✂', style: const pw.TextStyle(fontSize: 10)),
-              ),
-            ],
-          ),
+
           pw.SizedBox(height: 8),
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // ── Empfangsschein (Receipt) ──
-              pw.Container(
-                width: 150,
-                padding: const pw.EdgeInsets.only(right: 8),
-                decoration: const pw.BoxDecoration(
-                  border: pw.Border(
-                    right: pw.BorderSide(color: PdfColors.black, width: 0.5, style: pw.BorderStyle.dashed),
-                  ),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('Empfangsschein', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 8),
-                    pw.Text('Konto / Zahlbar an', style: labelStyle),
-                    pw.Text(_formatIban(iban), style: smallValueStyle.copyWith(color: PdfColors.amber800)),
-                    pw.Text(settings.companyOwner, style: smallValueStyle.copyWith(color: PdfColors.amber800)),
-                    pw.Text('$postalCode $city', style: smallValueStyle.copyWith(color: PdfColors.amber800)),
-                    pw.SizedBox(height: 12),
-                    pw.Text('Zahlbar durch (Name/Adresse)', style: labelStyle),
-                    cornerBox(width: 130, height: 40),
-                    pw.SizedBox(height: 16),
-                    pw.Row(
-                      children: [
-                        pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Währung', style: labelStyle),
-                            pw.Text('CHF', style: smallValueStyle.copyWith(color: PdfColors.amber800)),
-                          ],
-                        ),
-                        pw.SizedBox(width: 16),
-                        pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Betrag', style: labelStyle),
-                            pw.Text(amountFormatted, style: smallValueStyle.copyWith(color: PdfColors.amber800)),
-                          ],
-                        ),
-                      ],
-                    ),
-                    pw.SizedBox(height: 20),
-                    pw.Align(
-                      alignment: pw.Alignment.centerRight,
-                      child: pw.Text('Annahmestelle', style: labelStyle),
-                    ),
-                  ],
-                ),
+          if (paymentInfoImage != null)
+            pw.Center(
+              child: pw.Image(
+                paymentInfoImage,
+                width: 500,
+                height: 250,
+                fit: pw.BoxFit.contain,
               ),
-              pw.SizedBox(width: 8),
-              // ── Zahlteil (Payment Part) ──
-              pw.Expanded(
-                child: pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    // QR Code section
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('Zahlteil', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 8),
-                        pw.Container(
-                          width: 120,
-                          height: 120,
-                          child: pw.BarcodeWidget(
-                            barcode: Barcode.qrCode(),
-                            data: qrData,
-                            drawText: false,
-                          ),
-                        ),
-                        pw.SizedBox(height: 12),
-                        pw.Row(
-                          children: [
-                            pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                pw.Text('Währung', style: labelStyle),
-                                pw.Text('CHF', style: valueStyle.copyWith(color: PdfColors.amber800)),
-                              ],
-                            ),
-                            pw.SizedBox(width: 24),
-                            pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                pw.Text('Betrag', style: labelStyle),
-                                pw.Text(amountFormatted, style: valueStyle.copyWith(color: PdfColors.amber800)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    pw.SizedBox(width: 24),
-                    // Info section
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text('Konto / Zahlbar an', style: labelStyle),
-                          pw.Text(_formatIban(iban), style: valueStyle),
-                          pw.Text(settings.companyOwner, style: valueStyle),
-                          pw.Text('$postalCode $city', style: valueStyle),
-                          pw.SizedBox(height: 12),
-                          pw.Text('Zusätzliche Informationen', style: labelStyle),
-                          pw.Text('${order.name} - $eventDateStr', style: valueStyle.copyWith(color: PdfColors.amber800)),
-                          pw.SizedBox(height: 12),
-                          pw.Text('Zahlbar durch (Name/Adresse)', style: labelStyle),
-                          cornerBox(width: 160, height: 50),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            )
+          else
+            pw.Center(
+              child: pw.Text('Zahlteil-Bild nicht gefunden', style: pw.TextStyle(fontSize: 12, color: PdfColors.red)),
+            ),
         ],
       ),
     );
   }
-
-  /// Formats IBAN with spaces for readability
-  static String _formatIban(String iban) {
-    final clean = iban.replaceAll(' ', '');
-    final buffer = StringBuffer();
-    for (var i = 0; i < clean.length; i++) {
-      if (i > 0 && i % 4 == 0) buffer.write(' ');
-      buffer.write(clean[i]);
-    }
-    return buffer.toString();
-  }
-
   // ── Footer ────────────────────────────────────────────────────────────────
 
   static pw.Widget _buildFooter(pw.Context context, bool isEn) {
