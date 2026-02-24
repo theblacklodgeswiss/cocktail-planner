@@ -60,7 +60,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/shopping-list',
-      builder: (context, state) => const ShoppingListScreen(),
+      builder: (context, state) {
+        final extra = state.extra;
+        return ShoppingListScreen(orderSetup: extra);
+      },
     ),
     GoRoute(
       path: '/admin',

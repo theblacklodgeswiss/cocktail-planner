@@ -16,7 +16,8 @@ import 'widgets/widgets.dart';
 
 /// Shopping list screen with wizard-style navigation.
 class ShoppingListScreen extends StatefulWidget {
-  const ShoppingListScreen({super.key, this.loadData});
+  final dynamic orderSetup;
+  const ShoppingListScreen({super.key, this.loadData, this.orderSetup});
 
   final Future<CocktailData> Function()? loadData;
 
@@ -36,7 +37,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   int _currentPage = 0;
   int _longDistanceThresholdKm = 400;
   
-  // Master data from initial setup dialog
+  // Master data from initial setup dialog or dashboard
   String _orderName = '';
   int _personCount = 0;
   String _drinkerType = 'normal';
@@ -49,7 +50,23 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
     _pageController = PageController();
     _loadSettings();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initSetup());
+    if (widget.orderSetup != null) {
+      final setup = widget.orderSetup as dynamic;
+      setState(() {
+        _orderName = setup.orderName ?? '';
+        _personCount = setup.personCount ?? 0;
+        _drinkerType = setup.drinkerType ?? 'normal';
+        _currency = Currency.fromCode(setup.currency ?? 'CHF');
+        _venueDistanceKm = setup.distanceKm ?? 0;
+        // Pre-fill Fahrtkosten with the entered distance
+        const fahrtkosten = 'Fahrtkosten|KM';
+        _quantities[fahrtkosten] = setup.distanceKm ?? 0;
+        _selectedItems.add(fahrtkosten);
+        _controllers[fahrtkosten]?.text = (setup.distanceKm ?? '').toString();
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initSetup());
+    }
   }
 
   Future<void> _loadSettings() async {

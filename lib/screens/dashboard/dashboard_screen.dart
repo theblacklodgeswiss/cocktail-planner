@@ -9,9 +9,11 @@ import '../../services/auth_service.dart';
 import '../../services/gemini_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
+import '../../widgets/order_setup_dialog.dart';
 import 'user_menu_sheet.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/selected_cocktails.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.loadData});
@@ -23,9 +25,12 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+
+
   Future<CocktailData>? _dataFuture;
   bool _initialized = false;
   bool _cocktailMatchingDone = false;
+  OrderSetupData? _orderSetup; // Ensure _orderSetup is a member of _DashboardScreenState
 
   @override
   void initState() {
@@ -111,7 +116,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         initialSelection: List<Recipe>.from(appState.selectedRecipes),
       ),
     );
-
     if (!mounted || result == null) return;
     appState.setSelectedRecipes(result);
   }
@@ -121,23 +125,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_dataFuture == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     return FutureBuilder<CocktailData>(
       future: _dataFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-
         if (snapshot.hasError || !snapshot.hasData) {
           return Scaffold(
             appBar: AppBar(title: Text('dashboard.title'.tr())),
             body: Center(child: Text('dashboard.load_error'.tr())),
           );
         }
-
         final data = snapshot.data!;
-        
         // Auto-apply linked order cocktails after data loads (only once)
         if (!_cocktailMatchingDone && appState.linkedOrderRequestedCocktails != null) {
           _cocktailMatchingDone = true;
@@ -145,58 +145,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _applyLinkedOrderCocktails(data.recipes);
           });
         }
-
         return AnimatedBuilder(
           animation: appState,
           builder: (context, _) {
             final hasSelection = appState.selectedRecipes.isNotEmpty;
             final hasLinkedOrder = appState.linkedOrderId != null;
-
             return LayoutBuilder(
               builder: (context, constraints) {
-                final isDesktop = constraints.maxWidth >= 900;
-                return Scaffold(
-                  appBar: _buildAppBar(),
-                  body: Column(
-                    children: [
-                      if (hasLinkedOrder) _buildLinkedOrderBanner(),
-                      if (hasSelection && isDesktop)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 24, right: 32, bottom: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: () => context.push('/shopping-list'),
-                                icon: const Icon(Icons.shopping_cart),
-                                label: Text('dashboard.generate_list'.tr()),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                                ),
-                              ),
-                            ],
+                  final isDesktop = constraints.maxWidth >= 900;
+                  return Scaffold(
+                    appBar: _buildAppBar(),
+                    body: Column(
+                      children: [
+                        if (_orderSetup == null)
+                          OrderSetupForm(
+                            onSubmit: (setup) => setState(() => _orderSetup = setup),
                           ),
-                        ),
-                      Expanded(
-                        child: hasSelection
-                            ? SelectedCocktails(
-                                recipes: appState.selectedRecipes,
-                                onEdit: () => _openRecipeSelection(data.recipes),
-                              )
-                            : DashboardEmptyState(
-                                onAdd: () => _openRecipeSelection(data.recipes),
+                        if (_orderSetup != null) ...[
+                          if (hasLinkedOrder) _buildLinkedOrderBanner(),
+                          if (hasSelection && isDesktop)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 24, right: 32, bottom: 8),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: () {
+                                      if (_orderSetup != null) {
+                                        context.push('/shopping-list', extra: _orderSetup);
+                                      }
+                                    },
+                                    icon: const Icon(Icons.shopping_cart),
+                                    label: Text('dashboard.generate_list'.tr()),
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                    ),
+                                  ),
+                                ],
                               ),
-                      ),
-                    ],
-                  ),
-                  bottomNavigationBar: hasSelection && !isDesktop ? _buildBottomBar() : null,
-                );
-              },
-            );
-          },
-        );
-      },
-    );
+                            ),
+                          Expanded(
+                            child: hasSelection
+                                ? SelectedCocktails(
+                                    recipes: appState.selectedRecipes,
+                                    onEdit: () => _openRecipeSelection(data.recipes),
+                                  )
+                                : DashboardEmptyState(
+                                    onAdd: () => _openRecipeSelection(data.recipes),
+                                  ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    bottomNavigationBar: hasSelection && isDesktop == false && _orderSetup != null ? _buildBottomBar() : null,
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
   }
 
   AppBar _buildAppBar() {
@@ -258,7 +266,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: SafeArea(
         child: FilledButton.icon(
-          onPressed: () => context.push('/shopping-list'),
+          onPressed: () {
+            if (_orderSetup != null) {
+              context.push('/shopping-list', extra: _orderSetup);
+            }
+          },
           icon: const Icon(Icons.shopping_cart),
           label: Text('dashboard.generate_list'.tr()),
           style: FilledButton.styleFrom(
