@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../models/order.dart';
 import '../screens/admin/admin_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
+import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
@@ -106,6 +107,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final order = state.extra as SavedOrder;
         return CreateOfferScreen(order: order);
+      },
+    ),
+    GoRoute(
+      path: '/create-invoice',
+      builder: (context, state) {
+        final order = state.extra as SavedOrder;
+        return CreateInvoiceScreen(order: order);
       },
     ),
   ],

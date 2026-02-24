@@ -58,6 +58,11 @@ class SavedOrder {
     this.offerDiscount = 0,
     this.offerLanguage = 'de',
     this.offerExtraPositions = const [],
+    this.offerShotsCount = 0,
+    this.offerShotsPricePerPiece = 1.50,
+    this.offerShotsRemark = '',
+    this.offerExtraHours = 0,
+    this.offerExtraHourRate = 50.0,
     this.assignedEmployees = const [],
     // Form sync fields
     this.source = OrderSource.app,
@@ -97,6 +102,11 @@ class SavedOrder {
   final double offerDiscount;
   final String offerLanguage;
   final List<Map<String, dynamic>> offerExtraPositions;
+  final int offerShotsCount;
+  final double offerShotsPricePerPiece;
+  final String offerShotsRemark;
+  final int offerExtraHours;
+  final double offerExtraHourRate;
   final List<String> assignedEmployees;
   // Form sync fields
   final OrderSource source;
@@ -170,6 +180,11 @@ class SavedOrder {
       offerExtraPositions: (data['offerExtraPositions'] as List<dynamic>?)
           ?.map((e) => Map<String, dynamic>.from(e as Map))
           .toList() ?? [],
+      offerShotsCount: (data['offerShotsCount'] as num?)?.toInt() ?? 0,
+      offerShotsPricePerPiece: (data['offerShotsPricePerPiece'] as num?)?.toDouble() ?? 1.50,
+      offerShotsRemark: data['offerShotsRemark'] as String? ?? '',
+      offerExtraHours: (data['offerExtraHours'] as num?)?.toInt() ?? 0,
+      offerExtraHourRate: (data['offerExtraHourRate'] as num?)?.toDouble() ?? 50.0,
       assignedEmployees: (data['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
       // Form sync fields
       source: OrderSource.fromString(data['source'] as String?),

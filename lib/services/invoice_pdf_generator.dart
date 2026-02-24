@@ -1,3 +1,4 @@
+import 'package:barcode/barcode.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -69,11 +70,13 @@ class InvoicePdfGenerator {
     final travelCostPerKm = 0.70;
     final travelTotal = order.distanceKm * 2 * travelCostPerKm;
     final barServiceCost = order.total - travelTotal - order.thekeCost;
+    final shotsCost = order.offerShotsCount * order.offerShotsPricePerPiece;
     final extraPositionsTotal = order.offerExtraPositions.fold<double>(
       0.0,
-      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).price,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
     );
-    final grandTotal = order.total + extraPositionsTotal - order.offerDiscount;
+    final extraHoursCost = order.assignedEmployees.length * order.offerExtraHours * order.offerExtraHourRate;
+    final grandTotal = order.total + shotsCost + extraPositionsTotal + extraHoursCost - order.offerDiscount;
     // Payment split: ~2/3 deposit, ~1/3 on-site (rounded UP to nearest 100)
     final oneThird = grandTotal / 3;
     final remainingAmount = ((oneThird / 100).ceil()) * 100.0; // Round up to nearest 100
@@ -111,6 +114,8 @@ class InvoicePdfGenerator {
             depositAmount: depositAmount,
             remainingAmount: remainingAmount,
           ),
+          pw.SizedBox(height: 30),
+          _buildSwissQrBill(order, settings, grandTotal, isEn),
         ],
         footer: (context) => _buildFooter(context, isEn),
       ),
@@ -393,11 +398,13 @@ class InvoicePdfGenerator {
   ) {
     final dateStr =
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
+    final shotsCost = order.offerShotsCount * order.offerShotsPricePerPiece;
     final extraPositionsTotal = order.offerExtraPositions.fold<double>(
       0.0,
-      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).price,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
     );
-    final grandTotal = order.total + extraPositionsTotal - order.offerDiscount;
+    final extraHoursCost = order.assignedEmployees.length * order.offerExtraHours * order.offerExtraHourRate;
+    final grandTotal = order.total + shotsCost + extraPositionsTotal + extraHoursCost - order.offerDiscount;
 
     pw.Widget headerCell(String text) => pw.Container(
           color: PdfColors.grey200,
@@ -462,19 +469,21 @@ class InvoicePdfGenerator {
           ),
         ],
       ),
-      // Shots (if present)
-      if (order.shots.isNotEmpty)
+      // Shots (if present and count > 0)
+      if (order.shots.isNotEmpty && order.offerShotsCount > 0)
         pw.TableRow(
           children: [
             cell(dateStr),
             cell('Shots'),
-            cell('${order.personCount ~/ 5}', align: pw.TextAlign.center), // Estimate
-            cell(curr.format(1.50), align: pw.TextAlign.right),
-            cell(curr.format((order.personCount ~/ 5) * 1.50), align: pw.TextAlign.right),
+            cell('${order.offerShotsCount}', align: pw.TextAlign.center),
+            cell(curr.format(order.offerShotsPricePerPiece), align: pw.TextAlign.right),
+            cell(curr.format(order.offerShotsCount * order.offerShotsPricePerPiece), align: pw.TextAlign.right),
             cell(
-              isEn
-                  ? 'Shots – ${order.shots.join(", ")}\nServed in 0.4 CL shot glasses'
-                  : 'Shots – ${order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern',
+              order.offerShotsRemark.isNotEmpty
+                  ? order.offerShotsRemark
+                  : (isEn
+                      ? 'Shots – ${order.shots.join(", ")}\nServed in 0.4 CL shot glasses'
+                      : 'Shots – ${order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern'),
             ),
           ],
         ),
@@ -494,21 +503,22 @@ class InvoicePdfGenerator {
             ),
           ],
         ),
-      // Extra hours row
-      pw.TableRow(
-        children: [
-          cell(dateStr),
-          cell(isEn ? 'Extra hours' : 'Extrastunden'),
-          cell('X', align: pw.TextAlign.center),
-          cell(curr.format(200), align: pw.TextAlign.right),
-          cell('tbd'),
-          cell(
-            isEn
-                ? 'Price is determined as follows:\n50 ${order.currency} per Barkeeper per hour'
-                : 'Der Preis setzt sich, wie folgt zusammen:\n50 ${order.currency} a Barkeeper pro Stunde',
-          ),
-        ],
-      ),
+      // Extra hours row (if hours > 0)
+      if (order.offerExtraHours > 0 && order.assignedEmployees.isNotEmpty)
+        pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(isEn ? 'Extra hours' : 'Extrastunden'),
+            cell('${order.assignedEmployees.length} × ${order.offerExtraHours}h', align: pw.TextAlign.center),
+            cell(curr.format(order.offerExtraHourRate), align: pw.TextAlign.right),
+            cell(curr.format(extraHoursCost), align: pw.TextAlign.right),
+            cell(
+              isEn
+                  ? 'Price is determined as follows:\n${curr.format(order.offerExtraHourRate)} per Barkeeper per hour'
+                  : 'Der Preis setzt sich, wie folgt zusammen:\n${curr.format(order.offerExtraHourRate)} a Barkeeper pro Stunde',
+            ),
+          ],
+        ),
       // Theke (if cost > 0)
       if (order.thekeCost > 0)
         pw.TableRow(
@@ -532,9 +542,9 @@ class InvoicePdfGenerator {
           children: [
             cell(dateStr),
             cell(pos.name),
-            cell('1', align: pw.TextAlign.center),
+            cell(pos.quantity.toString(), align: pw.TextAlign.center),
             cell(curr.format(pos.price), align: pw.TextAlign.right),
-            cell(curr.format(pos.price), align: pw.TextAlign.right),
+            cell(curr.format(pos.total), align: pw.TextAlign.right),
             cell(pos.remark),
           ],
         );
@@ -627,6 +637,228 @@ If the order is cancelled by the client after the deposit has been made, they ar
         ),
       ],
     );
+  }
+
+  // ── Swiss QR Bill (Einzahlungsschein) ─────────────────────────────────────
+
+  static pw.Widget _buildSwissQrBill(
+    SavedOrder order,
+    AppSettings settings,
+    double amount,
+    bool isEn,
+  ) {
+    final eventDateStr =
+        '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
+    final amountFormatted = amount.toStringAsFixed(2);
+    final iban = settings.bankIban.replaceAll(' ', '');
+    
+    // Parse companyCity (format: "CH-4123 Allschwil" or "4123 Allschwil")
+    final cityParts = settings.companyCity.split(' ');
+    final postalCodeRaw = cityParts.isNotEmpty ? cityParts[0] : '4123';
+    final postalCode = postalCodeRaw.replaceAll(RegExp(r'^CH-?'), ''); // Remove CH- prefix
+    final city = cityParts.length > 1 ? cityParts.sublist(1).join(' ') : 'Allschwil';
+    
+    // Swiss QR Code data (SPC format)
+    final qrData = '''
+SPC
+0200
+1
+$iban
+K
+${settings.companyOwner}
+${settings.companyStreet}
+$postalCode $city
+
+
+CH
+
+
+
+
+
+
+$amountFormatted
+CHF
+
+
+
+
+NON
+
+${order.name} - $eventDateStr
+EPD'''.trim();
+
+    final labelStyle = pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold);
+    final valueStyle = const pw.TextStyle(fontSize: 8);
+    final smallValueStyle = const pw.TextStyle(fontSize: 7);
+
+    // Corner markers for "Zahlbar durch" field
+    pw.Widget cornerBox({double width = 100, double height = 50}) {
+      return pw.Container(
+        width: width,
+        height: height,
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            left: const pw.BorderSide(color: PdfColors.black, width: 0.5),
+            right: const pw.BorderSide(color: PdfColors.black, width: 0.5),
+            top: const pw.BorderSide(color: PdfColors.black, width: 0.5),
+            bottom: const pw.BorderSide(color: PdfColors.black, width: 0.5),
+          ),
+        ),
+      );
+    }
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          top: const pw.BorderSide(color: PdfColors.black, width: 0.5, style: pw.BorderStyle.dashed),
+        ),
+      ),
+      child: pw.Column(
+        children: [
+          // Scissors icon and perforation line
+          pw.Row(
+            children: [
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: pw.Text('✂', style: const pw.TextStyle(fontSize: 10)),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // ── Empfangsschein (Receipt) ──
+              pw.Container(
+                width: 150,
+                padding: const pw.EdgeInsets.only(right: 8),
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(
+                    right: pw.BorderSide(color: PdfColors.black, width: 0.5, style: pw.BorderStyle.dashed),
+                  ),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Empfangsschein', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 8),
+                    pw.Text('Konto / Zahlbar an', style: labelStyle),
+                    pw.Text(_formatIban(iban), style: smallValueStyle.copyWith(color: PdfColors.amber800)),
+                    pw.Text(settings.companyOwner, style: smallValueStyle.copyWith(color: PdfColors.amber800)),
+                    pw.Text('$postalCode $city', style: smallValueStyle.copyWith(color: PdfColors.amber800)),
+                    pw.SizedBox(height: 12),
+                    pw.Text('Zahlbar durch (Name/Adresse)', style: labelStyle),
+                    cornerBox(width: 130, height: 40),
+                    pw.SizedBox(height: 16),
+                    pw.Row(
+                      children: [
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Währung', style: labelStyle),
+                            pw.Text('CHF', style: smallValueStyle.copyWith(color: PdfColors.amber800)),
+                          ],
+                        ),
+                        pw.SizedBox(width: 16),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Betrag', style: labelStyle),
+                            pw.Text(amountFormatted, style: smallValueStyle.copyWith(color: PdfColors.amber800)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 20),
+                    pw.Align(
+                      alignment: pw.Alignment.centerRight,
+                      child: pw.Text('Annahmestelle', style: labelStyle),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              // ── Zahlteil (Payment Part) ──
+              pw.Expanded(
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // QR Code section
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('Zahlteil', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 8),
+                        pw.Container(
+                          width: 120,
+                          height: 120,
+                          child: pw.BarcodeWidget(
+                            barcode: Barcode.qrCode(),
+                            data: qrData,
+                            drawText: false,
+                          ),
+                        ),
+                        pw.SizedBox(height: 12),
+                        pw.Row(
+                          children: [
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text('Währung', style: labelStyle),
+                                pw.Text('CHF', style: valueStyle.copyWith(color: PdfColors.amber800)),
+                              ],
+                            ),
+                            pw.SizedBox(width: 24),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text('Betrag', style: labelStyle),
+                                pw.Text(amountFormatted, style: valueStyle.copyWith(color: PdfColors.amber800)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(width: 24),
+                    // Info section
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text('Konto / Zahlbar an', style: labelStyle),
+                          pw.Text(_formatIban(iban), style: valueStyle),
+                          pw.Text(settings.companyOwner, style: valueStyle),
+                          pw.Text('$postalCode $city', style: valueStyle),
+                          pw.SizedBox(height: 12),
+                          pw.Text('Zusätzliche Informationen', style: labelStyle),
+                          pw.Text('${order.name} - $eventDateStr', style: valueStyle.copyWith(color: PdfColors.amber800)),
+                          pw.SizedBox(height: 12),
+                          pw.Text('Zahlbar durch (Name/Adresse)', style: labelStyle),
+                          cornerBox(width: 160, height: 50),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Formats IBAN with spaces for readability
+  static String _formatIban(String iban) {
+    final clean = iban.replaceAll(' ', '');
+    final buffer = StringBuffer();
+    for (var i = 0; i < clean.length; i++) {
+      if (i > 0 && i % 4 == 0) buffer.write(' ');
+      buffer.write(clean[i]);
+    }
+    return buffer.toString();
   }
 
   // ── Footer ────────────────────────────────────────────────────────────────

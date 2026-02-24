@@ -12,16 +12,22 @@ class ExtraPosition {
   const ExtraPosition({
     required this.name,
     required this.price,
+    this.quantity = 1,
     this.remark = '',
   });
 
   final String name;
   final double price;
+  final int quantity;
   final String remark;
+
+  /// Total price = price × quantity
+  double get total => price * quantity;
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'price': price,
+        'quantity': quantity,
         'remark': remark,
       };
 
@@ -29,6 +35,7 @@ class ExtraPosition {
     return ExtraPosition(
       name: json['name'] as String? ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0,
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       remark: json['remark'] as String? ?? '',
     );
   }
@@ -36,11 +43,13 @@ class ExtraPosition {
   ExtraPosition copyWith({
     String? name,
     double? price,
+    int? quantity,
     String? remark,
   }) {
     return ExtraPosition(
       name: name ?? this.name,
       price: price ?? this.price,
+      quantity: quantity ?? this.quantity,
       remark: remark ?? this.remark,
     );
   }

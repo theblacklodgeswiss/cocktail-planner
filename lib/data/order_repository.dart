@@ -119,6 +119,12 @@ class OrderRepository {
     required String language,
     required DateTime eventDate,
     List<Map<String, dynamic>> extraPositions = const [],
+    int shotsCount = 0,
+    double shotsPricePerPiece = 1.50,
+    String shotsRemark = '',
+    int extraHours = 0,
+    double extraHourRate = 50.0,
+    List<String> assignedEmployees = const [],
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -131,12 +137,41 @@ class OrderRepository {
         'offerDiscount': discount,
         'offerLanguage': language,
         'offerExtraPositions': extraPositions,
+        'offerShotsCount': shotsCount,
+        'offerShotsPricePerPiece': shotsPricePerPiece,
+        'offerShotsRemark': shotsRemark,
+        'offerExtraHours': extraHours,
+        'offerExtraHourRate': extraHourRate,
+        'assignedEmployees': assignedEmployees,
         'offerUpdatedAt': FieldValue.serverTimestamp(),
         'date': eventDate.toIso8601String(),
       });
       return true;
     } catch (e) {
       debugPrint('Failed to update order offer data: $e');
+      return false;
+    }
+  }
+
+  /// Update order totals (for invoice editing).
+  Future<bool> updateOrderTotals({
+    required String orderId,
+    required double total,
+    required int distanceKm,
+    required double thekeCost,
+  }) async {
+    if (!firestoreService.isAvailable) return false;
+
+    try {
+      await firestoreService.ordersCollection.doc(orderId).update({
+        'total': total,
+        'distanceKm': distanceKm,
+        'thekeCost': thekeCost,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update order totals: $e');
       return false;
     }
   }

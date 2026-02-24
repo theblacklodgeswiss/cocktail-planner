@@ -61,6 +61,7 @@ dependencies:
   
   # URL launcher
   url_launcher: ^6.2.5
+  barcode: ^2.2.9
 
 dev_dependencies:
   flutter_test:
