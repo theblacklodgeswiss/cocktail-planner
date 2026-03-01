@@ -162,6 +162,71 @@ class MicrosoftGraphService {
   /// Upload [bytes] to OneDrive at [oneDrivePath] (e.g. "Aufträge/2026/05 Mai/Auftrag_Foo.pdf").
   /// Creates folders automatically if they don't exist.
   /// Returns the web URL of the uploaded file, or null on failure.
+  /// Ensure all folders in path exist, creating them if necessary.
+  Future<bool> _ensureFolderPath(String path, String token) async {
+    // Split path into parts, excluding the filename
+    final parts = path.split('/');
+    if (parts.length <= 1) return true; // No folders to create
+    
+    // Remove filename (last part)
+    final folderParts = parts.sublist(0, parts.length - 1);
+    
+    // Create folders hierarchically
+    String currentPath = '';
+    for (final part in folderParts) {
+      if (part.isEmpty) continue;
+      
+      final parentPath = currentPath.isEmpty ? '' : currentPath;
+      currentPath = currentPath.isEmpty ? part : '$currentPath/$part';
+      
+      // Check if folder exists or create it
+      try {
+        final encodedPath = Uri.encodeFull(currentPath);
+        final checkUrl = Uri.parse(
+            '$_graphBaseUrl/me/drive/root:/$encodedPath');
+        final checkResponse = await http.get(
+          checkUrl,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+        );
+        
+        if (checkResponse.statusCode == 404) {
+          // Folder doesn't exist, create it
+          debugPrint('Creating folder: $currentPath');
+          final createUrl = parentPath.isEmpty
+              ? Uri.parse('$_graphBaseUrl/me/drive/root/children')
+              : Uri.parse('$_graphBaseUrl/me/drive/root:/${Uri.encodeFull(parentPath)}:/children');
+          
+          final createResponse = await http.post(
+            createUrl,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'name': part,
+              'folder': {},
+              '@microsoft.graph.conflictBehavior': 'rename',
+            }),
+          );
+          
+          if (createResponse.statusCode != 200 && createResponse.statusCode != 201) {
+            debugPrint('Failed to create folder $part: ${createResponse.statusCode} ${createResponse.body}');
+            return false;
+          }
+          debugPrint('Created folder: $part');
+        }
+      } catch (e) {
+        debugPrint('Error ensuring folder $part: $e');
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
   Future<String?> uploadToOneDrive({
     required String oneDrivePath,
     required Uint8List bytes,
@@ -172,6 +237,13 @@ class MicrosoftGraphService {
     if (token == null) return null;
 
     try {
+      // Ensure folder path exists
+      final foldersCreated = await _ensureFolderPath(oneDrivePath, token);
+      if (!foldersCreated) {
+        debugPrint('Failed to create folder structure for: $oneDrivePath');
+        // Continue anyway, maybe folders already exist
+      }
+      
       // Use the simple upload endpoint (≤4 MB) with createUploadSession fallback path
       final encodedPath = Uri.encodeFull(oneDrivePath);
       final url = Uri.parse(
