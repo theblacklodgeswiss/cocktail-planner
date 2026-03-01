@@ -107,7 +107,7 @@ Future<MaterialEditResult?> showMaterialEditDialog(
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: categoryValue,
+                initialValue: categoryValue,
                 decoration: const InputDecoration(
                   labelText: 'Kategorie',
                   hintText: 'Wähle eine Kategorie',

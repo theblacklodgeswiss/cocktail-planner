@@ -111,7 +111,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   /// Navigate to shopping list to edit the existing order
-  void _editShoppingList() {
+  Future<void> _editShoppingList() async {
     final order = widget.order;
     
     // Parse eventTime from string
@@ -143,38 +143,66 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       drinkerType: order.drinkerType,
     );
     
-    // Link this order so it gets updated instead of creating a new one
-    appState.setLinkedOrder(
-      order.id,
-      order.name,
-      requestedCocktails: order.requestedCocktails,
-    );
-    
-    // Set selected recipes from the order's cocktails and shots
-    final allRecipes = <Recipe>[];
-    for (final cocktailName in order.cocktails) {
-      allRecipes.add(Recipe(
-        id: cocktailName.toLowerCase().replaceAll(' ', '_'),
-        name: cocktailName,
-        ingredients: [],
-        type: 'cocktail',
-      ));
+    // Load cocktail data to get recipe ingredients
+    try {
+      final cocktailData = await cocktailRepository.load();
+      
+      // Link this order so it gets updated instead of creating a new one
+      appState.setLinkedOrder(
+        order.id,
+        order.name,
+        requestedCocktails: order.requestedCocktails,
+        savedItems: order.items,
+      );
+      
+      // Set selected recipes from the order's cocktails and shots with real ingredients
+      final allRecipes = <Recipe>[];
+      
+      for (final cocktailName in order.cocktails) {
+        // Try to find recipe in loaded data
+        final recipe = cocktailData.recipes.firstWhere(
+          (r) => r.name == cocktailName,
+          orElse: () => Recipe(
+            id: cocktailName.toLowerCase().replaceAll(' ', '_'),
+            name: cocktailName,
+            ingredients: [],
+            type: 'cocktail',
+          ),
+        );
+        allRecipes.add(recipe);
+      }
+      
+      for (final shotName in order.shots) {
+        // Try to find recipe in loaded data
+        final recipe = cocktailData.recipes.firstWhere(
+          (r) => r.name == shotName,
+          orElse: () => Recipe(
+            id: shotName.toLowerCase().replaceAll(' ', '_'),
+            name: shotName,
+            ingredients: [],
+            type: 'shot',
+          ),
+        );
+        allRecipes.add(recipe);
+      }
+      
+      if (allRecipes.isNotEmpty) {
+        appState.setSelectedRecipes(allRecipes);
+      }
+      
+      // Navigate to shopping list
+      if (mounted) {
+        Navigator.pop(context);
+        context.push('/shopping-list', extra: orderSetup);
+      }
+    } catch (e) {
+      debugPrint('Failed to load cocktail data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+        );
+      }
     }
-    for (final shotName in order.shots) {
-      allRecipes.add(Recipe(
-        id: shotName.toLowerCase().replaceAll(' ', '_'),
-        name: shotName,
-        ingredients: [],
-        type: 'shot',
-      ));
-    }
-    if (allRecipes.isNotEmpty) {
-      appState.setSelectedRecipes(allRecipes);
-    }
-    
-    // Navigate to shopping list
-    Navigator.pop(context);
-    context.push('/shopping-list', extra: orderSetup);
   }
 
   /// Check if offer has all required fields filled

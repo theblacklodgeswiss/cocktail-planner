@@ -30,6 +30,9 @@ class AppState extends ChangeNotifier {
   /// Requested cocktails from linked order (names).
   List<String>? linkedOrderRequestedCocktails;
   
+  /// Saved order items for editing (includes quantities from saved order).
+  List<Map<String, dynamic>>? savedOrderItems;
+  
   /// Gemini-suggested recipes with quantities (cocktailName -> quantity).
   @Deprecated('Use materialSuggestions instead')
   Map<String, int>? geminiSuggestions;
@@ -57,10 +60,16 @@ class AppState extends ChangeNotifier {
   }
 
   /// Set linked order for shopping list creation.
-  void setLinkedOrder(String orderId, String orderName, {List<String>? requestedCocktails}) {
+  void setLinkedOrder(
+    String orderId,
+    String orderName, {
+    List<String>? requestedCocktails,
+    List<Map<String, dynamic>>? savedItems,
+  }) {
     linkedOrderId = orderId;
     linkedOrderName = orderName;
     linkedOrderRequestedCocktails = requestedCocktails;
+    savedOrderItems = savedItems;
     notifyListeners();
   }
 
@@ -69,6 +78,7 @@ class AppState extends ChangeNotifier {
     linkedOrderId = null;
     linkedOrderName = null;
     linkedOrderRequestedCocktails = null;
+    savedOrderItems = null;
     // ignore: deprecated_member_use_from_same_package
     geminiSuggestions = null;
     materialSuggestions = null;

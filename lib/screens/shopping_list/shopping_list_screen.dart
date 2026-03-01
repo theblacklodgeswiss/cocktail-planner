@@ -74,6 +74,23 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         _quantities[fahrtkosten] = setup.distanceKm ?? 0;
         _selectedItems.add(fahrtkosten);
         _controllers[fahrtkosten]?.text = (setup.distanceKm ?? '').toString();
+        
+        // Load saved order items if editing an existing order
+        final savedItems = appState.savedOrderItems;
+        if (savedItems != null && savedItems.isNotEmpty) {
+          // Mark defaults as applied to prevent overwriting saved values
+          _defaultsApplied = true;
+          for (final item in savedItems) {
+            final name = item['name'] as String? ?? '';
+            final unit = item['unit'] as String? ?? '';
+            final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+            if (name.isNotEmpty && unit.isNotEmpty && quantity > 0) {
+              final key = '$name|$unit';
+              _quantities[key] = quantity;
+              _selectedItems.add(key);
+            }
+          }
+        }
       });
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _initSetup());
