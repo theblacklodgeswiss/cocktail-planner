@@ -56,6 +56,7 @@ class SavedOrder {
     this.offerEventTime = '',
     this.offerEventTypes = const [],
     this.offerDiscount = 0,
+    this.offerDiscountRemark = '',
     this.offerLanguage = 'de',
     this.offerExtraPositions = const [],
     this.offerShotsCount = 0,
@@ -101,6 +102,7 @@ class SavedOrder {
   final String offerEventTime;
   final List<String> offerEventTypes;
   final double offerDiscount;
+  final String offerDiscountRemark;
   final String offerLanguage;
   final List<Map<String, dynamic>> offerExtraPositions;
   final int offerShotsCount;
@@ -178,6 +180,7 @@ class SavedOrder {
       offerEventTime: data['offerEventTime'] as String? ?? '',
       offerEventTypes: (data['offerEventTypes'] as List<dynamic>?)?.cast<String>() ?? [],
       offerDiscount: (data['offerDiscount'] as num?)?.toDouble() ?? 0,
+      offerDiscountRemark: data['offerDiscountRemark'] as String? ?? '',
       offerLanguage: data['offerLanguage'] as String? ?? 'de',
       offerExtraPositions: (data['offerExtraPositions'] as List<dynamic>?)
           ?.map((e) => Map<String, dynamic>.from(e as Map))

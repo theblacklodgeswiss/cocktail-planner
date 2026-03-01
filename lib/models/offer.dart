@@ -77,6 +77,7 @@ class OfferData {
     required this.discount,
     required this.additionalInfo,
     required this.language,
+    this.discountRemark = '',
     this.extraPositions = const [],
     this.assignedEmployees = const [],
   });
@@ -131,6 +132,9 @@ class OfferData {
 
   /// Family/friend discount amount (0 = none)
   final double discount;
+
+  /// Discount remark/description (e.g. "Familie/Freunde Rabatt")
+  final String discountRemark;
 
   /// Editable additional information block (Zusatzinformation)
   final String additionalInfo;

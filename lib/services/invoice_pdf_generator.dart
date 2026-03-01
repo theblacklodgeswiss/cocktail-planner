@@ -567,9 +567,11 @@ class InvoicePdfGenerator {
             cell(curr.format(order.offerDiscount), align: pw.TextAlign.right),
             cell('-${curr.format(order.offerDiscount)}', align: pw.TextAlign.right),
             cell(
-              order.offerDiscount >= order.total * 0.1
-                  ? (isEn ? 'Discount: 15% Friends' : 'Rabatt: 15% Friends')
-                  : (isEn ? 'Family/Friend discount' : 'Familie/Freunde Rabatt'),
+              order.offerDiscountRemark.isNotEmpty 
+                  ? order.offerDiscountRemark
+                  : (order.offerDiscount >= order.total * 0.1
+                      ? (isEn ? 'Discount: 15% Friends' : 'Rabatt: 15% Friends')
+                      : (isEn ? 'Family/Friend discount' : 'Familie/Freunde Rabatt')),
             ),
           ],
         ),

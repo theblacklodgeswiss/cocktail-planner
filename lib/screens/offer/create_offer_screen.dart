@@ -8,6 +8,7 @@ import '../../data/employee_repository.dart';
 import '../../models/offer.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
+import '../../services/auth_service.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
 import '../../utils/currency.dart';
@@ -59,8 +60,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   late DateTime _eventDate;
 
   // Controllers
-  final _editorNameCtrl =
-      TextEditingController(text: 'Mario Kantharoobarajah');
+  late final TextEditingController _editorNameCtrl;
   final _eventTimeCtrl = TextEditingController();
   final _clientNameCtrl = TextEditingController();
   final _clientContactCtrl = TextEditingController();
@@ -73,6 +73,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final _travelCostPerKmCtrl = TextEditingController(text: '0.70');
   final _barCostCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
+  final _discountRemarkCtrl = TextEditingController();
   late final TextEditingController _additionalInfoCtrl;
 
   // Event types
@@ -99,6 +100,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _orderTotalCtrl =
         TextEditingController(text: widget.order.total.toStringAsFixed(2));
 
+    // Initialize editor name with logged-in user's display name
+    final authService = AuthService();
+    _editorNameCtrl = TextEditingController(
+      text: authService.displayName ?? 'Mario Kantharoobarajah',
+    );
+
     // Pre-fill from order data
     _cocktailsCtrl.text = widget.order.cocktails.join(', ');
     _shotsCtrl.text = widget.order.shots.join(', ');
@@ -109,13 +116,22 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ? widget.order.thekeCost.toStringAsFixed(2)
         : '';
 
-    // Load saved offer data from order
-    _clientNameCtrl.text = widget.order.offerClientName;
-    _clientContactCtrl.text = widget.order.offerClientContact;
-    _eventTimeCtrl.text = widget.order.offerEventTime;
+    // Load saved offer data from order, or use order name/phone/time as fallback
+    _clientNameCtrl.text = widget.order.offerClientName.isEmpty 
+        ? widget.order.name 
+        : widget.order.offerClientName;
+    _clientContactCtrl.text = widget.order.offerClientContact.isEmpty 
+        ? widget.order.phone 
+        : widget.order.offerClientContact;
+    _eventTimeCtrl.text = widget.order.offerEventTime.isEmpty
+        ? widget.order.eventTime
+        : widget.order.offerEventTime;
     _discountCtrl.text = widget.order.offerDiscount > 0
         ? widget.order.offerDiscount.toStringAsFixed(2)
         : '';
+    _discountRemarkCtrl.text = widget.order.offerDiscountRemark.isEmpty
+        ? (_language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt')
+        : widget.order.offerDiscountRemark;
     _language = widget.order.offerLanguage;
 
     // Load event types
@@ -155,6 +171,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _travelCostPerKmCtrl.dispose();
     _barCostCtrl.dispose();
     _discountCtrl.dispose();
+    _discountRemarkCtrl.dispose();
     _additionalInfoCtrl.dispose();
     super.dispose();
   }
@@ -201,6 +218,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
       barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
       discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
+      discountRemark: _discountRemarkCtrl.text.trim(),
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
       extraPositions: List.of(_extraPositions),
@@ -216,6 +234,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       eventTime: _eventTimeCtrl.text.trim(),
       eventTypes: _eventTypes.map((e) => e.name).toList(),
       discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
+      discountRemark: _discountRemarkCtrl.text.trim(),
       language: _language,
       eventDate: _eventDate,
       extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
@@ -718,14 +737,41 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           },
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          width: 200,
-          child: _field(
-            controller: _discountCtrl,
-            label: '${'offer.discount'.tr()} (${widget.order.currency})',
-            hint: '0',
-            keyboard: TextInputType.number,
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 500;
+            final discountFields = [
+              Expanded(
+                flex: 1,
+                child: _field(
+                  controller: _discountCtrl,
+                  label: '${'offer.discount'.tr()} (${widget.order.currency})',
+                  hint: '0',
+                  keyboard: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: _field(
+                  controller: _discountRemarkCtrl,
+                  label: 'offer.discount_remark'.tr(),
+                  hint: _language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt',
+                ),
+              ),
+            ];
+            if (wide) {
+              return Row(children: discountFields);
+            }
+            return Column(
+              children: discountFields.map((f) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: f,
+                );
+              }).toList(),
+            );
+          },
         ),
         const SizedBox(height: 16),
         // Extra positions section

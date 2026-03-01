@@ -21,6 +21,7 @@ class MaterialItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isInactive = !item.active;
     final isHidden = !item.visible;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Opacity(
       opacity: isInactive || isHidden ? 0.5 : 1.0,
@@ -30,6 +31,7 @@ class MaterialItemCard extends StatelessWidget {
           title: Row(
             children: [
               Expanded(child: Text(item.name)),
+              if (item.category != null) _buildCategoryChip(item.category!, colorScheme),
               if (isInactive) _buildInactiveIcon(),
               if (isHidden) _buildHiddenIcon(),
             ],
@@ -47,6 +49,41 @@ class MaterialItemCard extends StatelessWidget {
                 onPressed: onDelete,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String category, ColorScheme colorScheme) {
+    final categoryLabels = {
+      'supervisor': '👤 Supervisor',
+      'purchase': '🛒 Kaufen',
+      'bring': '🚚 Mitbringen',
+      'other': '➕ Sonstige',
+    };
+    
+    final categoryColors = {
+      'supervisor': Colors.purple,
+      'purchase': Colors.green,
+      'bring': Colors.blue,
+      'other': Colors.grey,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, right: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: (categoryColors[category] ?? Colors.grey).withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          categoryLabels[category] ?? category,
+          style: TextStyle(
+            fontSize: 11,
+            color: categoryColors[category] ?? Colors.grey,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),

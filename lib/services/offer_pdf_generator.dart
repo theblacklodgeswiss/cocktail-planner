@@ -563,7 +563,9 @@ class OfferPdfGenerator {
             cell('', align: pw.TextAlign.center),
             cell('', align: pw.TextAlign.right),
             cell('-${curr.format(offer.discount)}', align: pw.TextAlign.right),
-            cell(isEn ? 'Family/Friend discount' : 'Familie/Freunde Rabatt'),
+            cell(offer.discountRemark.isNotEmpty 
+                ? offer.discountRemark 
+                : (isEn ? 'Family/Friend discount' : 'Familie/Freunde Rabatt')),
           ],
         ),
       // Total row

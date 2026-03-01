@@ -97,15 +97,6 @@ Future<MaterialEditResult?> showMaterialEditDialog(
                 ],
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: noteController,
-                decoration: const InputDecoration(
-                  labelText: 'Bemerkung',
-                  hintText: 'z.B. Lieferant',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: categoryValue,
                 decoration: const InputDecoration(
@@ -124,6 +115,15 @@ Future<MaterialEditResult?> showMaterialEditDialog(
                       )),
                 ],
                 onChanged: (value) => setDialogState(() => categoryValue = value),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(
+                  labelText: 'Bemerkung',
+                  hintText: 'z.B. Lieferant',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
               SwitchListTile(
