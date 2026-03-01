@@ -11,6 +11,7 @@ typedef MaterialEditResult = ({
   String note,
   bool active,
   bool visible,
+  String? category,
 });
 
 /// Shows a dialog for editing or creating a material item.
@@ -30,8 +31,16 @@ Future<MaterialEditResult?> showMaterialEditDialog(
   final noteController = TextEditingController(text: item?.note ?? '');
   bool activeValue = item?.active ?? true;
   bool visibleValue = item?.visible ?? true;
+  String? categoryValue = item?.category;
 
   final isNew = item == null;
+
+  const categories = [
+    (value: 'supervisor', label: 'Supervisor/Barkeeper'),
+    (value: 'purchase', label: 'Zu kaufen'),
+    (value: 'bring', label: 'Mitbringen'),
+    (value: 'other', label: 'Sonstige'),
+  ];
 
   return showDialog<MaterialEditResult>(
     context: context,
@@ -97,6 +106,26 @@ Future<MaterialEditResult?> showMaterialEditDialog(
                 ),
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: categoryValue,
+                decoration: const InputDecoration(
+                  labelText: 'Kategorie',
+                  hintText: 'Wähle eine Kategorie',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Text('Keine Kategorie'),
+                  ),
+                  ...categories.map((cat) => DropdownMenuItem<String>(
+                        value: cat.value,
+                        child: Text(cat.label),
+                      )),
+                ],
+                onChanged: (value) => setDialogState(() => categoryValue = value),
+              ),
+              const SizedBox(height: 12),
               SwitchListTile(
                 title: const Text('Aktiv'),
                 subtitle: const Text('In Einkaufsliste einschliessen'),
@@ -132,6 +161,7 @@ Future<MaterialEditResult?> showMaterialEditDialog(
                   note: noteController.text.trim(),
                   active: activeValue,
                   visible: visibleValue,
+                  category: categoryValue,
                 ),
               );
             },

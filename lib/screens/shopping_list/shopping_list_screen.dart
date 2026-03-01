@@ -7,7 +7,7 @@ import '../../data/settings_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/material_item.dart';
 import '../../models/recipe.dart';
-import '../../services/pdf_generator.dart';
+import '../../services/pdf_generator.dart'; // for OrderItem class
 import '../../state/app_state.dart';
 import '../../utils/currency.dart';
 import 'shopping_list_dialogs.dart';
@@ -43,6 +43,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   String _drinkerType = 'normal';
   Currency _currency = defaultCurrency;
   int _venueDistanceKm = 0;
+  String _phone = '';
+  String _location = '';
+  DateTime? _eventDate;
+  String _eventTime = '';
 
   @override
   void initState() {
@@ -58,6 +62,13 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         _drinkerType = setup.drinkerType ?? 'normal';
         _currency = Currency.fromCode(setup.currency ?? 'CHF');
         _venueDistanceKm = setup.distanceKm ?? 0;
+        _phone = setup.phoneNumber ?? '';
+        _location = setup.address ?? '';
+        _eventDate = setup.eventDate;
+        if (setup.eventTime != null) {
+          final time = setup.eventTime as TimeOfDay;
+          _eventTime = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+        }
         // Pre-fill Fahrtkosten with the entered distance
         const fahrtkosten = 'Fahrtkosten|KM';
         _quantities[fahrtkosten] = setup.distanceKm ?? 0;
@@ -361,6 +372,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               'note': oi.item.note,
               'quantity': oi.quantity,
               'total': oi.total,
+              'category': oi.item.category,
             })
         .toList();
 
@@ -379,6 +391,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         shots: shotNames,
         distanceKm: _venueDistanceKm,
         thekeCost: thekeCost,
+        phone: _phone.isNotEmpty ? _phone : null,
+        location: _location.isNotEmpty ? _location : null,
+        eventTime: _eventTime.isNotEmpty ? _eventTime : null,
+        eventDate: _eventDate,
       );
       // Clear linked order after saving
       appState.clearLinkedOrder();
@@ -396,26 +412,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         shots: shotNames,
         distanceKm: _venueDistanceKm,
         thekeCost: thekeCost,
+        phone: _phone,
+        location: _location,
+        eventTime: _eventTime,
       );
     }
 
-    await PdfGenerator.generateAndDownload(
-      orderName: result.name,
-      orderDate: orderDate,
-      items: selectedOrderItems,
-      grandTotal: total,
-      currency: result.currency.code,
-      personCount: result.personCount,
-      drinkerType: result.drinkerType,
-    );
-
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('orders.pdf_created'.tr())),
+      SnackBar(content: Text('shopping.order_saved'.tr())),
     );
-    // push and remove until dashboard to prevent going back to empty shopping list
+    // Navigate back to dashboard first
     Navigator.of(context).popUntil((route) => route.isFirst);
-    context.push('/');
+    // Then navigate to orders overview
+    context.push('/orders');
   }
 
   void _showError(String message) {

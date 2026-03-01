@@ -25,7 +25,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   bool _isSyncing = false;
   String _searchQuery = '';
   OrderSortOption _sortOption = OrderSortOption.eventDate;
-  bool _sortAscending = true;
+  bool _sortAscending = false;
   final _searchController = TextEditingController();
 
   @override

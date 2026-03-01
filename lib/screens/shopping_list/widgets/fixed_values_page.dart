@@ -24,15 +24,33 @@ class FixedValuesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Sort items: unselected (qty=0) first, then selected
-    final sortedItems = List<MaterialItem>.from(items);
-    sortedItems.sort((a, b) {
-      final qtyA = quantities[_itemKey(a)] ?? 0;
-      final qtyB = quantities[_itemKey(b)] ?? 0;
-      final isSelectedA = qtyA > 0 ? 1 : 0;
-      final isSelectedB = qtyB > 0 ? 1 : 0;
-      return isSelectedA.compareTo(isSelectedB);
-    });
+    // Group items by category
+    final Map<String, List<MaterialItem>> groupedItems = {
+      'supervisor': [],
+      'purchase': [],
+      'bring': [],
+      'other': [],
+    };
+
+    for (final item in items) {
+      final category = item.category ?? 'other';
+      if (groupedItems.containsKey(category)) {
+        groupedItems[category]!.add(item);
+      } else {
+        groupedItems['other']!.add(item);
+      }
+    }
+
+    // Sort items within each category
+    for (final category in groupedItems.keys) {
+      groupedItems[category]!.sort((a, b) {
+        final qtyA = quantities[_itemKey(a)] ?? 0;
+        final qtyB = quantities[_itemKey(b)] ?? 0;
+        final isSelectedA = qtyA > 0 ? 1 : 0;
+        final isSelectedB = qtyB > 0 ? 1 : 0;
+        return isSelectedA.compareTo(isSelectedB);
+      });
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -42,16 +60,12 @@ class FixedValuesPage extends StatelessWidget {
           const SizedBox(height: 20),
           _buildHeader(context, colorScheme),
           const SizedBox(height: 32),
-          ...sortedItems.map((item) {
-            final key = _itemKey(item);
-            final qty = quantities[key] ?? 0;
-            return ShoppingItemCard(
-              item: item,
-              controller: controllers[key]!,
-              quantity: qty,
-              isSelected: qty > 0,
-              cocktails: const [],
-              onQuantityChanged: (newQty) => onQuantityChanged(key, newQty),
+          ...groupedItems.entries.where((e) => e.value.isNotEmpty).map((entry) {
+            return _buildCategorySection(
+              context,
+              entry.key,
+              entry.value,
+              colorScheme,
             );
           }),
           const SizedBox(height: 100),
@@ -96,6 +110,65 @@ class FixedValuesPage extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildCategorySection(
+    BuildContext context,
+    String category,
+    List<MaterialItem> categoryItems,
+    ColorScheme colorScheme,
+  ) {
+    final categoryLabels = {
+      'supervisor': 'Supervisor / Barkeeper',
+      'purchase': 'Zu kaufen',
+      'bring': 'Mitbringen',
+      'other': 'Sonstige',
+    };
+
+    final categoryIcons = {
+      'supervisor': Icons.person,
+      'purchase': Icons.shopping_cart,
+      'bring': Icons.local_shipping,
+      'other': Icons.more_horiz,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12, top: 24),
+          child: Row(
+            children: [
+              Icon(
+                categoryIcons[category] ?? Icons.category,
+                size: 20,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                categoryLabels[category] ?? category,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        ...categoryItems.map((item) {
+          final key = _itemKey(item);
+          final qty = quantities[key] ?? 0;
+          return ShoppingItemCard(
+            item: item,
+            controller: controllers[key]!,
+            quantity: qty,
+            isSelected: qty > 0,
+            cocktails: const [],
+            onQuantityChanged: (newQty) => onQuantityChanged(key, newQty),
+          );
+        }),
       ],
     );
   }

@@ -133,6 +133,7 @@
     "person_count_error": "Please enter a valid number of persons",
     "generate_pdf": "Create PDF",
     "name_required": "Name required",
+    "order_saved": "Order saved!",
     "saved_and_generated": "Order saved and PDF created!",
     "generated_local": "PDF created (offline)",
     "setup_title": "Order Details",
@@ -433,8 +434,16 @@
     "order_setup": {
     "title": "Order Details",
     "hint": "Please enter the master data for this order.",
-    "order_name_label": "Order name *",
-    "order_name_hint": "e.g. Miller Wedding",
+    "order_name_label": "First and Last Name *",
+    "order_name_hint": "e.g. John Doe",
+    "phone_label": "Phone Number",
+    "phone_hint": "e.g. +41 79 123 45 67",
+    "event_date_label": "Event Date",
+    "event_date_hint": "Select date",
+    "event_time_label": "Event Time",
+    "event_time_hint": "Select time",
+    "address_label": "Address",
+    "address_hint": "e.g. Sample Street 123, 3000 Bern",
     "person_count_label": "Number of persons *",
     "distance_label": "Distance (km)",
     "currency_label": "Currency:",
@@ -442,6 +451,6 @@
     "drinker_light": "Light",
     "drinker_normal": "Normal",
     "drinker_heavy": "Heavy",
-    "rquired": "Required field"
+    "required": "Required field"
   }
 }

@@ -15,6 +15,7 @@ import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
 import '../../state/app_state.dart';
 import '../../utils/currency.dart';
+import '../../widgets/order_setup_dialog.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
 
@@ -107,6 +108,73 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     if (success && mounted) {
       setState(() => _assignedEmployees = employeeIds);
     }
+  }
+
+  /// Navigate to shopping list to edit the existing order
+  void _editShoppingList() {
+    final order = widget.order;
+    
+    // Parse eventTime from string
+    TimeOfDay? eventTime;
+    if (order.eventTime.isNotEmpty) {
+      try {
+        final parts = order.eventTime.split(':');
+        if (parts.length == 2) {
+          eventTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }
+      } catch (e) {
+        debugPrint('Failed to parse event time: $e');
+      }
+    }
+    
+    // Convert SavedOrder to OrderSetupData
+    final orderSetup = OrderSetupData(
+      orderName: order.name,
+      phoneNumber: order.phone.isNotEmpty ? order.phone : null,
+      eventDate: order.date,
+      eventTime: eventTime,
+      address: order.location.isNotEmpty ? order.location : null,
+      personCount: order.personCount,
+      distanceKm: order.distanceKm > 0 ? order.distanceKm : null,
+      currency: order.currency,
+      drinkerType: order.drinkerType,
+    );
+    
+    // Link this order so it gets updated instead of creating a new one
+    appState.setLinkedOrder(
+      order.id,
+      order.name,
+      requestedCocktails: order.requestedCocktails,
+    );
+    
+    // Set selected recipes from the order's cocktails and shots
+    final allRecipes = <Recipe>[];
+    for (final cocktailName in order.cocktails) {
+      allRecipes.add(Recipe(
+        id: cocktailName.toLowerCase().replaceAll(' ', '_'),
+        name: cocktailName,
+        ingredients: [],
+        type: 'cocktail',
+      ));
+    }
+    for (final shotName in order.shots) {
+      allRecipes.add(Recipe(
+        id: shotName.toLowerCase().replaceAll(' ', '_'),
+        name: shotName,
+        ingredients: [],
+        type: 'shot',
+      ));
+    }
+    if (allRecipes.isNotEmpty) {
+      appState.setSelectedRecipes(allRecipes);
+    }
+    
+    // Navigate to shopping list
+    Navigator.pop(context);
+    context.push('/shopping-list', extra: orderSetup);
   }
 
   /// Check if offer has all required fields filled
@@ -394,6 +462,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             onPressed: _generateInvoice,
             icon: const Icon(Icons.receipt_long),
             label: Text('orders.invoice'.tr()),
+          ),
+        if (!widget.order.needsShoppingList)
+          TextButton.icon(
+            onPressed: _editShoppingList,
+            icon: const Icon(Icons.edit),
+            label: Text('common.edit'.tr()),
           ),
         FilledButton.icon(
           onPressed: () async {

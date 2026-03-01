@@ -14,8 +14,34 @@ Widget _localizedMaterialApp(Widget home) {
 }
 
 Widget _localizedRouterApp(GoRouter router) {
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(
+    routerConfig: router,
+  );
 }
+
+/// Helper to fill out the OrderSetupForm that appears on Dashboard
+Future<void> _fillOrderSetupForm(WidgetTester tester) async {
+  // Wait for the form to appear
+  await tester.pumpAndSettle();
+  
+  // Find TextFormFields in the OrderSetupForm (orderName and personCount are required)
+  final textFields = find.byType(TextFormField);
+  
+  // Fill in orderName (first field)
+  await tester.enterText(textFields.at(0), 'Test Event');
+  await tester.pump();
+  
+  // Fill in personCount (fifth field after phone, date, time, address)
+  await tester.enterText(textFields.at(4), '50');
+  await tester.pump();
+  
+  // Find and tap the "Weiter"/"Next" button
+  final submitButton = find.byType(FilledButton).last;
+  await tester.ensureVisible(submitButton);
+  await tester.tap(submitButton);
+  await tester.pumpAndSettle();
+}
+
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -49,11 +75,13 @@ void main() {
         id: 'mojito_classic',
         name: 'Mojito - Classic',
         ingredients: ['Limetten (54 Stk.)'],
+        type: 'cocktail',
       ),
       Recipe(
         id: 'shot_b52',
         name: 'Shot - B52',
         ingredients: ['Baileys', 'Kahlua'],
+        type: 'shot',
       ),
     ],
     fixedValues: const [
@@ -71,97 +99,125 @@ void main() {
     appState.setSelectedRecipes([]);
   });
 
-  // testWidgets('FAB click opens recipe selection dialog', (tester) async {
-  //   await tester.pumpWidget(
-  //     _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
-  //   );
-  //   await tester.pumpAndSettle();
+  testWidgets('FAB click opens recipe selection dialog', (tester) async {
+    // Set a larger viewport to avoid overflow with OrderSetupForm
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    
+    await tester.pumpWidget(
+      _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
+    );
+    
+    // Fill OrderSetupForm first
+    await _fillOrderSetupForm(tester);
 
-  //   // Find the add button by its icon (Icons.add)
-  //   final addButton = find.byIcon(Icons.add);
-  //   expect(addButton, findsOneWidget, reason: 'Should find the add button');
-  //   await tester.tap(addButton);
-  //   await tester.pumpAndSettle();
+    // Find the add button using FilledButton type (should now be visible after form submission)
+    final addButton = find.byType(FilledButton);
+    expect(addButton, findsWidgets, reason: 'Should find FilledButton for adding cocktails');
+    await tester.tap(addButton.first);
+    await tester.pumpAndSettle();
 
-  //   expect(find.byType(RecipeSelectionDialog), findsOneWidget);
-  // });
+    expect(find.byType(RecipeSelectionDialog), findsOneWidget);
+  });
 
-  // testWidgets('select + apply click adds recipe card', (tester) async {
-  //   await tester.pumpWidget(
-  //     _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
-  //   );
-  //   await tester.pumpAndSettle();
+  testWidgets('select + apply click adds recipe card', (tester) async {
+    // Set a larger viewport to avoid overflow with OrderSetupForm
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    
+    await tester.pumpWidget(
+      _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
+    );
+    
+    // Fill OrderSetupForm first
+    await _fillOrderSetupForm(tester);
 
-  //   // Find and tap the add button by icon
-  //   final addButton = find.byIcon(Icons.add);
-  //   expect(addButton, findsOneWidget, reason: 'Should find the add button');
-  //   await tester.tap(addButton);
-  //   await tester.pumpAndSettle();
+    // Find and tap the add button (FilledButton in empty state)
+    final addButton = find.byType(FilledButton);
+    expect(addButton, findsWidgets, reason: 'Should find the add button');
+    await tester.tap(addButton.first);
+    await tester.pumpAndSettle();
 
-  //   await tester.enterText(find.byType(TextField).first, 'Mojito - Classic');
-  //   await tester.pumpAndSettle();
+    // Search for Mojito in the dialog
+    await tester.enterText(find.byType(TextField).first, 'Mojito');
+    await tester.pumpAndSettle();
 
-  //   await tester.tap(find.widgetWithText(ListTile, 'Mojito - Classic').first);
-  //   await tester.pumpAndSettle();
+    // Select the recipe
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Mojito - Classic').first);
+    await tester.pumpAndSettle();
 
-  //   await tester.tap(find.byType(FilledButton).last);
-  //   await tester.pumpAndSettle();
+    // Apply selection
+    await tester.tap(find.byType(FilledButton).last);
+    await tester.pumpAndSettle();
 
-  //   expect(find.text('Mojito - Classic'), findsOneWidget);
-  // });
-//TODO - Re-enable and fix the following tests after implementing the corresponding features in the app (deletion, navigation)
-  // testWidgets('delete click removes selected recipe card', (tester) async {
-  //   appState.setSelectedRecipes([
-  //     const Recipe(id: 'delete_me', name: 'Delete Me', ingredients: ['Mint'])
-  //   ]);
+    expect(find.text('Mojito - Classic'), findsOneWidget);
+  });
 
-  //   await tester.pumpWidget(
-  //     _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
-  //   );
-  //   await tester.pumpAndSettle();
+  testWidgets('delete click removes selected recipe card', (tester) async {
+    appState.setSelectedRecipes([
+      const Recipe(id: 'delete_me', name: 'Delete Me', ingredients: ['Mint'], type: 'cocktail')
+    ]);
 
-  //   expect(find.text('Delete Me'), findsOneWidget);
+    await tester.pumpWidget(
+      _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
+    );
+    
+    // Fill OrderSetupForm first
+    await _fillOrderSetupForm(tester);
 
-  //   // InputChip uses close icon for deletion
-  //   await tester.tap(find.byIcon(Icons.close).first);
-  //   await tester.pumpAndSettle();
+    expect(find.text('Delete Me'), findsOneWidget);
 
-  //   expect(find.text('Delete Me'), findsNothing);
-  // });
+    // Find and tap the delete icon
+    final deleteIcon = find.byIcon(Icons.delete);
+    await tester.tap(deleteIcon.first);
+    await tester.pumpAndSettle();
 
-  // testWidgets('generate button click navigates to shopping list route',
-  //     (tester) async {
-  //   appState.setSelectedRecipes([
-  //     const Recipe(id: 'go_next', name: 'Go Next', ingredients: ['Mint'])
-  //   ]);
+    expect(find.text('Delete Me'), findsNothing);
+  });
 
-  //   final router = GoRouter(
-  //     initialLocation: '/',
-  //     routes: [
-  //       GoRoute(
-  //         path: '/',
-  //         builder: (context, state) =>
-  //             DashboardScreen(loadData: () async => fakeData),
-  //       ),
-  //       GoRoute(
-  //         path: '/shopping-list',
-  //         builder: (context, state) =>
-  //             const Scaffold(body: Center(child: Text('ShoppingListRoute'))),
-  //       ),
-  //     ],
-  //   );
+  testWidgets('generate button click navigates to shopping list route',
+      (tester) async {
+    appState.setSelectedRecipes([
+      const Recipe(id: 'go_next', name: 'Go Next', ingredients: ['Mint'], type: 'cocktail')
+    ]);
 
-  //   await tester.pumpWidget(_localizedRouterApp(router));
-  //   await tester.pumpAndSettle();
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) =>
+              DashboardScreen(loadData: () async => fakeData),
+        ),
+        GoRoute(
+          path: '/shopping-list',
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('ShoppingListRoute'))),
+        ),
+      ],
+    );
 
-  //   // Find the generate button by its icon (shopping_cart)
-  //   final generateButton = find.byIcon(Icons.shopping_cart);
-  //   expect(generateButton, findsOneWidget, reason: 'Should find the shopping cart button');
-  //   await tester.tap(generateButton);
-  //   await tester.pumpAndSettle();
+    await tester.pumpWidget(_localizedRouterApp(router));
+    
+    // Fill OrderSetupForm first
+    await _fillOrderSetupForm(tester);
 
-  //   expect(find.text('ShoppingListRoute'), findsOneWidget);
-  // });
+    // Find the generate button by its icon (shopping_cart)
+    final generateButton = find.byIcon(Icons.shopping_cart);
+    expect(generateButton, findsOneWidget, reason: 'Should find the shopping cart button');
+    await tester.tap(generateButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('ShoppingListRoute'), findsOneWidget);
+  });
 
   testWidgets('shopping item can be selected and quantity changed', (tester) async {
     appState.setSelectedRecipes([
@@ -169,6 +225,7 @@ void main() {
         id: 'mojito_classic',
         name: 'Mojito - Classic',
         ingredients: ['Limetten (54 Stk.)'],
+        type: 'cocktail',
       )
     ]);
 
@@ -177,36 +234,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Handle the initial setup dialog that appears on screen load
-    // Find the AlertDialog by type (text is localized)
-    expect(find.byType(AlertDialog), findsOneWidget);
+    // OrderSetupForm is now a Card, not AlertDialog - no dialog to handle
+    // The screen starts directly with the form visible
     
-    // Find all TextFields inside the dialog (name, personCount, distance)
-    final dialogFields = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(TextField),
-    );
-    expect(dialogFields, findsNWidgets(3));
+    // Find TextFormFields in the OrderSetupForm (name and personCount are required)
+    final formFields = find.byType(TextFormField);
+    expect(formFields, findsWidgets);
     
-    // Enter data in all 3 fields (order: name, personCount, distance)
-    await tester.enterText(dialogFields.at(0), 'Test Event');
+    // Enter data in required fields (name is first, personCount is 5th after phone, date pickers, address)
+    await tester.enterText(formFields.at(0), 'Test Event');
     await tester.pump();
-    await tester.enterText(dialogFields.at(1), '50');
-    await tester.pump();
-    await tester.enterText(dialogFields.at(2), '100');
+    await tester.enterText(formFields.at(4), '50');
     await tester.pump();
     
-    // Tap the FilledButton inside the dialog to proceed
-    final weiterButton = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(FilledButton),
-    );
+    // Tap the FilledButton to proceed
+    final weiterButton = find.byType(FilledButton);
     expect(weiterButton, findsOneWidget);
     await tester.tap(weiterButton);
     await tester.pumpAndSettle();
-
-    // Verify dialog is closed
-    expect(find.byType(AlertDialog), findsNothing);
 
     // Find and tap the item card to select it (checkbox area)
     final itemCard = find.text('Limetten (54 Stk.)');

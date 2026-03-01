@@ -27,6 +27,7 @@ class AdminRepository {
     required bool isFixedValue,
     bool active = true,
     bool visible = true,
+    String? category,
   }) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available, cannot add material');
@@ -45,6 +46,7 @@ class AdminRepository {
         'note': note,
         'active': active,
         'visible': visible,
+        'category': category,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -68,6 +70,7 @@ class AdminRepository {
     required bool isFixedValue,
     bool active = true,
     bool visible = true,
+    String? category,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -83,6 +86,7 @@ class AdminRepository {
         'note': note,
         'active': active,
         'visible': visible,
+        'category': category,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': authService.email ?? authService.currentUser?.uid,
       });

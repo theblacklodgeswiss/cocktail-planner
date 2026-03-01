@@ -102,6 +102,7 @@ class _MaterialsTabState extends State<MaterialsTab> {
           isFixedValue: widget.isFixedValue,
           active: result.active,
           visible: result.visible,
+          category: result.category,
         );
       } else {
         success = await adminRepository.updateMaterial(
@@ -114,6 +115,7 @@ class _MaterialsTabState extends State<MaterialsTab> {
           isFixedValue: widget.isFixedValue,
           active: result.active,
           visible: result.visible,
+          category: result.category,
         );
       }
 

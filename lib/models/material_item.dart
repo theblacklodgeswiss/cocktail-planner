@@ -8,6 +8,7 @@ class MaterialItem {
     this.sortOrder,
     this.active = true,
     this.visible = true,
+    this.category,
   });
 
   final String unit;
@@ -25,6 +26,9 @@ class MaterialItem {
   /// Whether this item is shown in the inventory list (false = archived).
   final bool visible;
 
+  /// Category for grouping items (supervisor, purchase, bring, other).
+  final String? category;
+
   factory MaterialItem.fromJson(Map<String, dynamic> json) {
     return MaterialItem(
       unit: (json['unit'] ?? json['menge']) as String,
@@ -35,6 +39,7 @@ class MaterialItem {
       sortOrder: json['sortOrder'] as int?,
       active: (json['active'] as bool?) ?? true,
       visible: (json['visible'] as bool?) ?? true,
+      category: json['category'] as String?,
     );
   }
 }

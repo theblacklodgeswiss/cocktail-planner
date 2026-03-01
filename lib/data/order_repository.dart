@@ -23,6 +23,9 @@ class OrderRepository {
     String bar = '',
     int distanceKm = 0,
     double thekeCost = 0,
+    String phone = '',
+    String location = '',
+    String eventTime = '',
   }) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -44,6 +47,9 @@ class OrderRepository {
         'bar': bar,
         'distanceKm': distanceKm,
         'thekeCost': thekeCost,
+        'phone': phone,
+        'location': location,
+        'eventTime': eventTime,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -83,11 +89,15 @@ class OrderRepository {
     List<String> shots = const [],
     int distanceKm = 0,
     double thekeCost = 0,
+    String? phone,
+    String? location,
+    String? eventTime,
+    DateTime? eventDate,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
     try {
-      await firestoreService.ordersCollection.doc(orderId).update({
+      final updateData = {
         'items': items,
         'total': total,
         'currency': currency,
@@ -100,7 +110,15 @@ class OrderRepository {
         'hasShoppingList': true,
         'shoppingListCreatedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      
+      // Only update optional fields if provided
+      if (phone != null) updateData['phone'] = phone;
+      if (location != null) updateData['location'] = location;
+      if (eventTime != null) updateData['eventTime'] = eventTime;
+      if (eventDate != null) updateData['date'] = eventDate.toIso8601String();
+      
+      await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
       debugPrint('Failed to update order shopping list: $e');

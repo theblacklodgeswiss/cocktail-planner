@@ -71,6 +71,7 @@ class SavedOrder {
     this.formCreatedAt,
     this.phone = '',
     this.location = '',
+    this.eventTime = '',
     this.guestCountRange = '',
     this.mobileBar = false,
     this.eventType = '',
@@ -115,6 +116,7 @@ class SavedOrder {
   final DateTime? formCreatedAt;
   final String phone;
   final String location;
+  final String eventTime;
   final String guestCountRange;
   final bool mobileBar;
   final String eventType;
@@ -196,6 +198,7 @@ class SavedOrder {
       formCreatedAt: parseDateTime(data['formCreatedAt']),
       phone: data['phone'] as String? ?? '',
       location: data['location'] as String? ?? '',
+      eventTime: data['eventTime'] as String? ?? '',
       guestCountRange: data['guestCountRange'] as String? ?? '',
       mobileBar: data['mobileBar'] as bool? ?? false,
       eventType: data['eventType'] as String? ?? '',
