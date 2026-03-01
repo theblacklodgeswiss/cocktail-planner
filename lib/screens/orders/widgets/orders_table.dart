@@ -69,6 +69,7 @@ class OrdersTable extends StatelessWidget {
             DataColumn(label: Text('orders.persons'.tr()), numeric: true),
             DataColumn(label: Text('orders.articles'.tr()), numeric: true),
             DataColumn(label: Text('orders.total'.tr()), numeric: true),
+            DataColumn(label: Text('orders.created_at'.tr())),
           ],
           rows: orders.map((order) => _buildDataRow(order)).toList(),
         ),
@@ -88,6 +89,7 @@ class OrdersTable extends StatelessWidget {
         DataCell(Text(order.items.length.toString())),
         DataCell(
             Text('${order.total.toStringAsFixed(2)} ${order.currency}')),
+        DataCell(Text(formatDate(order.createdAt ?? order.date))),
       ],
     );
   }
@@ -260,7 +262,19 @@ class OrdersTable extends StatelessWidget {
                           ),
                     ),
                   ),
-                  Icon(Icons.chevron_right, color: colorScheme.outline),
+                  // Show createdAt on the far right, then chevron
+                  Row(
+                    children: [
+                      Text(
+                        formatDate(order.createdAt ?? order.date),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.outline,
+                            ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right, color: colorScheme.outline),
+                    ],
+                  ),
                 ],
               ),
             ],

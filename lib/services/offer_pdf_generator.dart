@@ -469,13 +469,30 @@ class OfferPdfGenerator {
         children: [
           cell(dateStr),
           cell(isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice'),
-          cell('1', align: pw.TextAlign.center),
-          cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
+          // Show number of assigned employees as quantity; price column shows per-employee price
+          (() {
+            final count = offer.assignedEmployees.isNotEmpty
+                ? offer.assignedEmployees.length
+                : 3;
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Align(child: pw.Text(count.toString()), alignment: pw.Alignment.center),
+              ],
+            );
+          })(),
+          cell(curr.format(offer.assignedEmployees.isNotEmpty ? (offer.barServiceCost / (offer.assignedEmployees.length)) : (offer.barServiceCost / 3)), align: pw.TextAlign.right),
           cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
           cell(
-            isEn
-                ? '3 Barkeeper, max. 5h, unlimited Cocktails (s. above), 0.3L hard plastic cups'
-                : '3 Barkeeper, max. 5h, unlimitiert Cocktails (s. oben), 0.3L Hartplastikbecher',
+            // Show configured number of assigned employees; fall back to 3 if none selected
+            (() {
+              final count = offer.assignedEmployees.isNotEmpty
+                  ? offer.assignedEmployees.length
+                  : 3;
+              return isEn
+                  ? '$count Barkeepers, max. 5h, unlimited Cocktails (s. above), 0.3L hard plastic cups'
+                  : '$count Barkeeper, max. 5h, unlimitiert Cocktails (s. oben), 0.3L Hartplastikbecher';
+            })(),
           ),
         ],
       ),

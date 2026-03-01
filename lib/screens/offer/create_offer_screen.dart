@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
 import '../../data/order_repository.dart';
+import '../../data/employee_repository.dart';
 import '../../models/offer.dart';
+import '../../models/employee.dart';
 import '../../models/order.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
@@ -76,6 +78,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   // Event types
   final Set<EventType> _eventTypes = {};
 
+  // Assigned employees (names)
+  late Set<String> _selectedEmployees;
+
   // Extra positions
   final List<ExtraPosition> _extraPositions = [];
 
@@ -123,6 +128,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     for (final posData in widget.order.offerExtraPositions) {
       _extraPositions.add(ExtraPosition.fromJson(posData));
     }
+
+    // Load assigned employees from order
+    _selectedEmployees = Set.from(widget.order.assignedEmployees);
 
     // Set additional info based on language
     _additionalInfoCtrl = TextEditingController(
@@ -196,6 +204,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
       extraPositions: List.of(_extraPositions),
+      assignedEmployees: _selectedEmployees.toList(),
     );
   }
 
@@ -210,6 +219,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       language: _language,
       eventDate: _eventDate,
       extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
+      assignedEmployees: _selectedEmployees.toList(),
     );
   }
 
@@ -345,6 +355,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   _buildClientSection(),
                   const SizedBox(height: 20),
                   _buildEventTypeSection(),
+                  const SizedBox(height: 12),
+                  _buildEmployeeSelectionSection(),
                   const SizedBox(height: 20),
                   _buildGuestCountSection(),
                   const SizedBox(height: 20),
@@ -456,6 +468,68 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           }),
         ),
       ],
+    );
+  }
+
+  /// Build employee selection section (choose barkeepers)
+  Widget _buildEmployeeSelectionSection() {
+    return StreamBuilder<List<Employee>>(
+      stream: employeeRepository.watchEmployees(),
+      builder: (context, snapshot) {
+        final employees = snapshot.data ?? [];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(label: 'invoice.extra_hours_section'.tr()),
+            const SizedBox(height: 8),
+            Text(
+              'invoice.select_employees'.tr(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (employees.isEmpty)
+              Text(
+                'orders.no_employees_available'.tr(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: employees.map((employee) {
+                  final isSelected = _selectedEmployees.contains(employee.name);
+                  return FilterChip(
+                    selected: isSelected,
+                    label: Text(employee.name),
+                    avatar: CircleAvatar(
+                      backgroundColor: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey,
+                      child: Text(
+                        employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
+                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                      ),
+                    ),
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedEmployees.add(employee.name);
+                        } else {
+                          _selectedEmployees.remove(employee.name);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
     );
   }
 

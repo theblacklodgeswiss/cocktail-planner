@@ -78,6 +78,7 @@ class OfferData {
     required this.additionalInfo,
     required this.language,
     this.extraPositions = const [],
+    this.assignedEmployees = const [],
   });
 
   /// Event / order name (from SavedOrder.name)
@@ -139,6 +140,8 @@ class OfferData {
 
   /// Extra custom positions (line items)
   final List<ExtraPosition> extraPositions;
+  /// Assigned employee names for this offer (used to show number of barkeepers)
+  final List<String> assignedEmployees;
 
   double get travelCostTotal => distanceKm * 2 * travelCostPerKm;
 
