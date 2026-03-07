@@ -289,30 +289,42 @@ class OrderRepository {
     int? year,
     bool includePending = false,
   }) {
+    debugPrint('📡 watchOrders called - Firestore available: ${firestoreService.isAvailable}, year: $year, includePending: $includePending');
     if (!firestoreService.isAvailable) {
+      debugPrint('⚠️ Firestore not available, returning empty stream');
       return Stream.value([]);
     }
 
+    debugPrint('🔍 Querying orders collection...');
     return firestoreService.ordersCollection
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
+          debugPrint('📦 Received ${snapshot.docs.length} orders from Firestore');
           var orders = snapshot.docs
               .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
               .toList();
 
           // Filter out pending orders (total == 0) unless explicitly included
           if (!includePending) {
+            final beforeFilter = orders.length;
             orders = orders.where((o) => o.total > 0).toList();
+            debugPrint('🔸 Filtered pending orders: $beforeFilter → ${orders.length}');
           }
 
           if (year != null) {
-            return orders.where((o) => o.year == year).toList();
+            final beforeYearFilter = orders.length;
+            // Filter by year, but keep pending orders (total == 0) regardless of year
+            // because they need attention even if the event date is in another year
+            orders = orders.where((o) => o.year == year || o.total == 0).toList();
+            debugPrint('🔸 Filtered by year $year (keeping pending): $beforeYearFilter → ${orders.length}');
           }
+          
+          debugPrint('✅ Returning ${orders.length} orders');
           return orders;
         })
         .handleError((e) {
-          debugPrint('Failed to watch orders: $e');
+          debugPrint('❌ Failed to watch orders: $e');
           return <SavedOrder>[];
         });
   }

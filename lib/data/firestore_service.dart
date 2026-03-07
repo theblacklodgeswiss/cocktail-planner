@@ -38,11 +38,14 @@ class FirestoreService {
   /// Initialize Firestore connection.
   Future<bool> initialize() async {
     try {
-      await materialsCollection.limit(1).get();
+      debugPrint('🔧 Testing Firestore connection with orders collection...');
+      final testDoc = await ordersCollection.limit(1).get();
+      debugPrint('✅ Firestore available - fetched ${testDoc.docs.length} test docs');
       _available = true;
       return true;
     } catch (e) {
-      debugPrint('Firestore initialization failed: $e');
+      debugPrint('❌ Firestore initialization failed: $e');
+      debugPrint('📋 Error type: ${e.runtimeType}');
       _available = false;
       return false;
     }

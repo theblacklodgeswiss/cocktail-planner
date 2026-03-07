@@ -17,7 +17,9 @@ enum OrderStatusFilter { all, quotes, accepted, declined }
 
 /// Screen displaying an overview of all orders with filtering and summaries.
 class OrdersOverviewScreen extends StatefulWidget {
-  const OrdersOverviewScreen({super.key});
+  final String? initialStatus;
+
+  const OrdersOverviewScreen({super.key, this.initialStatus});
 
   @override
   State<OrdersOverviewScreen> createState() => _OrdersOverviewScreenState();
@@ -32,6 +34,26 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   bool _sortAscending = false;
   OrderStatusFilter _statusFilter = OrderStatusFilter.all;
   final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Set initial status filter based on query parameter
+    if (widget.initialStatus != null) {
+      switch (widget.initialStatus) {
+        case 'accepted':
+          _statusFilter = OrderStatusFilter.accepted;
+          break;
+        case 'offer':
+        case 'quote':
+          _statusFilter = OrderStatusFilter.quotes;
+          break;
+        case 'declined':
+          _statusFilter = OrderStatusFilter.declined;
+          break;
+      }
+    }
+  }
 
   @override
   void dispose() {

@@ -23,7 +23,9 @@ Future<void> main() async {
 
   // Initialize Firebase
   try {
+    debugPrint('🚀 Initializing Firebase...');
     const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+    debugPrint('📦 Flavor: $flavor');
     final googleClientId = flavor == 'prod'
         ? prod.DefaultFirebaseOptions.googleClientId
         : dev.DefaultFirebaseOptions.googleClientId;
@@ -31,12 +33,15 @@ Future<void> main() async {
         ? prod.DefaultFirebaseOptions.currentPlatform
         : dev.DefaultFirebaseOptions.currentPlatform;
 
+    debugPrint('🔧 Firebase Project: ${firebaseOptions.projectId}');
     await Firebase.initializeApp(options: firebaseOptions);
+    debugPrint('✅ Firebase initialized successfully');
 
     // Initialize Auth Service with environment specific client ID
     authService.initialize(googleClientId: googleClientId);
     // Wait for initial auth state to be determined (important for page reload)
-    await FirebaseAuth.instance.authStateChanges().first;
+    final user = await FirebaseAuth.instance.authStateChanges().first;
+    debugPrint('👤 Initial auth state: ${user?.email ?? "Not signed in"}');
 
     // Load settings and sync Microsoft Client ID to localStorage
     await _syncMicrosoftSettings(
@@ -46,7 +51,7 @@ Future<void> main() async {
     );
   } catch (e) {
     // Firebase initialization failed - app will use local JSON fallback
-    debugPrint('Firebase initialization failed: $e');
+    debugPrint('❌ Firebase initialization failed: $e');
   }
 
   // Initialize localization
