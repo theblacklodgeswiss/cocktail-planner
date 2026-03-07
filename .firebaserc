@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "cocktail-planner-bl"
+    "development": "cocktail-planer-dev",
+    "production": "cocktail-planner-bl",
+    "default": "cocktail-planer-dev"
   }
 }

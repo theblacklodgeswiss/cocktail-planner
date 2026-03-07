@@ -131,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Cocktail Planner',
+                  'Cocktail Planer',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
@@ -148,7 +148,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, 
+                        Icon(
+                          Icons.error_outline,
                           color: colorScheme.onErrorContainer,
                           size: 20,
                         ),
@@ -156,7 +157,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: TextStyle(color: colorScheme.onErrorContainer),
+                            style: TextStyle(
+                              color: colorScheme.onErrorContainer,
+                            ),
                           ),
                         ),
                       ],
@@ -210,7 +213,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Divider
                 Row(
                   children: [
-                    Expanded(child: Divider(color: colorScheme.outline.withValues(alpha: 0.5))),
+                    Expanded(
+                      child: Divider(
+                        color: colorScheme.outline.withValues(alpha: 0.5),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
@@ -220,7 +227,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    Expanded(child: Divider(color: colorScheme.outline.withValues(alpha: 0.5))),
+                    Expanded(
+                      child: Divider(
+                        color: colorScheme.outline.withValues(alpha: 0.5),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),

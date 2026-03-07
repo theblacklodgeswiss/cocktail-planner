@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:shopping_list/models/cocktail_data.dart';
-import 'package:shopping_list/models/employee.dart';
-import 'package:shopping_list/models/material_item.dart';
-import 'package:shopping_list/models/offer.dart';
-import 'package:shopping_list/models/recipe.dart';
+import 'package:cocktail_planer/models/cocktail_data.dart';
+import 'package:cocktail_planer/models/employee.dart';
+import 'package:cocktail_planer/models/material_item.dart';
+import 'package:cocktail_planer/models/offer.dart';
+import 'package:cocktail_planer/models/recipe.dart';
 
 void main() {
   test('parses recipe from json', () {
@@ -30,14 +30,14 @@ void main() {
           'price': 14.0,
           'currency': 'CHF',
           'note': 'Prodega',
-        }
+        },
       ],
       'recipes': [
         {
           'name': 'Mojito - Classic',
-          'ingredients': ['Limetten (54 Stk.)']
-        }
-      ]
+          'ingredients': ['Limetten (54 Stk.)'],
+        },
+      ],
     });
 
     expect(data.materials.length, 1);
@@ -55,16 +55,18 @@ void main() {
       final file = File('assets/data/cocktail_data.json');
       final content = file.readAsStringSync();
       jsonData = json.decode(content) as Map<String, dynamic>;
-      
+
       final materialListe = jsonData['materialListe'] as List<dynamic>;
       materialNames = materialListe
           .map((m) => (m as Map<String, dynamic>)['artikel'] as String)
           .toList();
-      
+
       final rezepte = jsonData['rezepte'] as List<dynamic>;
-      mangoMojitoRecipe = rezepte.firstWhere(
-        (r) => (r as Map<String, dynamic>)['name'] == 'Mojito - Mango',
-      ) as Map<String, dynamic>;
+      mangoMojitoRecipe =
+          rezepte.firstWhere(
+                (r) => (r as Map<String, dynamic>)['name'] == 'Mojito - Mango',
+              )
+              as Map<String, dynamic>;
     });
 
     test('Mojito - Mango Rezept existiert', () {
@@ -74,15 +76,15 @@ void main() {
     test('alle Zutaten vom Mango Mojito sind in der Materialliste', () {
       final zutaten = (mangoMojitoRecipe['zutaten'] as List<dynamic>)
           .cast<String>();
-      
+
       final missingIngredients = <String>[];
-      
+
       for (final zutat in zutaten) {
         if (!materialNames.contains(zutat)) {
           missingIngredients.add(zutat);
         }
       }
-      
+
       expect(
         missingIngredients,
         isEmpty,

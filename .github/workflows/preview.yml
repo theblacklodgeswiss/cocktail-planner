@@ -22,9 +22,9 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate firebase_options.dart
+      - name: Generate firebase_options_prod.dart
         run: |
-          cat > lib/firebase_options.dart << 'EOF'
+          cat > lib/firebase_options_prod.dart << 'EOF'
           import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
           import 'package:flutter/foundation.dart'
               show defaultTargetPlatform, kIsWeb, TargetPlatform;
@@ -61,6 +61,25 @@ jobs:
           }
           EOF
 
+      - name: Generate dummy firebase_options_dev.dart
+        run: |
+          cat > lib/firebase_options_dev.dart << 'EOF'
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          import 'package:flutter/foundation.dart'
+              show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform {
+              return const FirebaseOptions(
+                apiKey: 'dummy',
+                appId: 'dummy',
+                messagingSenderId: 'dummy',
+                projectId: 'dummy',
+              );
+            }
+          }
+          EOF
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -68,7 +87,7 @@ jobs:
         run: flutter test
 
       - name: Build web
-        run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+        run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=prod
 
       - name: Deploy to Firebase Hosting Preview Channel
         uses: FirebaseExtended/action-hosting-deploy@v0

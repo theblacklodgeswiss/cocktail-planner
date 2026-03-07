@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'router/app_router.dart';
 import 'services/user_preferences_service.dart';
 
-class CocktailPlannerApp extends StatefulWidget {
-  const CocktailPlannerApp({super.key});
+class CocktailPlanerApp extends StatefulWidget {
+  const CocktailPlanerApp({super.key});
 
   @override
-  State<CocktailPlannerApp> createState() => _CocktailPlannerAppState();
+  State<CocktailPlanerApp> createState() => _CocktailPlanerAppState();
 }
 
-class _CocktailPlannerAppState extends State<CocktailPlannerApp> {
+class _CocktailPlanerAppState extends State<CocktailPlanerApp> {
   @override
   void initState() {
     super.initState();
@@ -55,7 +55,10 @@ class _CocktailPlannerAppState extends State<CocktailPlannerApp> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colorScheme.error, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       );
     }
 
@@ -69,7 +72,7 @@ class _CocktailPlannerAppState extends State<CocktailPlannerApp> {
     );
 
     return MaterialApp.router(
-      title: 'Cocktail Planner',
+      title: 'Cocktail Planer',
       debugShowCheckedModeBanner: false,
       themeMode: userPreferencesService.themeMode,
       theme: ThemeData(

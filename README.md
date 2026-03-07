@@ -1,4 +1,4 @@
-# Cocktail Planner
+# Cocktail Planer
 
 A Flutter web application for managing cocktail orders, generating shopping lists, and integrating with Microsoft 365 services.
 

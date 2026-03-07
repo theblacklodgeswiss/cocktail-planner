@@ -1,44 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shopping_list/models/cocktail_data.dart';
-import 'package:shopping_list/models/material_item.dart';
-import 'package:shopping_list/models/recipe.dart';
-import 'package:shopping_list/screens/dashboard/dashboard_screen.dart';
-import 'package:shopping_list/screens/shopping_list/shopping_list_screen.dart';
-import 'package:shopping_list/state/app_state.dart';
-import 'package:shopping_list/widgets/recipe_selection_dialog.dart';
+import 'package:cocktail_planer/models/cocktail_data.dart';
+import 'package:cocktail_planer/models/material_item.dart';
+import 'package:cocktail_planer/models/recipe.dart';
+import 'package:cocktail_planer/screens/dashboard/dashboard_screen.dart';
+import 'package:cocktail_planer/screens/shopping_list/shopping_list_screen.dart';
+import 'package:cocktail_planer/state/app_state.dart';
+import 'package:cocktail_planer/widgets/recipe_selection_dialog.dart';
 
 Widget _localizedMaterialApp(Widget home) {
   return MaterialApp(home: home);
 }
 
 Widget _localizedRouterApp(GoRouter router) {
-  return MaterialApp.router(
-    routerConfig: router,
-  );
+  return MaterialApp.router(routerConfig: router);
 }
 
 /// Helper to fill out the OrderSetupForm that appears on Dashboard
 Future<void> _fillOrderSetupForm(WidgetTester tester) async {
   // Wait for the form to appear
   await tester.pumpAndSettle();
-  
+
   // Find TextFormFields in the OrderSetupForm
   final textFields = find.byType(TextFormField);
   expect(textFields, findsWidgets);
-  
+
   // Fill in orderName (first field)
   await tester.enterText(textFields.first, 'Test Event');
   await tester.pump();
-  
+
   // Fill in personCount field
   // Fields are: 0=orderName, 1=phoneNumber, 2=address, 3=personCount, 4=distance
   if (textFields.evaluate().length > 3) {
     await tester.enterText(textFields.at(3), '50');
     await tester.pump();
   }
-  
+
   // Find and tap the submit button (FilledButton in the form)
   final submitButtons = find.byType(FilledButton);
   if (submitButtons.evaluate().isNotEmpty) {
@@ -50,7 +48,6 @@ Future<void> _fillOrderSetupForm(WidgetTester tester) async {
     await tester.pumpAndSettle();
   }
 }
-
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -116,14 +113,14 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    
+
     await tester.runAsync(() async {
       await tester.pumpWidget(
         _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
       );
       await tester.pumpAndSettle();
     });
-    
+
     // Fill OrderSetupForm first
     await _fillOrderSetupForm(tester);
 
@@ -145,14 +142,14 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    
+
     await tester.runAsync(() async {
       await tester.pumpWidget(
         _localizedMaterialApp(DashboardScreen(loadData: () async => fakeData)),
       );
       await tester.pumpAndSettle();
     });
-    
+
     // Fill OrderSetupForm first
     await _fillOrderSetupForm(tester);
 
@@ -195,9 +192,14 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    
+
     appState.setSelectedRecipes([
-      const Recipe(id: 'delete_me', name: 'Delete Me', ingredients: ['Mint'], type: 'cocktail')
+      const Recipe(
+        id: 'delete_me',
+        name: 'Delete Me',
+        ingredients: ['Mint'],
+        type: 'cocktail',
+      ),
     ]);
 
     await tester.runAsync(() async {
@@ -206,7 +208,7 @@ void main() {
       );
       await tester.pumpAndSettle();
     });
-    
+
     // Fill OrderSetupForm first
     await _fillOrderSetupForm(tester);
 
@@ -221,8 +223,9 @@ void main() {
     expect(find.text('Delete Me'), findsNothing);
   });
 
-  testWidgets('generate button click navigates to shopping list route',
-      (tester) async {
+  testWidgets('generate button click navigates to shopping list route', (
+    tester,
+  ) async {
     // Set a larger viewport to avoid overflow with OrderSetupForm
     tester.view.physicalSize = const Size(1200, 1800);
     tester.view.devicePixelRatio = 1.0;
@@ -230,9 +233,14 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    
+
     appState.setSelectedRecipes([
-      const Recipe(id: 'go_next', name: 'Go Next', ingredients: ['Mint'], type: 'cocktail')
+      const Recipe(
+        id: 'go_next',
+        name: 'Go Next',
+        ingredients: ['Mint'],
+        type: 'cocktail',
+      ),
     ]);
 
     final router = GoRouter(
@@ -255,7 +263,7 @@ void main() {
       await tester.pumpWidget(_localizedRouterApp(router));
       await tester.pumpAndSettle();
     });
-    
+
     // Fill OrderSetupForm first
     await _fillOrderSetupForm(tester);
 
@@ -265,48 +273,52 @@ void main() {
     if (generateButton.evaluate().isNotEmpty) {
       await tester.tap(generateButton.first);
       await tester.pumpAndSettle();
-      
+
       expect(find.text('ShoppingListRoute'), findsOneWidget);
     }
   });
 
-  testWidgets('shopping item can be selected and quantity changed', (tester) async {
+  testWidgets('shopping item can be selected and quantity changed', (
+    tester,
+  ) async {
     appState.setSelectedRecipes([
       const Recipe(
         id: 'mojito_classic',
         name: 'Mojito - Classic',
         ingredients: ['Limetten (54 Stk.)'],
         type: 'cocktail',
-      )
+      ),
     ]);
 
     await tester.runAsync(() async {
       await tester.pumpWidget(
-        _localizedMaterialApp(ShoppingListScreen(loadData: () async => fakeData)),
+        _localizedMaterialApp(
+          ShoppingListScreen(loadData: () async => fakeData),
+        ),
       );
       await tester.pumpAndSettle();
     });
 
     // OrderSetupForm is now a Card, not AlertDialog - no dialog to handle
     // The screen starts directly with the form visible
-    
+
     // Find TextFormFields in the OrderSetupForm (name and personCount are required)
     final formFields = find.byType(TextFormField);
     if (formFields.evaluate().isEmpty) {
       // Form might already be filled or not shown
       return;
     }
-    
+
     // Enter data in required fields (name is first, personCount is 5th after phone, date pickers, address)
     await tester.enterText(formFields.first, 'Test Event');
     await tester.pump();
-    
+
     // Try to find and fill person count field
     if (formFields.evaluate().length > 4) {
       await tester.enterText(formFields.at(4), '50');
       await tester.pump();
     }
-    
+
     // Tap the FilledButton to proceed if it exists
     final weiterButton = find.byType(FilledButton);
     if (weiterButton.evaluate().isNotEmpty) {
@@ -318,7 +330,7 @@ void main() {
     final itemCard = find.text('Limetten (54 Stk.)');
     if (itemCard.evaluate().isNotEmpty) {
       expect(itemCard, findsOneWidget);
-      
+
       // Tap on the card area to select
       await tester.tap(itemCard);
       await tester.pumpAndSettle();
