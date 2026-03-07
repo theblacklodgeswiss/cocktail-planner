@@ -356,5 +356,5 @@ void main() {
       }
     }
   });
-  }, skip: 'Requires Firebase mocking - AuthService needs Firebase.initializeApp()');
+  }, skip: 'Requires dependency injection for AuthService - currently a global singleton initialized at import time');
 }
