@@ -78,6 +78,7 @@ class SavedOrder {
     this.eventType = '',
     this.serviceType = '',
     this.requestedCocktails = const [],
+    this.isPendingDismissed = false,
   });
 
   final String id;
@@ -125,6 +126,9 @@ class SavedOrder {
   final String serviceType;
   /// Cocktails requested in the form submission (from Excel column 15).
   final List<String> requestedCocktails;
+  
+  /// If true, this pending order (total == 0) is dismissed from pending list.
+  final bool isPendingDismissed;
 
   int get year => date.year;
   
@@ -207,6 +211,7 @@ class SavedOrder {
       eventType: data['eventType'] as String? ?? '',
       serviceType: data['serviceType'] as String? ?? '',
       requestedCocktails: (data['requestedCocktails'] as List<dynamic>?)?.cast<String>() ?? [],
+      isPendingDismissed: data['isPendingDismissed'] as bool? ?? false,
     );
   }
 }

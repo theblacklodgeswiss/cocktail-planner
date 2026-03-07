@@ -13,12 +13,14 @@ class OrdersTable extends StatelessWidget {
     required this.colorScheme,
     required this.selectedYear,
     required this.onOrderTap,
+    this.showMonthSubtitle = false,
   });
 
   final List<SavedOrder> orders;
   final ColorScheme colorScheme;
   final int selectedYear;
   final void Function(SavedOrder order) onOrderTap;
+  final bool showMonthSubtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -179,11 +181,25 @@ class OrdersTable extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      order.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.name,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        if (showMonthSubtitle) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatMonthYear(order.date),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                           ),
+                        ],
+                      ],
                     ),
                   ),
                   if (order.isFromForm) ...[
@@ -282,5 +298,13 @@ class OrdersTable extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatMonthYear(DateTime date) {
+    const monthNames = [
+      'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+    ];
+    return '${monthNames[date.month - 1]} ${date.year}';
   }
 }

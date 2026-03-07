@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../data/order_repository.dart';
 import '../../models/order.dart';
 import 'order_detail_sheet.dart';
-import 'widgets/orders_table.dart';
 
 /// Sort options for pending orders.
 enum PendingSortOption { eventDate, createdAt, guests, name }
@@ -155,18 +154,170 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
                           ),
                     ),
                     const SizedBox(height: 12),
-                    OrdersTable(
-                      orders: orders,
-                      colorScheme: colorScheme,
-                      selectedYear: DateTime.now().year,
-                      onOrderTap: (order) => showOrderDetails(context, order),
-                    ),
+                    // Orders list with dismiss functionality
+                    ...orders.map((order) => _buildDismissibleOrderCard(
+                      context,
+                      order,
+                      colorScheme,
+                    )),
                   ],
                 ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildDismissibleOrderCard(
+    BuildContext context,
+    SavedOrder order,
+    ColorScheme colorScheme,
+  ) {
+    return Dismissible(
+      key: Key(order.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              color: colorScheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'orders.pending_dismiss_done'.tr(),
+              style: TextStyle(
+                color: colorScheme.onTertiaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('orders.pending_dismiss_title'.tr()),
+            content: Text(
+              'orders.pending_dismiss_message'.tr(namedArgs: {
+                'name': order.name,
+              }),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text('orders.pending_dismiss_cancel'.tr()),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text('orders.pending_dismiss_confirm'.tr()),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (direction) async {
+        final success = await orderRepository.dismissPendingOrder(order.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                success
+                    ? 'orders.pending_dismissed'.tr(namedArgs: {
+                        'name': order.name,
+                      })
+                    : 'orders.pending_dismiss_error'.tr(),
+              ),
+              action: success
+                  ? SnackBarAction(
+                      label: 'orders.pending_dismiss_undo'.tr(),
+                      onPressed: () async {
+                        // Re-activate pending order
+                        await orderRepository.updateOrder(
+                          order.id,
+                          {'isPendingDismissed': false},
+                        );
+                      },
+                    )
+                  : null,
+            ),
+          );
+        }
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: InkWell(
+          onTap: () => showOrderDetails(context, order),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Status icon
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: colorScheme.error,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Order info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${DateFormat('dd.MM.yyyy').format(order.date)} • '
+                        '${order.personCount} Personen',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                      if (order.location.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          order.location,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Arrow icon
+                Icon(
+                  Icons.chevron_right,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

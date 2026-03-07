@@ -12,6 +12,9 @@ import 'widgets/summary_card.dart';
 /// Sorting options for orders.
 enum OrderSortOption { eventDate, createdAt, guests, name, status }
 
+/// Status filter for orders
+enum OrderStatusFilter { all, quotes, accepted, declined }
+
 /// Screen displaying an overview of all orders with filtering and summaries.
 class OrdersOverviewScreen extends StatefulWidget {
   const OrdersOverviewScreen({super.key});
@@ -22,10 +25,12 @@ class OrdersOverviewScreen extends StatefulWidget {
 
 class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   int _selectedYear = DateTime.now().year;
+  int? _selectedMonth; // null = all months
   bool _isSyncing = false;
   String _searchQuery = '';
   OrderSortOption _sortOption = OrderSortOption.eventDate;
   bool _sortAscending = false;
+  OrderStatusFilter _statusFilter = OrderStatusFilter.all;
   final _searchController = TextEditingController();
 
   @override
@@ -34,19 +39,54 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     super.dispose();
   }
 
-  Stream<List<SavedOrder>> get _ordersStream =>
-      orderRepository.watchOrders(year: _selectedYear);
+  Stream<List<SavedOrder>> get _ordersStream {
+    // If searching, get all orders regardless of year
+    if (_searchQuery.isNotEmpty) {
+      return orderRepository.watchOrders(); // No year filter
+    }
+    // Otherwise, filter by selected year
+    return orderRepository.watchOrders(year: _selectedYear);
+  }
 
   void _changeYear(int year) {
-    setState(() => _selectedYear = year);
+    setState(() {
+      _selectedYear = year;
+      _selectedMonth = null; // Reset month when changing year
+    });
+  }
+
+  void _changeMonth(int? month) {
+    setState(() => _selectedMonth = month);
   }
 
   List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) {
-    // Filter by search query
     var filtered = orders;
+
+    // Filter by month (if selected and not searching globally)
+    if (_selectedMonth != null && _searchQuery.isEmpty) {
+      filtered = filtered.where((o) => o.date.month == _selectedMonth).toList();
+    }
+
+    // Filter by status
+    if (_statusFilter != OrderStatusFilter.all) {
+      filtered = filtered.where((o) {
+        switch (_statusFilter) {
+          case OrderStatusFilter.quotes:
+            return o.status == OrderStatus.quote;
+          case OrderStatusFilter.accepted:
+            return o.status == OrderStatus.accepted;
+          case OrderStatusFilter.declined:
+            return o.status == OrderStatus.declined;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    // Filter by search query
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
-      filtered = orders.where((o) {
+      filtered = filtered.where((o) {
         final nameMatch = o.name.toLowerCase().contains(query);
         final guestMatch = o.personCount.toString().contains(query) ||
             o.guestCountRange.toLowerCase().contains(query);
@@ -262,23 +302,23 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   children: [
                     _buildYearSelector(),
                     const SizedBox(height: 12),
+                    _buildMonthSelector(),
+                    const SizedBox(height: 12),
+                    _buildStatusFilter(),
+                    const SizedBox(height: 12),
                     _buildPendingOrdersBanner(),
                     const SizedBox(height: 20),
                     _SummaryCardsSection(orders: orders),
                     const SizedBox(height: 20),
                     _buildSearchAndSortBar(),
                     const SizedBox(height: 16),
-                    Text(
-                      '${'orders.order_count'.tr()} $_selectedYear',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
+                    _buildListHeader(orders),
                     const SizedBox(height: 12),
                     OrdersTable(
                       orders: orders,
                       colorScheme: colorScheme,
                       selectedYear: _selectedYear,
+                      showMonthSubtitle: _searchQuery.isNotEmpty || _selectedMonth == null,
                       onOrderTap: (order) => showOrderDetails(context, order),
                     ),
                   ],
@@ -315,6 +355,138 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
           );
         }).toList(),
       ),
+    );
+  }
+
+  Widget _buildMonthSelector() {
+    if (_searchQuery.isNotEmpty) {
+      // Don't show month selector when searching globally
+      return const SizedBox.shrink();
+    }
+
+    const monthNames = [
+      'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: const Text('Alle Monate'),
+              selected: _selectedMonth == null,
+              onSelected: (_) => _changeMonth(null),
+            ),
+          ),
+          ...List.generate(12, (index) {
+            final month = index + 1;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(monthNames[index]),
+                selected: _selectedMonth == month,
+                onSelected: (_) => _changeMonth(month),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusFilter() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Status:',
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilterChip(
+            label: const Text('Alle'),
+            selected: _statusFilter == OrderStatusFilter.all,
+            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.all),
+            showCheckmark: false,
+          ),
+          const SizedBox(width: 6),
+          FilterChip(
+            avatar: const Icon(Icons.description, size: 16),
+            label: const Text('Angebote'),
+            selected: _statusFilter == OrderStatusFilter.quotes,
+            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.quotes),
+            showCheckmark: false,
+            selectedColor: Colors.orange.shade100,
+            labelStyle: TextStyle(
+              color: _statusFilter == OrderStatusFilter.quotes
+                  ? Colors.orange.shade900
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 6),
+          FilterChip(
+            avatar: const Icon(Icons.check_circle, size: 16),
+            label: const Text('Angenommen'),
+            selected: _statusFilter == OrderStatusFilter.accepted,
+            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.accepted),
+            showCheckmark: false,
+            selectedColor: Colors.green.shade100,
+            labelStyle: TextStyle(
+              color: _statusFilter == OrderStatusFilter.accepted
+                  ? Colors.green.shade900
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 6),
+          FilterChip(
+            avatar: const Icon(Icons.cancel, size: 16),
+            label: const Text('Abgelehnt'),
+            selected: _statusFilter == OrderStatusFilter.declined,
+            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.declined),
+            showCheckmark: false,
+            selectedColor: Colors.red.shade100,
+            labelStyle: TextStyle(
+              color: _statusFilter == OrderStatusFilter.declined
+                  ? Colors.red.shade900
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListHeader(List<SavedOrder> orders) {
+    String title;
+    if (_searchQuery.isNotEmpty) {
+      title = '${orders.length} ${'orders.search_results'.tr()}';
+    } else if (_selectedMonth != null) {
+      const monthNames = [
+        'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+      ];
+      title = '${monthNames[_selectedMonth! - 1]} $_selectedYear';
+    } else {
+      title = '${'orders.order_count'.tr()} $_selectedYear';
+    }
+
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
     );
   }
 

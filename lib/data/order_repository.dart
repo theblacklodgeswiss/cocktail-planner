@@ -297,7 +297,7 @@ class OrderRepository {
         });
   }
 
-  /// Watch pending orders (total == 0) across all years.
+  /// Watch pending orders (total == 0 and not dismissed) across all years.
   Stream<List<SavedOrder>> watchPendingOrders() {
     if (!firestoreService.isAvailable) {
       return Stream.value([]);
@@ -309,13 +309,45 @@ class OrderRepository {
         .map((snapshot) {
           return snapshot.docs
               .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
-              .where((o) => o.total == 0)
+              .where((o) => o.total == 0 && !o.isPendingDismissed)
               .toList();
         })
         .handleError((e) {
           debugPrint('Failed to watch pending orders: $e');
           return <SavedOrder>[];
         });
+  }
+
+  /// Dismiss a pending order from the pending list (sets isPendingDismissed = true).
+  Future<bool> dismissPendingOrder(String orderId) async {
+    if (!firestoreService.isAvailable) return false;
+    try {
+      await firestoreService.ordersCollection.doc(orderId).update({
+        'isPendingDismissed': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint('Pending order dismissed: $orderId');
+      return true;
+    } catch (e) {
+      debugPrint('Failed to dismiss pending order: $e');
+      return false;
+    }
+  }
+
+  /// Generic update method for any order fields.
+  Future<bool> updateOrder(String orderId, Map<String, dynamic> data) async {
+    if (!firestoreService.isAvailable) return false;
+    try {
+      await firestoreService.ordersCollection.doc(orderId).update({
+        ...data,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint('Order updated: $orderId');
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update order: $e');
+      return false;
+    }
   }
 
   /// Update the assigned employees for an order.
