@@ -8,6 +8,7 @@ import 'app.dart';
 import 'data/settings_repository.dart';
 import 'firebase_options_dev.dart' as dev;
 import 'firebase_options_prod.dart' as prod;
+import 'services/auth_service.dart';
 import 'services/microsoft_graph_service.dart';
 import 'services/user_preferences_service.dart';
 
@@ -23,16 +24,26 @@ Future<void> main() async {
   // Initialize Firebase
   try {
     const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+    final googleClientId = flavor == 'prod'
+        ? prod.DefaultFirebaseOptions.googleClientId
+        : dev.DefaultFirebaseOptions.googleClientId;
     final firebaseOptions = flavor == 'prod'
         ? prod.DefaultFirebaseOptions.currentPlatform
         : dev.DefaultFirebaseOptions.currentPlatform;
 
     await Firebase.initializeApp(options: firebaseOptions);
+
+    // Initialize Auth Service with environment specific client ID
+    authService.initialize(googleClientId: googleClientId);
     // Wait for initial auth state to be determined (important for page reload)
     await FirebaseAuth.instance.authStateChanges().first;
 
     // Load settings and sync Microsoft Client ID to localStorage
-    await _syncMicrosoftSettings();
+    await _syncMicrosoftSettings(
+      defaultClientId: googleClientId.contains('-')
+          ? dev.DefaultFirebaseOptions.microsoftClientId
+          : prod.DefaultFirebaseOptions.microsoftClientId,
+    );
   } catch (e) {
     // Firebase initialization failed - app will use local JSON fallback
     debugPrint('Firebase initialization failed: $e');
@@ -57,20 +68,24 @@ Future<void> main() async {
 
 /// Syncs Microsoft Client ID from Firestore to localStorage.
 /// This ensures MSAL can read the config synchronously on page reload.
-Future<void> _syncMicrosoftSettings() async {
+Future<void> _syncMicrosoftSettings({String? defaultClientId}) async {
   try {
     final settings = await settingsRepository.load();
-    if (settings.microsoftClientId != null &&
-        settings.microsoftClientId!.isNotEmpty) {
+    final clientId =
+        (settings.microsoftClientId != null &&
+            settings.microsoftClientId!.isNotEmpty)
+        ? settings.microsoftClientId
+        : defaultClientId;
+
+    if (clientId != null && clientId.isNotEmpty) {
       // Sync to localStorage (MSAL reads this synchronously)
       final currentClientId = microsoftGraphService.getClientId();
-      if (currentClientId != settings.microsoftClientId) {
+      if (currentClientId != clientId) {
         microsoftGraphService.setClientId(
-          settings.microsoftClientId!,
+          clientId,
           tenantId: settings.microsoftTenantId,
         );
-        // Page will need reload for MSAL to pick up new config
-        debugPrint('Microsoft Client ID synced from Firestore');
+        debugPrint('Microsoft Client ID synced to localStorage');
       }
     }
   } catch (e) {

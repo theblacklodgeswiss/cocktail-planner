@@ -71,8 +71,13 @@ class _CocktailPlanerAppState extends State<CocktailPlanerApp> {
       brightness: Brightness.dark,
     );
 
+    const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+    final String appTitle = flavor == 'prod'
+        ? 'Cocktail Planer'
+        : '[DEV] Cocktail Planer';
+
     return MaterialApp.router(
-      title: 'Cocktail Planer',
+      title: appTitle,
       debugShowCheckedModeBanner: false,
       themeMode: userPreferencesService.themeMode,
       theme: ThemeData(

@@ -29,8 +29,8 @@
   // Priority: localStorage > window.MSAL_CLIENT_ID > 'YOUR_CLIENT_ID'
   const storedClientId = localStorage.getItem('msal_client_id');
   const storedTenantId = localStorage.getItem('msal_tenant_id');
-  
-  const clientId = storedClientId || window.MSAL_CLIENT_ID || 'YOUR_CLIENT_ID';
+
+  const clientId = storedClientId || window.MSAL_CLIENT_ID || 'c86056f7-b549-4b89-82ef-66624d7b4dce';
   const tenantId = storedTenantId || window.MSAL_TENANT_ID || 'common';
 
   // Function to set Client ID (requires page reload)

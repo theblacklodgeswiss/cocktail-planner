@@ -50,6 +50,9 @@ jobs:
               }
             }
 
+            static const String googleClientId = '518462681027-r3os4nc4snnuab176urst718tsoost1t.apps.googleusercontent.com';
+            static const String microsoftClientId = 'c86056f7-b549-4b89-82ef-66624d7b4dce';
+
             static const FirebaseOptions web = FirebaseOptions(
               apiKey: '${{ secrets.FIREBASE_API_KEY }}',
               appId: '${{ secrets.FIREBASE_APP_ID }}',
@@ -61,7 +64,7 @@ jobs:
           }
           EOF
 
-      - name: Generate dummy firebase_options_dev.dart
+      - name: Generate firebase_options_dev.dart
         run: |
           cat > lib/firebase_options_dev.dart << 'EOF'
           import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
@@ -69,12 +72,17 @@ jobs:
               show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
           class DefaultFirebaseOptions {
+            static const String googleClientId = '${{ secrets.DEV_GOOGLE_CLIENT_ID }}';
+            static const String microsoftClientId = 'c86056f7-b549-4b89-82ef-66624d7b4dce';
+
             static FirebaseOptions get currentPlatform {
               return const FirebaseOptions(
-                apiKey: 'dummy',
-                appId: 'dummy',
-                messagingSenderId: 'dummy',
-                projectId: 'dummy',
+                apiKey: '${{ secrets.DEV_FIREBASE_API_KEY }}',
+                appId: '${{ secrets.DEV_FIREBASE_APP_ID }}',
+                messagingSenderId: '${{ secrets.DEV_FIREBASE_MESSAGING_SENDER_ID }}',
+                projectId: '${{ secrets.DEV_FIREBASE_PROJECT_ID }}',
+                authDomain: '${{ secrets.DEV_FIREBASE_AUTH_DOMAIN }}',
+                storageBucket: '${{ secrets.DEV_FIREBASE_STORAGE_BUCKET }}',
               );
             }
           }
@@ -87,13 +95,13 @@ jobs:
         run: flutter test
 
       - name: Build web
-        run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=prod
+        run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=dev
 
       - name: Deploy to Firebase Hosting Preview Channel
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          projectId: cocktail-planer-dev
           # channelId omitted → action auto-creates a per-PR preview channel
           # and posts the preview URL as a comment on the PR

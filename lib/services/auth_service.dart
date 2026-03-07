@@ -9,7 +9,14 @@ const String superAdminEmail = 'the.blacklodge@outlook.com';
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal();
+  AuthService._internal() {
+    _firebaseAuth.authStateChanges().listen((user) {
+      _cachedIsAdmin = null; // Clear cache on user change
+      if (user != null && !user.isAnonymous) {
+        checkIsAdmin();
+      }
+    });
+  }
 
   FirebaseAuth? _auth;
   GoogleSignIn? _googleSignIn;
@@ -18,6 +25,15 @@ class AuthService {
   FirebaseAuth get _firebaseAuth {
     _auth ??= FirebaseAuth.instance;
     return _auth!;
+  }
+
+  void initialize({String? googleClientId}) {
+    if (googleClientId != null && googleClientId.isNotEmpty) {
+      _googleSignIn = GoogleSignIn(
+        clientId: googleClientId,
+        scopes: ['email', 'profile'],
+      );
+    }
   }
 
   GoogleSignIn get _google {
@@ -53,6 +69,8 @@ class AuthService {
   bool get isAdmin {
     final userEmail = email;
     if (userEmail == null) return false;
+    // Super admin is always an admin
+    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) return true;
     return _cachedIsAdmin ?? false;
   }
 
@@ -79,19 +97,19 @@ class AuthService {
       return false;
     }
 
-    // Super admin can manage users but is not a data admin
+    // Super admin is always an admin
     if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) {
-      _cachedIsAdmin = false;
-      return false;
+      _cachedIsAdmin = true;
+      return true;
     }
-    
+
     // Check Firestore allowedUsers collection
     try {
       final doc = await FirebaseFirestore.instance
           .collection('allowedUsers')
           .doc(userEmail.toLowerCase())
           .get();
-      
+
       if (doc.exists) {
         final data = doc.data();
         _cachedIsAdmin = data?['isAdmin'] == true;
@@ -102,7 +120,7 @@ class AuthService {
       debugPrint('Failed to check admin status: $e');
       _cachedIsAdmin = false;
     }
-    
+
     return _cachedIsAdmin ?? false;
   }
 
@@ -126,7 +144,7 @@ class AuthService {
         googleProvider.setCustomParameters({
           'prompt': 'select_account', // Force account selection
         });
-        
+
         return await _firebaseAuth.signInWithPopup(googleProvider);
       } else {
         // Mobile/Desktop - sign out first to force account selection
@@ -136,7 +154,8 @@ class AuthService {
           return null; // User cancelled
         }
 
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
@@ -188,7 +207,7 @@ class AuthService {
         googleProvider.setCustomParameters({
           'prompt': 'select_account', // Force account selection
         });
-        
+
         return await user.linkWithPopup(googleProvider);
       } else {
         await _google.signOut(); // Force account selection
@@ -197,7 +216,8 @@ class AuthService {
           return null;
         }
 
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
@@ -216,13 +236,15 @@ class AuthService {
   /// Get list of allowed users (admin or super admin only)
   Future<List<AllowedUser>> getAllowedUsers() async {
     if (!canManageUsers) return [];
-    
+
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('allowedUsers')
           .get();
-      
-      return snapshot.docs.map((doc) => AllowedUser.fromFirestore(doc)).toList();
+
+      return snapshot.docs
+          .map((doc) => AllowedUser.fromFirestore(doc))
+          .toList();
     } catch (e) {
       debugPrint('Failed to get allowed users: $e');
       return [];
@@ -230,20 +252,24 @@ class AuthService {
   }
 
   /// Add allowed user (admin or super admin only)
-  Future<bool> addAllowedUser(String email, {String? name, bool isAdmin = false}) async {
+  Future<bool> addAllowedUser(
+    String email, {
+    String? name,
+    bool isAdmin = false,
+  }) async {
     if (!canManageUsers) return false;
-    
+
     try {
       await FirebaseFirestore.instance
           .collection('allowedUsers')
           .doc(email.toLowerCase())
           .set({
-        'email': email.toLowerCase(),
-        'name': name ?? '',
-        'isAdmin': isAdmin,
-        'createdAt': FieldValue.serverTimestamp(),
-        'createdBy': this.email,
-      });
+            'email': email.toLowerCase(),
+            'name': name ?? '',
+            'isAdmin': isAdmin,
+            'createdAt': FieldValue.serverTimestamp(),
+            'createdBy': this.email,
+          });
       return true;
     } catch (e) {
       debugPrint('Failed to add allowed user: $e');
@@ -251,10 +277,26 @@ class AuthService {
     }
   }
 
+  /// Update admin status of an allowed user
+  Future<bool> updateAdminStatus(String email, bool isAdmin) async {
+    if (!canManageUsers) return false;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('allowedUsers')
+          .doc(email.toLowerCase())
+          .update({'isAdmin': isAdmin});
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update admin status: $e');
+      return false;
+    }
+  }
+
   /// Remove allowed user (admin only)
   Future<bool> removeAllowedUser(String email) async {
     if (!isAdmin) return false;
-    
+
     try {
       await FirebaseFirestore.instance
           .collection('allowedUsers')

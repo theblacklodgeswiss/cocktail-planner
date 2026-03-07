@@ -48,9 +48,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
           title: Text('admin_panel.title'.tr()),
         ),
-        body: Center(
-          child: Text('admin.access_denied'.tr()),
-        ),
+        body: Center(child: Text('admin.access_denied'.tr())),
       );
     }
 
@@ -107,12 +105,34 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               ),
               title: Text(user.name.isNotEmpty ? user.name : user.email),
               subtitle: SelectableText(user.email),
-              trailing: authService.isAdmin
-                  ? IconButton(
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (user.email.toLowerCase() != superAdminEmail.toLowerCase())
+                    Switch(
+                      value: user.isAdmin,
+                      onChanged: (value) async {
+                        final success = await authService.updateAdminStatus(
+                          user.email,
+                          value,
+                        );
+                        if (success) _loadUsers();
+                      },
+                      activeThumbColor: Colors.amber,
+                    )
+                  else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Icon(Icons.security, color: Colors.amber),
+                    ),
+                  if (authService.isAdmin &&
+                      user.email.toLowerCase() != superAdminEmail.toLowerCase())
+                    IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
                       onPressed: () => _confirmRemoveUser(user.email),
-                    )
-                  : null,
+                    ),
+                ],
+              ),
             ),
           );
         },
@@ -126,7 +146,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (c) => AlertDialog(
         title: Text('admin_panel.remove_user_title'.tr()),
         content: Text(
-            'admin_panel.remove_user_message'.tr(namedArgs: {'email': email})),
+          'admin_panel.remove_user_message'.tr(namedArgs: {'email': email}),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -149,46 +170,59 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   Future<void> _showAddUserDialog() async {
     final emailController = TextEditingController();
     final nameController = TextEditingController();
+    bool isAdmin = false;
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('admin_panel.add_user'.tr()),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(
-                labelText: 'admin_panel.email_label'.tr(),
-                hintText: 'admin_panel.email_hint'.tr(),
-                prefixIcon: const Icon(Icons.email),
-                border: const OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('admin_panel.add_user'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: 'admin_panel.email_label'.tr(),
+                  hintText: 'admin_panel.email_hint'.tr(),
+                  prefixIcon: const Icon(Icons.email),
+                  border: const OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.emailAddress,
               ),
-              keyboardType: TextInputType.emailAddress,
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'admin_panel.name_label'.tr(),
+                  hintText: 'admin_panel.name_hint'.tr(),
+                  prefixIcon: const Icon(Icons.person),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              CheckboxListTile(
+                title: const Text('Admin'),
+                subtitle: const Text('Hat Zugriff auf Einstellungen'),
+                value: isAdmin,
+                onChanged: (val) =>
+                    setDialogState(() => isAdmin = val ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('common.cancel'.tr()),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: 'admin_panel.name_label'.tr(),
-                hintText: 'admin_panel.name_hint'.tr(),
-                prefixIcon: const Icon(Icons.person),
-                border: const OutlineInputBorder(),
-              ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('common.add'.tr()),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.add'.tr()),
-          ),
-        ],
       ),
     );
 
@@ -196,13 +230,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final success = await authService.addAllowedUser(
         emailController.text.trim(),
         name: nameController.text.trim(),
+        isAdmin: isAdmin,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                success ? 'common.user_added'.tr() : 'common.add_error'.tr()),
+              success ? 'common.user_added'.tr() : 'common.add_error'.tr(),
+            ),
           ),
         );
         if (success) {
