@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
+import '../../config/env_config.dart';
 import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
@@ -450,9 +451,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         language: _language,
       );
 
-      // Upload to OneDrive if supported
+      // Upload to OneDrive if supported and in production
       final fileName = InvoicePdfGenerator.getFilename(updatedOrder);
-      if (microsoftGraphService.isSupported) {
+      if (microsoftGraphService.isSupported && EnvConfig.isOneDriveEnabled) {
         final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
           rootFolder: 'Aufträge',
           date: updatedOrder.date,

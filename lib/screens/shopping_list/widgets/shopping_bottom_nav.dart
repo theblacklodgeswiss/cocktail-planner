@@ -7,18 +7,14 @@ class ShoppingBottomNav extends StatelessWidget {
     super.key,
     required this.currentPage,
     required this.totalPages,
-    required this.hasSelectedItems,
     required this.onBack,
     required this.onNext,
-    required this.onExport,
   });
 
   final int currentPage;
   final int totalPages;
-  final bool hasSelectedItems;
   final VoidCallback onBack;
   final VoidCallback onNext;
-  final VoidCallback onExport;
 
   bool get _isLastPage => currentPage == totalPages - 1;
   bool get _isFirstPage => currentPage == 0;
@@ -83,11 +79,7 @@ class ShoppingBottomNav extends StatelessWidget {
 
   Widget _buildNextButton(BuildContext context) {
     if (_isLastPage) {
-      return FilledButton.icon(
-        onPressed: hasSelectedItems ? onExport : null,
-        icon: const Icon(Icons.picture_as_pdf),
-        label: Text('common.pdf'.tr()),
-      );
+      return const SizedBox(width: 100);
     }
     return FilledButton.icon(
       onPressed: onNext,

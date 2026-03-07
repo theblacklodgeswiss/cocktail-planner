@@ -34,6 +34,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   bool _suggestionsApplied = false;
   bool _defaultsApplied = false;
   bool _savedItemsApplied = false;
+  int _geminiSuggestionsCount = 0;
+  String _geminiExplanation = '';
+  bool _showGeminiBanner = false;
+  bool _isBannerExpanded = false;
 
   late PageController _pageController;
   int _currentPage = 0;
@@ -196,34 +200,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    // Show a snackbar that suggestions were applied
-    if (mounted && appliedCount > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'shopping.gemini_suggestions_applied'.tr(
-                namedArgs: {'count': appliedCount.toString()},
-              ),
-            ),
-            backgroundColor: Colors.deepPurple,
-            action: SnackBarAction(
-              label: 'common.undo'.tr(),
-              textColor: Colors.white,
-              onPressed: () {
-                // Clear all quantities and rebuild
-                setState(() {
-                  _quantities.clear();
-                  _selectedItems.clear();
-                  for (final controller in _controllers.values) {
-                    controller.text = '';
-                  }
-                });
-              },
-            ),
-          ),
-        );
+    // Store count and explanation for banner
+    if (appliedCount > 0) {
+      setState(() {
+        _geminiSuggestionsCount = appliedCount;
+        _geminiExplanation = appState.materialSuggestionExplanation ?? '';
+        _showGeminiBanner = true;
       });
     }
 
@@ -636,8 +618,15 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     // Apply saved order items first (if editing)
     _applySavedOrderItems(data, cocktailNames);
+    
     // Apply Gemini material suggestions if available (once)
-    _applyMaterialSuggestions(data);
+    // Use post-frame callback to avoid setState during build
+    if (appState.hasMaterialSuggestions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyMaterialSuggestions(data);
+      });
+    }
+    
     // Apply default fixed value quantities (once)
     _applyDefaultFixedValues(data);
 
@@ -720,7 +709,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            ShoppingHeader(currentPage: _currentPage, totalPages: totalPages),
+            ShoppingHeader(
+              currentPage: _currentPage,
+              totalPages: totalPages,
+              hasSelectedItems: selectedItems.isNotEmpty,
+              totalCost: total,
+              currency: _currency,
+              onExport: () => _export(
+                allItems,
+                total,
+                mergedQuantities,
+                aggregatedSelected,
+              ),
+            ),
+            if (_showGeminiBanner) _buildGeminiBanner(),
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -741,15 +743,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             ShoppingBottomNav(
               currentPage: _currentPage,
               totalPages: totalPages,
-              hasSelectedItems: selectedItems.isNotEmpty,
               onBack: () => _goToPage(_currentPage - 1),
               onNext: () => _goToPage(_currentPage + 1),
-              onExport: () => _export(
-                allItems,
-                total,
-                mergedQuantities,
-                aggregatedSelected,
-              ),
             ),
           ],
         ),
@@ -894,6 +889,110 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           }),
           const SizedBox(height: 100),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGeminiBanner() {
+    final theme = Theme.of(context);
+    final primaryContainer = theme.colorScheme.primaryContainer;
+    final onPrimaryContainer = theme.colorScheme.onPrimaryContainer;
+    final primary = theme.colorScheme.primary;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: primaryContainer,
+        border: Border(
+          bottom: BorderSide(
+            color: primary.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _isBannerExpanded = !_isBannerExpanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  color: primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'shopping.gemini_suggestions_applied'.tr(
+                          namedArgs: {'count': _geminiSuggestionsCount.toString()},
+                        ),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: onPrimaryContainer,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (_geminiExplanation.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _geminiExplanation,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: onPrimaryContainer.withValues(alpha: 0.8),
+                          ),
+                          maxLines: _isBannerExpanded ? null : 2,
+                          overflow: _isBannerExpanded ? null : TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showGeminiBanner = false;
+                      _quantities.clear();
+                      _selectedItems.clear();
+                      for (final controller in _controllers.values) {
+                        controller.text = '';
+                      }
+                    });
+                  },
+                  icon: const Icon(Icons.undo, size: 16),
+                  label: Text(
+                    'common.undo'.tr(),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: onPrimaryContainer,
+                  onPressed: () {
+                    setState(() => _showGeminiBanner = false);
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  tooltip: 'common.close'.tr(),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

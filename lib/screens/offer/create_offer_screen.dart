@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
+import '../../config/env_config.dart';
 import '../../data/order_repository.dart';
 import '../../data/employee_repository.dart';
 import '../../models/offer.dart';
@@ -310,11 +311,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       final offer = _buildOfferData();
       final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
 
-      // Upload to OneDrive if supported
+      // Upload to OneDrive if supported and in production
       final safeName = offer.orderName.replaceAll(' ', '_');
       final dateTag =
           '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
-      if (microsoftGraphService.isSupported) {
+      if (microsoftGraphService.isSupported && EnvConfig.isOneDriveEnabled) {
         final fileName = 'Angebot_${safeName}_$dateTag.pdf';
         final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
           rootFolder: 'Angebote',

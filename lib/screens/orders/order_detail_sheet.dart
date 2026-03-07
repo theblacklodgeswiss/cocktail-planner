@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/env_config.dart';
 import '../../data/cocktail_repository.dart';
 import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
@@ -250,6 +251,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   Future<void> _triggerMicrosoftIntegration() async {
     if (!microsoftGraphService.isSupported) return;
+    
+    // Skip OneDrive uploads in development environment
+    if (!EnvConfig.isOneDriveEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.dev_mode_no_upload'.tr()),
+          ),
+        );
+      }
+      return;
+    }
 
     final statusNotifier = ValueNotifier<String>(
       'orders.ms_step_generating_shopping_list'.tr(),

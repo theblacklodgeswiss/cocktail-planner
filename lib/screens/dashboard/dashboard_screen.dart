@@ -10,12 +10,11 @@ import '../../services/gemini_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
+import '../../widgets/gemini_material_review_dialog.dart';
 import '../forms/modern_order_form_screen.dart';
 import 'user_menu_sheet.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/selected_cocktails.dart';
-
-import '../../widgets/gemini_plan_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.loadData});
@@ -122,7 +121,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     appState.setSelectedRecipes(result);
   }
 
-  void _showGeminiPlan() {
+  Future<void> _generateMaterialSuggestionsWithGemini(
+    CocktailData cocktailData,
+  ) async {
     if (_orderSetup == null) return;
     if (!geminiService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -131,20 +132,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
+    // Show loading dialog
     showDialog(
       context: context,
-      builder: (context) => GeminiPlanDialog(
-        setup: _orderSetup!,
-        cocktails: appState.selectedRecipes
-            .where((r) => !r.isShot)
-            .map((r) => r.name)
-            .toList(),
-        shots: appState.selectedRecipes
-            .where((r) => r.isShot)
-            .map((r) => r.name)
-            .toList(),
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('orders.gemini_generating'.tr()),
+          ],
+        ),
       ),
     );
+
+    try {
+      // Get available materials
+      final materials = cocktailData.materials
+          .where((m) => m.visible)
+          .map(
+            (m) => {
+              'name': m.name,
+              'unit': m.unit,
+              'price': m.price,
+              'currency': m.currency,
+            },
+          )
+          .toList();
+
+      // Get recipe ingredients
+      final selectedCocktails = appState.selectedRecipes;
+      final recipeIngredients = selectedCocktails
+          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
+          .toList();
+
+      // Generate material suggestions
+      final suggestion = await geminiService.generateMaterialSuggestions(
+        guestCount: _orderSetup!.personCount,
+        guestRange: '',  // Not available from OrderSetupData
+        requestedCocktails: selectedCocktails.map((r) => r.name).toList(),
+        eventType: _orderSetup!.drinkerType,
+        drinkerType: _orderSetup!.drinkerType,
+        availableMaterials: materials,
+        recipeIngredients: recipeIngredients,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (suggestion == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('orders.gemini_error'.tr()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show review dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => GeminiMaterialReviewDialog(
+            suggestion: suggestion,
+            personCount: _orderSetup!.personCount,
+            cocktailNames: selectedCocktails.map((r) => r.name).toList(),
+            onConfirm: (confirmedSuggestions, explanation) {
+              // Store suggestions in app state
+              appState.setMaterialSuggestions(
+                confirmedSuggestions,
+                explanation,
+              );
+
+              // Navigate to shopping list
+              context.push('/shopping-list', extra: _orderSetup);
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_error'.tr()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -264,9 +347,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 OutlinedButton.icon(
-                                  onPressed: _showGeminiPlan,
+                                  onPressed: () => _generateMaterialSuggestionsWithGemini(data),
                                   icon: const Icon(Icons.auto_awesome),
-                                  label: Text('dashboard.generate_plan'.tr()),
+                                  label: Text('orders.generate_with_gemini'.tr()),
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 24,
@@ -390,14 +473,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _showGeminiPlan,
-                icon: const Icon(Icons.auto_awesome, size: 20),
-                label: Text(
-                  'dashboard.generate_plan'.tr(),
-                  style: const TextStyle(fontSize: 13),
-                ),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56)),
+              child: FutureBuilder<CocktailData>(
+                future: _dataFuture,
+                builder: (context, snapshot) {
+                  final enabled = snapshot.hasData;
+                  return OutlinedButton.icon(
+                    onPressed: enabled && snapshot.data != null
+                        ? () => _generateMaterialSuggestionsWithGemini(snapshot.data!)
+                        : null,
+                    icon: const Icon(Icons.auto_awesome, size: 20),
+                    label: Text(
+                      'orders.generate_with_gemini'.tr(),
+                      style: const TextStyle(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56)),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 12),
