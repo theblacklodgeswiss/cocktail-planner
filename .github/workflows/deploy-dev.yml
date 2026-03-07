@@ -1,0 +1,68 @@
+name: Deploy to Firebase Hosting Dev
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy-dev:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Generate firebase_options_dev.dart
+        run: |
+          cat > lib/firebase_options_dev.dart << 'EOF'
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          import 'package:flutter/foundation.dart'
+              show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+          class DefaultFirebaseOptions {
+            static const String googleClientId = '${{ secrets.DEV_GOOGLE_CLIENT_ID }}';
+            static const String microsoftClientId = 'c86056f7-b549-4b89-82ef-66624d7b4dce';
+
+            static FirebaseOptions get currentPlatform {
+              return const FirebaseOptions(
+                apiKey: '${{ secrets.DEV_FIREBASE_API_KEY }}',
+                appId: '${{ secrets.DEV_FIREBASE_APP_ID }}',
+                messagingSenderId: '${{ secrets.DEV_FIREBASE_MESSAGING_SENDER_ID }}',
+                projectId: '${{ secrets.DEV_FIREBASE_PROJECT_ID }}',
+                authDomain: '${{ secrets.DEV_FIREBASE_AUTH_DOMAIN }}',
+                storageBucket: '${{ secrets.DEV_FIREBASE_STORAGE_BUCKET }}',
+              );
+            }
+          }
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build web
+        run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=dev
+
+      - name: Deploy Firestore Rules (Dev)
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore:rules --project ${{ secrets.DEV_FIREBASE_PROJECT_ID }}
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy to Firebase Hosting (Dev)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
+          projectId: ${{ secrets.DEV_FIREBASE_PROJECT_ID }}
+          channelId: live
