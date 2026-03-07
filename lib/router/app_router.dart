@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../models/order.dart';
 import '../screens/admin/admin_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
+import '../screens/forms/modern_order_form_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
@@ -64,6 +65,10 @@ final GoRouter appRouter = GoRouter(
         final extra = state.extra;
         return ShoppingListScreen(orderSetup: extra);
       },
+    ),
+    GoRoute(
+      path: '/order-form',
+      builder: (context, state) => const ModernOrderFormScreen(),
     ),
     GoRoute(
       path: '/admin',

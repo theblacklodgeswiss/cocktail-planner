@@ -10,6 +10,7 @@ import '../../services/gemini_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
+import '../forms/modern_order_form_screen.dart';
 import 'user_menu_sheet.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/selected_cocktails.dart';
@@ -188,10 +189,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       if (_orderSetup == null)
                         Expanded(
-                          child: SingleChildScrollView(
-                            child: OrderSetupForm(
-                              onSubmit: (setup) =>
-                                  setState(() => _orderSetup = setup),
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(48),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.assignment,
+                                    size: 120,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withValues(alpha: 0.3),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    'Auftragsdaten eingeben',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Erstelle einen neuen Auftrag und gib die\nwichtigen Details für dein Event ein',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 48),
+                                  FilledButton.icon(
+                                    onPressed: () async {
+                                      final result = await context.push<OrderFormResult>(
+                                        '/order-form',
+                                      );
+                                      if (result != null) {
+                                        setState(() => _orderSetup = result.setupData);
+                                        appState.setSelectedRecipes(result.selectedRecipes);
+                                      }
+                                    },
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Neuen Auftrag erstellen'),
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 32,
+                                        vertical: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
