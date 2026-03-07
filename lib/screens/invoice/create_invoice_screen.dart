@@ -828,6 +828,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       children: [
         SectionHeader(label: 'invoice.positions'.tr()),
         const SizedBox(height: 8),
+        
+        // Main pricing card (like offer screen)
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -844,7 +846,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Travel costs
+                // Travel costs in one row
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 500;
@@ -903,17 +905,27 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     keyboard: TextInputType.number,
                   ),
                 ),
-                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
 
-                // Shots position (only if shots are listed)
-                if (_shotsCtrl.text.trim().isNotEmpty) ...[
+        // Shots Section - separate card
+        if (_shotsCtrl.text.trim().isNotEmpty) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
                     'invoice.shots_position'.tr(),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final wide = constraints.maxWidth >= 500;
@@ -962,7 +974,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                             );
                     },
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   _field(
                     controller: _shotsRemarkCtrl,
                     label: 'invoice.shots_remark'.tr(),
@@ -970,38 +982,42 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                         'Shots – Aarewasser, Erdbeer Lime\nAusgeschenkt in 0.4 CL Shotbechern',
                     maxLines: 3,
                   ),
-                  const SizedBox(height: 12),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
 
-                // Discount
-                SizedBox(
-                  width: 250,
-                  child: _field(
-                    controller: _discountCtrl,
-                    label:
-                        '${'invoice.discount'.tr()} (${widget.order.currency})',
-                    hint: '0',
-                    keyboard: TextInputType.number,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-
-                // Extrastunden (Extra hours)
-                _buildExtraHoursSection(),
-
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-
-                // Extra positions
-                _buildExtraPositionsSection(curr),
-              ],
+        // Discount - separate card
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: 250,
+              child: _field(
+                controller: _discountCtrl,
+                label:
+                    '${'invoice.discount'.tr()} (${widget.order.currency})',
+                hint: '0',
+                keyboard: TextInputType.number,
+              ),
             ),
           ),
         ),
+        const SizedBox(height: 12),
+
+        // Extra hours - separate card
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildExtraHoursSection(),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Extra positions
+        _buildExtraPositionsSection(curr),
       ],
     );
   }

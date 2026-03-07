@@ -343,40 +343,46 @@ class OfferPdfGenerator {
         ],
         pw.Row(
           children: [
-            pw.RichText(
-              text: pw.TextSpan(
-                children: [
-                  pw.TextSpan(
-                    text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
-                    style: pw.TextStyle(
-                      fontSize: 9,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.TextSpan(
-                    text: '${offer.guestCount} ${isEn ? 'Guests' : 'Gäste'}',
-                    style: const pw.TextStyle(fontSize: 9),
-                  ),
-                ],
-              ),
-            ),
-            if (offer.eventTime.isNotEmpty) ...[
-              pw.Spacer(),
-              pw.RichText(
+            pw.Expanded(
+              flex: 2,
+              child: pw.RichText(
                 text: pw.TextSpan(
                   children: [
                     pw.TextSpan(
-                      text: isEn ? 'Time: ' : 'Uhrzeit: ',
+                      text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
                       style: pw.TextStyle(
                         fontSize: 9,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
                     pw.TextSpan(
-                      text: '${offer.eventTime} ${isEn ? '' : 'Uhr'}',
+                      text: '${offer.guestCount} ${isEn ? 'Guests' : 'Gäste'}',
                       style: const pw.TextStyle(fontSize: 9),
                     ),
                   ],
+                ),
+              ),
+            ),
+            if (offer.eventTime.isNotEmpty) ...[
+              pw.Expanded(
+                flex: 1,
+                child: pw.RichText(
+                  textAlign: pw.TextAlign.right,
+                  text: pw.TextSpan(
+                    children: [
+                      pw.TextSpan(
+                        text: isEn ? 'Time: ' : 'Uhrzeit: ',
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.TextSpan(
+                        text: '${offer.eventTime} ${isEn ? '' : 'Uhr'}',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
