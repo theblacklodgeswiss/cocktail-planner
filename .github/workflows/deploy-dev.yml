@@ -94,6 +94,13 @@ jobs:
       - name: Build web
         run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=dev
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web/
+          projectId: '${{ secrets.DEV_FIREBASE_PROJECT_ID }}'
+
       - name: Deploy to Firebase Hosting (Dev)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
