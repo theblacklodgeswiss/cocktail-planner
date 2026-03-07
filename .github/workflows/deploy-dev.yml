@@ -94,13 +94,6 @@ jobs:
       - name: Build web
         run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=dev
 
-      - name: Deploy Firestore Rules (Dev)
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only firestore:rules --project ${{ secrets.DEV_FIREBASE_PROJECT_ID }}
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-
       - name: Deploy to Firebase Hosting (Dev)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
