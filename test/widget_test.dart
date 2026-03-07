@@ -138,12 +138,13 @@ void main() {
     );
 
     test('calculates travel cost total (return trip)', () {
-      expect(offer.travelCostTotal, closeTo(210.0, 0.001));
+      // distanceKm (150) * travelCostPerKm (0.70) = 105
+      expect(offer.travelCostTotal, closeTo(105.0, 0.001));
     });
 
     test('calculates barServiceCost as orderTotal minus travel and theke', () {
-      // orderTotal (1910) - travel (210) - barCost (100) = 1600
-      expect(offer.barServiceCost, closeTo(1600.0, 0.001));
+      // orderTotal (1910) - travel (105) - barCost (100) = 1705
+      expect(offer.barServiceCost, closeTo(1705.0, 0.001));
     });
 
     test('calculates grand total as orderTotal minus discount', () {
