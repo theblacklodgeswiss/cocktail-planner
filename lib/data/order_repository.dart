@@ -28,6 +28,10 @@ class OrderRepository {
     String eventTime = '',
     String serviceType = 'cocktail_barservice',
     Map<String, double> cocktailPopularity = const {},
+    List<String> barDrinks = const [],
+    List<String> alcoholPurchase = const [],
+    List<String> additionalServices = const [],
+    String remarks = '',
   }) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -54,6 +58,10 @@ class OrderRepository {
         'eventTime': eventTime,
         'serviceType': serviceType,
         'cocktailPopularity': cocktailPopularity,
+        'barDrinks': barDrinks,
+        'alcoholPurchase': alcoholPurchase,
+        'additionalServices': additionalServices,
+        'remarks': remarks,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -99,6 +107,10 @@ class OrderRepository {
     DateTime? eventDate,
     String? serviceType,
     Map<String, double>? cocktailPopularity,
+    List<String>? barDrinks,
+    List<String>? alcoholPurchase,
+    List<String>? additionalServices,
+    String? remarks,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -125,6 +137,10 @@ class OrderRepository {
       if (eventDate != null) updateData['date'] = eventDate.toIso8601String();
       if (serviceType != null) updateData['serviceType'] = serviceType;
       if (cocktailPopularity != null) updateData['cocktailPopularity'] = cocktailPopularity;
+      if (barDrinks != null) updateData['barDrinks'] = barDrinks;
+      if (alcoholPurchase != null) updateData['alcoholPurchase'] = alcoholPurchase;
+      if (additionalServices != null) updateData['additionalServices'] = additionalServices;
+      if (remarks != null) updateData['remarks'] = remarks;
 
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;

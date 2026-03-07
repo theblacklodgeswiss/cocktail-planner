@@ -28,6 +28,7 @@
   },
   "common": {
     "cancel": "Cancel",
+    "ok": "OK",
     "delete": "Delete",
     "edit": "Edit",
     "back": "Back",
@@ -491,7 +492,16 @@
     "required": "Required field",
     "required_name": "Name is required",
     "required_date": "Date is required",
-    "required_cocktails": "Please select at least one cocktail"
+    "required_cocktails": "Please select at least one cocktail",
+    "bar_drinks_title": "Bar Service - Which beverages should be served?",
+    "bar_drinks_subtitle": "Select all applicable categories",
+    "alcohol_purchase_title": "Do you want to purchase alcohol from us?",
+    "alcohol_purchase_subtitle": "We will contact you regarding quantities",
+    "additional_services_title": "Do you need any of the services listed below?",
+    "additional_services_subtitle": "We can offer package prices with internal / external service providers",
+    "remarks_title": "Do you have any other remarks to add?",
+    "remarks_subtitle": "e.g. Welcome drinks, schedule",
+    "remarks_hint": "Enter your answer"
   },
   "cocktail_popularity": {
     "title": "Cocktail Popularity",

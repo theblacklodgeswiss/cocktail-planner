@@ -709,6 +709,53 @@ class InvoicePdfGenerator {
           ],
         );
       }),
+      // Bar drinks (if selected)
+      if (order.barDrinks.isNotEmpty)
+        pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(isEn ? 'Bar Drinks' : 'Bargetränke'),
+            cell('1', align: pw.TextAlign.center),
+            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(order.barDrinks.join(', ')),
+          ],
+        ),
+      // Alcohol purchase (if selected)
+      ...order.alcoholPurchase.map(
+        (alcohol) {
+          final isUsageBased = alcohol.toLowerCase().contains('wodka') || 
+                               alcohol.toLowerCase().contains('chivas');
+          final note = isUsageBased
+              ? (isEn 
+                  ? 'Usage-based billing' 
+                  : 'Nach Verbrauch abgerechnet')
+              : '';
+          return pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(alcohol),
+              cell('1', align: pw.TextAlign.center),
+              cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+              cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+              cell(note),
+            ],
+          );
+        },
+      ),
+      // Additional services (if selected)
+      ...order.additionalServices.map(
+        (service) => pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(service),
+            cell('1', align: pw.TextAlign.center),
+            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(order.remarks.isNotEmpty ? order.remarks : ''),
+          ],
+        ),
+      ),
       // Discount row (if > 0)
       if (order.offerDiscount > 0)
         pw.TableRow(

@@ -80,6 +80,10 @@ class SavedOrder {
     this.requestedCocktails = const [],
     this.isPendingDismissed = false,
     this.cocktailPopularity = const {},
+    this.barDrinks = const [],
+    this.alcoholPurchase = const [],
+    this.additionalServices = const [],
+    this.remarks = '',
   });
 
   final String id;
@@ -134,6 +138,18 @@ class SavedOrder {
   /// Popularity/probability percentage for each cocktail (0-100).
   /// Key: cocktail name, Value: popularity percentage.
   final Map<String, double> cocktailPopularity;
+
+  /// Selected bar drinks categories (e.g., "Bier", "Wein", "Softdrinks")
+  final List<String> barDrinks;
+  
+  /// Selected alcohol items for purchase (e.g., "Wodka", "Chivas")
+  final List<String> alcoholPurchase;
+  
+  /// Selected additional services (e.g., "360 Booth", "PhotoBox Classic")
+  final List<String> additionalServices;
+  
+  /// Free-form remarks/notes for additional services
+  final String remarks;
 
   int get year => date.year;
   
@@ -219,6 +235,10 @@ class SavedOrder {
       isPendingDismissed: data['isPendingDismissed'] as bool? ?? false,
       cocktailPopularity: (data['cocktailPopularity'] as Map<String, dynamic>?)
           ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
+      barDrinks: (data['barDrinks'] as List<dynamic>?)?.cast<String>() ?? [],
+      alcoholPurchase: (data['alcoholPurchase'] as List<dynamic>?)?.cast<String>() ?? [],
+      additionalServices: (data['additionalServices'] as List<dynamic>?)?.cast<String>() ?? [],
+      remarks: data['remarks'] as String? ?? '',
     );
   }
 }

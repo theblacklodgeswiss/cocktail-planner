@@ -77,6 +77,10 @@ class OfferData {
     this.extraPositions = const [],
     this.assignedEmployees = const [],
     this.supervisorItems = const [],
+    this.barDrinks = const [],
+    this.alcoholPurchase = const [],
+    this.additionalServices = const [],
+    this.remarks = '',
   });
 
   /// Event / order name (from SavedOrder.name)
@@ -153,6 +157,18 @@ class OfferData {
 
   /// Selected supervisor/barkeeper items from the shopping list
   final List<Map<String, dynamic>> supervisorItems;
+
+  /// Selected bar drinks categories (e.g., "Bier", "Wein", "Softdrinks")
+  final List<String> barDrinks;
+  
+  /// Selected alcohol items for purchase (e.g., "Wodka", "Chivas")
+  final List<String> alcoholPurchase;
+  
+  /// Selected additional services (e.g., "360 Booth", "PhotoBox Classic")
+  final List<String> additionalServices;
+  
+  /// Free-form remarks/notes for additional services
+  final String remarks;
 
   double get travelCostTotal => distanceKm * travelCostPerKm;
 

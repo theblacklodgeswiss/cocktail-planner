@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/url_utils.dart';
 import '../../data/cocktail_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/recipe.dart';
@@ -32,7 +34,7 @@ class ModernOrderFormScreen extends StatefulWidget {
 class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
-  final int _totalSteps = 5;
+  final int _totalSteps = 7;
   
   Future<CocktailData>? _dataFuture;
 
@@ -47,18 +49,56 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   int _distanceKm = 10;
   String _currency = 'CHF';
   String _drinkerType = 'normal';
-  List<Recipe> _selectedRecipes = [];
+  final List<Recipe> _selectedRecipes = [];
   String _searchQuery = '';
   String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
+  final Set<String> _selectedBarDrinks = {};
+  final Set<String> _selectedAlcoholItems = {};
+  final Set<String> _selectedAdditionalServices = {};
+  final TextEditingController _remarksController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadCocktailData();
+    // Read step from URL query parameter
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final uri = Uri.base;
+      final stepParam = uri.queryParameters['step'];
+      if (stepParam != null) {
+        final step = int.tryParse(stepParam) ?? 0;
+        if (step >= 0 && step < _totalSteps) {
+          setState(() => _currentStep = step);
+          if (_pageController.hasClients) {
+            _pageController.jumpToPage(step);
+          }
+        }
+      } else {
+        // No step parameter, set to 0 and update URL
+        _updateUrlWithoutNavigation(0);
+      }
+    });
   }
 
   void _loadCocktailData() {
     _dataFuture = cocktailRepository.load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Sync step from URL when navigating back/forward
+    final uri = Uri.base;
+    final stepParam = uri.queryParameters['step'];
+    if (stepParam != null) {
+      final step = int.tryParse(stepParam) ?? 0;
+      if (step >= 0 && step < _totalSteps && step != _currentStep) {
+        setState(() => _currentStep = step);
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(step);
+        }
+      }
+    }
   }
 
   @override
@@ -67,17 +107,190 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _remarksController.dispose();
     super.dispose();
+  }
+
+  // Update browser URL without affecting GoRouter's navigation stack
+  void _updateUrlWithoutNavigation(int step) {
+    final currentUrl = Uri.base;
+    final newUrl = currentUrl.replace(queryParameters: {'step': step.toString()});
+    updateBrowserUrl(newUrl.toString());
+  }
+
+  // Show date picker (Cupertino style with mouse wheel support on Web)
+  Future<DateTime?> _showCupertinoDatePicker() async {
+    final now = DateTime.now();
+    final maxDate = now.add(const Duration(days: 730));
+
+    // Use Cupertino Picker everywhere with proper mouse/touch support
+    DateTime selectedDate = _eventDate ?? now;
+
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          height: 300,
+          color: Theme.of(context).colorScheme.surface,
+          child: Column(
+            children: [
+              // Header with Cancel and OK buttons
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        'common.cancel'.tr(),
+                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ),
+                    Text(
+                      'order_setup.event_date_label'.tr(),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).pop(selectedDate),
+                      child: Text(
+                        'common.ok'.tr(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Cupertino Date Picker
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: selectedDate,
+                  minimumDate: now,
+                  maximumDate: maxDate,
+                  onDateTimeChanged: (DateTime newDate) {
+                    selectedDate = newDate;
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Show time picker (Cupertino style with mouse wheel support on Web)
+  Future<TimeOfDay?> _showCupertinoTimePicker() async {
+    final initialTime = _eventTime ?? const TimeOfDay(hour: 18, minute: 0);
+
+    // Use Cupertino Picker everywhere with proper mouse/touch support
+    DateTime selectedDateTime = DateTime(
+      2000,
+      1,
+      1,
+      initialTime.hour,
+      initialTime.minute,
+    );
+
+    return showModalBottomSheet<TimeOfDay>(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          height: 300,
+          color: Theme.of(context).colorScheme.surface,
+          child: Column(
+            children: [
+              // Header with Cancel and OK buttons
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        'common.cancel'.tr(),
+                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ),
+                    Text(
+                      'order_setup.event_time_label'.tr(),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        final timeOfDay = TimeOfDay(
+                          hour: selectedDateTime.hour,
+                          minute: selectedDateTime.minute,
+                        );
+                        Navigator.of(context).pop(timeOfDay);
+                      },
+                      child: Text(
+                        'common.ok'.tr(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Cupertino Time Picker
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.time,
+                  initialDateTime: selectedDateTime,
+                  use24hFormat: true,
+                  onDateTimeChanged: (DateTime newDateTime) {
+                    selectedDateTime = newDateTime;
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _nextStep() {
     HapticFeedback.lightImpact();
     if (_currentStep < _totalSteps - 1) {
-      setState(() => _currentStep++);
+      final nextStep = _currentStep + 1;
+      setState(() => _currentStep = nextStep);
+      // Update URL without affecting navigation stack
+      _updateUrlWithoutNavigation(nextStep);
       // Animate PageView on mobile layout
       if (_pageController.hasClients) {
         _pageController.animateToPage(
-          _currentStep,
+          nextStep,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
@@ -90,11 +303,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   void _previousStep() {
     HapticFeedback.lightImpact();
     if (_currentStep > 0) {
-      setState(() => _currentStep--);
+      final prevStep = _currentStep - 1;
+      setState(() => _currentStep = prevStep);
+      // Update URL without affecting navigation stack
+      _updateUrlWithoutNavigation(prevStep);
       // Animate PageView on mobile layout
       if (_pageController.hasClients) {
         _pageController.animateToPage(
-          _currentStep,
+          prevStep,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
@@ -109,12 +325,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     if (_nameController.text.trim().isEmpty) {
       errorMessage = 'order_setup.required_name'.tr();
       _currentStep = 1; // Jump to Basic Info step
+      _updateUrlWithoutNavigation(1);
     } else if (_eventDate == null) {
       errorMessage = 'order_setup.required_date'.tr();
       _currentStep = 2; // Jump to Event Details step
+      _updateUrlWithoutNavigation(2);
     } else if (_selectedRecipes.isEmpty) {
       errorMessage = 'order_setup.required_cocktails'.tr();
-      _currentStep = 4; // Jump to Cocktail Selection step
+      _currentStep = 5; // Jump to Cocktail Selection step (updated from 4 to 5)
+      _updateUrlWithoutNavigation(5);
     }
     
     if (errorMessage != null) {
@@ -140,6 +359,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       currency: _currency,
       drinkerType: _drinkerType,
       serviceType: _serviceType,
+      barDrinks: _selectedBarDrinks.isEmpty ? null : _selectedBarDrinks.toList(),
+      alcoholPurchase: _selectedAlcoholItems.isEmpty ? null : _selectedAlcoholItems.toList(),
+      additionalServices: _selectedAdditionalServices.isEmpty ? null : _selectedAdditionalServices.toList(),
+      remarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
     );
 
     final result = OrderFormResult(
@@ -212,7 +435,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               _buildBasicInfoStep(),
               _buildEventDetailsStep(),
               _buildPreferencesStep(),
+              _buildBarAlcoholStep(),
               _buildCocktailSelectionStep(),
+              _buildAdditionalServicesStep(),
             ],
           ),
         ),
@@ -319,9 +544,21 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     ),
                     _buildStepperItem(
                       4,
+                      Icons.liquor,
+                      'Bargetränke & Alkohol',
+                      'Optional',
+                    ),
+                    _buildStepperItem(
+                      5,
                       Icons.local_bar,
                       'Cocktail-Auswahl',
                       'Cocktails',
+                    ),
+                    _buildStepperItem(
+                      6,
+                      Icons.miscellaneous_services,
+                      'Zusatzleistungen',
+                      'Optional',
                     ),
                   ],
                 ),
@@ -332,7 +569,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         // Right Side: Content
         Expanded(
           child: SingleChildScrollView(
-            child: _currentStep == 4
+            child: _currentStep >= 5
                 ? Padding(
                     padding: const EdgeInsets.all(32),
                     child: _buildCurrentStepContent(),
@@ -367,6 +604,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           onTap: () {
             HapticFeedback.selectionClick();
             setState(() => _currentStep = step);
+            // Update URL without affecting navigation stack
+            _updateUrlWithoutNavigation(step);
           },
           borderRadius: BorderRadius.circular(12),
           child: Padding(
@@ -445,9 +684,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       case 3:
         return '$_personCount Personen';
       case 4:
+        if (_serviceType == 'cocktail_barservice' || _serviceType == 'bar_service') {
+          final total = _selectedBarDrinks.length + _selectedAlcoholItems.length;
+          return total == 0 ? 'Keine ausgewählt' : '$total ausgewählt';
+        }
+        return 'Übersprungen';
+      case 5:
         return _selectedRecipes.isEmpty
             ? 'Keine ausgewählt'
             : '${_selectedRecipes.length} Cocktails';
+      case 6:
+        final count = _selectedAdditionalServices.length;
+        return count == 0 ? 'Keine' : '$count ausgewählt';
       default:
         return '';
     }
@@ -464,7 +712,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       case 3:
         return _buildPreferencesStep();
       case 4:
+        return _buildBarAlcoholStep();
+      case 5:
         return _buildCocktailSelectionStep();
+      case 6:
+        return _buildAdditionalServicesStep();
       default:
         return Container();
     }
@@ -713,12 +965,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           InkWell(
             onTap: () async {
               HapticFeedback.lightImpact();
-              final date = await showDatePicker(
-                context: context,
-                initialDate: _eventDate ?? DateTime.now(),
-                firstDate: DateTime.now(),
-                lastDate: DateTime.now().add(const Duration(days: 730)),
-              );
+              final date = await _showCupertinoDatePicker();
               if (date != null) {
                 HapticFeedback.selectionClick();
                 setState(() => _eventDate = date);
@@ -763,10 +1010,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           InkWell(
             onTap: () async {
               HapticFeedback.lightImpact();
-              final time = await showTimePicker(
-                context: context,
-                initialTime: _eventTime ?? const TimeOfDay(hour: 18, minute: 0),
-              );
+              final time = await _showCupertinoTimePicker();
               if (time != null) {
                 HapticFeedback.selectionClick();
                 setState(() => _eventTime = time);
@@ -1026,6 +1270,173 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         setState(() => _drinkerType = value);
       },
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+  }
+
+  Widget _buildBarDrinksSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'order_setup.bar_drinks_title'.tr(),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'order_setup.bar_drinks_subtitle'.tr(),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildBarDrinkCheckbox('whiskey_mix', 'Whiskey & Mischgetränke'),
+            _buildBarDrinkCheckbox('vodka_mix', 'Vodka & Mischgetränke'),
+            _buildBarDrinkCheckbox('gin_mix', 'Gin & Mischgetränke'),
+            _buildBarDrinkCheckbox('shots', 'Shots'),
+            _buildBarDrinkCheckbox('other', 'Sonstiges'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBarDrinkCheckbox(String value, String label) {
+    final isSelected = _selectedBarDrinks.contains(value);
+    return FilterChip(
+      selected: isSelected,
+      label: Text(label),
+      onSelected: (selected) {
+        HapticFeedback.selectionClick();
+        setState(() {
+          if (selected) {
+            _selectedBarDrinks.add(value);
+          } else {
+            _selectedBarDrinks.remove(value);
+          }
+        });
+      },
+      showCheckmark: true,
+    );
+  }
+
+  Widget _buildAlcoholPurchaseSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'order_setup.alcohol_purchase_title'.tr(),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'order_setup.alcohol_purchase_subtitle'.tr(),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildAlcoholCheckbox('whiskey_chivas', 'Whiskey Chivas 0.7L - 35,-'),
+            _buildAlcoholCheckbox('whiskey_black_label', 'Whiskey Black Label 0.7L - 35,-'),
+            _buildAlcoholCheckbox('vodka_absolut', 'Vodka Absolut 0.7L - 25,-'),
+            _buildAlcoholCheckbox('vodka_three_sixty', 'Vodka Three Sixty 0.7L - 25,-'),
+            _buildAlcoholCheckbox('vodka_ciroc', 'Vodka Ciroc 0.7L - 40,-'),
+            _buildAlcoholCheckbox('vodka_belvedere', 'Vodka Belvedere 0.7L - 45,-'),
+            _buildAlcoholCheckbox('vodka_grey_goose', 'Vodka Grey Goose 0.7L - 45,-'),
+            _buildAlcoholCheckbox('gin_bombay', 'Gin Bombay Saphire 0.7L - 25,-'),
+            _buildAlcoholCheckbox('gin_bulldog', 'Gin Bulldog 0.7L - 35,-'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAlcoholCheckbox(String value, String label) {
+    final isSelected = _selectedAlcoholItems.contains(value);
+    return FilterChip(
+      selected: isSelected,
+      label: Text(label),
+      onSelected: (selected) {
+        HapticFeedback.selectionClick();
+        setState(() {
+          if (selected) {
+            _selectedAlcoholItems.add(value);
+          } else {
+            _selectedAlcoholItems.remove(value);
+          }
+        });
+      },
+      showCheckmark: true,
+    );
+  }
+
+  Widget _buildBarAlcoholStep() {
+    // Skip this step if service type doesn't include bar service
+    if (_serviceType != 'cocktail_barservice' && _serviceType != 'bar_service') {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Dieser Schritt ist für Ihren ausgewählten Service nicht erforderlich.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Barservice - Welche Getränke sollen ausgeschenkt werden?',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Wähle alle zutreffenden Kategorien',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 32),
+          _buildBarDrinksSelector(),
+          const SizedBox(height: 32),
+          _buildAlcoholPurchaseSelector(),
+          if (MediaQuery.of(context).size.width >= 600) ...[
+            const SizedBox(height: 32),
+            _buildDesktopActionButtons(),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1409,6 +1820,96 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAdditionalServicesStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'order_setup.additional_services_title'.tr(),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'order_setup.additional_services_subtitle'.tr(),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 32),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildServiceCheckbox('booth_360', 'BlackLodge - 360 Booth (600 CHF)'),
+              _buildServiceCheckbox('photobox_print', 'BlackLodge - PhotoBox inkl. 300 Druck (500 CHF)'),
+              _buildServiceCheckbox('photobox_qr', 'BlackLodge - PhotoBox Digal mit QR Code (300 CHF)'),
+              _buildServiceCheckbox('bubble_waffles', 'BlackLodge - Bubble Waffles (250 CHF)'),
+              _buildServiceCheckbox('catering', 'BlackLodge - Catering (Preis auf Anfrage)'),
+              _buildServiceCheckbox('choreographer', 'Nirosi Singh - Choreographer (Preis auf Anfrage)'),
+              _buildServiceCheckbox('dj', 'Extern - DJs (Preis auf Anfrage)'),
+              _buildServiceCheckbox('led_screen', 'Extern - LED Screen (Preis auf Anfrage)'),
+              _buildServiceCheckbox('security', 'Mudanca Security (min. 2 Securitys á 40 CHF/H)'),
+              _buildServiceCheckbox('entry_song', 'Entry Song mit Geige - Praveen (300 CHF)'),
+              _buildServiceCheckbox('other_services', 'Sonstiges'),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'order_setup.remarks_title'.tr(),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'order_setup.remarks_subtitle'.tr(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _remarksController,
+            maxLines: 4,
+            decoration: InputDecoration(
+              hintText: 'order_setup.remarks_hint'.tr(),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          if (MediaQuery.of(context).size.width >= 600) ...[
+            const SizedBox(height: 32),
+            _buildDesktopActionButtons(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceCheckbox(String value, String label) {
+    final isSelected = _selectedAdditionalServices.contains(value);
+    return FilterChip(
+      selected: isSelected,
+      label: Text(label),
+      onSelected: (selected) {
+        HapticFeedback.selectionClick();
+        setState(() {
+          if (selected) {
+            _selectedAdditionalServices.add(value);
+          } else {
+            _selectedAdditionalServices.remove(value);
+          }
+        });
+      },
+      showCheckmark: true,
     );
   }
 

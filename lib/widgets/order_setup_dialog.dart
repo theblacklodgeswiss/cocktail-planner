@@ -12,6 +12,10 @@ class OrderSetupData {
   final String currency;
   final String drinkerType;
   final String serviceType;
+  final List<String>? barDrinks;
+  final List<String>? alcoholPurchase;
+  final List<String>? additionalServices;
+  final String? remarks;
 
   OrderSetupData({
     required this.orderName,
@@ -24,6 +28,10 @@ class OrderSetupData {
     required this.currency,
     required this.drinkerType,
     required this.serviceType,
+    this.barDrinks,
+    this.alcoholPurchase,
+    this.additionalServices,
+    this.remarks,
   });
 }
 

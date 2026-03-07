@@ -54,6 +54,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   DateTime? _eventDate;
   String _eventTime = '';
   String _serviceType = 'cocktail_barservice';
+  List<String> _barDrinks = [];
+  List<String> _alcoholPurchase = [];
+  List<String> _additionalServices = [];
+  String _remarks = '';
 
   @override
   void initState() {
@@ -78,6 +82,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
         }
         _serviceType = setup.serviceType ?? 'cocktail_barservice';
+        _barDrinks = (setup.barDrinks as List<String>?) ?? [];
+        _alcoholPurchase = (setup.alcoholPurchase as List<String>?) ?? [];
+        _additionalServices = (setup.additionalServices as List<String>?) ?? [];
+        _remarks = setup.remarks ?? '';
         // Pre-fill Fahrtkosten with the entered distance
         const fahrtkosten = 'Fahrtkosten|KM';
         _quantities[fahrtkosten] = setup.distanceKm ?? 0;
@@ -501,6 +509,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         eventDate: _eventDate,
         serviceType: _serviceType,
         cocktailPopularity: appState.cocktailPopularity,
+        barDrinks: _barDrinks.isNotEmpty ? _barDrinks : null,
+        alcoholPurchase: _alcoholPurchase.isNotEmpty ? _alcoholPurchase : null,
+        additionalServices: _additionalServices.isNotEmpty ? _additionalServices : null,
+        remarks: _remarks.isNotEmpty ? _remarks : null,
       );
       // Clear linked order after saving
       appState.clearLinkedOrder();
@@ -523,6 +535,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         eventTime: _eventTime,
         serviceType: _serviceType,
         cocktailPopularity: appState.cocktailPopularity,
+        barDrinks: _barDrinks,
+        alcoholPurchase: _alcoholPurchase,
+        additionalServices: _additionalServices,
+        remarks: _remarks,
       );
     }
 

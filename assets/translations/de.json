@@ -28,6 +28,7 @@
   },
   "common": {
     "cancel": "Abbrechen",
+    "ok": "OK",
     "delete": "Löschen",
     "edit": "Bearbeiten",
     "back": "Zurück",
@@ -493,7 +494,16 @@
     "required": "Pflichtfeld",
     "required_name": "Name ist erforderlich",
     "required_date": "Datum ist erforderlich",
-    "required_cocktails": "Bitte wähle mindestens einen Cocktail"
+    "required_cocktails": "Bitte wähle mindestens einen Cocktail",
+    "bar_drinks_title": "Barservice - Welche Getränke sollen ausgeschenkt werden?",
+    "bar_drinks_subtitle": "Wähle alle zutreffenden Kategorien",
+    "alcohol_purchase_title": "Wollen Sie Alkohol von uns beziehen?",
+    "alcohol_purchase_subtitle": "Bezüglich der Anzahl, werden wir Sie dann kontaktieren",
+    "additional_services_title": "Benötigen Sie noch eines der unten aufgeführten Dienstleistungen?",
+    "additional_services_subtitle": "Wir können Paketpreise mit internen / externen Dienstleistern anbieten",
+    "remarks_title": "Haben Sie sonstige Bemerkungen hinzuzufügen?",
+    "remarks_subtitle": "z.B. Welcomedrinks, Ablauf",
+    "remarks_hint": "Ihre Antwort eingeben"
   },
   "cocktail_popularity": {
     "title": "Cocktail-Wahrscheinlichkeit",

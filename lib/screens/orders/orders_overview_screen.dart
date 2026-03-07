@@ -300,11 +300,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildYearSelector(),
-                    const SizedBox(height: 12),
-                    _buildMonthSelector(),
-                    const SizedBox(height: 12),
-                    _buildStatusFilter(),
+                    _buildFiltersSection(),
                     const SizedBox(height: 12),
                     _buildPendingOrdersBanner(),
                     const SizedBox(height: 20),
@@ -331,6 +327,35 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
+  /// Compact filters section with year, month, and status in 2 rows
+  Widget _buildFiltersSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Row 1: Years
+        _buildYearSelector(),
+        const SizedBox(height: 8),
+        // Row 2: Months + Status Dropdown
+        if (_searchQuery.isEmpty) ...[
+          Row(
+            children: [
+              Expanded(child: _buildMonthSelector()),
+              const SizedBox(width: 12),
+              _buildStatusDropdown(colorScheme),
+            ],
+          ),
+        ] else
+          // When searching, just show status dropdown
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _buildStatusDropdown(colorScheme),
+          ),
+      ],
+    );
+  }
+
   Widget _buildYearSelector() {
     final currentYear = DateTime.now().year;
     final years = List.generate(5, (i) => currentYear - i);
@@ -351,6 +376,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   _changeYear(year);
                 }
               },
+              visualDensity: VisualDensity.compact,
             ),
           );
         }).toList(),
@@ -359,11 +385,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   }
 
   Widget _buildMonthSelector() {
-    if (_searchQuery.isNotEmpty) {
-      // Don't show month selector when searching globally
-      return const SizedBox.shrink();
-    }
-
     const monthNames = [
       'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
       'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'
@@ -377,9 +398,10 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
-              label: const Text('Alle Monate'),
+              label: const Text('Alle'),
               selected: _selectedMonth == null,
               onSelected: (_) => _changeMonth(null),
+              visualDensity: VisualDensity.compact,
             ),
           ),
           ...List.generate(12, (index) {
@@ -390,6 +412,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                 label: Text(monthNames[index]),
                 selected: _selectedMonth == month,
                 onSelected: (_) => _changeMonth(month),
+                visualDensity: VisualDensity.compact,
               ),
             );
           }),
@@ -398,73 +421,88 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  Widget _buildStatusFilter() {
-    final colorScheme = Theme.of(context).colorScheme;
+  /// Compact status dropdown menu
+  Widget _buildStatusDropdown(ColorScheme colorScheme) {
+    // Map status to icon and color
+    IconData getIcon(OrderStatusFilter status) {
+      switch (status) {
+        case OrderStatusFilter.all:
+          return Icons.filter_list;
+        case OrderStatusFilter.quotes:
+          return Icons.description;
+        case OrderStatusFilter.accepted:
+          return Icons.check_circle;
+        case OrderStatusFilter.declined:
+          return Icons.cancel;
+      }
+    }
+
+    Color? getColor(OrderStatusFilter status) {
+      switch (status) {
+        case OrderStatusFilter.quotes:
+          return Colors.orange;
+        case OrderStatusFilter.accepted:
+          return Colors.green;
+        case OrderStatusFilter.declined:
+          return Colors.red;
+        default:
+          return null;
+      }
+    }
+
+    String getLabel(OrderStatusFilter status) {
+      switch (status) {
+        case OrderStatusFilter.all:
+          return 'Alle';
+        case OrderStatusFilter.quotes:
+          return 'Angebote';
+        case OrderStatusFilter.accepted:
+          return 'Angenommen';
+        case OrderStatusFilter.declined:
+          return 'Abgelehnt';
+      }
+    }
+
+    final currentColor = getColor(_statusFilter);
     
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Status:',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+    return MenuAnchor(
+      builder: (context, controller, child) {
+        return OutlinedButton.icon(
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+          icon: Icon(
+            getIcon(_statusFilter),
+            size: 18,
+            color: currentColor,
           ),
-          const SizedBox(width: 12),
-          FilterChip(
-            label: const Text('Alle'),
-            selected: _statusFilter == OrderStatusFilter.all,
-            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.all),
-            showCheckmark: false,
+          label: Text(
+            getLabel(_statusFilter),
+            style: TextStyle(color: currentColor),
           ),
-          const SizedBox(width: 6),
-          FilterChip(
-            avatar: const Icon(Icons.description, size: 16),
-            label: const Text('Angebote'),
-            selected: _statusFilter == OrderStatusFilter.quotes,
-            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.quotes),
-            showCheckmark: false,
-            selectedColor: Colors.orange.shade100,
-            labelStyle: TextStyle(
-              color: _statusFilter == OrderStatusFilter.quotes
-                  ? Colors.orange.shade900
-                  : null,
-            ),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            visualDensity: VisualDensity.compact,
           ),
-          const SizedBox(width: 6),
-          FilterChip(
-            avatar: const Icon(Icons.check_circle, size: 16),
-            label: const Text('Angenommen'),
-            selected: _statusFilter == OrderStatusFilter.accepted,
-            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.accepted),
-            showCheckmark: false,
-            selectedColor: Colors.green.shade100,
-            labelStyle: TextStyle(
-              color: _statusFilter == OrderStatusFilter.accepted
-                  ? Colors.green.shade900
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 6),
-          FilterChip(
-            avatar: const Icon(Icons.cancel, size: 16),
-            label: const Text('Abgelehnt'),
-            selected: _statusFilter == OrderStatusFilter.declined,
-            onSelected: (_) => setState(() => _statusFilter = OrderStatusFilter.declined),
-            showCheckmark: false,
-            selectedColor: Colors.red.shade100,
-            labelStyle: TextStyle(
-              color: _statusFilter == OrderStatusFilter.declined
-                  ? Colors.red.shade900
-                  : null,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
+      menuChildren: OrderStatusFilter.values.map((status) {
+        final icon = getIcon(status);
+        final color = getColor(status);
+        final label = getLabel(status);
+        final isSelected = _statusFilter == status;
+        
+        return MenuItemButton(
+          leadingIcon: Icon(icon, size: 18, color: color),
+          trailingIcon: isSelected ? const Icon(Icons.check, size: 18) : null,
+          onPressed: () => setState(() => _statusFilter = status),
+          child: Text(label),
+        );
+      }).toList(),
     );
   }
 

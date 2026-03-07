@@ -237,6 +237,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       supervisorItems: widget.order.items
           .where((item) => item['category'] == 'supervisor')
           .toList(),
+      barDrinks: widget.order.barDrinks,
+      alcoholPurchase: widget.order.alcoholPurchase,
+      additionalServices: widget.order.additionalServices,
+      remarks: widget.order.remarks,
     );
   }
 

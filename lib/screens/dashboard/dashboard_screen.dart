@@ -343,7 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   FilledButton.icon(
                                     onPressed: () async {
                                       final result = await context.push<OrderFormResult>(
-                                        '/order-form',
+                                        '/order-form?step=0',
                                       );
                                       if (result != null && mounted) {
                                         setState(() => _orderSetup = result.setupData);
