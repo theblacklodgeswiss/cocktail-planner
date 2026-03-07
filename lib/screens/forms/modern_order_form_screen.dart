@@ -72,10 +72,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   void _nextStep() {
     HapticFeedback.lightImpact();
     if (_currentStep < _totalSteps - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      setState(() => _currentStep++);
+      // Animate PageView on mobile layout
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          _currentStep,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
     } else {
       _submitForm();
     }
@@ -84,10 +89,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   void _previousStep() {
     HapticFeedback.lightImpact();
     if (_currentStep > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      setState(() => _currentStep--);
+      // Animate PageView on mobile layout
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          _currentStep,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
     }
   }
 
@@ -315,23 +325,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                   ],
                 ),
               ),
-              // Submit Button in Stepper
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: FilledButton(
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    _submitForm();
-                  },
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text('common.finish'.tr()),
-                ),
-              ),
             ],
           ),
         ),
@@ -511,8 +504,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             'order_setup.service_barservice'.tr(),
             'order_setup.service_barservice_desc'.tr(),
           ),
-          const SizedBox(height: 32),
-          _buildActionButton(),
         ],
       ),
     );
@@ -644,8 +635,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.done,
           ),
-          const SizedBox(height: 32),
-          _buildActionButton(),
         ],
       ),
     );
@@ -686,8 +675,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ),
             maxLines: 3,
           ),
-          const SizedBox(height: 32),
-          _buildActionButton(),
         ],
       ),
     );
@@ -833,8 +820,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           _buildCurrencySelector(),
           const SizedBox(height: 32),
           _buildDrinkerTypeSelector(),
-          const SizedBox(height: 32),
-          _buildActionButton(),
         ],
       ),
     );
@@ -1021,26 +1006,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
-  Widget _buildActionButton() {
-    final isLastStep = _currentStep == _totalSteps - 1;
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: _nextStep,
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: Text(
-          isLastStep ? 'common.finish'.tr() : 'common.next'.tr(),
-          style: const TextStyle(fontSize: 16),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCocktailSelectionStep() {
     return FutureBuilder<CocktailData>(
       future: _dataFuture,
@@ -1125,8 +1090,6 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ],
               const SizedBox(height: 16),
               _buildCocktailList(recipes),
-              const SizedBox(height: 32),
-              _buildActionButton(),
             ],
           ),
         );
@@ -1164,85 +1127,116 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       );
     }
 
-    return Column(
-      children: filtered.map((recipe) {
-        final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.outlineVariant,
-              width: isSelected ? 2 : 1,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Grid für Desktop (≥600px)
+        if (constraints.maxWidth >= 600) {
+          final crossAxisCount = constraints.maxWidth > 900 ? 3 : 2;
+          
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              childAspectRatio: 2.5,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
             ),
-          ),
-          child: InkWell(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() {
-                if (isSelected) {
-                  _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-                } else {
-                  _selectedRecipes.add(recipe);
-                }
-              });
+            itemCount: filtered.length,
+            itemBuilder: (context, index) {
+              return _buildCocktailCard(filtered[index]);
             },
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          recipe.name,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
+          );
+        }
+        
+        // Liste für Mobile
+        return Column(
+          children: filtered.map((recipe) => _buildCocktailCard(recipe)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildCocktailCard(Recipe recipe) {
+    final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outlineVariant,
+          width: isSelected ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() {
+            if (isSelected) {
+              _selectedRecipes.removeWhere((r) => r.id == recipe.id);
+            } else {
+              _selectedRecipes.add(recipe);
+            }
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      recipe.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (recipe.isShot) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'dialog.tag_shot'.tr(),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSecondaryContainer,
                               ),
                         ),
-                        if (recipe.isShot) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'dialog.tag_shot'.tr(),
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    isSelected
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.outline,
-                    size: 28,
-                  ),
-                ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Icon(
+                isSelected
+                    ? Icons.check_circle
+                    : Icons.radio_button_unchecked,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.outline,
+                size: 28,
+              ),
+            ],
           ),
-        );
-      }).toList(),
+        ),
+      ),
     );
   }
 }
