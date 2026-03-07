@@ -765,7 +765,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               HapticFeedback.lightImpact();
               final time = await showTimePicker(
                 context: context,
-                initialTime: _eventTime ?? TimeOfDay.now(),
+                initialTime: _eventTime ?? const TimeOfDay(hour: 18, minute: 0),
               );
               if (time != null) {
                 HapticFeedback.selectionClick();
@@ -881,8 +881,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         Slider(
           value: _personCount.toDouble(),
           min: 50,
-          max: 2500,
-          divisions: 49,
+          max: 1000,
+          divisions: 19,
           label: '$_personCount',
           onChanged: (value) {
             HapticFeedback.selectionClick();
@@ -893,7 +893,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('50', style: Theme.of(context).textTheme.bodySmall),
-            Text('2500', style: Theme.of(context).textTheme.bodySmall),
+            Text('1000', style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ],
@@ -933,8 +933,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         Slider(
           value: _distanceKm.toDouble(),
           min: 0,
-          max: 2000,
-          divisions: 100,
+          max: 1000,
+          divisions: 50,
           label: '$_distanceKm km',
           onChanged: (value) {
             HapticFeedback.selectionClick();
@@ -945,7 +945,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('0 km', style: Theme.of(context).textTheme.bodySmall),
-            Text('2000 km', style: Theme.of(context).textTheme.bodySmall),
+            Text('1000 km', style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ],
@@ -1053,22 +1053,24 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
         final recipes = snapshot.data?.recipes ?? [];
         
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'order_setup.cocktail_selection_title'.tr(),
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 8),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                'order_setup.cocktail_selection_subtitle'.tr(),
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                'order_setup.cocktail_selection_title'.tr(),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
               ),
+              const SizedBox(height: 8),
+                Text(
+                  'order_setup.cocktail_selection_subtitle'.tr(),
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
               const SizedBox(height: 16),
               TextField(
                 decoration: InputDecoration(
@@ -1148,7 +1150,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 _buildDesktopActionButtons(),
               ],
             ],
-          );
+          ),
+        );
       },
     );
   }

@@ -27,6 +27,7 @@ class OrderRepository {
     String location = '',
     String eventTime = '',
     String serviceType = 'cocktail_barservice',
+    Map<String, double> cocktailPopularity = const {},
   }) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -52,6 +53,7 @@ class OrderRepository {
         'location': location,
         'eventTime': eventTime,
         'serviceType': serviceType,
+        'cocktailPopularity': cocktailPopularity,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -96,6 +98,7 @@ class OrderRepository {
     String? eventTime,
     DateTime? eventDate,
     String? serviceType,
+    Map<String, double>? cocktailPopularity,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -121,6 +124,7 @@ class OrderRepository {
       if (eventTime != null) updateData['eventTime'] = eventTime;
       if (eventDate != null) updateData['date'] = eventDate.toIso8601String();
       if (serviceType != null) updateData['serviceType'] = serviceType;
+      if (cocktailPopularity != null) updateData['cocktailPopularity'] = cocktailPopularity;
 
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;

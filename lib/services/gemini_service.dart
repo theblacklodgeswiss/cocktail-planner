@@ -332,6 +332,7 @@ class GeminiService {
     required String drinkerType,
     required List<Map<String, dynamic>> availableMaterials,
     required List<Map<String, dynamic>> recipeIngredients,
+    Map<String, double>? cocktailPopularity,
   }) async {
     if (!isConfigured || _model == null) {
       debugPrint('Gemini not configured');
@@ -352,6 +353,7 @@ class GeminiService {
         availableMaterials: availableMaterials,
         recipeIngredients: recipeIngredients,
         trainingData: trainingData,
+        cocktailPopularity: cocktailPopularity ?? {},
       );
 
       debugPrint('Sending material prompt to Gemini...');
@@ -385,12 +387,20 @@ class GeminiService {
     required List<Map<String, dynamic>> availableMaterials,
     required List<Map<String, dynamic>> recipeIngredients,
     required List<Map<String, dynamic>> trainingData,
+    required Map<String, double> cocktailPopularity,
   }) {
     final materialsJson = jsonEncode(availableMaterials);
     final ingredientsJson = jsonEncode(recipeIngredients);
     final trainingDataJson = trainingData.isNotEmpty
         ? jsonEncode(trainingData)
         : 'Keine vorherigen Bestellungen verfügbar';
+    
+    // Build popularity information string
+    final popularityInfo = cocktailPopularity.isNotEmpty
+        ? cocktailPopularity.entries
+            .map((e) => '  - ${e.key}: ${e.value.round()}% Wahrscheinlichkeit')
+            .join('\n')
+        : 'Keine Wahrscheinlichkeits-Informationen verfügbar (verwende Standardverteilung)';
 
     return '''
 Du bist ein Experte für Cocktail-Catering und Eventplanung in der Schweiz.
@@ -403,6 +413,9 @@ EVENT-DETAILS:
 - Gewünschte Cocktails: ${requestedCocktails.isNotEmpty ? requestedCocktails.join(', ') : 'Nicht spezifiziert'}
 - Event-Typ: $eventType
 - Trinkverhalten: $drinkerType
+
+COCKTAIL-POPULARITÄT (wie wahrscheinlich wird jeder Cocktail getrunken):
+$popularityInfo
 
 REZEPT-ZUTATEN (welche Zutaten für welchen Cocktail):
 $ingredientsJson
@@ -437,7 +450,7 @@ WICHTIG: Antworte NUR mit validem JSON im folgenden Format:
   "materials": [
     {"name": "Materialname", "unit": "Einheit", "quantity": 10, "reason": "Kurze Begründung"}
   ],
-  "explanation": "Zusammenfassung der Berechnung"
+  "explanation": "Zusammenfassung der Berechnung - erwähne EXPLIZIT die verwendeten Cocktail-Wahrscheinlichkeiten und wie diese die Mengenverteilung beeinflusst haben!"
 }
 
 Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE MATERIALIEN stammen!

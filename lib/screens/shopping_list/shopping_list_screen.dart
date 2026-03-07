@@ -313,13 +313,22 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     if (_defaultsApplied) return;
     _defaultsApplied = true;
 
+    // Calculate Hartplastikbecher quantities based on person count
+    // Hartplastikbecher 0.3L: Minimum = personCount / 30 (rounded up)
+    final becher03LQuantity = (_personCount / 30).ceil();
+    
+    // Hartplastikbecher 0.2L: Only if cocktail & bar service, minimum = personCount * 2 / 40 (rounded up)
+    final becher02LQuantity = _serviceType == 'cocktail_barservice' 
+        ? ((_personCount * 2) / 40).ceil() 
+        : 0;
+
     // Default fixed items with their quantities
-    // Hartplastikbecher = 15, all others = 1
-    const defaultFixedItems = <String, int>{
+    final defaultFixedItems = <String, int>{
       'Theken|Stk': 1,
       'Reinvstement|Stk': 1,
       'Einkaufsentschädigung|Stk': 1,
-      'Hartplastikbecher 0.3L|30er Packung': 15,
+      'Hartplastikbecher 0.3L|30er Packung': becher03LQuantity,
+      'Hartplastikbecher 0.2L|40er Packung': becher02LQuantity,
       'Strohhalme|500er Packung': 1,
       'Schwarze Handschuhe|100er Packung': 1,
       'Servietten|250er Packung': 1,
@@ -340,6 +349,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       final quantity = entry.value;
 
       if (!availableFixedKeys.contains(key)) continue;
+      // Skip if quantity is 0 (e.g., 0.2L when not cocktail_barservice)
+      if (quantity <= 0) continue;
       // Don't override if already set (e.g., by Gemini suggestions)
       if (_quantities.containsKey(key) && _quantities[key]! > 0) continue;
 
@@ -489,6 +500,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         eventTime: _eventTime.isNotEmpty ? _eventTime : null,
         eventDate: _eventDate,
         serviceType: _serviceType,
+        cocktailPopularity: appState.cocktailPopularity,
       );
       // Clear linked order after saving
       appState.clearLinkedOrder();
@@ -510,6 +522,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         location: _location,
         eventTime: _eventTime,
         serviceType: _serviceType,
+        cocktailPopularity: appState.cocktailPopularity,
       );
     }
 

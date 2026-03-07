@@ -42,16 +42,35 @@ class AppState extends ChangeNotifier {
   
   /// Explanation from Gemini about the suggestions.
   String? materialSuggestionExplanation;
+  
+  /// Popularity/probability for each cocktail (0-100).
+  /// Key: cocktail name, Value: popularity percentage.
+  final Map<String, double> cocktailPopularity = {};
 
   void setSelectedRecipes(List<Recipe> recipes) {
     selectedRecipes
       ..clear()
       ..addAll(recipes);
+    // Initialize popularity to 50% (neutral) for new recipes
+    for (final recipe in recipes) {
+      cocktailPopularity.putIfAbsent(recipe.name, () => 50.0);
+    }
+    // Remove popularity for unselected recipes
+    cocktailPopularity.removeWhere(
+      (name, _) => !recipes.any((r) => r.name == name),
+    );
     notifyListeners();
   }
 
   void removeRecipe(String recipeId) {
+    final removedRecipe = selectedRecipes.firstWhere(
+      (r) => r.id == recipeId,
+      orElse: () => Recipe(id: '', name: '', ingredients: []),
+    );
     selectedRecipes.removeWhere((recipe) => recipe.id == recipeId);
+    if (removedRecipe.name.isNotEmpty) {
+      cocktailPopularity.remove(removedRecipe.name);
+    }
     notifyListeners();
   }
 
@@ -73,6 +92,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set popularity for a specific cocktail.
+  void setCocktailPopularity(String cocktailName, double popularity) {
+    cocktailPopularity[cocktailName] = popularity;
+    notifyListeners();
+  }
+  
+  /// Set popularity for multiple cocktails at once.
+  void setCocktailPopularities(Map<String, double> popularities) {
+    cocktailPopularity.addAll(popularities);
+    notifyListeners();
+  }
+  
   /// Clear linked order after shopping list is saved.
   void clearLinkedOrder() {
     linkedOrderId = null;

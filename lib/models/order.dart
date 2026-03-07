@@ -79,6 +79,7 @@ class SavedOrder {
     this.serviceType = '',
     this.requestedCocktails = const [],
     this.isPendingDismissed = false,
+    this.cocktailPopularity = const {},
   });
 
   final String id;
@@ -129,6 +130,10 @@ class SavedOrder {
   
   /// If true, this pending order (total == 0) is dismissed from pending list.
   final bool isPendingDismissed;
+  
+  /// Popularity/probability percentage for each cocktail (0-100).
+  /// Key: cocktail name, Value: popularity percentage.
+  final Map<String, double> cocktailPopularity;
 
   int get year => date.year;
   
@@ -212,6 +217,8 @@ class SavedOrder {
       serviceType: data['serviceType'] as String? ?? '',
       requestedCocktails: (data['requestedCocktails'] as List<dynamic>?)?.cast<String>() ?? [],
       isPendingDismissed: data['isPendingDismissed'] as bool? ?? false,
+      cocktailPopularity: (data['cocktailPopularity'] as Map<String, dynamic>?)
+          ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
     );
   }
 }

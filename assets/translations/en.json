@@ -13,6 +13,7 @@
     "cocktails_section": "Cocktails",
     "shots_section": "Shots",
     "generate_list": "Generate Shopping List",
+    "manual_create": "Manual Create",
     "user_tooltip": "User",
     "linked_order": "Shopping list for: {}",
     "unlink_order": "Unlink order",
@@ -491,5 +492,14 @@
     "required_name": "Name is required",
     "required_date": "Date is required",
     "required_cocktails": "Please select at least one cocktail"
+  },
+  "cocktail_popularity": {
+    "title": "Cocktail Popularity",
+    "description": "Indicate how likely each cocktail is to be ordered. This helps the AI calculate quantities more accurately.",
+    "low": "Low",
+    "high": "High",
+    "hint": "50% = average popularity, 100% = very popular, 0% = rarely ordered",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
   }
 }

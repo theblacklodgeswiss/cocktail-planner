@@ -533,27 +533,30 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   }
 
   Widget _buildSortChips(ColorScheme colorScheme) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          // Direction toggle - prominent at the start
-          _buildDirectionChip(colorScheme),
-          const SizedBox(width: 12),
-          Text(
-            'Sortieren:',
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 13,
+    return SizedBox(
+      height: 44,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            // Direction toggle - prominent at the start
+            _buildDirectionChip(colorScheme),
+            const SizedBox(width: 12),
+            Text(
+              'Sortieren:',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _buildSortChip(OrderSortOption.eventDate, 'orders.sort_event_date'.tr(), Icons.event, colorScheme),
-          _buildSortChip(OrderSortOption.createdAt, 'orders.sort_created_at'.tr(), Icons.schedule, colorScheme),
-          _buildSortChip(OrderSortOption.guests, 'orders.sort_guests'.tr(), Icons.people, colorScheme),
-          _buildSortChip(OrderSortOption.name, 'orders.sort_name'.tr(), Icons.sort_by_alpha, colorScheme),
-          _buildSortChip(OrderSortOption.status, 'orders.sort_status'.tr(), Icons.flag, colorScheme),
-        ],
+            const SizedBox(width: 8),
+            _buildSortChip(OrderSortOption.eventDate, 'orders.sort_event_date'.tr(), Icons.event, colorScheme),
+            _buildSortChip(OrderSortOption.createdAt, 'orders.sort_created_at'.tr(), Icons.schedule, colorScheme),
+            _buildSortChip(OrderSortOption.guests, 'orders.sort_guests'.tr(), Icons.people, colorScheme),
+            _buildSortChip(OrderSortOption.name, 'orders.sort_name'.tr(), Icons.sort_by_alpha, colorScheme),
+            _buildSortChip(OrderSortOption.status, 'orders.sort_status'.tr(), Icons.flag, colorScheme),
+          ],
+        ),
       ),
     );
   }

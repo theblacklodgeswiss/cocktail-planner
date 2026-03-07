@@ -11,10 +11,12 @@ class SelectedCocktails extends StatelessWidget {
     super.key,
     required this.recipes,
     required this.onEdit,
+    this.onEditPopularity,
   });
 
   final List<Recipe> recipes;
   final VoidCallback onEdit;
+  final void Function(Recipe)? onEditPopularity;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +44,7 @@ class SelectedCocktails extends StatelessWidget {
                   icon: Icons.local_bar,
                   color: Colors.green.shade700,
                   recipes: cocktails,
+                  onEditPopularity: onEditPopularity,
                 ),
               if (shots.isNotEmpty)
                 _CocktailSection(
@@ -49,6 +52,7 @@ class SelectedCocktails extends StatelessWidget {
                   icon: Icons.wine_bar,
                   color: Colors.orange.shade700,
                   recipes: shots,
+                  onEditPopularity: onEditPopularity,
                 ),
               // Space for bottom bar
               const SizedBox(height: 100),
@@ -134,12 +138,14 @@ class _CocktailSection extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.recipes,
+    this.onEditPopularity,
   });
 
   final String title;
   final IconData icon;
   final Color color;
   final List<Recipe> recipes;
+  final void Function(Recipe)? onEditPopularity;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +173,9 @@ class _CocktailSection extends StatelessWidget {
               .map((r) => CocktailChip(
                     recipe: r,
                     onDelete: () => appState.removeRecipe(r.id),
+                    onTap: onEditPopularity != null
+                        ? () => onEditPopularity!(r)
+                        : null,
                   ))
               .toList(),
         ),

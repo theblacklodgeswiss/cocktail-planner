@@ -483,6 +483,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           controller: scrollController,
           padding: const EdgeInsets.all(16),
           children: [
+            _buildActionButtons(),
+            const SizedBox(height: 8),
             _buildStatusCard(),
             const SizedBox(height: 16),
             if (widget.order.isFromForm) ...[
@@ -508,55 +510,117 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         icon: const Icon(Icons.close),
         onPressed: () => Navigator.pop(context),
       ),
-      actions: [
-        TextButton.icon(
-          onPressed: () {
-            Navigator.pop(context);
-            context.push('/create-offer', extra: widget.order);
-          },
-          icon: const Icon(Icons.description_outlined),
-          label: Text('orders.offer'.tr()),
-        ),
-        if (_currentStatus == OrderStatus.accepted)
-          TextButton.icon(
-            onPressed: _generateInvoice,
-            icon: const Icon(Icons.receipt_long),
-            label: Text('orders.invoice'.tr()),
-          ),
-        if (!widget.order.needsShoppingList)
-          TextButton.icon(
-            onPressed: _editShoppingList,
-            icon: const Icon(Icons.edit),
-            label: Text('common.edit'.tr()),
-          ),
-        TextButton.icon(
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (ctx) => GeminiPlanDialog(
-                order: widget.order,
-                cocktails: widget.order.cocktails,
-                shots: widget.order.shots,
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 700;
+          
+          if (isNarrow) {
+            // Vertical layout for narrow screens
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/create-offer', extra: widget.order);
+                    },
+                    icon: const Icon(Icons.description_outlined),
+                    label: Text('orders.offer'.tr()),
+                  ),
+                  if (_currentStatus == OrderStatus.accepted) ...[
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: _generateInvoice,
+                      icon: const Icon(Icons.receipt_long),
+                      label: Text('orders.invoice'.tr()),
+                    ),
+                  ],
+                  if (!widget.order.needsShoppingList) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _editShoppingList,
+                      icon: const Icon(Icons.edit),
+                      label: Text('common.edit'.tr()),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => GeminiPlanDialog(
+                          order: widget.order,
+                          cocktails: widget.order.cocktails,
+                          shots: widget.order.shots,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text('dashboard.generate_plan'.tr()),
+                  ),
+                ],
               ),
             );
-          },
-          icon: const Icon(Icons.auto_awesome),
-          label: Text('dashboard.generate_plan'.tr()),
-        ),
-        FilledButton.icon(
-          onPressed: () async {
-            await PdfGenerator.generateFromSavedOrder(widget.order);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('orders.pdf_created'.tr())),
-              );
-            }
-          },
-          icon: const Icon(Icons.shopping_cart),
-          label: Text('orders.shopping_list'.tr()),
-        ),
-        const SizedBox(width: 8),
-      ],
+          } else {
+            // Horizontal layout for wider screens
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.push('/create-offer', extra: widget.order);
+                    },
+                    icon: const Icon(Icons.description_outlined),
+                    label: Text('orders.offer'.tr()),
+                  ),
+                  if (_currentStatus == OrderStatus.accepted) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: _generateInvoice,
+                      icon: const Icon(Icons.receipt_long),
+                      label: Text('orders.invoice'.tr()),
+                    ),
+                  ],
+                  if (!widget.order.needsShoppingList) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: _editShoppingList,
+                      icon: const Icon(Icons.edit),
+                      label: Text('common.edit'.tr()),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => GeminiPlanDialog(
+                          order: widget.order,
+                          cocktails: widget.order.cocktails,
+                          shots: widget.order.shots,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text('dashboard.generate_plan'.tr()),
+                  ),
+                ],
+              ),
+            );
+          }
+        },
+      ),
     );
   }
 
@@ -1044,6 +1108,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         drinkerType: order.drinkerType,
         availableMaterials: materials,
         recipeIngredients: recipeIngredients,
+        cocktailPopularity: order.cocktailPopularity,
       );
 
       // Close loading dialog

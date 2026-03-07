@@ -153,7 +153,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                 onTap: () async {
                   final time = await showTimePicker(
                     context: context,
-                    initialTime: _eventTime ?? TimeOfDay.now(),
+                    initialTime: _eventTime ?? const TimeOfDay(hour: 18, minute: 0),
                   );
                   if (time != null) {
                     setState(() => _eventTime = time);

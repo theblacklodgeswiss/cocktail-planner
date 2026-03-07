@@ -13,6 +13,7 @@
     "cocktails_section": "Cocktails",
     "shots_section": "Shots",
     "generate_list": "Einkaufsliste generieren",
+    "manual_create": "Manuell anlegen",
     "user_tooltip": "Benutzer",
     "linked_order": "Einkaufsliste für: {}",
     "unlink_order": "Verknüpfung aufheben",
@@ -493,5 +494,14 @@
     "required_name": "Name ist erforderlich",
     "required_date": "Datum ist erforderlich",
     "required_cocktails": "Bitte wähle mindestens einen Cocktail"
+  },
+  "cocktail_popularity": {
+    "title": "Cocktail-Wahrscheinlichkeit",
+    "description": "Gib an, wie wahrscheinlich es ist, dass jeder Cocktail bestellt wird. Dies hilft der KI, die Mengen genauer zu berechnen.",
+    "low": "Niedrig",
+    "high": "Hoch",
+    "hint": "50% = durchschnittliche Beliebtheit, 100% = sehr beliebt, 0% = selten bestellt",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen"
   }
 }

@@ -11,6 +11,7 @@ import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
+import '../../widgets/cocktail_popularity_dialog.dart';
 import '../forms/modern_order_form_screen.dart';
 import 'user_menu_sheet.dart';
 import 'widgets/empty_state.dart';
@@ -109,6 +110,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _showCocktailPopularityDialog(List<Recipe> cocktails) async {
+    if (cocktails.isEmpty) return;
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CocktailPopularityDialog(
+        cocktails: cocktails,
+        onConfirm: () {
+          // Dialog already saves to AppState, nothing else needed here
+        },
+      ),
+    );
+  }
+
+  Future<void> _editSingleCocktailPopularity(Recipe recipe) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => CocktailPopularityDialog(
+        cocktails: [recipe],
+        onConfirm: () {
+          // Dialog already saves to AppState, nothing else needed here
+        },
+      ),
+    );
+  }
+
   Future<void> _openRecipeSelection(List<Recipe> allRecipes) async {
     final result = await showDialog<List<Recipe>>(
       context: context,
@@ -177,6 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         drinkerType: _orderSetup!.drinkerType,
         availableMaterials: materials,
         recipeIngredients: recipeIngredients,
+        cocktailPopularity: appState.cocktailPopularity,
       );
 
       // Close loading dialog
@@ -315,9 +345,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       final result = await context.push<OrderFormResult>(
                                         '/order-form',
                                       );
-                                      if (result != null) {
+                                      if (result != null && mounted) {
                                         setState(() => _orderSetup = result.setupData);
                                         appState.setSelectedRecipes(result.selectedRecipes);
+                                        // Show cocktail popularity dialog after selection
+                                        if (result.selectedRecipes.isNotEmpty) {
+                                          _showCocktailPopularityDialog(result.selectedRecipes);
+                                        }
                                       }
                                     },
                                     icon: const Icon(Icons.add),
@@ -346,11 +380,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                OutlinedButton.icon(
+                                FilledButton.icon(
                                   onPressed: () => _generateMaterialSuggestionsWithGemini(data),
                                   icon: const Icon(Icons.auto_awesome),
                                   label: Text('orders.generate_with_gemini'.tr()),
-                                  style: OutlinedButton.styleFrom(
+                                  style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 24,
                                       vertical: 16,
@@ -358,7 +392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 16),
-                                FilledButton.icon(
+                                TextButton(
                                   onPressed: () {
                                     if (_orderSetup != null) {
                                       context.push(
@@ -367,14 +401,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       );
                                     }
                                   },
-                                  icon: const Icon(Icons.shopping_cart),
-                                  label: Text('dashboard.generate_list'.tr()),
-                                  style: FilledButton.styleFrom(
+                                  style: TextButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 24,
                                       vertical: 16,
                                     ),
                                   ),
+                                  child: Text('dashboard.manual_create'.tr()),
                                 ),
                               ],
                             ),
@@ -385,6 +418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   recipes: appState.selectedRecipes,
                                   onEdit: () =>
                                       _openRecipeSelection(data.recipes),
+                                  onEditPopularity: _editSingleCocktailPopularity,
                                 )
                               : DashboardEmptyState(
                                   onAdd: () =>
@@ -473,38 +507,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Row(
           children: [
             Expanded(
+              flex: 2,
               child: FutureBuilder<CocktailData>(
                 future: _dataFuture,
                 builder: (context, snapshot) {
                   final enabled = snapshot.hasData;
-                  return OutlinedButton.icon(
+                  return FilledButton.icon(
                     onPressed: enabled && snapshot.data != null
                         ? () => _generateMaterialSuggestionsWithGemini(snapshot.data!)
                         : null,
                     icon: const Icon(Icons.auto_awesome, size: 20),
-                    label: Text(
-                      'orders.generate_with_gemini'.tr(),
-                      style: const TextStyle(fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56)),
+                    label: Text('orders.generate_with_gemini'.tr()),
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 56)),
                   );
                 },
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: FilledButton.icon(
-                onPressed: () {
-                  if (_orderSetup != null) {
-                    context.push('/shopping-list', extra: _orderSetup);
-                  }
-                },
-                icon: const Icon(Icons.shopping_cart),
-                label: Text('dashboard.generate_list'.tr()),
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 56)),
-              ),
+            TextButton(
+              onPressed: () {
+                if (_orderSetup != null) {
+                  context.push('/shopping-list', extra: _orderSetup);
+                }
+              },
+              style: TextButton.styleFrom(minimumSize: const Size(0, 56)),
+              child: Text('dashboard.manual_create'.tr()),
             ),
           ],
         ),
