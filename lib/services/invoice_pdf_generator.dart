@@ -107,6 +107,18 @@ class InvoicePdfGenerator {
         ((oneThird / 100).ceil()) * 100.0; // Round up to nearest 100
     final depositAmount = grandTotal - remainingAmount;
 
+    final serviceLabel = switch (order.serviceType) {
+      'cocktail_barservice' =>
+        isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+      'cocktailservice' =>
+        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+      'barservice' => isEn ? 'Bar Service only' : 'Nur Barservice',
+      _ =>
+        order.serviceType.isEmpty
+            ? (isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice')
+            : order.serviceType,
+    };
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -127,9 +139,16 @@ class InvoicePdfGenerator {
           pw.SizedBox(height: 12),
           _buildAnlass(order, isEn),
           pw.SizedBox(height: 10),
-          _buildGuestAndServices(order, isEn),
+          _buildGuestAndServices(order, isEn, serviceLabel),
           pw.SizedBox(height: 14),
-          _buildPositionsTable(order, curr, isEn, barServiceCost, travelTotal),
+          _buildPositionsTable(
+            order,
+            curr,
+            isEn,
+            barServiceCost,
+            travelTotal,
+            serviceLabel,
+          ),
           pw.SizedBox(height: 14),
           _buildAdditionalInfo(
             order,
@@ -368,10 +387,34 @@ class InvoicePdfGenerator {
 
   // ── Guests, cocktails, bar, shots ─────────────────────────────────────────
 
-  static pw.Widget _buildGuestAndServices(SavedOrder order, bool isEn) {
+  static pw.Widget _buildGuestAndServices(
+    SavedOrder order,
+    bool isEn,
+    String serviceLabel,
+  ) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        if (order.serviceType.isNotEmpty) ...[
+          pw.RichText(
+            text: pw.TextSpan(
+              children: [
+                pw.TextSpan(
+                  text: isEn ? 'Service Type: ' : 'Service Art: ',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.TextSpan(
+                  text: serviceLabel,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 3),
+        ],
         pw.RichText(
           text: pw.TextSpan(
             children: [
@@ -461,6 +504,7 @@ class InvoicePdfGenerator {
     bool isEn,
     double barServiceCost,
     double travelTotal,
+    String serviceLabel,
   ) {
     final dateStr =
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
@@ -530,14 +574,14 @@ class InvoicePdfGenerator {
           headerCell(isEn ? 'Note' : 'Bemerkung'),
         ],
       ),
-      // Cocktail & Barservice
+      // First position (Package name based on serviceType)
       pw.TableRow(
         children: [
           cell(dateStr),
-          cell(isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice'),
+          cell(serviceLabel),
           // Quantity is always 1
           cell('1', align: pw.TextAlign.center),
-          // Price is the full bar service cost
+          // Price is the full package cost
           cell(curr.format(barServiceCost), align: pw.TextAlign.right),
           cell(curr.format(barServiceCost), align: pw.TextAlign.right),
           cell(
@@ -565,8 +609,8 @@ class InvoicePdfGenerator {
                   : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
 
               return isEn
-                  ? '- $rolesText\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern'
-                  : '- $rolesText\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
+                  ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
+                  : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
             })(),
           ),
         ],

@@ -219,6 +219,11 @@ class OfferPdfGenerator {
                   '${isEn ? 'Time' : 'Uhrzeit'}: ${offer.eventTime}',
                   style: const pw.TextStyle(fontSize: 9),
                 ),
+              if (offer.eventLocation.isNotEmpty)
+                pw.Text(
+                  '${isEn ? 'Location' : 'Adresse'}: ${offer.eventLocation}',
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
             ],
           ),
         ),
@@ -301,9 +306,41 @@ class OfferPdfGenerator {
   // ── Guests, cocktails, bar, shots ─────────────────────────────────────────
 
   static pw.Widget _buildGuestAndServices(OfferData offer, bool isEn) {
+    final serviceLabel = switch (offer.serviceType) {
+      'cocktail_barservice' =>
+        isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+      'cocktail_service' =>
+        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+      'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
+      _ =>
+        offer.serviceType.isEmpty
+            ? (isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice')
+            : offer.serviceType,
+    };
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        if (offer.serviceType.isNotEmpty) ...[
+          pw.RichText(
+            text: pw.TextSpan(
+              children: [
+                pw.TextSpan(
+                  text: isEn ? 'Service Type: ' : 'Service Art: ',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.TextSpan(
+                  text: serviceLabel,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 4),
+        ],
         pw.Row(
           children: [
             pw.RichText(
@@ -324,7 +361,7 @@ class OfferPdfGenerator {
               ),
             ),
             if (offer.eventTime.isNotEmpty) ...[
-              pw.SizedBox(width: 40),
+              pw.Spacer(),
               pw.RichText(
                 text: pw.TextSpan(
                   children: [
@@ -474,7 +511,23 @@ class OfferPdfGenerator {
       pw.TableRow(
         children: [
           cell(dateStr),
-          cell(isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice'),
+          cell(
+            (() {
+              return switch (offer.serviceType) {
+                'cocktail_barservice' =>
+                  isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+                'cocktail_service' =>
+                  isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
+                _ =>
+                  offer.serviceType.isEmpty
+                      ? (isEn
+                            ? 'Cocktail & Bar Service'
+                            : 'Cocktail- & Barservice')
+                      : offer.serviceType,
+              };
+            })(),
+          ),
           // Quantity is always 1
           cell('1', align: pw.TextAlign.center),
           // Price is the full bar service cost
@@ -483,6 +536,20 @@ class OfferPdfGenerator {
           cell(
             // Summary of roles from supervisor items, or fallback
             (() {
+              final serviceLabel = switch (offer.serviceType) {
+                'cocktail_barservice' =>
+                  isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+                'cocktailservice' =>
+                  isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                'barservice' => isEn ? 'Bar Service only' : 'Nur Barservice',
+                _ =>
+                  offer.serviceType.isEmpty
+                      ? (isEn
+                            ? 'Cocktail & Bar Service'
+                            : 'Cocktail- & Barservice')
+                      : offer.serviceType,
+              };
+
               final supervisorSummary = offer.supervisorItems
                   .map(
                     (item) =>
@@ -507,8 +574,8 @@ class OfferPdfGenerator {
                   : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
 
               return isEn
-                  ? '$rolesText, max. 5h, unlimited Cocktails (s. above), 0.3L hard plastic cups'
-                  : '$rolesText, max. 5h, unlimitiert Cocktails (s. oben), 0.3L Hartplastikbecher';
+                  ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
+                  : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
             })(),
           ),
         ],
@@ -535,8 +602,8 @@ class OfferPdfGenerator {
           cell(dateStr),
           cell(isEn ? 'Extra hours' : 'Extrastunden'),
           cell('X', align: pw.TextAlign.center),
-          cell(curr.format(100), align: pw.TextAlign.right),
-          cell('tbd'),
+          cell('tbd', align: pw.TextAlign.right),
+          cell('tbd', align: pw.TextAlign.right),
           cell(
             isEn
                 ? '50 ${offer.currency}/Barkeeper/h extra'

@@ -14,6 +14,7 @@ import 'shopping_list_dialogs.dart';
 import 'shopping_list_logic.dart';
 import 'widgets/widgets.dart';
 import 'package:go_router/go_router.dart';
+
 /// Shopping list screen with wizard-style navigation.
 class ShoppingListScreen extends StatefulWidget {
   final dynamic orderSetup;
@@ -37,7 +38,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   late PageController _pageController;
   int _currentPage = 0;
   int _longDistanceThresholdKm = 400;
-  
+
   // Master data from initial setup dialog or dashboard
   String _orderName = '';
   int _personCount = 0;
@@ -48,6 +49,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   String _location = '';
   DateTime? _eventDate;
   String _eventTime = '';
+  String _serviceType = 'cocktail_barservice';
 
   @override
   void initState() {
@@ -68,14 +70,16 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         _eventDate = setup.eventDate;
         if (setup.eventTime != null) {
           final time = setup.eventTime as TimeOfDay;
-          _eventTime = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+          _eventTime =
+              '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
         }
+        _serviceType = setup.serviceType ?? 'cocktail_barservice';
         // Pre-fill Fahrtkosten with the entered distance
         const fahrtkosten = 'Fahrtkosten|KM';
         _quantities[fahrtkosten] = setup.distanceKm ?? 0;
         _selectedItems.add(fahrtkosten);
         _controllers[fahrtkosten]?.text = (setup.distanceKm ?? '').toString();
-        
+
         // savedOrderItems will be loaded after data is available in _applySavedOrderItems
       });
     } else {
@@ -95,7 +99,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     // Get prefilled values from linked order (if coming from pending orders)
     final prefilledName = appState.linkedOrderName;
     // Could also get personCount from linked order if needed
-    
+
     final result = await showInitialSetupDialog(
       context,
       prefilledName: prefilledName,
@@ -119,27 +123,29 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       // Update controller if already created
       _controllers[fahrtkosten]?.text = result.distanceKm.toString();
     });
-    
+
     // Note: Material suggestions are applied in _buildContent when data is available
   }
-  
+
   /// Apply material suggestions from Gemini AI to the shopping list.
   /// Must be called after CocktailData is available.
   void _applyMaterialSuggestions(CocktailData data) {
     if (_suggestionsApplied) return;
     if (!appState.hasMaterialSuggestions) return;
-    
+
     _suggestionsApplied = true;
     final suggestions = appState.materialSuggestions!;
-    
+
     // Build a map of ingredient name -> list of cocktails that use it
     final ingredientToCocktails = <String, List<String>>{};
     for (final recipe in appState.selectedRecipes) {
       for (final ingredient in recipe.ingredients) {
-        ingredientToCocktails.putIfAbsent(ingredient, () => []).add(recipe.name);
+        ingredientToCocktails
+            .putIfAbsent(ingredient, () => [])
+            .add(recipe.name);
       }
     }
-    
+
     // Build a map of material name+unit -> MaterialItem
     final materialByKey = <String, MaterialItem>{};
     for (final item in data.materials) {
@@ -148,21 +154,21 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     for (final item in data.fixedValues) {
       materialByKey['${item.name}|${item.unit}'] = item;
     }
-    
+
     int appliedCount = 0;
-    
+
     for (final suggestion in suggestions) {
       final baseKey = suggestion.key; // name|unit
       final item = materialByKey[baseKey];
-      
+
       if (item == null) {
         // Item not found, skip
         continue;
       }
-      
+
       // Check if this is a fixed value (no cocktail association)
       final cocktails = ingredientToCocktails[suggestion.name];
-      
+
       if (cocktails == null || cocktails.isEmpty) {
         // This is a fixed value or ingredient not used by any cocktail
         // Apply with base key
@@ -176,8 +182,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         // Distribute quantity across cocktails that use this ingredient
         // For now, assign full quantity to the first cocktail
         final cocktailName = cocktails.first;
-        final cocktailKey = ShoppingListLogic.cocktailItemKey(item, cocktailName);
-        
+        final cocktailKey = ShoppingListLogic.cocktailItemKey(
+          item,
+          cocktailName,
+        );
+
         _quantities[cocktailKey] = suggestion.quantity;
         _selectedItems.add(cocktailKey);
         if (_controllers.containsKey(cocktailKey)) {
@@ -186,16 +195,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         appliedCount++;
       }
     }
-    
+
     // Show a snackbar that suggestions were applied
     if (mounted && appliedCount > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('shopping.gemini_suggestions_applied'.tr(
-              namedArgs: {'count': appliedCount.toString()},
-            )),
+            content: Text(
+              'shopping.gemini_suggestions_applied'.tr(
+                namedArgs: {'count': appliedCount.toString()},
+              ),
+            ),
             backgroundColor: Colors.deepPurple,
             action: SnackBarAction(
               label: 'common.undo'.tr(),
@@ -215,7 +226,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         );
       });
     }
-    
+
     // Clear suggestions so they don't get applied again
     appState.clearMaterialSuggestions();
   }
@@ -224,23 +235,27 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   /// Called once when editing an existing order.
   void _applySavedOrderItems(CocktailData data, List<String> cocktailNames) {
     if (_savedItemsApplied) return;
-    
+
     final savedItems = appState.savedOrderItems;
     if (savedItems == null || savedItems.isEmpty) return;
-    
+
     _savedItemsApplied = true;
     // Mark defaults as applied to prevent overwriting saved values
     _defaultsApplied = true;
-    
+
     // Build a map of ingredient name to cocktails that use it
     final Map<String, List<String>> ingredientToCocktails = {};
     for (final cocktailName in cocktailNames) {
-      final recipe = appState.selectedRecipes.firstWhere((r) => r.name == cocktailName);
+      final recipe = appState.selectedRecipes.firstWhere(
+        (r) => r.name == cocktailName,
+      );
       for (final ingredient in recipe.ingredients) {
-        ingredientToCocktails.putIfAbsent(ingredient, () => []).add(cocktailName);
+        ingredientToCocktails
+            .putIfAbsent(ingredient, () => [])
+            .add(cocktailName);
       }
     }
-    
+
     // Check which materials from data correspond to ingredients
     final ingredientMaterials = <String>{};
     for (final material in data.materials) {
@@ -249,26 +264,27 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         ingredientMaterials.add(materialName);
       }
     }
-    
+
     for (final item in savedItems) {
       final name = item['name'] as String? ?? '';
       final unit = item['unit'] as String? ?? '';
       final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
-      
+
       if (name.isEmpty || unit.isEmpty || quantity <= 0) continue;
-      
+
       final baseKey = '$name|$unit';
-      
+
       // Check if this item is an ingredient used in recipes
-      if (ingredientMaterials.contains(name) && ingredientToCocktails.containsKey(name)) {
+      if (ingredientMaterials.contains(name) &&
+          ingredientToCocktails.containsKey(name)) {
         // This is an ingredient - distribute total quantity across cocktails
         final cocktails = ingredientToCocktails[name]!;
         final cocktailCount = cocktails.length;
-        
+
         // Distribute quantity: some cocktails get baseAmount+1, others get baseAmount
         final baseAmount = quantity ~/ cocktailCount;
         final remainder = quantity % cocktailCount;
-        
+
         for (var i = 0; i < cocktails.length; i++) {
           final cocktailName = cocktails[i];
           final cocktailKey = '$name|$unit|$cocktailName';
@@ -279,8 +295,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             _selectedItems.add(cocktailKey);
             // Ensure controller exists for this cocktail-specific key
             if (!_controllers.containsKey(cocktailKey)) {
-              final controller = TextEditingController(text: cocktailQuantity.toString());
-              controller.addListener(() => _onQuantityTextChanged(cocktailKey, controller));
+              final controller = TextEditingController(
+                text: cocktailQuantity.toString(),
+              );
+              controller.addListener(
+                () => _onQuantityTextChanged(cocktailKey, controller),
+              );
               _controllers[cocktailKey] = controller;
             } else {
               _controllers[cocktailKey]?.text = cocktailQuantity.toString();
@@ -294,7 +314,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         // Ensure controller exists for this saved item
         if (!_controllers.containsKey(baseKey)) {
           final controller = TextEditingController(text: quantity.toString());
-          controller.addListener(() => _onQuantityTextChanged(baseKey, controller));
+          controller.addListener(
+            () => _onQuantityTextChanged(baseKey, controller),
+          );
           _controllers[baseKey] = controller;
         } else {
           _controllers[baseKey]?.text = quantity.toString();
@@ -429,7 +451,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   Future<void> _saveAndGeneratePdf(
     List<OrderItem> selectedOrderItems,
     double total,
-    ({String name, int personCount, String drinkerType, Currency currency}) result,
+    ({String name, int personCount, String drinkerType, Currency currency})
+    result,
   ) async {
     final orderDate = DateTime.now();
     final cocktailNames = appState.selectedRecipes
@@ -450,16 +473,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
 
     final itemsData = selectedOrderItems
-        .map((oi) => {
-              'name': oi.item.name,
-              'unit': oi.item.unit,
-              'price': oi.item.price,
-              'currency': oi.item.currency,
-              'note': oi.item.note,
-              'quantity': oi.quantity,
-              'total': oi.total,
-              'category': oi.item.category,
-            })
+        .map(
+          (oi) => {
+            'name': oi.item.name,
+            'unit': oi.item.unit,
+            'price': oi.item.price,
+            'currency': oi.item.currency,
+            'note': oi.item.note,
+            'quantity': oi.quantity,
+            'total': oi.total,
+            'category': oi.item.category,
+          },
+        )
         .toList();
 
     // Check if linking to existing order (from form submission)
@@ -481,6 +506,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         location: _location.isNotEmpty ? _location : null,
         eventTime: _eventTime.isNotEmpty ? _eventTime : null,
         eventDate: _eventDate,
+        serviceType: _serviceType,
       );
       // Clear linked order after saving
       appState.clearLinkedOrder();
@@ -501,13 +527,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         phone: _phone,
         location: _location,
         eventTime: _eventTime,
+        serviceType: _serviceType,
       );
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('shopping.order_saved'.tr())),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('shopping.order_saved'.tr())));
     // Navigate back to dashboard first
     Navigator.of(context).popUntil((route) => route.isFirst);
     // Then navigate to orders overview
@@ -557,26 +584,31 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       _venueDistanceKm,
       longDistanceThresholdKm: _longDistanceThresholdKm,
     );
-    
+
     // Create mutable copy of fixed values
     final fixedValues = List<MaterialItem>.from(separated.fixedValues);
-    
+
     // Add saved fixed values that might be filtered out (e.g. wrong distance variant)
     final savedItems = appState.savedOrderItems;
     if (savedItems != null && savedItems.isNotEmpty) {
-      final existingFixedKeys = fixedValues.map((i) => '${i.name}|${i.unit}').toSet();
-      
+      final existingFixedKeys = fixedValues
+          .map((i) => '${i.name}|${i.unit}')
+          .toSet();
+
       for (final savedItem in savedItems) {
         final name = savedItem['name'] as String? ?? '';
         final unit = savedItem['unit'] as String? ?? '';
         if (name.isEmpty || unit.isEmpty) continue;
-        
+
         final key = '$name|$unit';
-        
+
         // Check if this is a fixed value (not an ingredient)
-        final isIngredient = data.materials.any((m) => m.name == name && 
-            appState.selectedRecipes.any((r) => r.ingredients.contains(name)));
-        
+        final isIngredient = data.materials.any(
+          (m) =>
+              m.name == name &&
+              appState.selectedRecipes.any((r) => r.ingredients.contains(name)),
+        );
+
         // If it's a fixed value and not already in the list, add it
         if (!isIngredient && !existingFixedKeys.contains(key)) {
           // Find the item in data.fixedValues (even if filtered out)
@@ -596,11 +628,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         }
       }
     }
-    
-    final allIngredients =
-        separated.ingredientsByCocktail.values.expand((i) => i).toList();
+
+    final allIngredients = separated.ingredientsByCocktail.values
+        .expand((i) => i)
+        .toList();
     final cocktailNames = separated.ingredientsByCocktail.keys.toList();
-    
+
     // Apply saved order items first (if editing)
     _applySavedOrderItems(data, cocktailNames);
     // Apply Gemini material suggestions if available (once)
@@ -644,7 +677,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     // Ensure controllers exist for cocktail-specific keys
     for (final cocktailName in cocktailNames) {
       for (final item in separated.ingredientsByCocktail[cocktailName]!) {
-        _ensureController(ShoppingListLogic.cocktailItemKey(item, cocktailName));
+        _ensureController(
+          ShoppingListLogic.cocktailItemKey(item, cocktailName),
+        );
       }
     }
     // Ensure controllers exist for fixed values (base keys)
@@ -667,7 +702,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         fixedValuesByCategory['other']!.add(item);
       }
     }
-    
+
     // Count non-empty categories
     final categoryPages = fixedValuesByCategory.entries
         .where((e) => e.value.isNotEmpty)
@@ -724,8 +759,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   void _onIngredientsChanged(String cocktailName, List<String> newIngredients) {
     // Find and update the recipe in appState
-    final recipeIndex = appState.selectedRecipes
-        .indexWhere((r) => r.name == cocktailName);
+    final recipeIndex = appState.selectedRecipes.indexWhere(
+      (r) => r.name == cocktailName,
+    );
     if (recipeIndex != -1) {
       final oldRecipe = appState.selectedRecipes[recipeIndex];
       final updatedRecipe = Recipe(
@@ -765,17 +801,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         onIngredientsChanged: _onIngredientsChanged,
       );
     }
-    
+
     // Category pages
     final categoryIndex = index - cocktailNames.length;
     if (categoryIndex >= 0 && categoryIndex < categoryPages.length) {
       final categoryEntry = categoryPages[categoryIndex];
-      return _buildCategoryPage(
-        categoryEntry.key,
-        categoryEntry.value,
-      );
+      return _buildCategoryPage(categoryEntry.key, categoryEntry.value);
     }
-    
+
     // Summary page
     return SummaryPage(selectedItems: selectedItems, total: total);
   }
@@ -814,7 +847,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: (categoryColors[category] ?? Colors.grey).withValues(alpha: 0.15),
+                  color: (categoryColors[category] ?? Colors.grey).withValues(
+                    alpha: 0.15,
+                  ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
@@ -830,15 +865,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   children: [
                     Text(
                       categoryLabels[category] ?? category,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     Text(
                       '${items.length} Positionen',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                     ),
                   ],
                 ),

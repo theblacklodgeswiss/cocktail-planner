@@ -10,10 +10,7 @@ import '../utils/currency.dart';
 
 /// Data class for an order item with quantity
 class OrderItem {
-  const OrderItem({
-    required this.item,
-    required this.quantity,
-  });
+  const OrderItem({required this.item, required this.quantity});
 
   final MaterialItem item;
   final int quantity;
@@ -51,23 +48,23 @@ class PdfGenerator {
     required String currency,
     int personCount = 0,
     String drinkerType = 'normal',
+    String serviceType = '',
   }) async {
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
-    
+
     final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: fontRegular,
-        bold: fontBold,
-      ),
+      theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
     );
     final curr = Currency.fromCode(currency);
 
     // Group items by purchase location (note field)
     final groupedByLocation = <String, List<OrderItem>>{};
     for (final orderItem in items) {
-      final location = orderItem.item.note.isEmpty ? 'Sonstige' : orderItem.item.note;
+      final location = orderItem.item.note.isEmpty
+          ? 'Sonstige'
+          : orderItem.item.note;
       groupedByLocation.putIfAbsent(location, () => []).add(orderItem);
     }
 
@@ -85,19 +82,33 @@ class PdfGenerator {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
-        header: (context) => _buildHeader(orderName, orderDate, personCount, drinkerType),
+        header: (context) => _buildHeader(
+          orderName,
+          orderDate,
+          personCount,
+          drinkerType,
+          serviceType,
+        ),
         footer: (context) => _buildFooter(context),
         build: (context) => [
           // Summary section
-          _buildSummarySection(items.length, grandTotal, personCount, drinkerType, curr),
+          _buildSummarySection(
+            items.length,
+            grandTotal,
+            personCount,
+            drinkerType,
+            curr,
+          ),
           pw.SizedBox(height: 20),
-          
+
           // Items grouped by location
-          ...sortedLocations.expand((location) => [
-            _buildLocationHeader(location),
-            _buildItemsTable(groupedByLocation[location]!, curr),
-            pw.SizedBox(height: 16),
-          ]),
+          ...sortedLocations.expand(
+            (location) => [
+              _buildLocationHeader(location),
+              _buildItemsTable(groupedByLocation[location]!, curr),
+              pw.SizedBox(height: 16),
+            ],
+          ),
         ],
       ),
     );
@@ -105,7 +116,8 @@ class PdfGenerator {
     // Download the PDF
     await Printing.sharePdf(
       bytes: await pdf.save(),
-      filename: 'einkaufsliste_${_sanitizeFilename(orderName)}_${_formatDate(orderDate)}.pdf',
+      filename:
+          'einkaufsliste_${_sanitizeFilename(orderName)}_${_formatDate(orderDate)}.pdf',
     );
   }
 
@@ -114,7 +126,8 @@ class PdfGenerator {
     final bytes = await generateBytesFromSavedOrder(order);
     await Printing.sharePdf(
       bytes: bytes,
-      filename: 'einkaufsliste_${_sanitizeFilename(order.name)}_${_formatDate(order.date)}.pdf',
+      filename:
+          'einkaufsliste_${_sanitizeFilename(order.name)}_${_formatDate(order.date)}.pdf',
     );
   }
 
@@ -123,23 +136,24 @@ class PdfGenerator {
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
-    
+
     final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: fontRegular,
-        bold: fontBold,
-      ),
+      theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
     );
     final curr = Currency.fromCode(order.currency);
 
     // Convert saved items to simple order items
-    final items = order.items.map((item) => _SimpleOrderItem(
-      name: item['name'] as String? ?? '',
-      unit: item['unit'] as String? ?? '',
-      price: (item['price'] as num?)?.toDouble() ?? 0,
-      note: item['note'] as String? ?? '',
-      quantity: (item['quantity'] as num?)?.toInt() ?? 1,
-    )).toList();
+    final items = order.items
+        .map(
+          (item) => _SimpleOrderItem(
+            name: item['name'] as String? ?? '',
+            unit: item['unit'] as String? ?? '',
+            price: (item['price'] as num?)?.toDouble() ?? 0,
+            note: item['note'] as String? ?? '',
+            quantity: (item['quantity'] as num?)?.toInt() ?? 1,
+          ),
+        )
+        .toList();
 
     // Group items by purchase location (note field)
     final groupedByLocation = <String, List<_SimpleOrderItem>>{};
@@ -162,19 +176,33 @@ class PdfGenerator {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
-        header: (context) => _buildHeader(order.name, order.date, order.personCount, order.drinkerType),
+        header: (context) => _buildHeader(
+          order.name,
+          order.date,
+          order.personCount,
+          order.drinkerType,
+          order.serviceType,
+        ),
         footer: (context) => _buildFooter(context),
         build: (context) => [
           // Summary section
-          _buildSummarySection(items.length, order.total, order.personCount, order.drinkerType, curr),
+          _buildSummarySection(
+            items.length,
+            order.total,
+            order.personCount,
+            order.drinkerType,
+            curr,
+          ),
           pw.SizedBox(height: 20),
-          
+
           // Items grouped by location
-          ...sortedLocations.expand((location) => [
-            _buildLocationHeader(location),
-            _buildSimpleItemsTable(groupedByLocation[location]!, curr),
-            pw.SizedBox(height: 16),
-          ]),
+          ...sortedLocations.expand(
+            (location) => [
+              _buildLocationHeader(location),
+              _buildSimpleItemsTable(groupedByLocation[location]!, curr),
+              pw.SizedBox(height: 16),
+            ],
+          ),
         ],
       ),
     );
@@ -183,7 +211,10 @@ class PdfGenerator {
     return await pdf.save();
   }
 
-  static pw.Widget _buildSimpleItemsTable(List<_SimpleOrderItem> items, Currency currency) {
+  static pw.Widget _buildSimpleItemsTable(
+    List<_SimpleOrderItem> items,
+    Currency currency,
+  ) {
     // Sort items by name within each location
     final sortedItems = List<_SimpleOrderItem>.from(items)
       ..sort((a, b) => a.name.compareTo(b.name));
@@ -210,15 +241,27 @@ class PdfGenerator {
           ],
         ),
         // Data rows
-        ...sortedItems.map((orderItem) => pw.TableRow(
-          children: [
-            _tableCell(orderItem.name),
-            _tableCell(orderItem.unit),
-            _tableCell(orderItem.quantity.toString(), align: pw.TextAlign.center),
-            _tableCell(currency.format(orderItem.price), align: pw.TextAlign.right),
-            _tableCell(currency.format(orderItem.total), align: pw.TextAlign.right, bold: true),
-          ],
-        )),
+        ...sortedItems.map(
+          (orderItem) => pw.TableRow(
+            children: [
+              _tableCell(orderItem.name),
+              _tableCell(orderItem.unit),
+              _tableCell(
+                orderItem.quantity.toString(),
+                align: pw.TextAlign.center,
+              ),
+              _tableCell(
+                currency.format(orderItem.price),
+                align: pw.TextAlign.right,
+              ),
+              _tableCell(
+                currency.format(orderItem.total),
+                align: pw.TextAlign.right,
+                bold: true,
+              ),
+            ],
+          ),
+        ),
         // Subtotal row
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.green50),
@@ -228,7 +271,9 @@ class PdfGenerator {
             _tableCell(''),
             _tableCell(''),
             _tableCell(
-              currency.format(sortedItems.fold<double>(0, (sum, i) => sum + i.total)),
+              currency.format(
+                sortedItems.fold<double>(0, (sum, i) => sum + i.total),
+              ),
               align: pw.TextAlign.right,
               bold: true,
             ),
@@ -238,13 +283,26 @@ class PdfGenerator {
     );
   }
 
-  static pw.Widget _buildHeader(String orderName, DateTime date, int personCount, String drinkerType) {
+  static pw.Widget _buildHeader(
+    String orderName,
+    DateTime date,
+    int personCount,
+    String drinkerType,
+    String serviceType,
+  ) {
+    final serviceLabel = switch (serviceType) {
+      'cocktail_barservice' => 'Cocktail- & Barservice',
+      'cocktailservice' => 'Nur Cocktailservice',
+      'barservice' => 'Nur Barservice',
+      _ => serviceType,
+    };
+
     final drinkerLabel = switch (drinkerType) {
       'light' => 'Wenig Trinker',
       'heavy' => 'Starke Trinker',
       _ => 'Normal',
     };
-    
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 20),
       decoration: const pw.BoxDecoration(
@@ -277,7 +335,7 @@ class PdfGenerator {
               if (personCount > 0) ...[
                 pw.SizedBox(height: 4),
                 pw.Text(
-                  '$personCount Personen • $drinkerLabel',
+                  '$personCount Personen • $drinkerLabel${serviceLabel.isNotEmpty ? ' • $serviceLabel' : ''}',
                   style: const pw.TextStyle(
                     fontSize: 12,
                     color: PdfColors.grey600,
@@ -336,13 +394,19 @@ class PdfGenerator {
     );
   }
 
-  static pw.Widget _buildSummarySection(int itemCount, double total, int personCount, String drinkerType, Currency currency) {
+  static pw.Widget _buildSummarySection(
+    int itemCount,
+    double total,
+    int personCount,
+    String drinkerType,
+    Currency currency,
+  ) {
     final drinkerLabel = switch (drinkerType) {
       'light' => 'Wenig Trinker',
       'heavy' => 'Starke Trinker',
       _ => 'Normal',
     };
-    
+
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
       decoration: pw.BoxDecoration(
@@ -365,13 +429,19 @@ class PdfGenerator {
               pw.SizedBox(height: 4),
               pw.Text(
                 '$itemCount Artikel ausgewählt',
-                style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                style: const pw.TextStyle(
+                  fontSize: 12,
+                  color: PdfColors.grey700,
+                ),
               ),
               if (personCount > 0) ...[
                 pw.SizedBox(height: 2),
                 pw.Text(
                   '$personCount Personen • $drinkerLabel',
-                  style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                  style: const pw.TextStyle(
+                    fontSize: 12,
+                    color: PdfColors.grey700,
+                  ),
                 ),
               ],
             ],
@@ -381,7 +451,10 @@ class PdfGenerator {
             children: [
               pw.Text(
                 'Gesamtsumme',
-                style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                style: const pw.TextStyle(
+                  fontSize: 12,
+                  color: PdfColors.grey600,
+                ),
               ),
               pw.Text(
                 currency.format(total),
@@ -419,10 +492,7 @@ class PdfGenerator {
           pw.SizedBox(width: 8),
           pw.Text(
             location,
-            style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
@@ -456,15 +526,27 @@ class PdfGenerator {
           ],
         ),
         // Data rows
-        ...sortedItems.map((orderItem) => pw.TableRow(
-          children: [
-            _tableCell(orderItem.item.name),
-            _tableCell(orderItem.item.unit),
-            _tableCell(orderItem.quantity.toString(), align: pw.TextAlign.center),
-            _tableCell(currency.format(orderItem.item.price), align: pw.TextAlign.right),
-            _tableCell(currency.format(orderItem.total), align: pw.TextAlign.right, bold: true),
-          ],
-        )),
+        ...sortedItems.map(
+          (orderItem) => pw.TableRow(
+            children: [
+              _tableCell(orderItem.item.name),
+              _tableCell(orderItem.item.unit),
+              _tableCell(
+                orderItem.quantity.toString(),
+                align: pw.TextAlign.center,
+              ),
+              _tableCell(
+                currency.format(orderItem.item.price),
+                align: pw.TextAlign.right,
+              ),
+              _tableCell(
+                currency.format(orderItem.total),
+                align: pw.TextAlign.right,
+                bold: true,
+              ),
+            ],
+          ),
+        ),
         // Subtotal row
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.green50),
@@ -474,7 +556,9 @@ class PdfGenerator {
             _tableCell(''),
             _tableCell(''),
             _tableCell(
-              currency.format(sortedItems.fold<double>(0, (sum, i) => sum + i.total)),
+              currency.format(
+                sortedItems.fold<double>(0, (sum, i) => sum + i.total),
+              ),
               align: pw.TextAlign.right,
               bold: true,
             ),

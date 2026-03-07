@@ -26,29 +26,30 @@ class CreateInvoiceScreen extends StatefulWidget {
 }
 
 class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
-    // Confirmation dialog for PDF save
-    Future<void> _confirmGeneratePdf() async {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('invoice.confirm_save_title'.tr()),
-          content: Text('invoice.confirm_save_msg'.tr()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text('common.save'.tr()),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true) {
-        await _generatePdf();
-      }
+  // Confirmation dialog for PDF save
+  Future<void> _confirmGeneratePdf() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('invoice.confirm_save_title'.tr()),
+        content: Text('invoice.confirm_save_msg'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('common.save'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _generatePdf();
     }
+  }
+
   final _formKey = GlobalKey<FormState>();
 
   // Language
@@ -56,17 +57,19 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // Event date (editable)
   late DateTime _eventDate;
+  late String _serviceType;
 
   // Controllers
   final _editorNameCtrl = TextEditingController(text: 'Mario Kantharoobarajah');
   final _eventTimeCtrl = TextEditingController();
   final _clientNameCtrl = TextEditingController();
   final _clientContactCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController();
   late final TextEditingController _guestCountCtrl;
   final _cocktailsCtrl = TextEditingController();
   final _barDescCtrl = TextEditingController();
   final _shotsCtrl = TextEditingController();
-  
+
   // Position controllers
   late final TextEditingController _barServiceCostCtrl;
   final _distanceKmCtrl = TextEditingController();
@@ -101,41 +104,53 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   void _initializeControllers() {
     _eventDate = widget.order.date;
-    _guestCountCtrl = TextEditingController(text: widget.order.personCount.toString());
+    _guestCountCtrl = TextEditingController(
+      text: widget.order.personCount.toString(),
+    );
 
     // Calculate initial bar service cost
     final travelTotal = widget.order.distanceKm * 2 * 0.70;
-    final barServiceCost = widget.order.total - travelTotal - widget.order.thekeCost;
-    _barServiceCostCtrl = TextEditingController(text: barServiceCost.toStringAsFixed(2));
+    final barServiceCost =
+        widget.order.total - travelTotal - widget.order.thekeCost;
+    _barServiceCostCtrl = TextEditingController(
+      text: barServiceCost.toStringAsFixed(2),
+    );
 
     // Pre-fill from order data
     _cocktailsCtrl.text = widget.order.cocktails.join(', ');
     _shotsCtrl.text = widget.order.shots.join(', ');
     _barDescCtrl.text = widget.order.bar;
-    _distanceKmCtrl.text = widget.order.distanceKm > 0 ? widget.order.distanceKm.toString() : '';
+    _distanceKmCtrl.text = widget.order.distanceKm > 0
+        ? widget.order.distanceKm.toString()
+        : '';
     _thekeCostCtrl = TextEditingController(
-      text: widget.order.thekeCost > 0 ? widget.order.thekeCost.toStringAsFixed(2) : '',
+      text: widget.order.thekeCost > 0
+          ? widget.order.thekeCost.toStringAsFixed(2)
+          : '',
     );
 
     // Shots position - use saved values or calculate from personCount
-    final shotsCount = widget.order.offerShotsCount > 0 
-        ? widget.order.offerShotsCount 
+    final shotsCount = widget.order.offerShotsCount > 0
+        ? widget.order.offerShotsCount
         : (widget.order.shots.isNotEmpty ? widget.order.personCount ~/ 5 : 0);
     _shotsCountCtrl = TextEditingController(
       text: shotsCount > 0 ? shotsCount.toString() : '',
     );
-    _shotsPricePerPieceCtrl.text = widget.order.offerShotsPricePerPiece.toStringAsFixed(2);
-    
+    _shotsPricePerPieceCtrl.text = widget.order.offerShotsPricePerPiece
+        .toStringAsFixed(2);
+
     // Shots remark - use saved value or generate default from shot names
     if (widget.order.offerShotsRemark.isNotEmpty) {
       _shotsRemarkCtrl.text = widget.order.offerShotsRemark;
     } else if (widget.order.shots.isNotEmpty) {
-      _shotsRemarkCtrl.text = 'Shots – ${widget.order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern';
+      _shotsRemarkCtrl.text =
+          'Shots – ${widget.order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern';
     }
 
     // Load saved offer data from order
     _clientNameCtrl.text = widget.order.offerClientName;
     _clientContactCtrl.text = widget.order.offerClientContact;
+    _locationCtrl.text = widget.order.location;
     _eventTimeCtrl.text = widget.order.offerEventTime;
     _discountCtrl.text = widget.order.offerDiscount > 0
         ? widget.order.offerDiscount.toStringAsFixed(2)
@@ -155,12 +170,21 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
     // Load extra hours
     _extraHoursCtrl = TextEditingController(
-      text: widget.order.offerExtraHours > 0 ? widget.order.offerExtraHours.toString() : '',
+      text: widget.order.offerExtraHours > 0
+          ? widget.order.offerExtraHours.toString()
+          : '',
     );
-    _extraHourRateCtrl.text = widget.order.offerExtraHourRate.toStringAsFixed(2);
+    _extraHourRateCtrl.text = widget.order.offerExtraHourRate.toStringAsFixed(
+      2,
+    );
 
     // Load assigned employees
     _selectedEmployees = Set.from(widget.order.assignedEmployees);
+
+    // Set service type
+    _serviceType = widget.order.serviceType.isNotEmpty
+        ? widget.order.serviceType
+        : 'cocktail_barservice';
   }
 
   @override
@@ -190,24 +214,36 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     setState(() => _language = lang);
   }
 
-  double get _barServiceCost => double.tryParse(_barServiceCostCtrl.text.trim()) ?? 0;
+  double get _barServiceCost =>
+      double.tryParse(_barServiceCostCtrl.text.trim()) ?? 0;
   int get _distanceKm => int.tryParse(_distanceKmCtrl.text.trim()) ?? 0;
-  double get _travelCostPerKm => double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70;
+  double get _travelCostPerKm =>
+      double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70;
   double get _travelCostTotal => _distanceKm * 2 * _travelCostPerKm;
   double get _thekeCost => double.tryParse(_thekeCostCtrl.text.trim()) ?? 0;
   int get _shotsCount => int.tryParse(_shotsCountCtrl.text.trim()) ?? 0;
-  double get _shotsPricePerPiece => double.tryParse(_shotsPricePerPieceCtrl.text.trim()) ?? 1.50;
+  double get _shotsPricePerPiece =>
+      double.tryParse(_shotsPricePerPieceCtrl.text.trim()) ?? 1.50;
   double get _shotsCostTotal => _shotsCount * _shotsPricePerPiece;
   double get _discount => double.tryParse(_discountCtrl.text.trim()) ?? 0;
-  double get _extraPositionsTotal => _extraPositions.fold(0.0, (sum, p) => sum + p.total);
-  
-  // Extra hours calculation: employees × hours × rate  
+  double get _extraPositionsTotal =>
+      _extraPositions.fold(0.0, (sum, p) => sum + p.total);
+
+  // Extra hours calculation: employees × hours × rate
   int get _extraHours => int.tryParse(_extraHoursCtrl.text.trim()) ?? 0;
-  double get _extraHourRate => double.tryParse(_extraHourRateCtrl.text.trim()) ?? 50.0;
-  double get _extraHoursTotal => _selectedEmployees.length * _extraHours * _extraHourRate;
+  double get _extraHourRate =>
+      double.tryParse(_extraHourRateCtrl.text.trim()) ?? 50.0;
+  double get _extraHoursTotal =>
+      _selectedEmployees.length * _extraHours * _extraHourRate;
 
   /// Sum of all positions (without discount)
-  double get _positionsSum => _barServiceCost + _travelCostTotal + _thekeCost + _shotsCostTotal + _extraHoursTotal + _extraPositionsTotal;
+  double get _positionsSum =>
+      _barServiceCost +
+      _travelCostTotal +
+      _thekeCost +
+      _shotsCostTotal +
+      _extraHoursTotal +
+      _extraPositionsTotal;
 
   /// Grand total after discount
   double get _grandTotal => _positionsSum - _discount;
@@ -248,20 +284,22 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   /// Get the first validation error message
-  String? get _validationError => _employeeValidationError ?? _totalValidationError;
+  String? get _validationError =>
+      _employeeValidationError ?? _totalValidationError;
 
   /// Build updated order with invoice data
   SavedOrder _buildUpdatedOrder() {
     // Calculate new total from positions (without shots - they are separate)
     final newTotal = _barServiceCost + _travelCostTotal + _thekeCost;
-    
+
     return SavedOrder(
       id: widget.order.id,
       name: widget.order.name,
       date: _eventDate,
       items: widget.order.items,
       total: newTotal,
-      personCount: int.tryParse(_guestCountCtrl.text.trim()) ?? widget.order.personCount,
+      personCount:
+          int.tryParse(_guestCountCtrl.text.trim()) ?? widget.order.personCount,
       drinkerType: widget.order.drinkerType,
       currency: widget.order.currency,
       status: widget.order.status,
@@ -302,7 +340,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       guestCountRange: widget.order.guestCountRange,
       mobileBar: widget.order.mobileBar,
       eventType: widget.order.eventType,
-      serviceType: widget.order.serviceType,
+      serviceType: _serviceType,
       requestedCocktails: widget.order.requestedCocktails,
     );
   }
@@ -324,14 +362,26 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       extraHours: _extraHours,
       extraHourRate: _extraHourRate,
       assignedEmployees: _selectedEmployees.toList(),
+      serviceType: _serviceType,
     );
 
-    // Also update the order totals
+    // Also update the order totals and cocktails/bar/shots
     await orderRepository.updateOrderTotals(
       orderId: widget.order.id,
       total: _barServiceCost + _travelCostTotal + _thekeCost,
       distanceKm: _distanceKm,
       thekeCost: _thekeCost,
+      cocktails: _cocktailsCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      shots: _shotsCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      bar: _barDescCtrl.text.trim(),
     );
   }
 
@@ -348,9 +398,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     try {
       await _saveInvoiceData();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('invoice.saved'.tr())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('invoice.saved'.tr())));
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -370,7 +420,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     try {
       await _saveInvoiceData();
       final updatedOrder = _buildUpdatedOrder();
-      final pdfBytes = await InvoicePdfGenerator.generateBytes(updatedOrder, language: _language);
+      final pdfBytes = await InvoicePdfGenerator.generateBytes(
+        updatedOrder,
+        language: _language,
+      );
       if (mounted) {
         await Printing.layoutPdf(onLayout: (_) async => pdfBytes);
       }
@@ -392,8 +445,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     try {
       await _saveInvoiceData();
       final updatedOrder = _buildUpdatedOrder();
-      final pdfBytes = await InvoicePdfGenerator.generateBytes(updatedOrder, language: _language);
-      
+      final pdfBytes = await InvoicePdfGenerator.generateBytes(
+        updatedOrder,
+        language: _language,
+      );
+
       // Upload to OneDrive if supported
       final fileName = InvoicePdfGenerator.getFilename(updatedOrder);
       if (microsoftGraphService.isSupported) {
@@ -407,17 +463,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           bytes: pdfBytes,
         );
       }
-      
+
       // Share/download the PDF
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: fileName,
-      );
-      
+      await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('invoice.pdf_created'.tr())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('invoice.pdf_created'.tr())));
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -451,36 +504,69 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       ),
       body: Form(
         key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildOrderInfoBanner(colorScheme, curr),
-                  const SizedBox(height: 20),
-                  _buildEditorSection(),
-                  const SizedBox(height: 20),
-                  _buildClientSection(),
-                  const SizedBox(height: 20),
-                  _buildEventTypeSection(),
-                  const SizedBox(height: 20),
-                  _buildEventDetailsSection(),
-                  const SizedBox(height: 20),
-                  _buildServicesSection(),
-                  const SizedBox(height: 20),
-                  _buildPositionsSection(curr),
-                  const SizedBox(height: 20),
-                  _buildPricePreview(curr),
-                  const SizedBox(height: 32),
-                  _buildActionButtons(),
-                  const SizedBox(height: 32),
-                ],
+        child: Column(
+          children: [
+            // ── Sticky action bar ──────────────────────────────────────────
+            Material(
+              elevation: 4,
+              color: colorScheme.surface,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: _buildActionButtons(),
+                  ),
+                ),
               ),
             ),
-          ),
+            // ── Scrollable form ───────────────────────────────────────────
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildOrderInfoBanner(colorScheme, curr),
+                        const SizedBox(height: 20),
+                        _buildEditorSection(),
+                        const SizedBox(height: 20),
+                        _buildClientSection(),
+                        const SizedBox(height: 20),
+                        _buildEventTypeSection(),
+                        const SizedBox(height: 20),
+                        _buildEventDetailsSection(),
+                        const SizedBox(height: 20),
+                        _buildServiceTypeSection(),
+                        const SizedBox(height: 20),
+                        _buildServicesSection(),
+                        const SizedBox(height: 20),
+                        _buildPositionsSection(curr),
+                        const SizedBox(height: 20),
+                        _buildPricePreview(curr),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -539,18 +625,30 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 hint: 'invoice.client_contact_hint'.tr(),
               ),
             ];
-            return wide
-                ? Row(
-                    children: fields
-                        .map((f) => Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: f,
+            return Column(
+              children: [
+                wide
+                    ? Row(
+                        children: fields
+                            .map(
+                              (f) => Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: f,
+                                ),
                               ),
-                            ))
-                        .toList(),
-                  )
-                : Column(children: fields);
+                            )
+                            .toList(),
+                      )
+                    : Column(children: fields),
+                const SizedBox(height: 8),
+                _field(
+                  controller: _locationCtrl,
+                  label: 'orders.location'.tr(),
+                  hint: 'z.B. Musterstrasse 123, 3000 Bern',
+                ),
+              ],
+            );
           },
         ),
       ],
@@ -602,27 +700,28 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   hint: '17:30',
                 ),
               ),
-              SizedBox(
-                width: 200,
-                child: _buildDatePicker(),
-              ),
+              SizedBox(width: 200, child: _buildDatePicker()),
             ];
             return wide
                 ? Row(
                     children: fields
-                        .map((f) => Padding(
-                              padding: const EdgeInsets.only(right: 16),
-                              child: f,
-                            ))
+                        .map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: f,
+                          ),
+                        )
                         .toList(),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: fields
-                        .map((f) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: f,
-                            ))
+                        .map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: f,
+                          ),
+                        )
                         .toList(),
                   );
           },
@@ -683,6 +782,46 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     );
   }
 
+  Widget _buildServiceTypeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(label: 'orders.service_type'.tr()),
+        const SizedBox(height: 8),
+        InputDecorator(
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          ),
+          child: DropdownButton<String>(
+            value: _serviceType,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            items: [
+              DropdownMenuItem(
+                value: 'cocktail_barservice',
+                child: Text('orders.service_cocktail_bar'.tr()),
+              ),
+              DropdownMenuItem(
+                value: 'cocktail_service',
+                child: Text('orders.service_cocktail_only'.tr()),
+              ),
+              DropdownMenuItem(
+                value: 'bar_service',
+                child: Text('orders.service_bar_only'.tr()),
+              ),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _serviceType = value);
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPositionsSection(Currency curr) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,12 +837,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 // Bar Service Cost
                 _field(
                   controller: _barServiceCostCtrl,
-                  label: '${'invoice.bar_service_cost'.tr()} (${widget.order.currency})',
+                  label:
+                      '${'invoice.bar_service_cost'.tr()} (${widget.order.currency})',
                   keyboard: TextInputType.number,
                   required: true,
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Travel costs
                 LayoutBuilder(
                   builder: (context, constraints) {
@@ -714,47 +854,57 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                         label: 'invoice.distance_km'.tr(),
                         hint: '150',
                         keyboard: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                       ),
                       _field(
                         controller: _travelCostPerKmCtrl,
-                        label: '${'invoice.travel_cost_per_km'.tr()} (${widget.order.currency})',
+                        label:
+                            '${'invoice.travel_cost_per_km'.tr()} (${widget.order.currency})',
                         keyboard: TextInputType.number,
                       ),
                     ];
                     return wide
                         ? Row(
                             children: fields
-                                .map((f) => Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: f,
-                                      ),
-                                    ))
+                                .map(
+                                  (f) => Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: f,
+                                    ),
+                                  ),
+                                )
                                 .toList(),
                           )
                         : Column(
-                            children: fields.map((f) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: f,
-                            )).toList(),
+                            children: fields
+                                .map(
+                                  (f) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: f,
+                                  ),
+                                )
+                                .toList(),
                           );
                   },
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Theke cost
                 SizedBox(
                   width: 250,
                   child: _field(
                     controller: _thekeCostCtrl,
-                    label: '${'invoice.theke_cost'.tr()} (${widget.order.currency})',
+                    label:
+                        '${'invoice.theke_cost'.tr()} (${widget.order.currency})',
                     hint: '0',
                     keyboard: TextInputType.number,
                   ),
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Shots position (only if shots are listed)
                 if (_shotsCtrl.text.trim().isNotEmpty) ...[
                   Text(
@@ -773,11 +923,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                           label: 'invoice.shots_count'.tr(),
                           hint: '60',
                           keyboard: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
                         ),
                         _field(
                           controller: _shotsPricePerPieceCtrl,
-                          label: '${'invoice.shots_price_per_piece'.tr()} (${widget.order.currency})',
+                          label:
+                              '${'invoice.shots_price_per_piece'.tr()} (${widget.order.currency})',
                           hint: '1.50',
                           keyboard: TextInputType.number,
                         ),
@@ -785,19 +938,27 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       return wide
                           ? Row(
                               children: fields
-                                  .map((f) => Expanded(
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(right: 8),
-                                          child: f,
+                                  .map(
+                                    (f) => Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8,
                                         ),
-                                      ))
+                                        child: f,
+                                      ),
+                                    ),
+                                  )
                                   .toList(),
                             )
                           : Column(
-                              children: fields.map((f) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: f,
-                              )).toList(),
+                              children: fields
+                                  .map(
+                                    (f) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: f,
+                                    ),
+                                  )
+                                  .toList(),
                             );
                     },
                   ),
@@ -805,34 +966,36 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   _field(
                     controller: _shotsRemarkCtrl,
                     label: 'invoice.shots_remark'.tr(),
-                    hint: 'Shots – Aarewasser, Erdbeer Lime\nAusgeschenkt in 0.4 CL Shotbechern',
+                    hint:
+                        'Shots – Aarewasser, Erdbeer Lime\nAusgeschenkt in 0.4 CL Shotbechern',
                     maxLines: 3,
                   ),
                   const SizedBox(height: 12),
                 ],
-                
+
                 // Discount
                 SizedBox(
                   width: 250,
                   child: _field(
                     controller: _discountCtrl,
-                    label: '${'invoice.discount'.tr()} (${widget.order.currency})',
+                    label:
+                        '${'invoice.discount'.tr()} (${widget.order.currency})',
                     hint: '0',
                     keyboard: TextInputType.number,
                   ),
                 ),
-                
+
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 8),
-                
+
                 // Extrastunden (Extra hours)
                 _buildExtraHoursSection(),
-                
+
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 8),
-                
+
                 // Extra positions
                 _buildExtraPositionsSection(curr),
               ],
@@ -849,26 +1012,29 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       stream: employeeRepository.watchEmployees(),
       builder: (context, snapshot) {
         final employees = snapshot.data ?? [];
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
             Row(
               children: [
-                Icon(Icons.access_time, 
-                    size: 20, color: Theme.of(context).colorScheme.primary),
+                Icon(
+                  Icons.access_time,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'invoice.extra_hours_section'.tr(),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            
+
             // Employee selection
             Text(
               'invoice.select_employees'.tr(),
@@ -880,9 +1046,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             if (employees.isEmpty)
               Text(
                 'orders.no_employees_available'.tr(),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey),
               )
             else
               Wrap(
@@ -898,8 +1064,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                           ? Theme.of(context).colorScheme.primary
                           : Colors.grey,
                       child: Text(
-                        employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
-                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                        employee.name.isNotEmpty
+                            ? employee.name[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     onSelected: (selected) {
@@ -915,7 +1086,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 }).toList(),
               ),
             const SizedBox(height: 12),
-            
+
             // Extra hours inputs
             LayoutBuilder(
               builder: (context, constraints) {
@@ -930,7 +1101,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   ),
                   _field(
                     controller: _extraHourRateCtrl,
-                    label: '${'invoice.extra_hour_rate'.tr()} (${widget.order.currency})',
+                    label:
+                        '${'invoice.extra_hour_rate'.tr()} (${widget.order.currency})',
                     hint: '50.00',
                     keyboard: TextInputType.number,
                   ),
@@ -938,23 +1110,29 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 return wide
                     ? Row(
                         children: fields
-                            .map((f) => Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: f,
-                                  ),
-                                ))
+                            .map(
+                              (f) => Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: f,
+                                ),
+                              ),
+                            )
                             .toList(),
                       )
                     : Column(
-                        children: fields.map((f) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: f,
-                        )).toList(),
+                        children: fields
+                            .map(
+                              (f) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: f,
+                              ),
+                            )
+                            .toList(),
                       );
               },
             ),
-            
+
             // Show calculation if employees selected and hours > 0
             if (_selectedEmployees.isNotEmpty && _extraHours > 0) ...[
               const SizedBox(height: 8),
@@ -988,8 +1166,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.error_outline, 
-                      size: 16, color: Theme.of(context).colorScheme.error),
+                  Icon(
+                    Icons.error_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     _employeeValidationError!,
@@ -1013,8 +1194,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       children: [
         Row(
           children: [
-            Icon(Icons.add_circle_outline, 
-                size: 20, color: Theme.of(context).colorScheme.primary),
+            Icon(
+              Icons.add_circle_outline,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             const SizedBox(width: 8),
             Text(
               'invoice.extra_positions'.tr(),
@@ -1045,21 +1229,24 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          pos.quantity > 1 ? '${pos.quantity}x ${pos.name}' : pos.name,
+                          pos.quantity > 1
+                              ? '${pos.quantity}x ${pos.name}'
+                              : pos.name,
                           style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                         if (pos.remark.isNotEmpty)
                           Text(
                             pos.remark,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.outline,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
                           ),
                       ],
                     ),
                   ),
                   Text(
-                    pos.quantity > 1 
+                    pos.quantity > 1
                         ? '${pos.quantity} × ${curr.format(pos.price)} = ${curr.format(pos.total)}'
                         : curr.format(pos.price),
                     style: const TextStyle(fontWeight: FontWeight.bold),
@@ -1071,9 +1258,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     tooltip: 'common.edit'.tr(),
                   ),
                   IconButton(
-                    icon: Icon(Icons.delete, size: 18, 
-                        color: Theme.of(context).colorScheme.error),
-                    onPressed: () => setState(() => _extraPositions.removeAt(index)),
+                    icon: Icon(
+                      Icons.delete,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    onPressed: () =>
+                        setState(() => _extraPositions.removeAt(index)),
                     tooltip: 'common.delete'.tr(),
                   ),
                 ],
@@ -1093,13 +1284,17 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   Future<void> _showEditExtraPositionDialog(int index) async {
-    final result = await _showExtraPositionDialog(existing: _extraPositions[index]);
+    final result = await _showExtraPositionDialog(
+      existing: _extraPositions[index],
+    );
     if (result != null) {
       setState(() => _extraPositions[index] = result);
     }
   }
 
-  Future<ExtraPosition?> _showExtraPositionDialog({ExtraPosition? existing}) async {
+  Future<ExtraPosition?> _showExtraPositionDialog({
+    ExtraPosition? existing,
+  }) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final quantityCtrl = TextEditingController(
       text: existing != null ? existing.quantity.toString() : '1',
@@ -1113,7 +1308,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     return showDialog<ExtraPosition>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'invoice.add_position'.tr() : 'invoice.edit_position'.tr()),
+        title: Text(
+          existing == null
+              ? 'invoice.add_position'.tr()
+              : 'invoice.edit_position'.tr(),
+        ),
         content: Form(
           key: formKey,
           child: SizedBox(
@@ -1141,8 +1340,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   ),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'invoice.field_required'.tr();
-                    if (int.tryParse(v.trim()) == null || int.parse(v.trim()) < 1) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'invoice.field_required'.tr();
+                    }
+                    if (int.tryParse(v.trim()) == null ||
+                        int.parse(v.trim()) < 1) {
                       return 'invoice.invalid_number'.tr();
                     }
                     return null;
@@ -1153,12 +1355,17 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   controller: priceCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: '${'invoice.position_price'.tr()} (${widget.order.currency})',
+                    labelText:
+                        '${'invoice.position_price'.tr()} (${widget.order.currency})',
                     prefixIcon: const Icon(Icons.attach_money),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'invoice.field_required'.tr();
-                    if (double.tryParse(v.trim()) == null) return 'invoice.invalid_number'.tr();
+                    if (v == null || v.trim().isEmpty) {
+                      return 'invoice.field_required'.tr();
+                    }
+                    if (double.tryParse(v.trim()) == null) {
+                      return 'invoice.invalid_number'.tr();
+                    }
                     return null;
                   },
                 ),
@@ -1183,12 +1390,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           FilledButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, ExtraPosition(
-                  name: nameCtrl.text.trim(),
-                  quantity: int.parse(quantityCtrl.text.trim()),
-                  price: double.parse(priceCtrl.text.trim()),
-                  remark: remarkCtrl.text.trim(),
-                ));
+                Navigator.pop(
+                  ctx,
+                  ExtraPosition(
+                    name: nameCtrl.text.trim(),
+                    quantity: int.parse(quantityCtrl.text.trim()),
+                    price: double.parse(priceCtrl.text.trim()),
+                    remark: remarkCtrl.text.trim(),
+                  ),
+                );
               }
             },
             child: Text('common.save'.tr()),
@@ -1200,7 +1410,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   Widget _buildPricePreview(Currency curr) {
     return Card(
-      color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4),
+      color: Theme.of(
+        context,
+      ).colorScheme.secondaryContainer.withValues(alpha: 0.4),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -1208,7 +1420,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           children: [
             Text(
               'invoice.price_preview'.tr(),
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             _PreviewRow(
@@ -1218,7 +1432,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             if (_distanceKm > 0)
               _PreviewRow(
                 label: 'invoice.travel_cost'.tr(),
-                value: '${_distanceKm * 2} km × ${curr.format(_travelCostPerKm)} = ${curr.format(_travelCostTotal)}',
+                value:
+                    '${_distanceKm * 2} km × ${curr.format(_travelCostPerKm)} = ${curr.format(_travelCostTotal)}',
               ),
             if (_thekeCost > 0)
               _PreviewRow(
@@ -1228,12 +1443,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             if (_shotsCount > 0)
               _PreviewRow(
                 label: 'Shots',
-                value: '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
+                value:
+                    '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
               ),
             if (_extraHoursTotal > 0)
               _PreviewRow(
                 label: 'invoice.extra_hours_label'.tr(),
-                value: '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
+                value:
+                    '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
               ),
             if (_extraPositionsTotal > 0)
               _PreviewRow(
@@ -1275,74 +1492,61 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   Widget _buildActionButtons() {
+    final saveBtn = OutlinedButton.icon(
+      onPressed: _isGenerating ? null : _saveOnly,
+      icon: const Icon(Icons.save_outlined, size: 18),
+      label: Text('invoice.save'.tr()),
+    );
+
+    final previewBtn = OutlinedButton.icon(
+      onPressed: _isGenerating ? null : _previewPdf,
+      icon: const Icon(Icons.visibility, size: 18),
+      label: Text('invoice.preview'.tr()),
+    );
+
+    final pdfBtn = FilledButton.icon(
+      onPressed: _isGenerating ? null : _confirmGeneratePdf,
+      icon: _isGenerating
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.picture_as_pdf, size: 18),
+      label: Text('invoice.generate_pdf'.tr()),
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      ),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 500;
-        if (isMobile) {
+        if (constraints.maxWidth >= 520) {
+          return Row(
+            children: [
+              saveBtn,
+              const SizedBox(width: 8),
+              previewBtn,
+              const Spacer(),
+              pdfBtn,
+            ],
+          );
+        } else {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isGenerating ? null : _saveOnly,
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text('invoice.save'.tr()),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isGenerating ? null : _previewPdf,
-                      icon: const Icon(Icons.visibility),
-                      label: Text('invoice.preview'.tr()),
-                    ),
-                  ),
+                  Expanded(child: saveBtn),
+                  const SizedBox(width: 8),
+                  Expanded(child: previewBtn),
                 ],
               ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _isGenerating ? null : _confirmGeneratePdf,
-                icon: _isGenerating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.picture_as_pdf),
-                label: Text('invoice.generate_pdf'.tr()),
-              ),
-            ],
-          );
-        } else {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _isGenerating ? null : _saveOnly,
-                icon: const Icon(Icons.save_outlined),
-                label: Text('invoice.save'.tr()),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _isGenerating ? null : _previewPdf,
-                icon: const Icon(Icons.visibility),
-                label: Text('invoice.preview'.tr()),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: _isGenerating ? null : _confirmGeneratePdf,
-                icon: _isGenerating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.picture_as_pdf),
-                label: Text('invoice.generate_pdf'.tr()),
-              ),
+              const SizedBox(height: 8),
+              pdfBtn,
             ],
           );
         }
@@ -1371,8 +1575,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       ),
       validator: required
           ? (v) => (v == null || v.trim().isEmpty)
-              ? 'invoice.field_required'.tr()
-              : null
+                ? 'invoice.field_required'.tr()
+                : null
           : null,
       onChanged: (_) => setState(() {}),
     );

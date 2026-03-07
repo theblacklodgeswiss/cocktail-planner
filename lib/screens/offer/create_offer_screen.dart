@@ -8,7 +8,6 @@ import '../../data/employee_repository.dart';
 import '../../models/offer.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
-import '../../services/auth_service.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
 import '../../utils/currency.dart';
@@ -59,12 +58,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   // Event date (editable)
   late DateTime _eventDate;
+  late String _serviceType;
 
   // Controllers
-  late final TextEditingController _editorNameCtrl;
+  late final _editorNameCtrl = TextEditingController(text: 'Inthusan Gunasiri');
   final _eventTimeCtrl = TextEditingController();
   final _clientNameCtrl = TextEditingController();
   final _clientContactCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController();
   late final TextEditingController _guestCountCtrl;
   final _cocktailsCtrl = TextEditingController();
   final _barDescCtrl = TextEditingController();
@@ -103,12 +104,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       text: widget.order.total.toStringAsFixed(2),
     );
 
-    // Initialize editor name with logged-in user's display name
-    final authService = AuthService();
-    _editorNameCtrl = TextEditingController(
-      text: authService.displayName ?? 'Mario Kantharoobarajah',
-    );
-
     // Pre-fill from order data
     _cocktailsCtrl.text = widget.order.cocktails.join(', ');
     _shotsCtrl.text = widget.order.shots.join(', ');
@@ -127,6 +122,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _clientContactCtrl.text = widget.order.offerClientContact.isEmpty
         ? widget.order.phone
         : widget.order.offerClientContact;
+    _locationCtrl.text = widget.order.location;
     _eventTimeCtrl.text = widget.order.offerEventTime.isEmpty
         ? widget.order.eventTime
         : widget.order.offerEventTime;
@@ -154,6 +150,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     // Load assigned employees from order
     _selectedEmployees = Set.from(widget.order.assignedEmployees);
 
+    // Set service type
+    _serviceType = widget.order.serviceType.isNotEmpty
+        ? widget.order.serviceType
+        : 'cocktail_barservice';
+
     // Set additional info based on language
     _additionalInfoCtrl = TextEditingController(
       text: _language == 'en'
@@ -168,6 +169,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _eventTimeCtrl.dispose();
     _clientNameCtrl.dispose();
     _clientContactCtrl.dispose();
+    _locationCtrl.dispose();
     _guestCountCtrl.dispose();
     _cocktailsCtrl.dispose();
     _barDescCtrl.dispose();
@@ -213,6 +215,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       editorName: _editorNameCtrl.text.trim(),
       clientName: _clientNameCtrl.text.trim(),
       clientContact: _clientContactCtrl.text.trim(),
+      eventLocation: _locationCtrl.text.trim(),
       eventTypes: Set.of(_eventTypes),
       cocktails: cocktails,
       shots: shots,
@@ -227,6 +230,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       discountRemark: _discountRemarkCtrl.text.trim(),
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
+      serviceType: _serviceType,
       extraPositions: List.of(_extraPositions),
       assignedEmployees: _selectedEmployees.toList(),
       supervisorItems: widget.order.items
@@ -248,6 +252,23 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       eventDate: _eventDate,
       extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
       assignedEmployees: _selectedEmployees.toList(),
+      serviceType: _serviceType,
+    );
+    
+    // Also update cocktails, shots, and bar description
+    await orderRepository.updateOrderCocktailsAndBar(
+      orderId: widget.order.id,
+      cocktails: _cocktailsCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      shots: _shotsCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      bar: _barDescCtrl.text.trim(),
     );
   }
 
@@ -372,44 +393,77 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       ),
       body: Form(
         key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildOrderInfoBanner(colorScheme, curr),
-                  const SizedBox(height: 20),
-                  _buildEditorSection(),
-                  const SizedBox(height: 20),
-                  _buildClientSection(),
-                  const SizedBox(height: 20),
-                  _buildEventTypeSection(),
-                  const SizedBox(height: 12),
-                  _buildEmployeeSelectionSection(),
-                  const SizedBox(height: 20),
-                  _buildGuestCountSection(),
-                  const SizedBox(height: 20),
-                  _buildServicesSection(),
-                  const SizedBox(height: 20),
-                  _buildPricingSection(curr),
-                  const SizedBox(height: 20),
-                  _buildAdditionalInfoSection(),
-                  const SizedBox(height: 32),
-                  OfferActionButtons(
-                    isGenerating: _isGenerating,
-                    onSaveOnly: _saveOnly,
-                    onPreview: _previewPdf,
-                    onGeneratePdf: _confirmGeneratePdf,
-                    onPrint: _printPdf,
+        child: Column(
+          children: [
+            // ── Sticky action bar ──────────────────────────────────────────
+            Material(
+              elevation: 4,
+              color: colorScheme.surface,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
                   ),
-                  const SizedBox(height: 32),
-                ],
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: OfferActionButtons(
+                      isGenerating: _isGenerating,
+                      onSaveOnly: _saveOnly,
+                      onPreview: _previewPdf,
+                      onGeneratePdf: _confirmGeneratePdf,
+                      onPrint: _printPdf,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            // ── Scrollable form ───────────────────────────────────────────
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildOrderInfoBanner(colorScheme, curr),
+                        const SizedBox(height: 20),
+                        _buildEditorSection(),
+                        const SizedBox(height: 20),
+                        _buildClientSection(),
+                        const SizedBox(height: 20),
+                        _buildEventTypeSection(),
+                        const SizedBox(height: 12),
+                        _buildEmployeeSelectionSection(),
+                        const SizedBox(height: 20),
+                        _buildGuestCountSection(),
+                        const SizedBox(height: 20),
+                        _buildServiceTypeSection(),
+                        const SizedBox(height: 20),
+                        _buildServicesSection(),
+                        const SizedBox(height: 20),
+                        _buildPricingSection(curr),
+                        const SizedBox(height: 20),
+                        _buildAdditionalInfoSection(),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -468,20 +522,30 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 hint: 'offer.client_contact_hint'.tr(),
               ),
             ];
-            return wide
-                ? Row(
-                    children: fields
-                        .map(
-                          (f) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: f,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  )
-                : Column(children: fields);
+            return Column(
+              children: [
+                wide
+                    ? Row(
+                        children: fields
+                            .map(
+                              (f) => Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: f,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      )
+                    : Column(children: fields),
+                const SizedBox(height: 8),
+                _field(
+                  controller: _locationCtrl,
+                  label: 'orders.location'.tr(),
+                  hint: 'z.B. Musterstrasse 123, 3000 Bern',
+                ),
+              ],
+            );
           },
         ),
       ],
@@ -677,6 +741,46 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           controller: _shotsCtrl,
           label: 'offer.shots'.tr(),
           hint: 'offer.shots_hint'.tr(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildServiceTypeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(label: 'orders.service_type'.tr()),
+        const SizedBox(height: 8),
+        InputDecorator(
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          ),
+          child: DropdownButton<String>(
+            value: _serviceType,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            items: [
+              DropdownMenuItem(
+                value: 'cocktail_barservice',
+                child: Text('orders.service_cocktail_bar'.tr()),
+              ),
+              DropdownMenuItem(
+                value: 'cocktail_service',
+                child: Text('orders.service_cocktail_only'.tr()),
+              ),
+              DropdownMenuItem(
+                value: 'bar_service',
+                child: Text('orders.service_bar_only'.tr()),
+              ),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _serviceType = value);
+              }
+            },
+          ),
         ),
       ],
     );
@@ -977,10 +1081,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                     prefixIcon: const Icon(Icons.attach_money),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty)
+                    if (v == null || v.trim().isEmpty) {
                       return 'offer.field_required'.tr();
-                    if (double.tryParse(v.trim()) == null)
+                    }
+                    if (double.tryParse(v.trim()) == null) {
                       return 'offer.invalid_number'.tr();
+                    }
                     return null;
                   },
                 ),

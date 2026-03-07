@@ -26,6 +26,7 @@ class OrderRepository {
     String phone = '',
     String location = '',
     String eventTime = '',
+    String serviceType = 'cocktail_barservice',
   }) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available, order not saved to cloud');
@@ -50,6 +51,7 @@ class OrderRepository {
         'phone': phone,
         'location': location,
         'eventTime': eventTime,
+        'serviceType': serviceType,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
@@ -93,6 +95,7 @@ class OrderRepository {
     String? location,
     String? eventTime,
     DateTime? eventDate,
+    String? serviceType,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -111,13 +114,14 @@ class OrderRepository {
         'shoppingListCreatedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      
+
       // Only update optional fields if provided
       if (phone != null) updateData['phone'] = phone;
       if (location != null) updateData['location'] = location;
       if (eventTime != null) updateData['eventTime'] = eventTime;
       if (eventDate != null) updateData['date'] = eventDate.toIso8601String();
-      
+      if (serviceType != null) updateData['serviceType'] = serviceType;
+
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
@@ -144,11 +148,12 @@ class OrderRepository {
     int extraHours = 0,
     double extraHourRate = 50.0,
     List<String> assignedEmployees = const [],
+    String? serviceType,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
     try {
-      await firestoreService.ordersCollection.doc(orderId).update({
+      final updateData = <String, dynamic>{
         'offerClientName': clientName,
         'offerClientContact': clientContact,
         'offerEventTime': eventTime,
@@ -165,7 +170,13 @@ class OrderRepository {
         'assignedEmployees': assignedEmployees,
         'offerUpdatedAt': FieldValue.serverTimestamp(),
         'date': eventDate.toIso8601String(),
-      });
+      };
+      
+      if (serviceType != null) {
+        updateData['serviceType'] = serviceType;
+      }
+      
+      await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
       debugPrint('Failed to update order offer data: $e');
@@ -179,19 +190,54 @@ class OrderRepository {
     required double total,
     required int distanceKm,
     required double thekeCost,
+    List<String>? cocktails,
+    List<String>? shots,
+    String? bar,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
     try {
-      await firestoreService.ordersCollection.doc(orderId).update({
+      final updateData = <String, dynamic>{
         'total': total,
         'distanceKm': distanceKm,
         'thekeCost': thekeCost,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      
+      if (cocktails != null) updateData['cocktails'] = cocktails;
+      if (shots != null) updateData['shots'] = shots;
+      if (bar != null) updateData['bar'] = bar;
+      
+      await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
       debugPrint('Failed to update order totals: $e');
+      return false;
+    }
+  }
+
+  /// Update order cocktails, shots, and bar description.
+  Future<bool> updateOrderCocktailsAndBar({
+    required String orderId,
+    List<String>? cocktails,
+    List<String>? shots,
+    String? bar,
+  }) async {
+    if (!firestoreService.isAvailable) return false;
+
+    try {
+      final updateData = <String, dynamic>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      if (cocktails != null) updateData['cocktails'] = cocktails;
+      if (shots != null) updateData['shots'] = shots;
+      if (bar != null) updateData['bar'] = bar;
+      
+      await firestoreService.ordersCollection.doc(orderId).update(updateData);
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update order cocktails and bar: $e');
       return false;
     }
   }
@@ -219,7 +265,10 @@ class OrderRepository {
 
   /// Watch orders as a real-time stream.
   /// Excludes pending orders (total == 0) unless [includePending] is true.
-  Stream<List<SavedOrder>> watchOrders({int? year, bool includePending = false}) {
+  Stream<List<SavedOrder>> watchOrders({
+    int? year,
+    bool includePending = false,
+  }) {
     if (!firestoreService.isAvailable) {
       return Stream.value([]);
     }
@@ -228,23 +277,24 @@ class OrderRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      var orders = snapshot.docs
-          .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
-          .toList();
-      
-      // Filter out pending orders (total == 0) unless explicitly included
-      if (!includePending) {
-        orders = orders.where((o) => o.total > 0).toList();
-      }
-      
-      if (year != null) {
-        return orders.where((o) => o.year == year).toList();
-      }
-      return orders;
-    }).handleError((e) {
-      debugPrint('Failed to watch orders: $e');
-      return <SavedOrder>[];
-    });
+          var orders = snapshot.docs
+              .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+              .toList();
+
+          // Filter out pending orders (total == 0) unless explicitly included
+          if (!includePending) {
+            orders = orders.where((o) => o.total > 0).toList();
+          }
+
+          if (year != null) {
+            return orders.where((o) => o.year == year).toList();
+          }
+          return orders;
+        })
+        .handleError((e) {
+          debugPrint('Failed to watch orders: $e');
+          return <SavedOrder>[];
+        });
   }
 
   /// Watch pending orders (total == 0) across all years.
@@ -257,19 +307,22 @@ class OrderRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
-          .where((o) => o.total == 0)
-          .toList();
-    }).handleError((e) {
-      debugPrint('Failed to watch pending orders: $e');
-      return <SavedOrder>[];
-    });
+          return snapshot.docs
+              .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+              .where((o) => o.total == 0)
+              .toList();
+        })
+        .handleError((e) {
+          debugPrint('Failed to watch pending orders: $e');
+          return <SavedOrder>[];
+        });
   }
 
   /// Update the assigned employees for an order.
   Future<bool> updateAssignedEmployees(
-      String orderId, List<String> employees) async {
+    String orderId,
+    List<String> employees,
+  ) async {
     if (!firestoreService.isAvailable) return false;
     try {
       await firestoreService.ordersCollection.doc(orderId).update({
@@ -435,7 +488,8 @@ class OrderRepository {
           'drinkerType': 'normal',
           'status': OrderStatus.quote.value,
           'hasShoppingList': false,
-          'createdAt': formCreatedAt?.toIso8601String() ?? FieldValue.serverTimestamp(),
+          'createdAt':
+              formCreatedAt?.toIso8601String() ?? FieldValue.serverTimestamp(),
           'createdBy': authService.email ?? authService.currentUser?.uid,
         });
         debugPrint('Created form submission: $name');
@@ -470,9 +524,7 @@ class OrderRepository {
   /// E: Name, F: Phone1, G: Phone2, H: Date, I: Time,
   /// J: Location, K: GuestCount, L: MobileBar, M: EventType, N: ServiceType
   /// Returns the number of synced submissions (new + updated).
-  Future<int> syncFormSubmissions({
-    required List<List<String>> rows,
-  }) async {
+  Future<int> syncFormSubmissions({required List<List<String>> rows}) async {
     if (!firestoreService.isAvailable) {
       debugPrint('Firebase not available');
       return -1;
@@ -494,7 +546,9 @@ class OrderRepository {
 
       // Get existing form submissions with their doc IDs
       final existingSubmissions = await getExistingFormSubmissions();
-      debugPrint('Found ${existingSubmissions.length} existing form submissions');
+      debugPrint(
+        'Found ${existingSubmissions.length} existing form submissions',
+      );
 
       int syncedCount = 0;
 
@@ -516,9 +570,11 @@ class OrderRepository {
         // [13]: Service
         // [14]: Cocktails 1 (comma/semicolon separated)
         // [15]: Cocktails 2 (comma/semicolon separated)
-        
+
         if (row.length < 13) {
-          debugPrint('Skipping row with ${row.length} columns (need at least 13)');
+          debugPrint(
+            'Skipping row with ${row.length} columns (need at least 13)',
+          );
           continue;
         }
 
@@ -536,7 +592,11 @@ class OrderRepository {
         final cocktailsStr2 = row.length > 15 ? row[15].trim() : '';
         final combinedCocktails = '$cocktailsStr1;$cocktailsStr2';
         final requestedCocktails = combinedCocktails.isNotEmpty
-            ? combinedCocktails.split(RegExp(r'[,;]')).map((c) => c.trim()).where((c) => c.isNotEmpty).toList()
+            ? combinedCocktails
+                  .split(RegExp(r'[,;]'))
+                  .map((c) => c.trim())
+                  .where((c) => c.isNotEmpty)
+                  .toList()
             : <String>[];
 
         // Parse createdAt (Excel serial number)
@@ -555,7 +615,7 @@ class OrderRepository {
           debugPrint('Skipping row with empty name');
           continue;
         }
-        
+
         debugPrint('Processing: $name, $phone, $dateStr');
 
         // Create unique ID from name + phone (stable identifier across syncs)

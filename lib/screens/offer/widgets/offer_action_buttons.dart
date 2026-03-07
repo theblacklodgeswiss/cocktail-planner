@@ -20,116 +20,85 @@ class OfferActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Secondary (left-side) buttons
+    final saveBtn = OutlinedButton.icon(
+      onPressed: isGenerating ? null : onSaveOnly,
+      icon: const Icon(Icons.save_outlined, size: 18),
+      label: Text('offer.save_only'.tr()),
+    );
+
+    final previewBtn = OutlinedButton.icon(
+      onPressed: isGenerating ? null : onPreview,
+      icon: const Icon(Icons.visibility, size: 18),
+      label: Text('offer.preview'.tr()),
+    );
+
+    // Primary (right-side) button
+    final pdfBtn = FilledButton.icon(
+      onPressed: isGenerating ? null : onGeneratePdf,
+      icon: isGenerating
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.picture_as_pdf, size: 18),
+      label: Text('offer.generate_pdf'.tr()),
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+      ),
+    );
+
+    final printBtn = IconButton.outlined(
+      onPressed: isGenerating ? null : onPrint,
+      icon: const Icon(Icons.print, size: 20),
+      tooltip: 'offer.print'.tr(),
+      style: IconButton.styleFrom(side: BorderSide(color: colorScheme.outline)),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 500;
-        if (isMobile) {
-          // Mobile: first row (save, preview), second row (PDF), third row (print)
+        if (constraints.maxWidth >= 520) {
+          // ── Desktop / Tablet ──────────────────────────────────────────────
+          // Secondary left | gap | Primary right
+          return Row(
+            children: [
+              // Left: secondary actions
+              saveBtn,
+              const SizedBox(width: 8),
+              previewBtn,
+              // Push primary actions to the right
+              const Spacer(),
+              // Right: primary actions
+              pdfBtn,
+              const SizedBox(width: 8),
+              printBtn,
+            ],
+          );
+        } else {
+          // ── Mobile: two rows ──────────────────────────────────────────────
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: isGenerating ? null : onSaveOnly,
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text('offer.save_only'.tr()),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: isGenerating ? null : onPreview,
-                      icon: const Icon(Icons.visibility),
-                      label: Text('offer.preview'.tr()),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: saveBtn),
+                  const SizedBox(width: 8),
+                  Expanded(child: previewBtn),
                 ],
               ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: isGenerating ? null : onGeneratePdf,
-                icon: isGenerating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.picture_as_pdf),
-                label: Text('offer.generate_pdf'.tr()),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: isGenerating ? null : onPrint,
-                icon: const Icon(Icons.print),
-                label: Text('offer.print'.tr()),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-              ),
-            ],
-          );
-        } else {
-          // Desktop/tablet: all in a row
-          return Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: isGenerating ? null : onSaveOnly,
-                icon: const Icon(Icons.save_outlined),
-                label: Text('offer.save_only'.tr()),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: isGenerating ? null : onPreview,
-                icon: const Icon(Icons.visibility),
-                label: Text('offer.preview'.tr()),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: isGenerating ? null : onGeneratePdf,
-                icon: isGenerating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.picture_as_pdf),
-                label: Text('offer.generate_pdf'.tr()),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: isGenerating ? null : onPrint,
-                icon: const Icon(Icons.print),
-                label: Text('offer.print'.tr()),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: pdfBtn),
+                  const SizedBox(width: 8),
+                  printBtn,
+                ],
               ),
             ],
           );

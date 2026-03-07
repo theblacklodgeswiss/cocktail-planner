@@ -11,6 +11,7 @@ class OrderSetupData {
   final int? distanceKm;
   final String currency;
   final String drinkerType;
+  final String serviceType;
 
   OrderSetupData({
     required this.orderName,
@@ -22,9 +23,9 @@ class OrderSetupData {
     this.distanceKm,
     required this.currency,
     required this.drinkerType,
+    required this.serviceType,
   });
 }
-
 
 class OrderSetupForm extends StatefulWidget {
   final void Function(OrderSetupData data) onSubmit;
@@ -45,6 +46,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
   TimeOfDay? _eventTime;
   String currency = 'CHF';
   String drinkerType = 'normal';
+  String serviceType = 'cocktail_barservice';
 
   @override
   Widget build(BuildContext context) {
@@ -58,10 +60,43 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('order_setup.title'.tr(), style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'order_setup.title'.tr(),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text('order_setup.hint'.tr()),
               const SizedBox(height: 16),
+              Text(
+                'order_setup.service_type_label'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: Text('order_setup.service_cocktail_barservice'.tr()),
+                    selected: serviceType == 'cocktail_barservice',
+                    onSelected: (_) =>
+                        setState(() => serviceType = 'cocktail_barservice'),
+                  ),
+                  ChoiceChip(
+                    label: Text('order_setup.service_cocktailservice'.tr()),
+                    selected: serviceType == 'cocktail_service',
+                    onSelected: (_) =>
+                        setState(() => serviceType = 'cocktail_service'),
+                  ),
+                  ChoiceChip(
+                    label: Text('order_setup.service_barservice'.tr()),
+                    selected: serviceType == 'bar_service',
+                    onSelected: (_) =>
+                        setState(() => serviceType = 'bar_service'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               TextFormField(
                 controller: orderNameCtrl,
                 decoration: InputDecoration(
@@ -69,7 +104,9 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   hintText: 'order_setup.order_name_hint'.tr(),
                   prefixIcon: const Icon(Icons.badge),
                 ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'order_setup.required'.tr() : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'order_setup.required'.tr()
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -157,7 +194,9 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   prefixIcon: const Icon(Icons.people),
                 ),
                 keyboardType: TextInputType.number,
-                validator: (v) => v == null || int.tryParse(v) == null ? 'order_setup.required'.tr() : null,
+                validator: (v) => v == null || int.tryParse(v) == null
+                    ? 'order_setup.required'.tr()
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -239,14 +278,19 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                         widget.onSubmit(
                           OrderSetupData(
                             orderName: orderNameCtrl.text.trim(),
-                            phoneNumber: phoneNumberCtrl.text.trim().isEmpty ? null : phoneNumberCtrl.text.trim(),
+                            phoneNumber: phoneNumberCtrl.text.trim().isEmpty
+                                ? null
+                                : phoneNumberCtrl.text.trim(),
                             eventDate: _eventDate,
                             eventTime: _eventTime,
-                            address: addressCtrl.text.trim().isEmpty ? null : addressCtrl.text.trim(),
+                            address: addressCtrl.text.trim().isEmpty
+                                ? null
+                                : addressCtrl.text.trim(),
                             personCount: int.parse(personCountCtrl.text.trim()),
                             distanceKm: int.tryParse(distanceCtrl.text.trim()),
                             currency: currency,
                             drinkerType: drinkerType,
+                            serviceType: serviceType,
                           ),
                         );
                       }

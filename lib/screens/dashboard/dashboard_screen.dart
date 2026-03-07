@@ -14,6 +14,8 @@ import 'user_menu_sheet.dart';
 import 'widgets/empty_state.dart';
 import 'widgets/selected_cocktails.dart';
 
+import '../../widgets/gemini_plan_dialog.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.loadData});
 
@@ -119,6 +121,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     appState.setSelectedRecipes(result);
   }
 
+  void _showGeminiPlan() {
+    if (_orderSetup == null) return;
+    if (!geminiService.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.gemini_not_configured'.tr())),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => GeminiPlanDialog(
+        setup: _orderSetup!,
+        cocktails: appState.selectedRecipes
+            .where((r) => !r.isShot)
+            .map((r) => r.name)
+            .toList(),
+        shots: appState.selectedRecipes
+            .where((r) => r.isShot)
+            .map((r) => r.name)
+            .toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_dataFuture == null) {
@@ -160,9 +187,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   body: Column(
                     children: [
                       if (_orderSetup == null)
-                        OrderSetupForm(
-                          onSubmit: (setup) =>
-                              setState(() => _orderSetup = setup),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: OrderSetupForm(
+                              onSubmit: (setup) =>
+                                  setState(() => _orderSetup = setup),
+                            ),
+                          ),
                         ),
                       if (_orderSetup != null) ...[
                         if (hasLinkedOrder) _buildLinkedOrderBanner(),
@@ -176,6 +207,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                OutlinedButton.icon(
+                                  onPressed: _showGeminiPlan,
+                                  icon: const Icon(Icons.auto_awesome),
+                                  label: Text('dashboard.generate_plan'.tr()),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
                                 FilledButton.icon(
                                   onPressed: () {
                                     if (_orderSetup != null) {
@@ -288,17 +331,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       child: SafeArea(
-        child: FilledButton.icon(
-          onPressed: () {
-            if (_orderSetup != null) {
-              context.push('/shopping-list', extra: _orderSetup);
-            }
-          },
-          icon: const Icon(Icons.shopping_cart),
-          label: Text('dashboard.generate_list'.tr()),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(double.infinity, 56),
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _showGeminiPlan,
+                icon: const Icon(Icons.auto_awesome, size: 20),
+                label: Text(
+                  'dashboard.generate_plan'.tr(),
+                  style: const TextStyle(fontSize: 13),
+                ),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                onPressed: () {
+                  if (_orderSetup != null) {
+                    context.push('/shopping-list', extra: _orderSetup);
+                  }
+                },
+                icon: const Icon(Icons.shopping_cart),
+                label: Text('dashboard.generate_list'.tr()),
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 56)),
+              ),
+            ),
+          ],
         ),
       ),
     );

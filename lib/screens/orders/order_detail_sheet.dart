@@ -15,6 +15,7 @@ import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
 import '../../state/app_state.dart';
 import '../../utils/currency.dart';
+import '../../widgets/gemini_plan_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -84,13 +85,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       );
       if (confirmed != true) return;
     }
-    final success = await orderRepository.updateStatus(widget.order.id, newStatus.value);
+    final success = await orderRepository.updateStatus(
+      widget.order.id,
+      newStatus.value,
+    );
     if (success && mounted) {
       setState(() => _currentStatus = newStatus);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('orders.status_changed'
-              .tr(namedArgs: {'status': statusLabel(newStatus)})),
+          content: Text(
+            'orders.status_changed'.tr(
+              namedArgs: {'status': statusLabel(newStatus)},
+            ),
+          ),
         ),
       );
       // Trigger Microsoft integration when status becomes accepted
@@ -113,7 +120,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   /// Navigate to shopping list to edit the existing order
   Future<void> _editShoppingList() async {
     final order = widget.order;
-    
+
     // Parse eventTime from string
     TimeOfDay? eventTime;
     if (order.eventTime.isNotEmpty) {
@@ -129,7 +136,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         debugPrint('Failed to parse event time: $e');
       }
     }
-    
+
     // Convert SavedOrder to OrderSetupData
     final orderSetup = OrderSetupData(
       orderName: order.name,
@@ -141,12 +148,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       distanceKm: order.distanceKm > 0 ? order.distanceKm : null,
       currency: order.currency,
       drinkerType: order.drinkerType,
+      serviceType: order.serviceType.isNotEmpty
+          ? order.serviceType
+          : 'cocktail_barservice',
     );
-    
+
     // Load cocktail data to get recipe ingredients
     try {
       final cocktailData = await cocktailRepository.load();
-      
+
       // Link this order so it gets updated instead of creating a new one
       appState.setLinkedOrder(
         order.id,
@@ -154,10 +164,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         requestedCocktails: order.requestedCocktails,
         savedItems: order.items,
       );
-      
+
       // Set selected recipes from the order's cocktails and shots with real ingredients
       final allRecipes = <Recipe>[];
-      
+
       for (final cocktailName in order.cocktails) {
         // Try to find recipe in loaded data
         final recipe = cocktailData.recipes.firstWhere(
@@ -171,7 +181,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         );
         allRecipes.add(recipe);
       }
-      
+
       for (final shotName in order.shots) {
         // Try to find recipe in loaded data
         final recipe = cocktailData.recipes.firstWhere(
@@ -185,11 +195,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         );
         allRecipes.add(recipe);
       }
-      
+
       if (allRecipes.isNotEmpty) {
         appState.setSelectedRecipes(allRecipes);
       }
-      
+
       // Navigate to shopping list
       if (mounted) {
         Navigator.pop(context);
@@ -241,8 +251,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   Future<void> _triggerMicrosoftIntegration() async {
     if (!microsoftGraphService.isSupported) return;
 
-    final statusNotifier = ValueNotifier<String>('orders.ms_step_generating_shopping_list'.tr());
-    
+    final statusNotifier = ValueNotifier<String>(
+      'orders.ms_step_generating_shopping_list'.tr(),
+    );
+
     // Show progress dialog
     showDialog(
       context: context,
@@ -268,16 +280,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       // Fetch fresh order data to get the current event date
       final freshOrder = await orderRepository.getOrderById(widget.order.id);
       final order = freshOrder ?? widget.order;
-      
+
       final safeName = order.name.replaceAll(' ', '_');
-      final dateTag = '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
+      final dateTag =
+          '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
       String? einkaufslisteUrl;
       String? auftragsbestaetigungUrl;
-      
+
       // 1. Generate Einkaufsliste (Shopping List) PDF
-      final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(order);
+      final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(
+        order,
+      );
       final shoppingListFileName = 'Einkaufsliste_${safeName}_$dateTag.pdf';
-      
+
       // 2. Upload Einkaufsliste to OneDrive
       statusNotifier.value = 'orders.ms_step_uploading_shopping_list'.tr();
       final shoppingListPath = MicrosoftGraphService.buildOneDrivePath(
@@ -289,12 +304,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         oneDrivePath: shoppingListPath,
         bytes: shoppingListBytes,
       );
-      
+
       // 3. Generate Auftragsbestätigung (Order Confirmation) PDF
       statusNotifier.value = 'orders.ms_step_generating_invoice'.tr();
       final invoiceBytes = await InvoicePdfGenerator.generateBytes(order);
       final invoiceFileName = InvoicePdfGenerator.getFilename(order);
-      
+
       // 4. Upload Auftragsbestätigung to OneDrive
       statusNotifier.value = 'orders.ms_step_uploading_invoice'.tr();
       final invoicePath = MicrosoftGraphService.buildOneDrivePath(
@@ -306,10 +321,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         oneDrivePath: invoicePath,
         bytes: invoiceBytes,
       );
-      
+
       // 5. Create calendar event with document links
       statusNotifier.value = 'orders.ms_step_creating_calendar'.tr();
-      
+
       // Parse event time (e.g. "17:30") and combine with date
       DateTime eventStart = order.date;
       if (order.offerEventTime.isNotEmpty) {
@@ -330,7 +345,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       final employeeNames = _assignedEmployees.isNotEmpty
           ? _assignedEmployees.join(', ')
           : 'TBD';
-      
+
       // Build event body with document links
       final bodyLines = <String>[
         'Auftrag: ${order.name}',
@@ -346,14 +361,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (auftragsbestaetigungUrl != null) {
         bodyLines.add('Auftragsbestätigung: $auftragsbestaetigungUrl');
       }
-      
+
       final eventId = await microsoftGraphService.createCalendarEvent(
         subject: order.name,
         start: eventStart,
         end: eventEnd,
         bodyContent: bodyLines.join('\n'),
       );
-      
+
       // 6. Add PDF attachments to calendar event
       if (eventId != null && eventId != 'unknown') {
         statusNotifier.value = 'orders.ms_step_adding_attachments'.tr();
@@ -368,13 +383,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           bytes: invoiceBytes,
         );
       }
-      
-      final uploadSuccess = einkaufslisteUrl != null || auftragsbestaetigungUrl != null;
+
+      final uploadSuccess =
+          einkaufslisteUrl != null || auftragsbestaetigungUrl != null;
       final calendarSuccess = eventId != null;
-      
+
       // Close progress dialog
       if (mounted) Navigator.of(context).pop();
-      
+
       if (mounted && (uploadSuccess || calendarSuccess)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('orders.microsoft_integration_success'.tr())),
@@ -407,8 +423,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('orders.delete_confirm_title'.tr()),
-        content: Text('orders.delete_confirm_message'
-            .tr(namedArgs: {'name': widget.order.name})),
+        content: Text(
+          'orders.delete_confirm_message'.tr(
+            namedArgs: {'name': widget.order.name},
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -429,9 +448,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success
-                ? 'orders.deleted'.tr()
-                : 'orders.delete_failed'.tr()),
+            content: Text(
+              success ? 'orders.deleted'.tr() : 'orders.delete_failed'.tr(),
+            ),
           ),
         );
       }
@@ -497,6 +516,20 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             icon: const Icon(Icons.edit),
             label: Text('common.edit'.tr()),
           ),
+        TextButton.icon(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (ctx) => GeminiPlanDialog(
+                order: widget.order,
+                cocktails: widget.order.cocktails,
+                shots: widget.order.shots,
+              ),
+            );
+          },
+          icon: const Icon(Icons.auto_awesome),
+          label: Text('dashboard.generate_plan'.tr()),
+        ),
         FilledButton.icon(
           onPressed: () async {
             await PdfGenerator.generateFromSavedOrder(widget.order);
@@ -516,7 +549,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   Widget _buildStatusCard() {
     final isComplete = _isOfferComplete();
-    
+
     return Card(
       color: statusColor(_currentStatus).withValues(alpha: 0.1),
       child: Padding(
@@ -526,8 +559,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           children: [
             Row(
               children: [
-                Icon(statusIcon(_currentStatus),
-                    color: statusColor(_currentStatus)),
+                Icon(
+                  statusIcon(_currentStatus),
+                  color: statusColor(_currentStatus),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '${"orders.status".tr()}: ${statusLabel(_currentStatus)}',
@@ -542,10 +577,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             const SizedBox(height: 12),
             // Show "Complete Offer" button if offer is incomplete and status is quote
             if (!isComplete && _currentStatus == OrderStatus.quote) ...[
-              Text('orders.offer_incomplete'.tr(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.orange,
-                  )),
+              Text(
+                'orders.offer_incomplete'.tr(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.orange),
+              ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -556,14 +593,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   },
                   icon: const Icon(Icons.edit_document),
                   label: Text('orders.complete_offer'.tr()),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                  ),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.orange),
                 ),
               ),
             ] else ...[
-              Text('orders.change_status'.tr(),
-                  style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'orders.change_status'.tr(),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -636,7 +673,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   'orders.form_details'.tr(),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: order.needsShoppingList ? Colors.orange : Colors.blue,
+                    color: order.needsShoppingList
+                        ? Colors.orange
+                        : Colors.blue,
                     fontSize: 16,
                   ),
                 ),
@@ -644,7 +683,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 if (order.needsShoppingList)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.orange,
                       borderRadius: BorderRadius.circular(12),
@@ -741,10 +782,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         children: [
           Icon(icon, size: 16, color: widget.colorScheme.outline),
           const SizedBox(width: 8),
-          Text(
-            '$label:',
-            style: TextStyle(color: widget.colorScheme.outline),
-          ),
+          Text('$label:', style: TextStyle(color: widget.colorScheme.outline)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -766,14 +804,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           children: [
             Row(
               children: [
-                Icon(Icons.calendar_today,
-                    size: 16, color: widget.colorScheme.outline),
+                Icon(
+                  Icons.calendar_today,
+                  size: 16,
+                  color: widget.colorScheme.outline,
+                ),
                 const SizedBox(width: 8),
                 Text(formatDate(widget.order.date)),
                 const Spacer(),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
@@ -793,8 +836,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               children: [
                 OrderInfoChip(
                   icon: Icons.people,
-                  label:
-                      '${widget.order.personCount} ${'orders.persons'.tr()}',
+                  label: '${widget.order.personCount} ${'orders.persons'.tr()}',
                   colorScheme: widget.colorScheme,
                 ),
                 const SizedBox(width: 8),
@@ -821,9 +863,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   Widget _buildItemsHeader() {
     return Text(
       '${widget.order.items.length} ${'orders.articles'.tr()}',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+      style: Theme.of(
+        context,
+      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 
@@ -852,7 +894,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
           title: Text(name),
           subtitle: Text(
-              '$unit • ${widget.currency.format(price)}${note.isNotEmpty ? ' • $note' : ''}'),
+            '$unit • ${widget.currency.format(price)}${note.isNotEmpty ? ' • $note' : ''}',
+          ),
           trailing: Text(
             widget.currency.format(total),
             style: const TextStyle(fontWeight: FontWeight.w600),
@@ -874,9 +917,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             onPressed: _deleteOrder,
             icon: const Icon(Icons.delete_forever),
             label: Text('orders.delete_order'.tr()),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
           ),
         ),
       ],
@@ -918,18 +959,20 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       final cocktailData = await cocktailRepository.load();
       final materials = cocktailData.materials
           .where((m) => m.visible)
-          .map((m) => {
-            'name': m.name,
-            'unit': m.unit,
-            'price': m.price,
-            'currency': m.currency,
-          })
+          .map(
+            (m) => {
+              'name': m.name,
+              'unit': m.unit,
+              'price': m.price,
+              'currency': m.currency,
+            },
+          )
           .toList();
-      
+
       // Get recipe ingredients for the requested cocktails
       final matchedRecipes = <Recipe>[];
       final unmatchedNames = <String>[];
-      
+
       // First try exact match (case-insensitive)
       for (final cocktailName in order.requestedCocktails) {
         final lower = cocktailName.toLowerCase().trim();
@@ -937,30 +980,35 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           (r) => r.name.toLowerCase().trim() == lower,
           orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
         );
-        if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+        if (recipe.id.isNotEmpty &&
+            !matchedRecipes.any((r) => r.id == recipe.id)) {
           matchedRecipes.add(recipe);
         } else if (recipe.id.isEmpty) {
           unmatchedNames.add(cocktailName);
         }
       }
-      
+
       // Use Gemini AI for fuzzy matching of unmatched names
       if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
         try {
-          final availableNames = cocktailData.recipes.map((r) => r.name).toList();
+          final availableNames = cocktailData.recipes
+              .map((r) => r.name)
+              .toList();
           final aiMatches = await geminiService.matchCocktailNames(
             requestedNames: unmatchedNames,
             availableRecipeNames: availableNames,
           );
-          
+
           for (final entry in aiMatches.entries) {
             final matchedName = entry.value;
             if (matchedName != null) {
               final recipe = cocktailData.recipes.firstWhere(
                 (r) => r.name == matchedName,
-                orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
+                orElse: () =>
+                    Recipe(id: '', name: '', ingredients: [], type: ''),
               );
-              if (recipe.id.isNotEmpty && !matchedRecipes.any((r) => r.id == recipe.id)) {
+              if (recipe.id.isNotEmpty &&
+                  !matchedRecipes.any((r) => r.id == recipe.id)) {
                 matchedRecipes.add(recipe);
               }
             }
@@ -969,14 +1017,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           debugPrint('Gemini cocktail matching failed: $e');
         }
       }
-      
+
       final recipeIngredients = matchedRecipes
-          .map((r) => {
-            'cocktail': r.name,
-            'ingredients': r.ingredients,
-          })
+          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
           .toList();
-      
+
       // Generate material suggestions
       final suggestion = await geminiService.generateMaterialSuggestions(
         guestCount: order.personCount,
@@ -1010,7 +1055,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     } catch (e) {
       // Close loading dialog
       if (mounted) Navigator.pop(context);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1043,12 +1088,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               reason: '',
             );
           }).toList();
-          
+
           // Set selected recipes FIRST (before navigating)
           if (matchedRecipes.isNotEmpty) {
             appState.setSelectedRecipes(matchedRecipes);
           }
-          
+
           appState.setLinkedOrder(
             order.id,
             order.name,
@@ -1078,8 +1123,7 @@ class _EmployeeAssignmentWidget extends StatefulWidget {
       _EmployeeAssignmentWidgetState();
 }
 
-class _EmployeeAssignmentWidgetState
-    extends State<_EmployeeAssignmentWidget> {
+class _EmployeeAssignmentWidgetState extends State<_EmployeeAssignmentWidget> {
   late Set<String> _selectedIds;
 
   @override
@@ -1119,14 +1163,17 @@ class _EmployeeAssignmentWidgetState
           children: [
             Row(
               children: [
-                Icon(Icons.assignment_ind,
-                    size: 16, color: Theme.of(context).colorScheme.primary),
+                Icon(
+                  Icons.assignment_ind,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'orders.assigned_employees'.tr(),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -1136,9 +1183,9 @@ class _EmployeeAssignmentWidgetState
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'orders.no_employees_assigned'.tr(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
               )
             else
@@ -1154,9 +1201,7 @@ class _EmployeeAssignmentWidgetState
                         selected: isSelected,
                         label: Text(
                           employee.name,
-                          style: TextStyle(
-                            fontSize: isSmall ? 12 : 14,
-                          ),
+                          style: TextStyle(fontSize: isSmall ? 12 : 14),
                         ),
                         avatar: CircleAvatar(
                           backgroundColor: isSelected
@@ -1173,10 +1218,10 @@ class _EmployeeAssignmentWidgetState
                           ),
                         ),
                         onSelected: (_) => _toggleEmployee(employee.name),
-                        selectedColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        checkmarkColor:
-                            Theme.of(context).colorScheme.primary,
+                        selectedColor: Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
                       );
                     }).toList(),
                   );
@@ -1223,7 +1268,7 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return AlertDialog(
       title: Row(
         children: [
@@ -1270,7 +1315,7 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Reasoning
               if (widget.suggestion.explanation.isNotEmpty) ...[
                 Text(
@@ -1280,14 +1325,11 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                 const SizedBox(height: 8),
                 Text(
                   widget.suggestion.explanation,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.outline,
-                  ),
+                  style: TextStyle(fontSize: 13, color: colorScheme.outline),
                 ),
                 const SizedBox(height: 16),
               ],
-              
+
               // Suggested materials header
               Row(
                 children: [
@@ -1303,14 +1345,14 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                 ],
               ),
               const SizedBox(height: 8),
-              
+
               // Material list
               ..._editableMaterials.entries.map((entry) {
                 final parts = entry.key.split('|');
                 final name = parts[0];
                 final unit = parts.length > 1 ? parts[1] : '';
                 final reason = _materialReasons[entry.key] ?? '';
-                
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
@@ -1326,7 +1368,9 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                                 children: [
                                   Text(
                                     name,
-                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                   if (unit.isNotEmpty)
                                     Text(
@@ -1345,7 +1389,8 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                               onPressed: () {
                                 setState(() {
                                   if (entry.value > 1) {
-                                    _editableMaterials[entry.key] = entry.value - 1;
+                                    _editableMaterials[entry.key] =
+                                        entry.value - 1;
                                   } else {
                                     _editableMaterials.remove(entry.key);
                                     _materialReasons.remove(entry.key);
@@ -1369,7 +1414,8 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                               iconSize: 20,
                               onPressed: () {
                                 setState(() {
-                                  _editableMaterials[entry.key] = entry.value + 1;
+                                  _editableMaterials[entry.key] =
+                                      entry.value + 1;
                                 });
                               },
                             ),
@@ -1402,7 +1448,7 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
                   ),
                 );
               }),
-              
+
               if (_editableMaterials.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(16),
@@ -1432,9 +1478,7 @@ class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
               : null,
           icon: const Icon(Icons.shopping_cart),
           label: Text('orders.apply_to_shopping_list'.tr()),
-          style: FilledButton.styleFrom(
-            backgroundColor: Colors.deepPurple,
-          ),
+          style: FilledButton.styleFrom(backgroundColor: Colors.deepPurple),
         ),
       ],
     );

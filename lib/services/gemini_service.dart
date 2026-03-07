@@ -60,16 +60,16 @@ class GeminiService {
 
   /// API key from dart-define (compile-time)
   static const String _envApiKey = String.fromEnvironment('GEMINI_API_KEY');
-  
+
   /// Check if environment API key is available.
   static bool get hasEnvKey => _envApiKey.isNotEmpty;
-  
+
   /// Free tier limits for gemini-2.5-flash
   /// Note: Free tier has 20 RPD (not 500 as in paid tiers)
   /// Resets daily at midnight Pacific Time (PT)
   static const int dailyRequestLimit = 20; // RPD (Requests Per Day) - Free tier
   static const int dailyTokenLimit = 1000000; // TPD (Tokens Per Day)
-  
+
   /// Get time until daily limit resets (midnight PT = UTC-8)
   static Duration get timeUntilReset {
     final now = DateTime.now().toUtc();
@@ -83,7 +83,7 @@ class GeminiService {
     );
     return nextResetUtc.difference(now);
   }
-  
+
   /// Get formatted reset time string
   static String get resetTimeFormatted {
     final duration = timeUntilReset;
@@ -94,11 +94,11 @@ class GeminiService {
     }
     return '${minutes}m';
   }
-  
+
   String? _apiKey;
   GenerativeModel? _model;
   bool _usageLoaded = false;
-  
+
   /// Usage tracking (from actual API responses, persisted in Firestore)
   int _requestsToday = 0;
   int _inputTokensToday = 0;
@@ -107,57 +107,57 @@ class GeminiService {
 
   /// Check if Gemini is configured (API key set).
   bool get isConfigured => _apiKey != null && _apiKey!.isNotEmpty;
-  
+
   /// Get today's date key for Firestore.
   String get _todayKey {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
-  
+
   /// Get number of requests made today.
   int get requestsToday {
     _checkDayReset();
     return _requestsToday;
   }
-  
+
   /// Get total input tokens used today.
   int get inputTokensToday {
     _checkDayReset();
     return _inputTokensToday;
   }
-  
+
   /// Get total output tokens used today.
   int get outputTokensToday {
     _checkDayReset();
     return _outputTokensToday;
   }
-  
+
   /// Get total tokens used today.
   int get totalTokensToday => inputTokensToday + outputTokensToday;
-  
+
   /// Get request usage percentage (0.0 - 1.0).
   double get requestUsagePercentage {
     _checkDayReset();
     return (_requestsToday / dailyRequestLimit).clamp(0.0, 1.0);
   }
-  
+
   /// Get token usage percentage (0.0 - 1.0).
   double get tokenUsagePercentage {
     _checkDayReset();
     return (totalTokensToday / dailyTokenLimit).clamp(0.0, 1.0);
   }
-  
+
   /// Get remaining requests today.
   int get remainingRequests {
     _checkDayReset();
     return (dailyRequestLimit - _requestsToday).clamp(0, dailyRequestLimit);
   }
-  
+
   /// Check if we need to reset daily counters.
   void _checkDayReset() {
     final now = DateTime.now();
-    if (now.day != _lastResetDate.day || 
-        now.month != _lastResetDate.month || 
+    if (now.day != _lastResetDate.day ||
+        now.month != _lastResetDate.month ||
         now.year != _lastResetDate.year) {
       _requestsToday = 0;
       _inputTokensToday = 0;
@@ -165,7 +165,7 @@ class GeminiService {
       _lastResetDate = now;
     }
   }
-  
+
   /// Load usage data from Firestore.
   Future<void> _loadUsageFromFirestore() async {
     if (_usageLoaded) return;
@@ -174,20 +174,22 @@ class GeminiService {
           .collection('gemini_usage')
           .doc(_todayKey)
           .get();
-      
+
       if (doc.exists) {
         final data = doc.data()!;
         _requestsToday = data['requests'] as int? ?? 0;
         _inputTokensToday = data['inputTokens'] as int? ?? 0;
         _outputTokensToday = data['outputTokens'] as int? ?? 0;
-        debugPrint('Loaded Gemini usage from Firestore: $_requestsToday requests, $totalTokensToday tokens');
+        debugPrint(
+          'Loaded Gemini usage from Firestore: $_requestsToday requests, $totalTokensToday tokens',
+        );
       }
       _usageLoaded = true;
     } catch (e) {
       debugPrint('Failed to load Gemini usage: $e');
     }
   }
-  
+
   /// Save usage data to Firestore.
   Future<void> _saveUsageToFirestore() async {
     try {
@@ -195,39 +197,41 @@ class GeminiService {
           .collection('gemini_usage')
           .doc(_todayKey)
           .set({
-        'requests': _requestsToday,
-        'inputTokens': _inputTokensToday,
-        'outputTokens': _outputTokensToday,
-        'date': _todayKey,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'requests': _requestsToday,
+            'inputTokens': _inputTokensToday,
+            'outputTokens': _outputTokensToday,
+            'date': _todayKey,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
     } catch (e) {
       debugPrint('Failed to save Gemini usage: $e');
     }
   }
-  
+
   /// Track usage from API response.
   void _trackUsage(GenerateContentResponse response) {
     _checkDayReset();
     _requestsToday++;
-    
+
     final usage = response.usageMetadata;
     if (usage != null) {
       _inputTokensToday += usage.promptTokenCount ?? 0;
       _outputTokensToday += usage.candidatesTokenCount ?? 0;
-      debugPrint('Gemini usage: ${usage.promptTokenCount} input + ${usage.candidatesTokenCount} output = ${usage.totalTokenCount} tokens');
+      debugPrint(
+        'Gemini usage: ${usage.promptTokenCount} input + ${usage.candidatesTokenCount} output = ${usage.totalTokenCount} tokens',
+      );
     }
-    
+
     // Persist to Firestore
     _saveUsageToFirestore();
   }
-  
+
   /// Reload usage data from Firestore (for UI refresh).
   Future<void> reloadUsage() async {
     _usageLoaded = false;
     await _loadUsageFromFirestore();
   }
-  
+
   /// Initialize from environment variable if available.
   void _initFromEnvironment() {
     if (_envApiKey.isNotEmpty && _apiKey == null) {
@@ -240,10 +244,7 @@ class GeminiService {
   void setApiKey(String apiKey) {
     if (apiKey.isEmpty) return;
     _apiKey = apiKey;
-    _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: apiKey,
-    );
+    _model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
     debugPrint('Gemini API key configured');
   }
 
@@ -256,7 +257,7 @@ class GeminiService {
   /// Get training data from existing orders with shopping lists.
   Future<List<Map<String, dynamic>>> _getTrainingData() async {
     final trainingData = <Map<String, dynamic>>[];
-    
+
     try {
       // Get orders from Firestore
       final ordersStream = orderRepository.watchOrders();
@@ -275,12 +276,16 @@ class GeminiService {
           'requestedCocktails': order.requestedCocktails,
           'drinkerType': order.drinkerType,
           'eventType': order.eventType,
-          'items': order.items.map((item) => {
-            'name': item['name'],
-            'unit': item['unit'],
-            'quantity': item['quantity'],
-            'total': item['total'],
-          }).toList(),
+          'items': order.items
+              .map(
+                (item) => {
+                  'name': item['name'],
+                  'unit': item['unit'],
+                  'quantity': item['quantity'],
+                  'total': item['total'],
+                },
+              )
+              .toList(),
           'total': order.total,
           'distanceKm': order.distanceKm,
         });
@@ -294,7 +299,7 @@ class GeminiService {
       final historicalDocs = await FirebaseFirestore.instance
           .collection('historical_shopping_lists')
           .get();
-      
+
       for (final doc in historicalDocs.docs) {
         final data = doc.data();
         trainingData.add({
@@ -307,7 +312,9 @@ class GeminiService {
           'eventDate': data['eventDate'],
         });
       }
-      debugPrint('Loaded ${historicalDocs.docs.length} historical shopping lists');
+      debugPrint(
+        'Loaded ${historicalDocs.docs.length} historical shopping lists',
+      );
     } catch (e) {
       debugPrint('Failed to get historical training data: $e');
     }
@@ -437,11 +444,14 @@ Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE M
 ''';
   }
 
-  GeminiMaterialSuggestion? _parseMaterialResponse(String responseText, int trainingCount) {
+  GeminiMaterialSuggestion? _parseMaterialResponse(
+    String responseText,
+    int trainingCount,
+  ) {
     try {
       // Extract JSON from response (might be wrapped in markdown code blocks)
       var jsonStr = responseText;
-      
+
       // Remove markdown code blocks if present
       if (jsonStr.contains('```json')) {
         jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
@@ -451,8 +461,12 @@ Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE M
 
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-      final materials = (json['materials'] as List<dynamic>?)
-              ?.map((item) => SuggestedMaterial.fromJson(item as Map<String, dynamic>))
+      final materials =
+          (json['materials'] as List<dynamic>?)
+              ?.map(
+                (item) =>
+                    SuggestedMaterial.fromJson(item as Map<String, dynamic>),
+              )
               .toList() ??
           [];
 
@@ -486,7 +500,8 @@ Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE M
     }
 
     try {
-      final prompt = '''
+      final prompt =
+          '''
 Du bist ein Experte für Cocktails. Matche die angeforderten Cocktail-Namen zu den verfügbaren Rezeptnamen.
 
 ANGEFORDERTE COCKTAILS (aus Kundenformular):
@@ -583,12 +598,9 @@ Falls ein Wert nicht erkennbar ist, setze null.
 ''';
 
       debugPrint('Parsing shopping list image: $fileName');
-      
+
       final response = await _model!.generateContent([
-        Content.multi([
-          TextPart(prompt),
-          DataPart(mimeType, imageBytes),
-        ]),
+        Content.multi([TextPart(prompt), DataPart(mimeType, imageBytes)]),
       ]);
       _trackUsage(response);
 
@@ -607,7 +619,9 @@ Falls ein Wert nicht erkennbar ist, setze null.
       }
 
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      debugPrint('Parsed shopping list items: ${(data['items'] as List?)?.length ?? 0} items');
+      debugPrint(
+        'Parsed shopping list items: ${(data['items'] as List?)?.length ?? 0} items',
+      );
       return data;
     } catch (e) {
       debugPrint('Gemini image parsing failed: $e');
@@ -656,12 +670,9 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
 ''';
 
       debugPrint('Parsing Auftrag document: $fileName');
-      
+
       final response = await _model!.generateContent([
-        Content.multi([
-          TextPart(prompt),
-          DataPart(mimeType, imageBytes),
-        ]),
+        Content.multi([TextPart(prompt), DataPart(mimeType, imageBytes)]),
       ]);
       _trackUsage(response);
 
@@ -680,7 +691,9 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
       }
 
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      debugPrint('Parsed Auftrag: ${data['eventName']} - ${data['guestCount']} guests');
+      debugPrint(
+        'Parsed Auftrag: ${data['eventName']} - ${data['guestCount']} guests',
+      );
       return data;
     } catch (e) {
       debugPrint('Gemini Auftrag parsing failed: $e');
@@ -688,9 +701,7 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
     }
   }
 
-  /// Import historical data from OneDrive and save to Firestore.
-  /// Combines Auftrag (metadata) and Einkaufsliste (items) files.
-  /// Returns number of successfully imported events.
+  /// Create successfully imported events.
   Future<int> importHistoricalShoppingLists({
     required Future<List<Map<String, String?>>> Function() findEventPairs,
     required Future<Uint8List?> Function(String path) downloadFile,
@@ -706,10 +717,10 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
           final folder = pair['folder'] ?? '';
           final auftragFile = pair['auftragFile'];
           final einkaufslisteFile = pair['einkaufslisteFile'];
-          
+
           Map<String, dynamic>? auftragData;
           Map<String, dynamic>? einkaufslisteData;
-          
+
           // Parse Auftrag file for metadata
           if (auftragFile != null) {
             final bytes = await downloadFile(auftragFile);
@@ -721,7 +732,7 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
               );
             }
           }
-          
+
           // Parse Einkaufsliste file for items
           if (einkaufslisteFile != null) {
             final bytes = await downloadFile(einkaufslisteFile);
@@ -733,13 +744,13 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
               );
             }
           }
-          
+
           // Skip if we couldn't parse anything useful
           if (auftragData == null && einkaufslisteData == null) {
             debugPrint('Could not parse any files in: $folder');
             continue;
           }
-          
+
           // Combine data: metadata from Auftrag, items from Einkaufsliste
           final combinedData = <String, dynamic>{
             'folder': folder,
@@ -754,14 +765,16 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
             'totalPrice': einkaufslisteData?['totalPrice'],
             'importedAt': FieldValue.serverTimestamp(),
           };
-          
+
           // Save to Firestore as training data
           await FirebaseFirestore.instance
               .collection('historical_shopping_lists')
               .add(combinedData);
 
           imported++;
-          debugPrint('Imported event: ${combinedData['eventName']} from $folder');
+          debugPrint(
+            'Imported event: ${combinedData['eventName']} from $folder',
+          );
         } catch (e) {
           debugPrint('Failed to import pair: $e');
         }
@@ -773,6 +786,97 @@ Für cocktails: Liste alle bestellten Cocktails auf die du im Dokument findest.
       debugPrint('Import failed: $e');
       return imported;
     }
+  }
+
+  /// Generate a detailed operational event plan using Gemini AI.
+  Future<String?> generateEventPlan({
+    required String eventName,
+    required int guestCount,
+    required List<String> cocktails,
+    required List<String> shots,
+    required String drinkerType,
+    required String? eventTime,
+    required DateTime? eventDate,
+    required String? location,
+  }) async {
+    if (!isConfigured || _model == null) {
+      debugPrint('Gemini not configured for plan generation');
+      return null;
+    }
+
+    try {
+      final prompt = _buildPlanPrompt(
+        eventName: eventName,
+        guestCount: guestCount,
+        cocktails: cocktails,
+        shots: shots,
+        drinkerType: drinkerType,
+        eventTime: eventTime,
+        eventDate: eventDate,
+        location: location,
+      );
+
+      debugPrint('Generating event plan for $eventName...');
+      final response = await _model!.generateContent([Content.text(prompt)]);
+      _trackUsage(response);
+
+      return response.text;
+    } catch (e) {
+      debugPrint('Gemini plan generation failed: $e');
+      return null;
+    }
+  }
+
+  String _buildPlanPrompt({
+    required String eventName,
+    required int guestCount,
+    required List<String> cocktails,
+    required List<String> shots,
+    required String drinkerType,
+    required String? eventTime,
+    required DateTime? eventDate,
+    required String? location,
+  }) {
+    final dateStr = eventDate != null
+        ? '${eventDate.day}.${eventDate.month}.${eventDate.year}'
+        : 'Nicht spezifiziert';
+
+    return '''
+Du bist der Chef-Planer von "Black Lodge", einem Premium Cocktail-Catering aus der Schweiz.
+Erstelle einen detaillierten Ablauf- und Einsatzplan für das folgende Event.
+
+EVENT-INFOS:
+- Name: $eventName
+- Datum: $dateStr
+- Zeit: ${eventTime ?? 'Nicht spezifiziert'} (Service-Dauer: 5 Stunden ab Startzeit)
+- Ort: ${location ?? 'Nicht spezifiziert'}
+- Gäste: $guestCount Personen
+- Trinkverhalten: $drinkerType
+- Cocktails: ${cocktails.join(', ')}
+- Shots: ${shots.isNotEmpty ? shots.join(', ') : 'Keine'}
+
+STRUKTUR DES PLANS (in Markdown):
+
+1. **Übersicht**: Kurze Zusammenfassung des Events.
+2. **Zeitplan (Timeline)**:
+   - Vorbereitung im Lager (Material laden)
+   - Anfahrt (berücksichtige Distanz falls Ort bekannt)
+   - Aufbau vor Ort (mind. 1.5h vor Service-Start)
+   - Service-Phase (5 Stunden)
+   - Abbau (ca. 45-60 Min)
+   - Rückfahrt & Ausladen
+3. **Personalplanung**:
+   - Wie viele Barkeeper werden benötigt? (Empfehlung: ca. 1 Barkeeper pro 40-50 Gäste)
+   - Rollenverteilung (z.B. Supervisor, Barkeeper, Runner)
+4. **Vorbereitung & Mise-en-Place**:
+   - Spezifische To-Dos für die gewählten Cocktails (z.B. Minze zupfen, Limetten schneiden)
+   - Benötigtes Equipment (Theke, Mixer, etc.)
+5. **Wichtige Hinweise**:
+   - Besonderheiten des Event-Typs oder Trinkverhaltens.
+   - Fokus-Punkte für exzellenten Service.
+
+Schreibe den Plan professionell, motivierend und auf Deutsch. Verwende Markdown-Formatierung für gute Lesbarkeit.
+''';
   }
 }
 

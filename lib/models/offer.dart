@@ -71,7 +71,9 @@ class OfferData {
     required this.discount,
     required this.additionalInfo,
     required this.language,
+    this.serviceType = 'cocktail_barservice',
     this.discountRemark = '',
+    this.eventLocation = '',
     this.extraPositions = const [],
     this.assignedEmployees = const [],
     this.supervisorItems = const [],
@@ -79,6 +81,9 @@ class OfferData {
 
   /// Event / order name (from SavedOrder.name)
   final String orderName;
+
+  /// Service type (e.g. "cocktail_barservice", "cocktailservice", "barservice")
+  final String serviceType;
 
   /// Date of the event (from SavedOrder.date)
   final DateTime eventDate;
@@ -100,6 +105,9 @@ class OfferData {
 
   /// Contact info of the client
   final String clientContact;
+
+  /// Event location / address
+  final String eventLocation;
 
   /// Selected event types (one or more)
   final Set<EventType> eventTypes;
