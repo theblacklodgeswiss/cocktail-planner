@@ -11,7 +11,8 @@ import '../utils/currency.dart';
 /// Generates a PDF offer document (Angebot) from [OfferData].
 class OfferPdfGenerator {
   /// Gets the company address lines from settings.
-  static List<String> _getAddressLines(AppSettings settings) => settings.addressLines;
+  static List<String> _getAddressLines(AppSettings settings) =>
+      settings.addressLines;
 
   /// Generates PDF bytes from offer data (for preview/print).
   static Future<Uint8List> generatePdfBytes(OfferData offer) async {
@@ -24,8 +25,10 @@ class OfferPdfGenerator {
     final pdfBytes = await generatePdfBytes(offer);
     final dateTag =
         '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
-    final safeName =
-        offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+    final safeName = offer.orderName.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '_',
+    );
     await Printing.sharePdf(
       bytes: pdfBytes,
       filename: 'angebot_${safeName}_$dateTag.pdf',
@@ -36,16 +39,13 @@ class OfferPdfGenerator {
   static Future<pw.Document> _buildPdfDocument(OfferData offer) async {
     // Load settings
     final settings = settingsRepository.current;
-    
+
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
-    
+
     final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: fontRegular,
-        bold: fontBold,
-      ),
+      theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
     );
     final curr = Currency.fromCode(offer.currency);
     final isEn = offer.language == 'en';
@@ -68,7 +68,11 @@ class OfferPdfGenerator {
           pw.SizedBox(height: 24),
           pw.Text(
             isEn ? 'Offer' : 'Angebot',
-            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, decoration: pw.TextDecoration.underline),
+            style: pw.TextStyle(
+              fontSize: 18,
+              fontWeight: pw.FontWeight.bold,
+              decoration: pw.TextDecoration.underline,
+            ),
           ),
           pw.SizedBox(height: 18),
           _buildEditorAndClient(offer, isEn),
@@ -90,7 +94,10 @@ class OfferPdfGenerator {
 
   // ── Company header ────────────────────────────────────────────────────────
 
-  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage, AppSettings settings) {
+  static pw.Widget _buildCompanyHeader(
+    pw.ImageProvider? logoImage,
+    AppSettings settings,
+  ) {
     final addressLines = _getAddressLines(settings);
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -113,11 +120,7 @@ class OfferPdfGenerator {
               .toList(),
         ),
         if (logoImage != null)
-          pw.Container(
-            width: 70,
-            height: 70,
-            child: pw.Image(logoImage),
-          )
+          pw.Container(width: 70, height: 70, child: pw.Image(logoImage))
         else
           pw.Container(
             width: 100,
@@ -129,7 +132,9 @@ class OfferPdfGenerator {
               children: [
                 pw.Container(
                   padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: pw.BoxDecoration(
                     border: pw.Border.all(color: PdfColors.amber700, width: 2),
                     borderRadius: pw.BorderRadius.circular(6),
@@ -169,7 +174,9 @@ class OfferPdfGenerator {
               pw.Text(
                 isEn ? 'Editor' : 'Bearbeiter',
                 style: pw.TextStyle(
-                    fontSize: 10, fontWeight: pw.FontWeight.bold),
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
@@ -194,7 +201,9 @@ class OfferPdfGenerator {
               pw.Text(
                 isEn ? 'Client' : 'Auftraggeber',
                 style: pw.TextStyle(
-                    fontSize: 10, fontWeight: pw.FontWeight.bold),
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
@@ -221,26 +230,11 @@ class OfferPdfGenerator {
 
   static pw.Widget _buildAnlass(OfferData offer, bool isEn) {
     final options = [
-      (
-        EventType.birthday,
-        isEn ? 'Birthday Party' : 'Geburtstagsfeier',
-      ),
-      (
-        EventType.wedding,
-        isEn ? 'Wedding Party' : 'Hochzeitsfeier',
-      ),
-      (
-        EventType.company,
-        isEn ? 'Company Event' : 'Firmenanlass',
-      ),
-      (
-        EventType.babyshower,
-        isEn ? 'Babyshower' : 'Babyshower',
-      ),
-      (
-        EventType.other,
-        isEn ? 'Other' : 'Sonstiges',
-      ),
+      (EventType.birthday, isEn ? 'Birthday Party' : 'Geburtstagsfeier'),
+      (EventType.wedding, isEn ? 'Wedding Party' : 'Hochzeitsfeier'),
+      (EventType.company, isEn ? 'Company Event' : 'Firmenanlass'),
+      (EventType.babyshower, isEn ? 'Babyshower' : 'Babyshower'),
+      (EventType.other, isEn ? 'Other' : 'Sonstiges'),
     ];
 
     // Split into two rows of up to 3 columns each
@@ -260,11 +254,13 @@ class OfferPdfGenerator {
             ),
             child: checked
                 ? pw.Center(
-                    child: pw.Text('X',
-                        style: pw.TextStyle(
-                          fontSize: 8, 
-                          fontWeight: pw.FontWeight.bold,
-                        )),
+                    child: pw.Text(
+                      'X',
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
                   )
                 : null,
           ),
@@ -279,8 +275,7 @@ class OfferPdfGenerator {
       children: [
         pw.Text(
           isEn ? 'Event Type' : 'Anlass',
-          style:
-              pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
         pw.Row(
@@ -295,7 +290,7 @@ class OfferPdfGenerator {
             // Fill remaining columns
             ...List.generate(
               3 - row2.length,
-              (_) =>  pw.Expanded(child: pw.SizedBox()),
+              (_) => pw.Expanded(child: pw.SizedBox()),
             ),
           ],
         ),
@@ -317,7 +312,9 @@ class OfferPdfGenerator {
                   pw.TextSpan(
                     text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
                     style: pw.TextStyle(
-                        fontSize: 9, fontWeight: pw.FontWeight.bold),
+                      fontSize: 9,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
                   pw.TextSpan(
                     text: '${offer.guestCount} ${isEn ? 'Guests' : 'Gäste'}',
@@ -326,7 +323,7 @@ class OfferPdfGenerator {
                 ],
               ),
             ),
-            if (offer.eventTime.isNotEmpty) ...[            
+            if (offer.eventTime.isNotEmpty) ...[
               pw.SizedBox(width: 40),
               pw.RichText(
                 text: pw.TextSpan(
@@ -334,7 +331,9 @@ class OfferPdfGenerator {
                     pw.TextSpan(
                       text: isEn ? 'Time: ' : 'Uhrzeit: ',
                       style: pw.TextStyle(
-                          fontSize: 9, fontWeight: pw.FontWeight.bold),
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                     pw.TextSpan(
                       text: '${offer.eventTime} ${isEn ? '' : 'Uhr'}',
@@ -354,7 +353,9 @@ class OfferPdfGenerator {
                 pw.TextSpan(
                   text: 'Cocktails: ',
                   style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.TextSpan(
                   text: offer.cocktails.join(', '),
@@ -372,7 +373,9 @@ class OfferPdfGenerator {
                 pw.TextSpan(
                   text: 'Bar: ',
                   style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.TextSpan(
                   text: offer.barDescription,
@@ -390,7 +393,9 @@ class OfferPdfGenerator {
                 pw.TextSpan(
                   text: 'Shots: ',
                   style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold),
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.TextSpan(
                   text: offer.shots.join(', '),
@@ -407,19 +412,21 @@ class OfferPdfGenerator {
   // ── Positions table ───────────────────────────────────────────────────────
 
   static pw.Widget _buildPositionsTable(
-      OfferData offer, Currency curr, bool isEn) {
+    OfferData offer,
+    Currency curr,
+    bool isEn,
+  ) {
     final dateStr =
         '${offer.eventDate.day.toString().padLeft(2, '0')}.${offer.eventDate.month.toString().padLeft(2, '0')}.${offer.eventDate.year}';
 
     pw.Widget headerCell(String text) => pw.Container(
-          color: PdfColors.grey200,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-          child: pw.Text(
-            text,
-            style:
-                pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
-          ),
-        );
+      color: PdfColors.grey200,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+      ),
+    );
 
     pw.Widget cell(String text, {pw.TextAlign align = pw.TextAlign.left}) =>
         pw.Padding(
@@ -431,8 +438,7 @@ class OfferPdfGenerator {
           ),
         );
 
-    pw.Widget boldCell(String text,
-            {pw.TextAlign align = pw.TextAlign.left}) =>
+    pw.Widget boldCell(String text, {pw.TextAlign align = pw.TextAlign.left}) =>
         pw.Padding(
           padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
           child: pw.Text(
@@ -469,29 +475,40 @@ class OfferPdfGenerator {
         children: [
           cell(dateStr),
           cell(isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice'),
-          // Show number of assigned employees as quantity; price column shows per-employee price
-          (() {
-            final count = offer.assignedEmployees.isNotEmpty
-                ? offer.assignedEmployees.length
-                : 3;
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Align(child: pw.Text(count.toString()), alignment: pw.Alignment.center),
-              ],
-            );
-          })(),
-          cell(curr.format(offer.assignedEmployees.isNotEmpty ? (offer.barServiceCost / (offer.assignedEmployees.length)) : (offer.barServiceCost / 3)), align: pw.TextAlign.right),
+          // Quantity is always 1
+          cell('1', align: pw.TextAlign.center),
+          // Price is the full bar service cost
+          cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
           cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
           cell(
-            // Show configured number of assigned employees; fall back to 3 if none selected
+            // Summary of roles from supervisor items, or fallback
             (() {
-              final count = offer.assignedEmployees.isNotEmpty
-                  ? offer.assignedEmployees.length
-                  : 3;
+              final supervisorSummary = offer.supervisorItems
+                  .map(
+                    (item) =>
+                        "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
+                  )
+                  .join(", ");
+
+              final count = offer.supervisorItems.fold<int>(
+                0,
+                (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+              );
+              final finalCount = count > 0
+                  ? count
+                  : (offer.assignedEmployees.isNotEmpty
+                        ? offer.assignedEmployees.length
+                        : 3);
+
+              final rolesText = supervisorSummary.isNotEmpty
+                  ? (isEn
+                        ? 'Incl. $supervisorSummary'
+                        : 'Inkl. $supervisorSummary')
+                  : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
+
               return isEn
-                  ? '$count Barkeepers, max. 5h, unlimited Cocktails (s. above), 0.3L hard plastic cups'
-                  : '$count Barkeeper, max. 5h, unlimitiert Cocktails (s. oben), 0.3L Hartplastikbecher';
+                  ? '$rolesText, max. 5h, unlimited Cocktails (s. above), 0.3L hard plastic cups'
+                  : '$rolesText, max. 5h, unlimitiert Cocktails (s. oben), 0.3L Hartplastikbecher';
             })(),
           ),
         ],
@@ -502,13 +519,13 @@ class OfferPdfGenerator {
           children: [
             cell(dateStr),
             cell(isEn ? 'Travel Costs' : 'Reisekosten'),
-            cell('${offer.distanceKm * 2} km', align: pw.TextAlign.center),
+            cell('${offer.distanceKm} km', align: pw.TextAlign.center),
             cell(curr.format(offer.travelCostPerKm), align: pw.TextAlign.right),
             cell(curr.format(travelTotal), align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Return trip Allschwil CH - venue'
-                  : 'Hin & Rück Allschwil CH - ${offer.orderName}',
+                  ? 'Travel from Allschwil CH to'
+                  : 'Reisekosten von Allschwil CH nach ${offer.orderName}',
             ),
           ],
         ),
@@ -544,16 +561,18 @@ class OfferPdfGenerator {
           ],
         ),
       // Extra positions (custom line items)
-      ...offer.extraPositions.map((pos) => pw.TableRow(
-        children: [
-          cell(dateStr),
-          cell(pos.name),
-          cell('1', align: pw.TextAlign.center),
-          cell(curr.format(pos.price), align: pw.TextAlign.right),
-          cell(curr.format(pos.price), align: pw.TextAlign.right),
-          cell(pos.remark),
-        ],
-      )),
+      ...offer.extraPositions.map(
+        (pos) => pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(pos.name),
+            cell('1', align: pw.TextAlign.center),
+            cell(curr.format(pos.price), align: pw.TextAlign.right),
+            cell(curr.format(pos.price), align: pw.TextAlign.right),
+            cell(pos.remark),
+          ],
+        ),
+      ),
       // Discount row (only if > 0)
       if (offer.discount > 0)
         pw.TableRow(
@@ -563,9 +582,13 @@ class OfferPdfGenerator {
             cell('', align: pw.TextAlign.center),
             cell('', align: pw.TextAlign.right),
             cell('-${curr.format(offer.discount)}', align: pw.TextAlign.right),
-            cell(offer.discountRemark.isNotEmpty 
-                ? offer.discountRemark 
-                : (isEn ? 'Family/Friend discount' : 'Familie/Freunde Rabatt')),
+            cell(
+              offer.discountRemark.isNotEmpty
+                  ? offer.discountRemark
+                  : (isEn
+                        ? 'Family/Friend discount'
+                        : 'Familie/Freunde Rabatt'),
+            ),
           ],
         ),
       // Total row
@@ -579,10 +602,7 @@ class OfferPdfGenerator {
             isEn ? 'Total:' : 'Gesamtkosten:',
             align: pw.TextAlign.right,
           ),
-          boldCell(
-            curr.format(offer.grandTotal),
-            align: pw.TextAlign.right,
-          ),
+          boldCell(curr.format(offer.grandTotal), align: pw.TextAlign.right),
           cell(''),
         ],
       ),
@@ -606,10 +626,7 @@ class OfferPdfGenerator {
           style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 6),
-        pw.Text(
-          offer.additionalInfo,
-          style: const pw.TextStyle(fontSize: 8),
-        ),
+        pw.Text(offer.additionalInfo, style: const pw.TextStyle(fontSize: 8)),
       ],
     );
   }

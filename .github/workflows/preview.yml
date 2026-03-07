@@ -97,11 +97,19 @@ jobs:
       - name: Build web
         run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=dev
 
+      - name: Deploy Firestore Rules (Dev)
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore:rules
+        env:
+          GCP_SA_KEY: ${{ secrets.DEV_FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: cocktail-planer-dev
+
       - name: Deploy to Firebase Hosting Preview Channel
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          firebaseServiceAccount: '${{ secrets.DEV_FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: cocktail-planer-dev
           # channelId omitted → action auto-creates a per-PR preview channel
           # and posts the preview URL as a comment on the PR

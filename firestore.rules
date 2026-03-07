@@ -65,8 +65,7 @@ service cloud.firestore {
     // Allowed users collection - super admin can create; full admins can create/update/delete
     match /allowedUsers/{email} {
       allow read: if isAuthenticated();
-      allow create: if canManageUsers();
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if canManageUsers();
     }
     
     // Admin config - only admin can read/write

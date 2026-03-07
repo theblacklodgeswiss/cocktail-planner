@@ -347,6 +347,20 @@ class AllowedUser {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
     );
   }
+
+  AllowedUser copyWith({
+    String? email,
+    String? name,
+    bool? isAdmin,
+    DateTime? createdAt,
+  }) {
+    return AllowedUser(
+      email: email ?? this.email,
+      name: name ?? this.name,
+      isAdmin: isAdmin ?? this.isAdmin,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
 
 final authService = AuthService();

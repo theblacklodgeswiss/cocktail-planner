@@ -12,11 +12,15 @@ import '../utils/currency.dart';
 /// Generates an invoice/confirmation PDF (Auftragsbestätigung) from a [SavedOrder].
 class InvoicePdfGenerator {
   /// Gets the company address lines from settings.
-  static List<String> _getAddressLines(AppSettings settings) => settings.addressLines;
+  static List<String> _getAddressLines(AppSettings settings) =>
+      settings.addressLines;
 
   /// Generates invoice PDF bytes for upload/storage.
   /// [language] overrides order.offerLanguage if provided ('de' or 'en').
-  static Future<Uint8List> generateBytes(SavedOrder order, {String? language}) async {
+  static Future<Uint8List> generateBytes(
+    SavedOrder order, {
+    String? language,
+  }) async {
     return _buildPdf(order, language: language);
   }
 
@@ -24,42 +28,47 @@ class InvoicePdfGenerator {
   static String getFilename(SavedOrder order) {
     final dateTag =
         '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
-    final safeName = order.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+    final safeName = order.name.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '_',
+    );
     return 'Auftragsbestaetigung_${safeName}_$dateTag.pdf';
   }
 
   /// Generates and shares an invoice PDF from an accepted order.
   /// [language] overrides order.offerLanguage if provided ('de' or 'en').
-  static Future<void> generateAndDownload(SavedOrder order, {String? language}) async {
+  static Future<void> generateAndDownload(
+    SavedOrder order, {
+    String? language,
+  }) async {
     final bytes = await _buildPdf(order, language: language);
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: getFilename(order),
-    );
+    await Printing.sharePdf(bytes: bytes, filename: getFilename(order));
   }
 
   /// Builds the PDF document and returns bytes.
-  static Future<Uint8List> _buildPdf(SavedOrder order, {String? language}) async {
-        // Load payment info image
-        pw.ImageProvider? paymentInfoImage;
-        try {
-          final paymentInfoBytes = await rootBundle.load('assets/images/paymentinfo.png');
-          paymentInfoImage = pw.MemoryImage(paymentInfoBytes.buffer.asUint8List());
-        } catch (e) {
-          // Payment info image not available
-        }
+  static Future<Uint8List> _buildPdf(
+    SavedOrder order, {
+    String? language,
+  }) async {
+    // Load payment info image
+    pw.ImageProvider? paymentInfoImage;
+    try {
+      final paymentInfoBytes = await rootBundle.load(
+        'assets/images/paymentinfo.png',
+      );
+      paymentInfoImage = pw.MemoryImage(paymentInfoBytes.buffer.asUint8List());
+    } catch (e) {
+      // Payment info image not available
+    }
     // Load settings
     final settings = settingsRepository.current;
-    
+
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
-    
+
     final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: fontRegular,
-        bold: fontBold,
-      ),
+      theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
     );
     final curr = Currency.fromCode(order.currency);
     final isEn = (language ?? order.offerLanguage) == 'en';
@@ -75,18 +84,27 @@ class InvoicePdfGenerator {
 
     // Calculate totals
     final travelCostPerKm = 0.70;
-    final travelTotal = order.distanceKm * 2 * travelCostPerKm;
+    final travelTotal = order.distanceKm * travelCostPerKm;
     final barServiceCost = order.total - travelTotal - order.thekeCost;
     final shotsCost = order.offerShotsCount * order.offerShotsPricePerPiece;
     final extraPositionsTotal = order.offerExtraPositions.fold<double>(
       0.0,
       (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
     );
-    final extraHoursCost = order.assignedEmployees.length * order.offerExtraHours * order.offerExtraHourRate;
-    final grandTotal = order.total + shotsCost + extraPositionsTotal + extraHoursCost - order.offerDiscount;
+    final extraHoursCost =
+        order.assignedEmployees.length *
+        order.offerExtraHours *
+        order.offerExtraHourRate;
+    final grandTotal =
+        order.total +
+        shotsCost +
+        extraPositionsTotal +
+        extraHoursCost -
+        order.offerDiscount;
     // Payment split: ~2/3 deposit, ~1/3 on-site (rounded UP to nearest 100)
     final oneThird = grandTotal / 3;
-    final remainingAmount = ((oneThird / 100).ceil()) * 100.0; // Round up to nearest 100
+    final remainingAmount =
+        ((oneThird / 100).ceil()) * 100.0; // Round up to nearest 100
     final depositAmount = grandTotal - remainingAmount;
 
     pdf.addPage(
@@ -122,7 +140,13 @@ class InvoicePdfGenerator {
             remainingAmount: remainingAmount,
           ),
           pw.SizedBox(height: 30),
-          _buildSwissQrBill(order, settings, grandTotal, isEn, paymentInfoImage),
+          _buildSwissQrBill(
+            order,
+            settings,
+            grandTotal,
+            isEn,
+            paymentInfoImage,
+          ),
         ],
         footer: (context) => _buildFooter(context, isEn),
       ),
@@ -133,7 +157,10 @@ class InvoicePdfGenerator {
 
   // ── Company header ────────────────────────────────────────────────────────
 
-  static pw.Widget _buildCompanyHeader(pw.ImageProvider? logoImage, AppSettings settings) {
+  static pw.Widget _buildCompanyHeader(
+    pw.ImageProvider? logoImage,
+    AppSettings settings,
+  ) {
     final addressLines = _getAddressLines(settings);
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -147,19 +174,16 @@ class InvoicePdfGenerator {
                   line,
                   style: pw.TextStyle(
                     fontSize: 9,
-                    fontWeight:
-                        line == settings.companyName ? pw.FontWeight.bold : pw.FontWeight.normal,
+                    fontWeight: line == settings.companyName
+                        ? pw.FontWeight.bold
+                        : pw.FontWeight.normal,
                   ),
                 ),
               )
               .toList(),
         ),
         if (logoImage != null)
-          pw.Container(
-            width: 65,
-            height: 65,
-            child: pw.Image(logoImage),
-          )
+          pw.Container(width: 65, height: 65, child: pw.Image(logoImage))
         else
           pw.Container(
             width: 100,
@@ -170,7 +194,10 @@ class InvoicePdfGenerator {
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
                 pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: pw.BoxDecoration(
                     border: pw.Border.all(color: PdfColors.amber700, width: 2),
                     borderRadius: pw.BorderRadius.circular(6),
@@ -209,10 +236,16 @@ class InvoicePdfGenerator {
             children: [
               pw.Text(
                 isEn ? 'Editor' : 'Bearbeiter',
-                style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 3),
-              pw.Text('Name: Mario Kantharoobarajah', style: const pw.TextStyle(fontSize: 9)),
+              pw.Text(
+                'Name: Mario Kantharoobarajah',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
               pw.Text(
                 '${isEn ? 'Date' : 'Datum'}: $createdDateStr',
                 style: const pw.TextStyle(fontSize: 9),
@@ -230,7 +263,10 @@ class InvoicePdfGenerator {
             children: [
               pw.Text(
                 isEn ? 'Client' : 'Auftraggeber',
-                style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.SizedBox(height: 3),
               pw.Text(
@@ -287,8 +323,13 @@ class InvoicePdfGenerator {
             ),
             child: checked
                 ? pw.Center(
-                    child: pw.Text('X',
-                        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                    child: pw.Text(
+                      'X',
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
                   )
                 : null,
           ),
@@ -307,13 +348,18 @@ class InvoicePdfGenerator {
         ),
         pw.SizedBox(height: 4),
         pw.Row(
-          children: row1.map((opt) => pw.Expanded(child: checkboxItem(opt))).toList(),
+          children: row1
+              .map((opt) => pw.Expanded(child: checkboxItem(opt)))
+              .toList(),
         ),
         pw.SizedBox(height: 3),
         pw.Row(
           children: [
             ...row2.map((opt) => pw.Expanded(child: checkboxItem(opt))),
-            ...List.generate(3 - row2.length, (_) => pw.Expanded(child: pw.SizedBox())),
+            ...List.generate(
+              3 - row2.length,
+              (_) => pw.Expanded(child: pw.SizedBox()),
+            ),
           ],
         ),
       ],
@@ -331,7 +377,10 @@ class InvoicePdfGenerator {
             children: [
               pw.TextSpan(
                 text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
-                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
               pw.TextSpan(
                 text: '${order.personCount} ${isEn ? 'Guests' : 'Personen'}',
@@ -347,7 +396,10 @@ class InvoicePdfGenerator {
               children: [
                 pw.TextSpan(
                   text: 'Cocktails: ',
-                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.TextSpan(
                   text: order.cocktails.join(', '),
@@ -364,7 +416,10 @@ class InvoicePdfGenerator {
               children: [
                 pw.TextSpan(
                   text: 'Bar: ',
-                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.TextSpan(
                   text: order.bar,
@@ -381,7 +436,10 @@ class InvoicePdfGenerator {
               children: [
                 pw.TextSpan(
                   text: 'Shots: ',
-                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
                 pw.TextSpan(
                   text: order.shots.join(', '),
@@ -411,19 +469,28 @@ class InvoicePdfGenerator {
       0.0,
       (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
     );
-    final extraHoursCost = order.assignedEmployees.length * order.offerExtraHours * order.offerExtraHourRate;
-    final grandTotal = order.total + shotsCost + extraPositionsTotal + extraHoursCost - order.offerDiscount;
+    final extraHoursCost =
+        order.assignedEmployees.length *
+        order.offerExtraHours *
+        order.offerExtraHourRate;
+    final grandTotal =
+        order.total +
+        shotsCost +
+        extraPositionsTotal +
+        extraHoursCost -
+        order.offerDiscount;
 
     pw.Widget headerCell(String text) => pw.Container(
-          color: PdfColors.grey200,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
-          ),
-        );
+      color: PdfColors.grey200,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+      ),
+    );
 
-    pw.Widget cell(String text, {pw.TextAlign align = pw.TextAlign.left}) => pw.Padding(
+    pw.Widget cell(String text, {pw.TextAlign align = pw.TextAlign.left}) =>
+        pw.Padding(
           padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: pw.Text(
             text,
@@ -432,7 +499,8 @@ class InvoicePdfGenerator {
           ),
         );
 
-    pw.Widget boldCell(String text, {pw.TextAlign align = pw.TextAlign.left}) => pw.Padding(
+    pw.Widget boldCell(String text, {pw.TextAlign align = pw.TextAlign.left}) =>
+        pw.Padding(
           padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: pw.Text(
             text,
@@ -467,13 +535,39 @@ class InvoicePdfGenerator {
         children: [
           cell(dateStr),
           cell(isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice'),
+          // Quantity is always 1
           cell('1', align: pw.TextAlign.center),
+          // Price is the full bar service cost
           cell(curr.format(barServiceCost), align: pw.TextAlign.right),
           cell(curr.format(barServiceCost), align: pw.TextAlign.right),
           cell(
-            isEn
-                ? '- 4 Barkeeper\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben welche Cocktails)\n- ausgeschenkt in 0.3L Hartplastikbechern'
-                : '- 4 Barkeeper\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben welche Cocktails)\n- ausgeschenkt in 0.3L Hartplastikbechern',
+            (() {
+              final supervisorItems = order.items
+                  .where((item) => item['category'] == 'supervisor')
+                  .toList();
+              final supervisorSummary = supervisorItems
+                  .map(
+                    (item) =>
+                        "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
+                  )
+                  .join(", ");
+
+              final count = supervisorItems.fold<int>(
+                0,
+                (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+              );
+              final finalCount = count > 0 ? count : 4;
+
+              final rolesText = supervisorSummary.isNotEmpty
+                  ? (isEn
+                        ? 'Incl. $supervisorSummary'
+                        : 'Inkl. $supervisorSummary')
+                  : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
+
+              return isEn
+                  ? '- $rolesText\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern'
+                  : '- $rolesText\n- Max. 5h Cocktail & Barservice\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
+            })(),
           ),
         ],
       ),
@@ -484,14 +578,22 @@ class InvoicePdfGenerator {
             cell(dateStr),
             cell('Shots'),
             cell('${order.offerShotsCount}', align: pw.TextAlign.center),
-            cell(curr.format(order.offerShotsPricePerPiece), align: pw.TextAlign.right),
-            cell(curr.format(order.offerShotsCount * order.offerShotsPricePerPiece), align: pw.TextAlign.right),
+            cell(
+              curr.format(order.offerShotsPricePerPiece),
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              curr.format(
+                order.offerShotsCount * order.offerShotsPricePerPiece,
+              ),
+              align: pw.TextAlign.right,
+            ),
             cell(
               order.offerShotsRemark.isNotEmpty
                   ? order.offerShotsRemark
                   : (isEn
-                      ? 'Shots – ${order.shots.join(", ")}\nServed in 0.4 CL shot glasses'
-                      : 'Shots – ${order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern'),
+                        ? 'Shots – ${order.shots.join(", ")}\nServed in 0.4 CL shot glasses'
+                        : 'Shots – ${order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern'),
             ),
           ],
         ),
@@ -501,13 +603,13 @@ class InvoicePdfGenerator {
           children: [
             cell(dateStr),
             cell(isEn ? 'Travel Costs' : 'Reisekosten'),
-            cell('${order.distanceKm * 2} km', align: pw.TextAlign.center),
+            cell('${order.distanceKm} km', align: pw.TextAlign.center),
             cell(curr.format(0.70), align: pw.TextAlign.right),
             cell(curr.format(travelTotal), align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Return trip from Allschwil, CH to ${order.name}'
-                  : 'An & Rückfahrt von Allschwil, CH nach ${order.name}',
+                  ? 'Travel costs Allschwil CH - ${order.name}'
+                  : 'Reisekosten von Allschwil CH nach ${order.name}',
             ),
           ],
         ),
@@ -517,8 +619,14 @@ class InvoicePdfGenerator {
           children: [
             cell(dateStr),
             cell(isEn ? 'Extra hours' : 'Extrastunden'),
-            cell('${order.assignedEmployees.length} × ${order.offerExtraHours}h', align: pw.TextAlign.center),
-            cell(curr.format(order.offerExtraHourRate), align: pw.TextAlign.right),
+            cell(
+              '${order.assignedEmployees.length} × ${order.offerExtraHours}h',
+              align: pw.TextAlign.center,
+            ),
+            cell(
+              curr.format(order.offerExtraHourRate),
+              align: pw.TextAlign.right,
+            ),
             cell(curr.format(extraHoursCost), align: pw.TextAlign.right),
             cell(
               isEn
@@ -565,13 +673,20 @@ class InvoicePdfGenerator {
             cell(isEn ? 'Discount' : 'Rabatt'),
             cell('1', align: pw.TextAlign.center),
             cell(curr.format(order.offerDiscount), align: pw.TextAlign.right),
-            cell('-${curr.format(order.offerDiscount)}', align: pw.TextAlign.right),
             cell(
-              order.offerDiscountRemark.isNotEmpty 
+              '-${curr.format(order.offerDiscount)}',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              order.offerDiscountRemark.isNotEmpty
                   ? order.offerDiscountRemark
                   : (order.offerDiscount >= order.total * 0.1
-                      ? (isEn ? 'Discount: 15% Friends' : 'Rabatt: 15% Friends')
-                      : (isEn ? 'Family/Friend discount' : 'Familie/Freunde Rabatt')),
+                        ? (isEn
+                              ? 'Discount: 15% Friends'
+                              : 'Rabatt: 15% Friends')
+                        : (isEn
+                              ? 'Family/Friend discount'
+                              : 'Familie/Freunde Rabatt')),
             ),
           ],
         ),
@@ -582,7 +697,10 @@ class InvoicePdfGenerator {
           cell(''),
           cell(''),
           cell(''),
-          boldCell(isEn ? 'Total:' : 'Gesamtkosten:', align: pw.TextAlign.right),
+          boldCell(
+            isEn ? 'Total:' : 'Gesamtkosten:',
+            align: pw.TextAlign.right,
+          ),
           boldCell(curr.format(grandTotal), align: pw.TextAlign.right),
           cell(''),
         ],
@@ -609,7 +727,8 @@ class InvoicePdfGenerator {
     final eventDateStr =
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
 
-    final additionalTextDe = '''
+    final additionalTextDe =
+        '''
 "${settings.companyName}" ist für den Einkauf und Zubereitung der Cocktails verantwortlich. Dies betrifft auch die Hartplastikbecher, Süssigkeiten, Strohhalme, Früchte und den dazugehörigen Alkohol. Eine "Bartheke" kann von uns zur Verfügung gestellt werden gegen Aufpreis (s. oben).
 Empfehlung: Am Anfang würden wir nur die Cocktails ohne "Barservice" für 2 Stunden anbieten und anschliessend sowohl Cocktails & Barservice für den restlichen Abend. Jedoch richten wir uns hier nach Kundenwunsch.
 
@@ -621,7 +740,8 @@ Name: ${settings.companyOwner}        IBAN: ${settings.bankIban}        TWINT: $
 
 Wird der Auftrag seitens, Auftraggeber nach Anzahlung storniert, hat er keinen Anspruch auf die Anzahlung! Sollte es von seitens Auftragnehmer storniert werden, wird die Anzahlung unverzüglich wieder zurückerstattet!''';
 
-    final additionalTextEn = '''
+    final additionalTextEn =
+        '''
 "${settings.companyName}" is responsible for purchasing and preparing the cocktails. This includes hard plastic cups, sweets, straws, fruits, and the associated alcohol. A "bar counter" can be provided by us for an additional charge (see above).
 Recommendation: At the beginning we would only offer cocktails without "bar service" for 2 hours and then both cocktails & bar service for the rest of the evening. However, we follow the customer's wishes.
 
@@ -662,12 +782,15 @@ If the order is cancelled by the client after the deposit has been made, they ar
     return pw.Container(
       decoration: pw.BoxDecoration(
         border: pw.Border(
-          top: const pw.BorderSide(color: PdfColors.black, width: 0.5, style: pw.BorderStyle.dashed),
+          top: const pw.BorderSide(
+            color: PdfColors.black,
+            width: 0.5,
+            style: pw.BorderStyle.dashed,
+          ),
         ),
       ),
       child: pw.Column(
         children: [
-
           pw.SizedBox(height: 8),
           if (paymentInfoImage != null)
             pw.Center(
@@ -680,7 +803,10 @@ If the order is cancelled by the client after the deposit has been made, they ar
             )
           else
             pw.Center(
-              child: pw.Text('Zahlteil-Bild nicht gefunden', style: pw.TextStyle(fontSize: 12, color: PdfColors.red)),
+              child: pw.Text(
+                'Zahlteil-Bild nicht gefunden',
+                style: pw.TextStyle(fontSize: 12, color: PdfColors.red),
+              ),
             ),
         ],
       ),

@@ -94,6 +94,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         itemCount: _users.length,
         itemBuilder: (context, index) {
           final user = _users[index];
+          final isCurrentUser =
+              user.email.toLowerCase() == authService.email?.toLowerCase();
+
           return Card(
             child: ListTile(
               leading: CircleAvatar(
@@ -103,22 +106,91 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       .toUpperCase(),
                 ),
               ),
-              title: Text(user.name.isNotEmpty ? user.name : user.email),
-              subtitle: SelectableText(user.email),
+              title: Row(
+                children: [
+                  Text(user.name.isNotEmpty ? user.name : user.email),
+                  if (isCurrentUser) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Du',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(user.email),
+                  if (isCurrentUser)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Eigener Status kann nicht geändert werden',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (user.email.toLowerCase() != superAdminEmail.toLowerCase())
-                    Switch(
-                      value: user.isAdmin,
-                      onChanged: (value) async {
-                        final success = await authService.updateAdminStatus(
-                          user.email,
-                          value,
-                        );
-                        if (success) _loadUsers();
-                      },
-                      activeThumbColor: Colors.amber,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Admin',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: user.isAdmin
+                                    ? Colors.amber.shade700
+                                    : Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(width: 4),
+                        Switch(
+                          value: user.isAdmin,
+                          onChanged: isCurrentUser
+                              ? null // Prevents de-admining yourself
+                              : (value) async {
+                                  // Optimistic UI: update local state immediately
+                                  setState(() {
+                                    _users[index] = user.copyWith(
+                                      isAdmin: value,
+                                    );
+                                  });
+
+                                  final success = await authService
+                                      .updateAdminStatus(user.email, value);
+
+                                  if (!success && mounted) {
+                                    // Revert local state on error
+                                    setState(() {
+                                      _users[index] = user;
+                                    });
+                                  }
+                                },
+                          activeThumbColor: Colors.amber,
+                        ),
+                      ],
                     )
                   else
                     const Padding(
@@ -126,7 +198,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       child: Icon(Icons.security, color: Colors.amber),
                     ),
                   if (authService.isAdmin &&
-                      user.email.toLowerCase() != superAdminEmail.toLowerCase())
+                      user.email.toLowerCase() !=
+                          superAdminEmail.toLowerCase() &&
+                      !isCurrentUser) // Cannot delete yourself
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
                       onPressed: () => _confirmRemoveUser(user.email),

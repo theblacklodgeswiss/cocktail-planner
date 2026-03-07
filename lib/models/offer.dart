@@ -1,11 +1,5 @@
 /// Event type for an offer
-enum EventType {
-  birthday,
-  wedding,
-  company,
-  babyshower,
-  other,
-}
+enum EventType { birthday, wedding, company, babyshower, other }
 
 /// Extra position (custom line item) for offers and invoices
 class ExtraPosition {
@@ -25,11 +19,11 @@ class ExtraPosition {
   double get total => price * quantity;
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'price': price,
-        'quantity': quantity,
-        'remark': remark,
-      };
+    'name': name,
+    'price': price,
+    'quantity': quantity,
+    'remark': remark,
+  };
 
   factory ExtraPosition.fromJson(Map<String, dynamic> json) {
     return ExtraPosition(
@@ -80,6 +74,7 @@ class OfferData {
     this.discountRemark = '',
     this.extraPositions = const [],
     this.assignedEmployees = const [],
+    this.supervisorItems = const [],
   });
 
   /// Event / order name (from SavedOrder.name)
@@ -144,10 +139,14 @@ class OfferData {
 
   /// Extra custom positions (line items)
   final List<ExtraPosition> extraPositions;
+
   /// Assigned employee names for this offer (used to show number of barkeepers)
   final List<String> assignedEmployees;
 
-  double get travelCostTotal => distanceKm * 2 * travelCostPerKm;
+  /// Selected supervisor/barkeeper items from the shopping list
+  final List<Map<String, dynamic>> supervisorItems;
+
+  double get travelCostTotal => distanceKm * travelCostPerKm;
 
   /// Sum of all extra positions
   double get extraPositionsTotal =>

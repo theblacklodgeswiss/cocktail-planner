@@ -28,29 +28,30 @@ class CreateOfferScreen extends StatefulWidget {
 }
 
 class _CreateOfferScreenState extends State<CreateOfferScreen> {
-    /// Confirmation dialog for PDF save (used when offer is accepted)
-    Future<void> _confirmGeneratePdf() async {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('invoice.confirm_save_title'.tr()),
-          content: Text('invoice.confirm_save_msg'.tr()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text('common.save'.tr()),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true) {
-        await _generatePdf();
-      }
+  /// Confirmation dialog for PDF save (used when offer is accepted)
+  Future<void> _confirmGeneratePdf() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('invoice.confirm_save_title'.tr()),
+        content: Text('invoice.confirm_save_msg'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('common.save'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _generatePdf();
     }
+  }
+
   final _formKey = GlobalKey<FormState>();
 
   // Language
@@ -95,10 +96,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   void _initializeControllers() {
     _eventDate = widget.order.date;
-    _guestCountCtrl =
-        TextEditingController(text: widget.order.personCount.toString());
-    _orderTotalCtrl =
-        TextEditingController(text: widget.order.total.toStringAsFixed(2));
+    _guestCountCtrl = TextEditingController(
+      text: widget.order.personCount.toString(),
+    );
+    _orderTotalCtrl = TextEditingController(
+      text: widget.order.total.toStringAsFixed(2),
+    );
 
     // Initialize editor name with logged-in user's display name
     final authService = AuthService();
@@ -110,18 +113,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _cocktailsCtrl.text = widget.order.cocktails.join(', ');
     _shotsCtrl.text = widget.order.shots.join(', ');
     _barDescCtrl.text = widget.order.bar;
-    _distanceKmCtrl.text =
-        widget.order.distanceKm > 0 ? widget.order.distanceKm.toString() : '';
+    _distanceKmCtrl.text = widget.order.distanceKm > 0
+        ? widget.order.distanceKm.toString()
+        : '';
     _barCostCtrl.text = widget.order.thekeCost > 0
         ? widget.order.thekeCost.toStringAsFixed(2)
         : '';
 
     // Load saved offer data from order, or use order name/phone/time as fallback
-    _clientNameCtrl.text = widget.order.offerClientName.isEmpty 
-        ? widget.order.name 
+    _clientNameCtrl.text = widget.order.offerClientName.isEmpty
+        ? widget.order.name
         : widget.order.offerClientName;
-    _clientContactCtrl.text = widget.order.offerClientContact.isEmpty 
-        ? widget.order.phone 
+    _clientContactCtrl.text = widget.order.offerClientContact.isEmpty
+        ? widget.order.phone
         : widget.order.offerClientContact;
     _eventTimeCtrl.text = widget.order.offerEventTime.isEmpty
         ? widget.order.eventTime
@@ -130,7 +134,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ? widget.order.offerDiscount.toStringAsFixed(2)
         : '';
     _discountRemarkCtrl.text = widget.order.offerDiscountRemark.isEmpty
-        ? (_language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt')
+        ? (_language == 'en'
+              ? 'Family/Friend discount'
+              : 'Familie/Freunde Rabatt')
         : widget.order.offerDiscountRemark;
     _language = widget.order.offerLanguage;
 
@@ -202,8 +208,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       eventDate: _eventDate,
       eventTime: _eventTimeCtrl.text.trim(),
       currency: widget.order.currency,
-      guestCount: int.tryParse(_guestCountCtrl.text.trim()) ??
-          widget.order.personCount,
+      guestCount:
+          int.tryParse(_guestCountCtrl.text.trim()) ?? widget.order.personCount,
       editorName: _editorNameCtrl.text.trim(),
       clientName: _clientNameCtrl.text.trim(),
       clientContact: _clientContactCtrl.text.trim(),
@@ -223,6 +229,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       language: _language,
       extraPositions: List.of(_extraPositions),
       assignedEmployees: _selectedEmployees.toList(),
+      supervisorItems: widget.order.items
+          .where((item) => item['category'] == 'supervisor')
+          .toList(),
     );
   }
 
@@ -248,9 +257,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     try {
       await _saveOfferData();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('offer.saved'.tr())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('offer.saved'.tr())));
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -279,10 +288,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       await _saveOfferData();
       final offer = _buildOfferData();
       final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
-      
+
       // Upload to OneDrive if supported
       final safeName = offer.orderName.replaceAll(' ', '_');
-      final dateTag = '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
+      final dateTag =
+          '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
       if (microsoftGraphService.isSupported) {
         final fileName = 'Angebot_${safeName}_$dateTag.pdf';
         final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
@@ -295,18 +305,21 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           bytes: pdfBytes,
         );
       }
-      
+
       // Share/download the PDF
-      final safeNameLower = offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+      final safeNameLower = offer.orderName.toLowerCase().replaceAll(
+        RegExp(r'[^a-z0-9]'),
+        '_',
+      );
       await Printing.sharePdf(
         bytes: pdfBytes,
         filename: 'angebot_${safeNameLower}_$dateTag.pdf',
       );
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('offer.pdf_created'.tr())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('offer.pdf_created'.tr())));
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -458,12 +471,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
             return wide
                 ? Row(
                     children: fields
-                        .map((f) => Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: f,
-                              ),
-                            ))
+                        .map(
+                          (f) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: f,
+                            ),
+                          ),
+                        )
                         .toList(),
                   )
                 : Column(children: fields);
@@ -511,9 +526,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
             if (employees.isEmpty)
               Text(
                 'orders.no_employees_available'.tr(),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey),
               )
             else
               Wrap(
@@ -529,8 +544,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                           ? Theme.of(context).colorScheme.primary
                           : Colors.grey,
                       child: Text(
-                        employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
-                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                        employee.name.isNotEmpty
+                            ? employee.name[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                     onSelected: (selected) {
@@ -580,27 +600,28 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   hint: '17:30',
                 ),
               ),
-              SizedBox(
-                width: 200,
-                child: _buildDatePicker(),
-              ),
+              SizedBox(width: 200, child: _buildDatePicker()),
             ];
             return wide
                 ? Row(
                     children: fields
-                        .map((f) => Padding(
-                              padding: const EdgeInsets.only(right: 16),
-                              child: f,
-                            ))
+                        .map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: f,
+                          ),
+                        )
                         .toList(),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: fields
-                        .map((f) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: f,
-                            ))
+                        .map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: f,
+                          ),
+                        )
                         .toList(),
                   );
           },
@@ -704,23 +725,27 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 children: [
                   Row(
                     children: row1
-                        .map((f) => Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: f,
-                              ),
-                            ))
+                        .map(
+                          (f) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: f,
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: row2
-                        .map((f) => Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: f,
-                              ),
-                            ))
+                        .map(
+                          (f) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: f,
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -728,10 +753,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
             }
             return Column(
               children: [...row1, ...row2]
-                  .map((f) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: f,
-                      ))
+                  .map(
+                    (f) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: f,
+                    ),
+                  )
                   .toList(),
             );
           },
@@ -756,7 +783,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 child: _field(
                   controller: _discountRemarkCtrl,
                   label: 'offer.discount_remark'.tr(),
-                  hint: _language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt',
+                  hint: _language == 'en'
+                      ? 'Family/Friend discount'
+                      : 'Familie/Freunde Rabatt',
                 ),
               ),
             ];
@@ -785,7 +814,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
           barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
           discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
-          extraPositionsTotal: _extraPositions.fold(0.0, (sum, p) => sum + p.price),
+          extraPositionsTotal: _extraPositions.fold(
+            0.0,
+            (sum, p) => sum + p.price,
+          ),
         ),
       ],
     );
@@ -800,8 +832,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.add_circle_outline, 
-                    size: 20, color: Theme.of(context).colorScheme.primary),
+                Icon(
+                  Icons.add_circle_outline,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'offer.extra_positions'.tr(),
@@ -831,13 +866,21 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(pos.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                            Text(
+                              pos.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                             if (pos.remark.isNotEmpty)
                               Text(
                                 pos.remark,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.outline,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.outline,
+                                    ),
                               ),
                           ],
                         ),
@@ -853,9 +896,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         tooltip: 'common.edit'.tr(),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete, size: 18, 
-                            color: Theme.of(context).colorScheme.error),
-                        onPressed: () => setState(() => _extraPositions.removeAt(index)),
+                        icon: Icon(
+                          Icons.delete,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        onPressed: () =>
+                            setState(() => _extraPositions.removeAt(index)),
                         tooltip: 'common.delete'.tr(),
                       ),
                     ],
@@ -877,13 +924,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _showEditExtraPositionDialog(int index) async {
-    final result = await _showExtraPositionDialog(existing: _extraPositions[index]);
+    final result = await _showExtraPositionDialog(
+      existing: _extraPositions[index],
+    );
     if (result != null) {
       setState(() => _extraPositions[index] = result);
     }
   }
 
-  Future<ExtraPosition?> _showExtraPositionDialog({ExtraPosition? existing}) async {
+  Future<ExtraPosition?> _showExtraPositionDialog({
+    ExtraPosition? existing,
+  }) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(
       text: existing != null ? existing.price.toStringAsFixed(2) : '',
@@ -894,7 +945,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     return showDialog<ExtraPosition>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'offer.add_position'.tr() : 'offer.edit_position'.tr()),
+        title: Text(
+          existing == null
+              ? 'offer.add_position'.tr()
+              : 'offer.edit_position'.tr(),
+        ),
         content: Form(
           key: formKey,
           child: SizedBox(
@@ -917,12 +972,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   controller: priceCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: '${'offer.position_price'.tr()} (${widget.order.currency})',
+                    labelText:
+                        '${'offer.position_price'.tr()} (${widget.order.currency})',
                     prefixIcon: const Icon(Icons.attach_money),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'offer.field_required'.tr();
-                    if (double.tryParse(v.trim()) == null) return 'offer.invalid_number'.tr();
+                    if (v == null || v.trim().isEmpty)
+                      return 'offer.field_required'.tr();
+                    if (double.tryParse(v.trim()) == null)
+                      return 'offer.invalid_number'.tr();
                     return null;
                   },
                 ),
@@ -947,11 +1005,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           FilledButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, ExtraPosition(
-                  name: nameCtrl.text.trim(),
-                  price: double.parse(priceCtrl.text.trim()),
-                  remark: remarkCtrl.text.trim(),
-                ));
+                Navigator.pop(
+                  ctx,
+                  ExtraPosition(
+                    name: nameCtrl.text.trim(),
+                    price: double.parse(priceCtrl.text.trim()),
+                    remark: remarkCtrl.text.trim(),
+                  ),
+                );
               }
             },
             child: Text('common.save'.tr()),
@@ -970,9 +1031,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         TextFormField(
           controller: _additionalInfoCtrl,
           maxLines: 8,
-          decoration: InputDecoration(
-            hintText: 'offer.additional_info'.tr(),
-          ),
+          decoration: InputDecoration(hintText: 'offer.additional_info'.tr()),
         ),
       ],
     );
@@ -990,14 +1049,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       controller: controller,
       keyboardType: keyboard,
       inputFormatters: inputFormatters,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-      ),
+      decoration: InputDecoration(labelText: label, hintText: hint),
       validator: required
           ? (v) => (v == null || v.trim().isEmpty)
-              ? 'offer.field_required'.tr()
-              : null
+                ? 'offer.field_required'.tr()
+                : null
           : null,
       onChanged: (_) => setState(() {}),
     );
