@@ -34,7 +34,12 @@
     "action_all_orders_subtitle": "Komplette Übersicht",
     "action_admin": "Admin-Bereich",
     "action_admin_subtitle": "Verwaltung & Einstellungen",
-    "new_order": "Neuer Auftrag"
+    "new_order": "Neuer Auftrag",
+    "stats_offers": "Offene Angebote",
+    "stats_revenue": "Gesamtumsatz",
+    "stats_accepted_suffix": "angenommene",
+    "stats_persons": "Personen",
+    "stats_avg_per_order": "Ø pro Bestellung"
   },
   "dialog": {
     "title": "Cocktails auswählen",

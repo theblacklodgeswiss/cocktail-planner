@@ -34,7 +34,12 @@
     "action_all_orders_subtitle": "Complete Overview",
     "action_admin": "Admin Area",
     "action_admin_subtitle": "Management & Settings",
-    "new_order": "New Order"
+    "new_order": "New Order",
+    "stats_offers": "Open Offers",
+    "stats_revenue": "Total Revenue",
+    "stats_accepted_suffix": "accepted",
+    "stats_persons": "Persons",
+    "stats_avg_per_order": "Ø per Order"
   },
   "dialog": {
     "title": "Select Cocktails",

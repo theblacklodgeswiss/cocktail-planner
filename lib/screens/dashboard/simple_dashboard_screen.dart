@@ -128,7 +128,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final acceptedCount = completedOrders.where((o) => o.status == OrderStatus.accepted).length;
           final openOffersCount = completedOrders.where((o) => o.status == OrderStatus.quote).length;
           
+          // Compute statistics from accepted orders
+          final acceptedOrders = completedOrders.where((o) => o.status == OrderStatus.accepted).toList();
+          final totalRevenue = acceptedOrders.fold<double>(0, (sum, o) => sum + o.total);
+          final totalPersons = acceptedOrders.fold<int>(0, (sum, o) => sum + o.personCount);
+          final avgPerOrder = acceptedOrders.isNotEmpty ? totalRevenue / acceptedOrders.length : 0.0;
+          
           debugPrint('📊 Counts for year ${DateTime.now().year}: accepted=$acceptedCount, pending=$pendingCount, quotes=$openOffersCount');
+          debugPrint('💰 Statistics: revenue=$totalRevenue, persons=$totalPersons, avg=$avgPerOrder');
           
           // Debug: Show pending orders details
           final pendingOrders = orders.where((o) => o.total == 0 && !o.isPendingDismissed).toList();
@@ -144,6 +151,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 // Status-Kacheln
                 _buildStatusCards(acceptedCount, pendingCount, openOffersCount),
+                const SizedBox(height: 24),
+                
+                // Statistics Bar
+                _buildStatisticsBar(
+                  openOffersCount, 
+                  acceptedCount, 
+                  totalRevenue, 
+                  totalPersons, 
+                  avgPerOrder,
+                  completedOrders.firstOrNull?.currency ?? 'CHF',
+                ),
                 const SizedBox(height: 32),
 
                 // Drei Haupt-Navigation Buttons
@@ -194,6 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.pending_outlined,
               color: Colors.blue,
               width: isWide ? (constraints.maxWidth - 32) / 3 : constraints.maxWidth,
+              onTap: () => context.push('/pending-orders'),
             ),
             _StatusCard(
               title: 'dashboard.open_offers'.tr(),
@@ -201,6 +220,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.description_outlined,
               color: Colors.orange,
               width: isWide ? (constraints.maxWidth - 32) / 3 : constraints.maxWidth,
+              onTap: () => context.push('/orders?status=quote'),
             ),
             _StatusCard(
               title: 'dashboard.accepted_orders'.tr(),
@@ -208,10 +228,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.check_circle_outline,
               color: Colors.green,
               width: isWide ? (constraints.maxWidth - 32) / 3 : constraints.maxWidth,
+              onTap: () => context.push('/orders?status=accepted'),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildStatisticsBar(
+    int openOffersCount,
+    int acceptedCount,
+    double totalRevenue,
+    int totalPersons,
+    double avgPerOrder,
+    String currency,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 600;
+          
+          final stats = [
+            _StatisticItem(
+              icon: Icons.description_outlined,
+              label: 'dashboard.stats_offers'.tr(),
+              value: '$openOffersCount / $acceptedCount',
+              color: Colors.orange,
+            ),
+            _StatisticItem(
+              icon: Icons.attach_money,
+              label: 'dashboard.stats_revenue'.tr(),
+              value: '${totalRevenue.toStringAsFixed(2)} $currency',
+              subtitle: '$acceptedCount ${'dashboard.stats_accepted_suffix'.tr()}',
+              color: Colors.green,
+            ),
+            _StatisticItem(
+              icon: Icons.people_outline,
+              label: 'dashboard.stats_persons'.tr(),
+              value: totalPersons.toString(),
+              color: Colors.blue,
+            ),
+            _StatisticItem(
+              icon: Icons.show_chart,
+              label: 'dashboard.stats_avg_per_order'.tr(),
+              value: '${avgPerOrder.toStringAsFixed(2)} $currency',
+              color: Colors.purple,
+            ),
+          ];
+
+          if (isWide) {
+            // Desktop: Horizontal layout
+            return Row(
+              children: stats
+                  .map((stat) => Expanded(child: stat))
+                  .toList(),
+            );
+          } else {
+            // Mobile: 2x2 Grid
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: stats[0]),
+                    const SizedBox(width: 8),
+                    Expanded(child: stats[1]),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(child: stats[2]),
+                    const SizedBox(width: 8),
+                    Expanded(child: stats[3]),
+                  ],
+                ),
+              ],
+            );
+          }
+        },
+      ),
     );
   }
 
@@ -309,6 +410,7 @@ class _StatusCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final double width;
+  final VoidCallback onTap;
 
   const _StatusCard({
     required this.title,
@@ -316,6 +418,7 @@ class _StatusCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.width,
+    required this.onTap,
   });
 
   @override
@@ -324,38 +427,99 @@ class _StatusCard extends StatelessWidget {
       width: width,
       child: Card(
         elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 32),
                 ),
-                child: Icon(icon, color: color, size: 32),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StatisticItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? subtitle;
+  final Color color;
+
+  const _StatisticItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
       ),
     );
   }
