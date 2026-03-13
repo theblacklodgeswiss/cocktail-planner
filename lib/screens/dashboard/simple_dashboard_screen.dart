@@ -6,6 +6,7 @@ import '../../data/firestore_service.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import 'user_menu_sheet.dart';
+import 'customer_landing_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -37,6 +38,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading while checking admin status
+    if (!_initialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Non-admin users see the customer landing screen
+    if (!authService.isAdmin) {
+      return const CustomerLandingScreen();
+    }
+
+    // Admin dashboard
     return Scaffold(
       appBar: AppBar(
         title: Column(

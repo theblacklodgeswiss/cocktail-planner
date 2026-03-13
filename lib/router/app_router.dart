@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../models/order.dart';
 import '../screens/admin/admin_screen.dart';
+import '../screens/dashboard/customer_landing_screen.dart';
 import '../screens/dashboard/simple_dashboard_screen.dart';
 import '../screens/forms/modern_order_form_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
@@ -57,6 +58,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/',
+      builder: (context, state) => const CustomerLandingScreen(),
+    ),
+    GoRoute(
+      path: '/dashboard',
       builder: (context, state) => const DashboardScreen(),
     ),
     GoRoute(

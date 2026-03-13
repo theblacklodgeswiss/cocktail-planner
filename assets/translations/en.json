@@ -47,8 +47,17 @@
     "add_selected": "Apply selection",
     "tag_cocktail": "Cocktail",
     "tag_shot": "Shot"
+  },  "order_form": {
+    "thank_you_title": "Thank You!",
+    "thank_you_message": "We have received your request and will process it as soon as possible. You will receive a personalized offer from us shortly.",
+    "save_error": "Error saving your request. Please try again later."
   },
-  "common": {
+  "customer": {
+    "welcome_title": "Welcome to The Blacklodge",
+    "welcome_message": "Create a new request for your event and receive a customized offer.",
+    "info_title": "How it works",
+    "info_message": "Fill out the form with your wishes. We will create an individual offer for you and get back to you as soon as possible."
+  },  "common": {
     "cancel": "Cancel",
     "ok": "OK",
     "delete": "Delete",
@@ -84,8 +93,7 @@
   "admin": {
     "title": "Manage Inventory",
     "title_short": "Admin",
-    "access_denied": "Access denied - admins only",
-    "tab_materials": "Materials",
+    "access_denied": "Access denied - admins only",    "access_denied_message": "This page is only accessible to administrators. Please sign in with an admin account.",    "tab_materials": "Materials",
     "tab_fixed": "Supplies",
     "tab_recipes": "Recipes",
     "tab_employees": "Employees",

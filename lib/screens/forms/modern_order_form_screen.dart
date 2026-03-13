@@ -5,9 +5,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/url_utils.dart';
 import '../../data/cocktail_repository.dart';
+import '../../data/order_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
+import '../../services/auth_service.dart';
 
 /// Result from the modern order form containing both setup data and selected recipes
 class OrderFormResult {
@@ -318,7 +320,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     }
   }
 
-  void _submitForm() {
+  void _submitForm() async {
     // Validate required fields
     String? errorMessage;
     
@@ -370,10 +372,87 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       selectedRecipes: _selectedRecipes,
     );
 
-    if (widget.onSubmit != null) {
-      widget.onSubmit!(result);
+    // Check if user is admin
+    final isAdmin = authService.isAdmin;
+
+    if (!isAdmin) {
+      // Customer flow: Save as pending order and show thank you dialog
+      await _savePendingOrderAndShowThanks(setupData);
     } else {
-      context.pop(result);
+      // Admin flow: Continue with normal flow (shopping list)
+      if (widget.onSubmit != null) {
+        widget.onSubmit!(result);
+      } else {
+        context.pop(result);
+      }
+    }
+  }
+
+  Future<void> _savePendingOrderAndShowThanks(OrderSetupData setupData) async {
+    try {
+      // Save pending order (total = 0) using repository method
+      final orderId = await orderRepository.saveOrder(
+        name: setupData.orderName,
+        date: setupData.eventDate ?? DateTime.now(),
+        items: [], // Empty items for pending order
+        total: 0, // Pending order
+        currency: setupData.currency,
+        personCount: setupData.personCount,
+        drinkerType: setupData.drinkerType,
+        status: 'quote',
+        cocktails: _selectedRecipes.map((r) => r.name).toList(),
+        bar: setupData.serviceType,
+        distanceKm: setupData.distanceKm ?? 0,
+        phone: setupData.phoneNumber ?? '',
+        location: setupData.address ?? '',
+        eventTime: setupData.eventTime != null 
+            ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}' 
+            : '',
+        barDrinks: setupData.barDrinks ?? [],
+        alcoholPurchase: setupData.alcoholPurchase ?? [],
+        additionalServices: setupData.additionalServices ?? [],
+        remarks: setupData.remarks ?? '',
+      );
+
+      if (orderId == null) {
+        throw Exception('Failed to save order');
+      }
+
+      // Show thank you dialog
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            icon: const Icon(
+              Icons.celebration,
+              size: 64,
+              color: Colors.green,
+            ),
+            title: Text('order_form.thank_you_title'.tr()),
+            content: Text('order_form.thank_you_message'.tr()),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  context.go('/orders'); // Navigate to orders overview
+                },
+                child: Text('common.ok'.tr()),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('order_form.save_error'.tr()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

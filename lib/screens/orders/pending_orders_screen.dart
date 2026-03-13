@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/order_repository.dart';
 import '../../models/order.dart';
+import '../../widgets/admin_protected_screen.dart';
 import 'order_detail_sheet.dart';
 
 /// Sort options for pending orders.
@@ -69,6 +70,12 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return AdminProtectedScreen(
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(

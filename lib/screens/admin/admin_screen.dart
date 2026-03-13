@@ -2,7 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../services/auth_service.dart';
+import '../../widgets/admin_protected_screen.dart';
 import 'materials_tab.dart';
 import 'recipes_tab.dart';
 
@@ -32,21 +32,12 @@ class _AdminScreenState extends State<AdminScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!authService.canManageUsers) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.pop(),
-          ),
-          title: Text('admin.title_short'.tr()),
-        ),
-        body: Center(
-          child: Text('admin.access_denied'.tr()),
-        ),
-      );
-    }
+    return AdminProtectedScreen(
+      child: _buildContent(context),
+    );
+  }
 
+  Widget _buildContent(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(

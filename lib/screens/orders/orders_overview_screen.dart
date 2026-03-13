@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/order_repository.dart';
+import '../../services/auth_service.dart';
 import '../../models/order.dart';
 import '../../services/microsoft_graph_service.dart';
+import '../../widgets/admin_protected_screen.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/orders_table.dart';
 import 'widgets/summary_card.dart';
@@ -251,12 +253,24 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return AdminProtectedScreen(
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: Text('orders.title'.tr()),
         actions: [
+          if (authService.isAdmin)
+            IconButton(
+              icon: const Icon(Icons.dashboard_outlined),
+              tooltip: 'Dashboard',
+              onPressed: () => context.push('/dashboard'),
+            ),
           if (microsoftGraphService.isSupported)
             _isSyncing
                 ? const Padding(

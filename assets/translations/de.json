@@ -48,6 +48,17 @@
     "tag_cocktail": "Cocktail",
     "tag_shot": "Shot"
   },
+  "order_form": {
+    "thank_you_title": "Vielen Dank!",
+    "thank_you_message": "Wir haben deine Anfrage erhalten und werden sie so schnell wie möglich bearbeiten. Du erhältst in Kürze ein persönliches Angebot von uns.",
+    "save_error": "Fehler beim Speichern der Anfrage. Bitte versuche es später erneut."
+  },
+  "customer": {
+    "welcome_title": "Willkommen bei The Blacklodge",
+    "welcome_message": "Erstelle eine neue Anfrage für deinen Event und erhalte ein maßgeschneidertes Angebot.",
+    "info_title": "So funktioniert's",
+    "info_message": "Fülle das Formular mit deinen Wünschen aus. Wir erstellen dir ein individuelles Angebot und melden uns schnellstmöglich bei dir."
+  },
   "common": {
     "cancel": "Abbrechen",
     "ok": "OK",
@@ -85,6 +96,7 @@
     "title": "Inventar verwalten",
     "title_short": "Admin",
     "access_denied": "Zugriff verweigert - nur für Admins",
+    "access_denied_message": "Diese Seite ist nur für Administratoren zugänglich. Bitte melde dich mit einem Admin-Account an.",
     "tab_materials": "Materialien",
     "tab_fixed": "Verbrauch",
     "tab_recipes": "Rezepte",
