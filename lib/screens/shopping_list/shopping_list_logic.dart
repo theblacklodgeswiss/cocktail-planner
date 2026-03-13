@@ -121,6 +121,11 @@ class ShoppingListLogic {
         final cocktailKey = cocktailItemKey(item, cocktailName);
         total += quantities[cocktailKey] ?? 0;
       }
+      // Fallback: check base key for quantities applied without cocktail context
+      // (e.g. Gemini suggestions when recipes had no matched ingredients)
+      if (total == 0) {
+        total = quantities[baseKey] ?? 0;
+      }
       if (total > 0) {
         aggregated[baseKey] = total;
       }

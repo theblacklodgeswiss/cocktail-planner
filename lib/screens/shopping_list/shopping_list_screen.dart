@@ -191,18 +191,21 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         }
         appliedCount++;
       } else {
-        // Distribute quantity across cocktails that use this ingredient
-        // For now, assign full quantity to the first cocktail
-        final cocktailName = cocktails.first;
-        final cocktailKey = ShoppingListLogic.cocktailItemKey(
-          item,
-          cocktailName,
-        );
-
-        _quantities[cocktailKey] = suggestion.quantity;
-        _selectedItems.add(cocktailKey);
-        if (_controllers.containsKey(cocktailKey)) {
-          _controllers[cocktailKey]?.text = suggestion.quantity.toString();
+        // Distribute quantity evenly across all cocktails that use this ingredient.
+        final perCocktail = suggestion.quantity ~/ cocktails.length;
+        final remainder = suggestion.quantity % cocktails.length;
+        for (var i = 0; i < cocktails.length; i++) {
+          final qty = i < remainder ? perCocktail + 1 : perCocktail;
+          if (qty <= 0) continue;
+          final cocktailKey = ShoppingListLogic.cocktailItemKey(
+            item,
+            cocktails[i],
+          );
+          _quantities[cocktailKey] = qty;
+          _selectedItems.add(cocktailKey);
+          if (_controllers.containsKey(cocktailKey)) {
+            _controllers[cocktailKey]?.text = qty.toString();
+          }
         }
         appliedCount++;
       }
@@ -659,10 +662,32 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     // Apply default fixed value quantities (once)
     _applyDefaultFixedValues(data);
 
+    // Collect any ingredient items that have quantities set directly (base keys)
+    // but are not yet in allIngredients — e.g. Gemini suggestions applied when
+    // recipe ingredients could not be matched.
+    final existingIngredientKeys =
+        allIngredients.map(ShoppingListLogic.itemKey).toSet();
+    final materialByItemKey = {
+      for (final m in data.materials) ShoppingListLogic.itemKey(m): m
+    };
+    final additionalIngredients = <MaterialItem>[];
+    for (final entry in _quantities.entries) {
+      if (entry.value > 0 &&
+          !existingIngredientKeys.contains(entry.key) &&
+          materialByItemKey.containsKey(entry.key)) {
+        additionalIngredients.add(materialByItemKey[entry.key]!);
+        existingIngredientKeys.add(entry.key);
+      }
+    }
+    final effectiveAllIngredients = [
+      ...allIngredients,
+      ...additionalIngredients,
+    ];
+
     // Aggregate quantities from cocktail-specific keys to base keys
     final aggregatedQuantities = ShoppingListLogic.aggregateQuantities(
       _quantities,
-      allIngredients,
+      effectiveAllIngredients,
       cocktailNames,
     );
 
@@ -683,7 +708,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
-    final allItems = [...allIngredients, ...fixedValues];
+    final allItems = [...effectiveAllIngredients, ...fixedValues];
     final total = ShoppingListLogic.calculateTotal(
       allItems,
       mergedQuantities,
@@ -702,6 +727,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
     // Ensure controllers exist for fixed values (base keys)
     for (final item in fixedValues) {
+      _ensureController(ShoppingListLogic.itemKey(item));
+    }
+    // Ensure controllers exist for additional ingredients (base keys)
+    for (final item in additionalIngredients) {
       _ensureController(ShoppingListLogic.itemKey(item));
     }
 
@@ -726,7 +755,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         .where((e) => e.value.isNotEmpty)
         .toList();
 
-    final totalPages = cocktailNames.length + categoryPages.length + 1;
+    // Show a dedicated ingredients page only when Gemini applied base-key
+    // quantities AND no per-cocktail pages will be shown (complete fallback).
+    final hasAdditionalIngredientsPage =
+        additionalIngredients.isNotEmpty && cocktailNames.isEmpty;
+    final totalPages = cocktailNames.length +
+        (hasAdditionalIngredientsPage ? 1 : 0) +
+        categoryPages.length +
+        1;
     final selectedItems = ShoppingListLogic.getSelectedOrderItems(
       allItems,
       mergedQuantities,
@@ -766,6 +802,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   selectedItems,
                   data,
                   categoryPages,
+                  additionalIngredients,
                 ),
               ),
             ),
@@ -809,6 +846,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     List<OrderItem> selectedItems,
     CocktailData data,
     List<MapEntry<String, List<MaterialItem>>> categoryPages,
+    List<MaterialItem> additionalIngredients,
   ) {
     // Cocktail pages
     if (index < cocktailNames.length) {
@@ -826,10 +864,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       );
     }
 
+    // Additional ingredients page (Gemini base-key suggestions, no cocktail pages)
+    final hasAdditionalIngredientsPage =
+        additionalIngredients.isNotEmpty && cocktailNames.isEmpty;
+    int adjustedIndex = index - cocktailNames.length;
+    if (hasAdditionalIngredientsPage) {
+      if (adjustedIndex == 0) {
+        return _buildCategoryPage('ingredients_extra', additionalIngredients);
+      }
+      adjustedIndex--;
+    }
+
     // Category pages
-    final categoryIndex = index - cocktailNames.length;
-    if (categoryIndex >= 0 && categoryIndex < categoryPages.length) {
-      final categoryEntry = categoryPages[categoryIndex];
+    if (adjustedIndex >= 0 && adjustedIndex < categoryPages.length) {
+      final categoryEntry = categoryPages[adjustedIndex];
       return _buildCategoryPage(categoryEntry.key, categoryEntry.value);
     }
 
@@ -843,6 +891,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       'purchase': 'Zu kaufen',
       'bring': 'Mitbringen',
       'other': 'Sonstige',
+      'ingredients_extra': 'Zutaten',
     };
 
     final categoryIcons = {
@@ -850,6 +899,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       'purchase': Icons.shopping_cart,
       'bring': Icons.local_shipping,
       'other': Icons.more_horiz,
+      'ingredients_extra': Icons.local_bar,
     };
 
     final categoryColors = {
@@ -857,6 +907,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       'purchase': Colors.green,
       'bring': Colors.blue,
       'other': Colors.grey,
+      'ingredients_extra': Colors.green,
     };
 
     return SingleChildScrollView(

@@ -233,6 +233,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
             personCount: _orderSetup!.personCount,
             cocktailNames: selectedCocktails.map((r) => r.name).toList(),
             onConfirm: (confirmedSuggestions, explanation) {
+              // Auto-select recipes when none are selected.
+              // Three-tier fallback to reliably find which cocktails Gemini used.
+              if (appState.selectedRecipes.isEmpty) {
+                List<Recipe> matched = [];
+
+                // Tier 1: exact match from the JSON cocktails field
+                if (suggestion.usedCocktails.isNotEmpty) {
+                  matched = suggestion.usedCocktails
+                      .map(
+                        (name) => cocktailData.recipes.firstWhere(
+                          (r) => r.name == name,
+                          orElse: () => Recipe(
+                            id: '',
+                            name: '',
+                            ingredients: [],
+                            type: '',
+                          ),
+                        ),
+                      )
+                      .where((r) => r.id.isNotEmpty)
+                      .toList();
+                }
+
+                // Tier 2: scan explanation text for known recipe names
+                if (matched.isEmpty && suggestion.explanation.isNotEmpty) {
+                  final exp = suggestion.explanation;
+                  matched = cocktailData.recipes
+                      .where((r) => exp.contains(r.name))
+                      .toList();
+                }
+
+                // Tier 3: find recipes whose ingredients appear in suggestions
+                if (matched.isEmpty) {
+                  final suggestedNames =
+                      confirmedSuggestions.map((s) => s.name).toSet();
+                  matched = cocktailData.recipes
+                      .where(
+                        (r) => r.ingredients
+                            .any((ing) => suggestedNames.contains(ing)),
+                      )
+                      .toList();
+                }
+
+                if (matched.isNotEmpty) {
+                  appState.setSelectedRecipes(matched);
+                }
+              }
+
               // Store suggestions in app state
               appState.setMaterialSuggestions(
                 confirmedSuggestions,

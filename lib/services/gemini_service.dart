@@ -38,11 +38,14 @@ class GeminiMaterialSuggestion {
   final List<SuggestedMaterial> materials;
   final String explanation;
   final int trainingDataCount;
+  /// Cocktail names Gemini actually used when computing the quantities.
+  final List<String> usedCocktails;
 
   const GeminiMaterialSuggestion({
     required this.materials,
     required this.explanation,
     required this.trainingDataCount,
+    this.usedCocktails = const [],
   });
 }
 
@@ -447,11 +450,19 @@ FALLS historische Daten verfügbar sind, orientiere dich STARK an deren Mengen p
 
 WICHTIG: Antworte NUR mit validem JSON im folgenden Format:
 {
+  "cocktails": ["Cocktailname1", "Cocktailname2"],
   "materials": [
     {"name": "Materialname", "unit": "Einheit", "quantity": 10, "reason": "Kurze Begründung"}
   ],
   "explanation": "Zusammenfassung der Berechnung - erwähne EXPLIZIT die verwendeten Cocktail-Wahrscheinlichkeiten und wie diese die Mengenverteilung beeinflusst haben!"
 }
+
+REGELN FÜR DAS "cocktails" FELD (PFLICHTFELD!):
+- Liste ALLE Cocktails die du für die Berechnung verwendet hast
+- Wenn Cocktails vom Kunden angegeben waren: diese auflisten
+- Wenn KEINE Cocktails angegeben waren und du selbst Cocktails auswählst: diese selbst gewählten Cocktails auflisten!
+- Cocktailnamen MÜSSEN EXAKT aus den REZEPT-ZUTATEN stammen (z.B. "Mojito - Classic", nicht "Classic Mojito")
+- Niemals ein leeres Array zurückgeben wenn Cocktails berechnet wurden!
 
 Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE MATERIALIEN stammen!
 ''';
@@ -484,11 +495,14 @@ Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE M
           [];
 
       final explanation = json['explanation'] as String? ?? '';
+      final usedCocktails =
+          (json['cocktails'] as List<dynamic>?)?.cast<String>() ?? [];
 
       return GeminiMaterialSuggestion(
         materials: materials,
         explanation: explanation,
         trainingDataCount: trainingCount,
+        usedCocktails: usedCocktails,
       );
     } catch (e) {
       debugPrint('Failed to parse Gimini material response: $e');
