@@ -542,7 +542,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                             )
                             .toList(),
                       )
-                    : Column(children: fields),
+                    : Column(
+                        children: fields
+                            .map((f) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: f,
+                                ))
+                            .toList(),
+                      ),
                 const SizedBox(height: 8),
                 _field(
                   controller: _locationCtrl,
