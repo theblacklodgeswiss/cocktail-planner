@@ -382,8 +382,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               children: [
                                 FilledButton.icon(
                                   onPressed: () => _generateMaterialSuggestionsWithGemini(data),
-                                  icon: const Icon(Icons.auto_awesome),
-                                  label: Text('orders.generate_with_gemini'.tr()),
+                                  icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                                  label: Text('orders.generate_with_gemini'.tr(), style: const TextStyle(color: Colors.white)),
                                   style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 24,
@@ -516,8 +516,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onPressed: enabled && snapshot.data != null
                         ? () => _generateMaterialSuggestionsWithGemini(snapshot.data!)
                         : null,
-                    icon: const Icon(Icons.auto_awesome, size: 20),
-                    label: Text('orders.generate_with_gemini'.tr()),
+                    icon: const Icon(Icons.auto_awesome, size: 20, color: Colors.white),
+                    label: Text('orders.generate_with_gemini'.tr(), style: const TextStyle(color: Colors.white)),
                     style: FilledButton.styleFrom(minimumSize: const Size(0, 56)),
                   );
                 },

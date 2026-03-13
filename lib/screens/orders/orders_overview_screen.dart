@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/firestore_service.dart';
 import '../../data/order_repository.dart';
 import '../../services/auth_service.dart';
 import '../../models/order.dart';
@@ -31,6 +32,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   int _selectedYear = DateTime.now().year;
   int? _selectedMonth; // null = all months
   bool _isSyncing = false;
+  bool _firestoreReady = false;
   String _searchQuery = '';
   OrderSortOption _sortOption = OrderSortOption.eventDate;
   bool _sortAscending = false;
@@ -40,6 +42,10 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   @override
   void initState() {
     super.initState();
+    // Ensure Firestore is initialized (screen can be reached directly without going through dashboard)
+    firestoreService.initialize().then((_) {
+      if (mounted) setState(() => _firestoreReady = true);
+    });
     // Set initial status filter based on query parameter
     if (widget.initialStatus != null) {
       switch (widget.initialStatus) {
@@ -64,6 +70,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   }
 
   Stream<List<SavedOrder>> get _ordersStream {
+    if (!_firestoreReady && !firestoreService.isAvailable) {
+      return const Stream.empty();
+    }
     // If searching, get all orders regardless of year
     if (_searchQuery.isNotEmpty) {
       return orderRepository.watchOrders(); // No year filter

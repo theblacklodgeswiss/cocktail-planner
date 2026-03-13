@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/env_config.dart';
 import '../../data/cocktail_repository.dart';
 import '../../data/employee_repository.dart';
+import '../../models/cocktail_data.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
@@ -16,7 +17,8 @@ import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
 import '../../state/app_state.dart';
 import '../../utils/currency.dart';
-import '../../widgets/gemini_plan_dialog.dart';
+import '../../widgets/cocktail_popularity_dialog.dart';
+import '../../widgets/gemini_material_review_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -65,6 +67,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _updateStatus(OrderStatus newStatus) async {
+    // Block accepting if no shopping list / price has been calculated
+    if (newStatus == OrderStatus.accepted && widget.order.total <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Kein Angebot annehmen ohne Einkaufsliste.\nBitte zuerst Einkaufsliste erstellen.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
     // If accepting, show confirmation dialog first
     if (newStatus == OrderStatus.accepted) {
       final confirmed = await showDialog<bool>(
@@ -211,6 +226,251 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+        );
+      }
+    }
+  }
+
+  /// Generate Gemini material suggestions for the shopping list.
+  /// 1. Load cocktail data and set up recipes in app state.
+  /// 2. Show cocktail popularity dialog.
+  /// 3. Generate material suggestions via Gemini.
+  /// 4. Show review dialog, then navigate to shopping list.
+  Future<void> _openShoppingList() async {
+    final order = widget.order;
+
+    // Load recipes to populate the popularity dialog
+    CocktailData cocktailData;
+    try {
+      cocktailData = await cocktailRepository.load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+        );
+      }
+      return;
+    }
+
+    // Build recipe list from structured cocktails + shots stored on the order
+    final allRecipes = <Recipe>[];
+    for (final name in [...order.cocktails, ...order.shots]) {
+      final recipe = cocktailData.recipes.firstWhere(
+        (r) => r.name == name,
+        orElse: () => Recipe(
+          id: name.toLowerCase().replaceAll(' ', '_'),
+          name: name,
+          ingredients: [],
+          type: order.cocktails.contains(name) ? 'cocktail' : 'shot',
+        ),
+      );
+      allRecipes.add(recipe);
+    }
+    if (allRecipes.isNotEmpty) {
+      appState.setSelectedRecipes(allRecipes);
+    }
+
+    // Show popularity dialog so user can set probabilities per cocktail
+    if (!mounted) return;
+    if (allRecipes.isNotEmpty) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => CocktailPopularityDialog(
+          cocktails: allRecipes,
+          onConfirm: () {},
+        ),
+      );
+    }
+    if (!mounted) return;
+
+    // Link the order and navigate to shopping list
+    appState.setLinkedOrder(
+      order.id,
+      order.name,
+      requestedCocktails: order.requestedCocktails,
+      savedItems: order.items,
+    );
+    Navigator.pop(context); // close bottom sheet
+    context.push('/shopping-list');
+  }
+
+  Future<void> _generateWithGemini() async {
+    if (!geminiService.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.gemini_not_configured'.tr())),
+      );
+      return;
+    }
+
+    final order = widget.order;
+
+    // Parse eventTime
+    TimeOfDay? eventTime;
+    if (order.eventTime.isNotEmpty) {
+      try {
+        final parts = order.eventTime.split(':');
+        if (parts.length == 2) {
+          eventTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }
+      } catch (_) {}
+    }
+
+    final orderSetup = OrderSetupData(
+      orderName: order.name,
+      phoneNumber: order.phone.isNotEmpty ? order.phone : null,
+      eventDate: order.date,
+      eventTime: eventTime,
+      address: order.location.isNotEmpty ? order.location : null,
+      personCount: order.personCount,
+      distanceKm: order.distanceKm > 0 ? order.distanceKm : null,
+      currency: order.currency,
+      drinkerType: order.drinkerType,
+      serviceType: order.serviceType.isNotEmpty
+          ? order.serviceType
+          : 'cocktail_barservice',
+    );
+
+    // Step 1: load cocktail data
+    CocktailData cocktailData;
+    try {
+      cocktailData = await cocktailRepository.load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+        );
+      }
+      return;
+    }
+
+    // Build recipe list
+    final allRecipes = <Recipe>[];
+    for (final name in [...order.cocktails, ...order.shots]) {
+      final recipe = cocktailData.recipes.firstWhere(
+        (r) => r.name == name,
+        orElse: () => Recipe(
+          id: name.toLowerCase().replaceAll(' ', '_'),
+          name: name,
+          ingredients: [],
+          type: order.cocktails.contains(name) ? 'cocktail' : 'shot',
+        ),
+      );
+      allRecipes.add(recipe);
+    }
+    if (allRecipes.isNotEmpty) {
+      appState.setSelectedRecipes(allRecipes);
+    }
+
+    // Step 2: cocktail popularity dialog
+    if (!mounted) return;
+    if (allRecipes.isNotEmpty) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => CocktailPopularityDialog(
+          cocktails: allRecipes,
+          onConfirm: () {},
+        ),
+      );
+    }
+    if (!mounted) return;
+
+    // Step 3: show loading + generate
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('orders.gemini_generating'.tr()),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final materials = cocktailData.materials
+          .where((m) => m.visible)
+          .map((m) => {
+                'name': m.name,
+                'unit': m.unit,
+                'price': m.price,
+                'currency': m.currency,
+              })
+          .toList();
+
+      final recipeIngredients = allRecipes
+          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
+          .toList();
+
+      final suggestion = await geminiService.generateMaterialSuggestions(
+        guestCount: order.personCount,
+        guestRange: order.guestCountRange,
+        requestedCocktails: allRecipes.map((r) => r.name).toList(),
+        eventType: order.drinkerType,
+        drinkerType: order.drinkerType,
+        availableMaterials: materials,
+        recipeIngredients: recipeIngredients,
+        cocktailPopularity: appState.cocktailPopularity,
+      );
+
+      if (mounted) Navigator.pop(context); // close loading
+
+      if (suggestion == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('orders.gemini_error'.tr()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Step 4: review dialog
+      if (mounted) {
+        appState.setLinkedOrder(
+          order.id,
+          order.name,
+          requestedCocktails: order.requestedCocktails,
+          savedItems: order.items,
+        );
+        showDialog(
+          context: context,
+          builder: (ctx) => GeminiMaterialReviewDialog(
+            suggestion: suggestion,
+            personCount: order.personCount,
+            cocktailNames: allRecipes.map((r) => r.name).toList(),
+            onConfirm: (confirmedSuggestions, explanation) {
+              appState.setMaterialSuggestions(confirmedSuggestions, explanation);
+              // Dialog pops itself after this callback.
+              // Defer sheet close + navigation until after dialog has fully closed.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  Navigator.pop(context); // close bottom sheet
+                  context.push('/shopping-list', extra: orderSetup);
+                }
+              });
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // close loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_error'.tr()),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -552,19 +812,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => GeminiPlanDialog(
-                          order: widget.order,
-                          cocktails: widget.order.cocktails,
-                          shots: widget.order.shots,
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.auto_awesome),
-                    label: Text('dashboard.generate_plan'.tr()),
+                  FilledButton.icon(
+                    onPressed: _generateWithGemini,
+                    icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                    label: const Text(
+                      'Mit Gemini generieren',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white70,
+                    ),
                   ),
                 ],
               ),
@@ -601,19 +860,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     ),
                   ],
                   const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => GeminiPlanDialog(
-                          order: widget.order,
-                          cocktails: widget.order.cocktails,
-                          shots: widget.order.shots,
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.auto_awesome),
-                    label: Text('dashboard.generate_plan'.tr()),
+                  FilledButton.icon(
+                    onPressed: _generateWithGemini,
+                    icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                    label: const Text(
+                      'Mit Gemini generieren',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white70,
+                    ),
                   ),
                 ],
               ),
@@ -683,13 +941,30 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 children: [
                   if (_currentStatus != OrderStatus.accepted)
                     Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _tryUpdateStatus(OrderStatus.accepted),
-                        icon: const Icon(Icons.check),
-                        label: Text('orders.accept'.tr()),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.green,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: widget.order.total > 0
+                                ? () => _tryUpdateStatus(OrderStatus.accepted)
+                                : null,
+                            icon: const Icon(Icons.check),
+                            label: Text('orders.accept'.tr()),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green,
+                            ),
+                          ),
+                          if (widget.order.total <= 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Erst Einkaufsliste erstellen',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(color: Colors.orange),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   if (_currentStatus != OrderStatus.accepted &&
@@ -815,16 +1090,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () {
-                        // Link this order to the shopping list with requested cocktails
-                        appState.setLinkedOrder(
-                          order.id,
-                          order.name,
-                          requestedCocktails: order.requestedCocktails,
-                        );
-                        Navigator.pop(context);
-                        context.go('/');
-                      },
+                      onPressed: _openShoppingList,
                       icon: const Icon(Icons.shopping_cart),
                       label: Text('orders.create_shopping_list'.tr()),
                       style: FilledButton.styleFrom(
@@ -835,9 +1101,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => _showGeminiSuggestions(order),
-                      icon: const Icon(Icons.auto_awesome),
-                      label: Text('orders.generate_with_gemini'.tr()),
+                      onPressed: () => _generateWithGemini(),
+                      icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                      label: Text('orders.generate_with_gemini'.tr(), style: const TextStyle(color: Colors.white)),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.deepPurple,
                       ),
@@ -1001,189 +1267,6 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     );
   }
 
-  Future<void> _showGeminiSuggestions(SavedOrder order) async {
-    // Check if Gemini API is configured
-    if (!geminiService.isConfigured) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.gemini_not_configured'.tr()),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('orders.gemini_generating'.tr()),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      // Fetch cocktails and materials for the order
-      final cocktailData = await cocktailRepository.load();
-      final materials = cocktailData.materials
-          .where((m) => m.visible)
-          .map(
-            (m) => {
-              'name': m.name,
-              'unit': m.unit,
-              'price': m.price,
-              'currency': m.currency,
-            },
-          )
-          .toList();
-
-      // Get recipe ingredients for the requested cocktails
-      final matchedRecipes = <Recipe>[];
-      final unmatchedNames = <String>[];
-
-      // First try exact match (case-insensitive)
-      for (final cocktailName in order.requestedCocktails) {
-        final lower = cocktailName.toLowerCase().trim();
-        final recipe = cocktailData.recipes.firstWhere(
-          (r) => r.name.toLowerCase().trim() == lower,
-          orElse: () => Recipe(id: '', name: '', ingredients: [], type: ''),
-        );
-        if (recipe.id.isNotEmpty &&
-            !matchedRecipes.any((r) => r.id == recipe.id)) {
-          matchedRecipes.add(recipe);
-        } else if (recipe.id.isEmpty) {
-          unmatchedNames.add(cocktailName);
-        }
-      }
-
-      // Use Gemini AI for fuzzy matching of unmatched names
-      if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
-        try {
-          final availableNames = cocktailData.recipes
-              .map((r) => r.name)
-              .toList();
-          final aiMatches = await geminiService.matchCocktailNames(
-            requestedNames: unmatchedNames,
-            availableRecipeNames: availableNames,
-          );
-
-          for (final entry in aiMatches.entries) {
-            final matchedName = entry.value;
-            if (matchedName != null) {
-              final recipe = cocktailData.recipes.firstWhere(
-                (r) => r.name == matchedName,
-                orElse: () =>
-                    Recipe(id: '', name: '', ingredients: [], type: ''),
-              );
-              if (recipe.id.isNotEmpty &&
-                  !matchedRecipes.any((r) => r.id == recipe.id)) {
-                matchedRecipes.add(recipe);
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('Gemini cocktail matching failed: $e');
-        }
-      }
-
-      final recipeIngredients = matchedRecipes
-          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
-          .toList();
-
-      // Generate material suggestions
-      final suggestion = await geminiService.generateMaterialSuggestions(
-        guestCount: order.personCount,
-        guestRange: order.guestCountRange,
-        requestedCocktails: order.requestedCocktails,
-        eventType: order.eventType,
-        drinkerType: order.drinkerType,
-        availableMaterials: materials,
-        recipeIngredients: recipeIngredients,
-        cocktailPopularity: order.cocktailPopularity,
-      );
-
-      // Close loading dialog
-      if (mounted) Navigator.pop(context);
-
-      if (suggestion == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('orders.gemini_error'.tr()),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Show material suggestion review dialog
-      if (mounted) {
-        _showMaterialSuggestionDialog(order, suggestion, matchedRecipes);
-      }
-    } catch (e) {
-      // Close loading dialog
-      if (mounted) Navigator.pop(context);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.gemini_error'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showMaterialSuggestionDialog(
-    SavedOrder order,
-    GeminiMaterialSuggestion suggestion,
-    List<Recipe> matchedRecipes,
-  ) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _GeminiMaterialDialog(
-        order: order,
-        suggestion: suggestion,
-        onConfirm: (confirmedMaterials, explanation) {
-          // Convert to MaterialSuggestion and store in app state
-          final suggestions = confirmedMaterials.entries.map((e) {
-            final parts = e.key.split('|');
-            return MaterialSuggestion(
-              name: parts[0],
-              unit: parts.length > 1 ? parts[1] : '',
-              quantity: e.value,
-              reason: '',
-            );
-          }).toList();
-
-          // Set selected recipes FIRST (before navigating)
-          if (matchedRecipes.isNotEmpty) {
-            appState.setSelectedRecipes(matchedRecipes);
-          }
-
-          appState.setLinkedOrder(
-            order.id,
-            order.name,
-            requestedCocktails: order.requestedCocktails,
-          );
-          appState.setMaterialSuggestions(suggestions, explanation);
-          Navigator.pop(context);
-          context.go('/');
-        },
-      ),
-    );
-  }
 }
 
 /// Widget for assigning employees to an order with multi-select chips
@@ -1312,253 +1395,3 @@ class _EmployeeAssignmentWidgetState extends State<_EmployeeAssignmentWidget> {
   }
 }
 
-/// Dialog to review and confirm Gemini material suggestions
-class _GeminiMaterialDialog extends StatefulWidget {
-  const _GeminiMaterialDialog({
-    required this.order,
-    required this.suggestion,
-    required this.onConfirm,
-  });
-
-  final SavedOrder order;
-  final GeminiMaterialSuggestion suggestion;
-  final void Function(Map<String, int> materials, String explanation) onConfirm;
-
-  @override
-  State<_GeminiMaterialDialog> createState() => _GeminiMaterialDialogState();
-}
-
-class _GeminiMaterialDialogState extends State<_GeminiMaterialDialog> {
-  late Map<String, int> _editableMaterials;
-  late Map<String, String> _materialReasons;
-
-  @override
-  void initState() {
-    super.initState();
-    _editableMaterials = {};
-    _materialReasons = {};
-    for (final material in widget.suggestion.materials) {
-      _editableMaterials[material.key] = material.quantity;
-      _materialReasons[material.key] = material.reason;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      title: Row(
-        children: [
-          Icon(Icons.auto_awesome, color: Colors.deepPurple),
-          const SizedBox(width: 8),
-          Expanded(child: Text('orders.gemini_material_suggestions'.tr())),
-        ],
-      ),
-      content: SizedBox(
-        width: 500,
-        height: 500,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Info section
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.deepPurple.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${'orders.guests'.tr()}: ${widget.order.personCount}',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    if (widget.order.requestedCocktails.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        '${'orders.requested_cocktails'.tr()}: ${widget.order.requestedCocktails.join(", ")}',
-                        style: TextStyle(color: colorScheme.outline),
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Text(
-                      '${'orders.event_type'.tr()}: ${widget.order.eventType}',
-                      style: TextStyle(color: colorScheme.outline),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Reasoning
-              if (widget.suggestion.explanation.isNotEmpty) ...[
-                Text(
-                  'orders.gemini_reasoning'.tr(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.suggestion.explanation,
-                  style: TextStyle(fontSize: 13, color: colorScheme.outline),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // Suggested materials header
-              Row(
-                children: [
-                  Text(
-                    'orders.suggested_materials'.tr(),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${_editableMaterials.length} ${'orders.items'.tr()}',
-                    style: TextStyle(color: colorScheme.outline, fontSize: 12),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Material list
-              ..._editableMaterials.entries.map((entry) {
-                final parts = entry.key.split('|');
-                final name = parts[0];
-                final unit = parts.length > 1 ? parts[1] : '';
-                final reason = _materialReasons[entry.key] ?? '';
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  if (unit.isNotEmpty)
-                                    Text(
-                                      unit,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: colorScheme.outline,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline),
-                              iconSize: 20,
-                              onPressed: () {
-                                setState(() {
-                                  if (entry.value > 1) {
-                                    _editableMaterials[entry.key] =
-                                        entry.value - 1;
-                                  } else {
-                                    _editableMaterials.remove(entry.key);
-                                    _materialReasons.remove(entry.key);
-                                  }
-                                });
-                              },
-                            ),
-                            SizedBox(
-                              width: 50,
-                              child: Text(
-                                '${entry.value}',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline),
-                              iconSize: 20,
-                              onPressed: () {
-                                setState(() {
-                                  _editableMaterials[entry.key] =
-                                      entry.value + 1;
-                                });
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              iconSize: 20,
-                              color: colorScheme.error,
-                              onPressed: () {
-                                setState(() {
-                                  _editableMaterials.remove(entry.key);
-                                  _materialReasons.remove(entry.key);
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                        if (reason.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            reason,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colorScheme.outline,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              }),
-
-              if (_editableMaterials.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'orders.no_material_suggestions'.tr(),
-                    style: TextStyle(color: colorScheme.outline),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('common.cancel'.tr()),
-        ),
-        FilledButton.icon(
-          onPressed: _editableMaterials.isNotEmpty
-              ? () {
-                  Navigator.pop(context);
-                  widget.onConfirm(
-                    _editableMaterials,
-                    widget.suggestion.explanation,
-                  );
-                }
-              : null,
-          icon: const Icon(Icons.shopping_cart),
-          label: Text('orders.apply_to_shopping_list'.tr()),
-          style: FilledButton.styleFrom(backgroundColor: Colors.deepPurple),
-        ),
-      ],
-    );
-  }
-}
