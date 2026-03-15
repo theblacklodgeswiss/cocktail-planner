@@ -530,7 +530,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             );
           },
         ),
-        _DataSourceChip(),
         const _FlavorChip(),
         _UserMenuButton(onPressed: () => showUserMenu(context)),
         const SizedBox(width: 8),
@@ -619,28 +618,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             tooltip: 'dashboard.unlink_order'.tr(),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _DataSourceChip extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Chip(
-        avatar: Icon(
-          cocktailRepository.isUsingFirebase ? Icons.cloud_done : Icons.folder,
-          size: 16,
-        ),
-        label: Text(
-          cocktailRepository.dataSourceLabel,
-          style: const TextStyle(fontSize: 12),
-        ),
-        backgroundColor: cocktailRepository.isUsingFirebase
-            ? Colors.green.shade100
-            : Colors.orange.shade100,
       ),
     );
   }

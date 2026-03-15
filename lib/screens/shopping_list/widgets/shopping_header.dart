@@ -34,7 +34,13 @@ class ShoppingHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => context.pop(),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/dashboard');
+              }
+            },
             icon: const Icon(Icons.arrow_back),
             tooltip: 'dashboard.title'.tr(),
           ),

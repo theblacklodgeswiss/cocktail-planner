@@ -126,7 +126,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
 
           final orders = snapshot.data ?? [];
-          debugPrint('Dashboard loaded ${orders.length} orders from ${firestoreService.dataSourceLabel}');
+          debugPrint('Dashboard loaded ${orders.length} orders from Firebase');
           
           // Debug: Log all orders with their years
           for (final order in orders) {

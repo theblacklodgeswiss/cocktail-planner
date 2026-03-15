@@ -9,9 +9,6 @@ class FirestoreService {
   /// Whether Firestore is available.
   bool get isAvailable => _available;
 
-  /// Data source label for UI display.
-  String get dataSourceLabel => _available ? 'Firebase' : 'Local JSON';
-
   FirebaseFirestore get firestore {
     _firestoreInstance ??= FirebaseFirestore.instance;
     return _firestoreInstance!;

@@ -10,6 +10,7 @@ import '../../models/cocktail_data.dart';
 import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
+import '../../state/app_state.dart';
 
 /// Result from the modern order form containing both setup data and selected recipes
 class OrderFormResult {
@@ -379,11 +380,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       // Customer flow: Save as pending order and show thank you dialog
       await _savePendingOrderAndShowThanks(setupData);
     } else {
-      // Admin flow: Continue with normal flow (shopping list)
+      // Admin flow: Sync selected recipes to global state and navigate to shopping list
+      appState.setSelectedRecipes(_selectedRecipes);
       if (widget.onSubmit != null) {
         widget.onSubmit!(result);
       } else {
-        context.pop(result);
+        context.go('/shopping-list', extra: setupData);
       }
     }
   }
