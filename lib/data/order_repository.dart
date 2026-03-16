@@ -169,6 +169,10 @@ class OrderRepository {
     double extraHourRate = 50.0,
     List<String> assignedEmployees = const [],
     String? serviceType,
+    int distanceKm = 0,
+    double travelCostPerKm = 0.70,
+    double barCost = 0,
+    String location = '',
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -190,10 +194,16 @@ class OrderRepository {
         'assignedEmployees': assignedEmployees,
         'offerUpdatedAt': FieldValue.serverTimestamp(),
         'date': eventDate.toIso8601String(),
+        'distanceKm': distanceKm,
+        'offerTravelCostPerKm': travelCostPerKm,
+        'offerBarCost': barCost,
       };
       
       if (serviceType != null) {
         updateData['serviceType'] = serviceType;
+      }
+      if (location.isNotEmpty) {
+        updateData['location'] = location;
       }
       
       await firestoreService.ordersCollection.doc(orderId).update(updateData);

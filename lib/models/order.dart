@@ -50,6 +50,8 @@ class SavedOrder {
     this.bar = '',
     this.distanceKm = 0,
     this.thekeCost = 0,
+    this.offerTravelCostPerKm = 0.70,
+    this.offerBarCost = 0,
     // Offer-related fields
     this.offerClientName = '',
     this.offerClientContact = '',
@@ -102,6 +104,8 @@ class SavedOrder {
   final String bar;
   final int distanceKm;
   final double thekeCost;
+  final double offerTravelCostPerKm;
+  final double offerBarCost;
   // Offer-related fields
   final String offerClientName;
   final String offerClientContact;
@@ -199,6 +203,8 @@ class SavedOrder {
       bar: data['bar'] as String? ?? '',
       distanceKm: (data['distanceKm'] as num?)?.toInt() ?? 0,
       thekeCost: (data['thekeCost'] as num?)?.toDouble() ?? 0,
+      offerTravelCostPerKm: (data['offerTravelCostPerKm'] as num?)?.toDouble() ?? 0.70,
+      offerBarCost: (data['offerBarCost'] as num?)?.toDouble() ?? 0,
       // Offer-related fields
       offerClientName: data['offerClientName'] as String? ?? '',
       offerClientContact: data['offerClientContact'] as String? ?? '',

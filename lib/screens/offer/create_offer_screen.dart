@@ -116,9 +116,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _distanceKmCtrl.text = widget.order.distanceKm > 0
         ? widget.order.distanceKm.toString()
         : '';
-    _barCostCtrl.text = widget.order.thekeCost > 0
-        ? widget.order.thekeCost.toStringAsFixed(2)
-        : '';
+    _travelCostPerKmCtrl.text = widget.order.offerTravelCostPerKm > 0
+        ? widget.order.offerTravelCostPerKm.toStringAsFixed(2)
+        : '0.70';
+    _barCostCtrl.text = widget.order.offerBarCost > 0
+        ? widget.order.offerBarCost.toStringAsFixed(2)
+        : (widget.order.thekeCost > 0 ? widget.order.thekeCost.toStringAsFixed(2) : '');
 
     // Load saved offer data from order, or use order name/phone/time as fallback
     _clientNameCtrl.text = widget.order.offerClientName.isEmpty
@@ -262,6 +265,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
       assignedEmployees: _selectedEmployees.toList(),
       serviceType: _serviceType,
+      distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
+      travelCostPerKm: double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
+      barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
+      location: _locationCtrl.text.trim(),
     );
     
     // Also update cocktails, shots, and bar description
