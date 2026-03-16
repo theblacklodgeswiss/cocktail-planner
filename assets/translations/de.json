@@ -76,7 +76,8 @@
     "add": "Hinzufügen",
     "user_added": "Benutzer hinzugefügt!",
     "add_error": "Fehler beim Hinzufügen",
-    "undo": "Rückgängig"
+    "undo": "Rückgängig",
+    "retry": "Erneut versuchen"
   },
   "drawer": {
     "admin_badge": "Admin",
@@ -249,7 +250,21 @@
     "position_quantity": "Anzahl",
     "position_price": "Einzelpreis",
     "position_remark": "Bemerkung",
-    "invalid_number": "Ungültige Zahl"
+    "invalid_number": "Ungültige Zahl",
+    "share": "Teilen",
+    "share_title": "Angebot teilen",
+    "share_generating": "Nachricht wird generiert...",
+    "share_generate_error": "Fehler beim Generieren der Nachricht.",
+    "share_message_label": "WhatsApp-Nachricht",
+    "share_copy": "Kopieren",
+    "share_copied": "Nachricht in Zwischenablage kopiert!",
+    "share_whatsapp": "WhatsApp",
+    "share_whatsapp_unavailable": "WhatsApp konnte nicht geöffnet werden.",
+    "share_regenerate": "Neu generieren",
+    "share_pdf": "PDF teilen & Nachricht kopieren",
+    "share_pdf_tip": "Tipp: \"PDF teilen\" kopiert die Nachricht in die Zwischenablage und öffnet den Teilen-Dialog. PDF auswählen → WhatsApp öffnet sich → Nachricht einfügen.",
+    "share_pdf_hint": "Nachricht wurde kopiert! Füge sie in WhatsApp ein.",
+    "share_pdf_error": "PDF konnte nicht geteilt werden."
   },
   "invoice": {
     "title": "Auftragsbestätigung erstellen",

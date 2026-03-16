@@ -1,7 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
-/// Action buttons for the offer form (save, preview, generate PDF, print).
+/// Action buttons for the offer form (save, preview, generate PDF, print, share).
 class OfferActionButtons extends StatelessWidget {
   const OfferActionButtons({
     super.key,
@@ -10,6 +10,7 @@ class OfferActionButtons extends StatelessWidget {
     required this.onPreview,
     required this.onGeneratePdf,
     required this.onPrint,
+    this.onShare,
   });
 
   final bool isGenerating;
@@ -17,6 +18,7 @@ class OfferActionButtons extends StatelessWidget {
   final VoidCallback? onPreview;
   final VoidCallback? onGeneratePdf;
   final VoidCallback? onPrint;
+  final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +63,13 @@ class OfferActionButtons extends StatelessWidget {
       style: IconButton.styleFrom(side: BorderSide(color: colorScheme.outline)),
     );
 
+    final shareBtn = IconButton.outlined(
+      onPressed: isGenerating ? null : onShare,
+      icon: const Icon(Icons.share, size: 20),
+      tooltip: 'offer.share'.tr(),
+      style: IconButton.styleFrom(side: BorderSide(color: colorScheme.outline)),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 520) {
@@ -78,6 +87,8 @@ class OfferActionButtons extends StatelessWidget {
               pdfBtn,
               const SizedBox(width: 8),
               printBtn,
+              const SizedBox(width: 8),
+              shareBtn,
             ],
           );
         } else {
@@ -98,6 +109,8 @@ class OfferActionButtons extends StatelessWidget {
                   Expanded(child: pdfBtn),
                   const SizedBox(width: 8),
                   printBtn,
+                  const SizedBox(width: 8),
+                  shareBtn,
                 ],
               ),
             ],

@@ -905,6 +905,60 @@ STRUKTUR DES PLANS (in Markdown):
 Schreibe den Plan professionell, motivierend und auf Deutsch. Verwende Markdown-Formatierung für gute Lesbarkeit.
 ''';
   }
+
+  /// Generate the middle part of a WhatsApp offer share message.
+  /// Returns the cocktail commentary text to be inserted into the message template.
+  Future<String?> generateOfferShareMessage({
+    required List<String> selectedCocktails,
+    required List<String> allAvailableCocktails,
+  }) async {
+    if (!isConfigured || _model == null) {
+      debugPrint('Gemini not configured for offer message generation');
+      return null;
+    }
+
+    if (selectedCocktails.isEmpty) {
+      return null;
+    }
+
+    try {
+      final prompt = '''
+Du bist ein freundlicher Berater des Premium Cocktail-Catering-Services "Black Lodge" aus der Schweiz.
+
+AUFGABE:
+Schreibe einen kurzen, natürlichen Kommentar zur Cocktail-Auswahl des Kunden für eine WhatsApp-Nachricht.
+
+AUSGEWÄHLTE COCKTAILS:
+${selectedCocktails.map((c) => '- $c').join('\n')}
+
+ALLE VERFÜGBAREN COCKTAILS IM REPERTOIRE:
+${allAvailableCocktails.map((c) => '- $c').join('\n')}
+
+REGELN:
+- Schreibe 2-4 Sätze als Kommentar zur Auswahl
+- Bewerte die Harmonie (z.B. gute Balance zwischen süß/frisch/tropisch/herb)
+- Falls die Auswahl sehr einseitig ist (z.B. nur süsse Cocktails), schlage 1-2 ergänzende Alternativen aus dem Repertoire vor
+- Schreibe locker und persönlich, nicht werblich
+- Auf Deutsch
+- KEINE Anrede (kein "Hallo" etc.) – die kommt separat in der Nachricht
+- KEIN Abschlussgruss – der kommt separat
+- Maximal 1-2 Emojis wenn es natürlich wirkt (z.B. ☀️ 🍹 😊)
+- Variiere den Schreibstil – keine Standardformulierungen
+- Jedes Mal etwas anders formulieren
+
+Antworte NUR mit dem Kommentar-Text, kein JSON, kein Markdown.
+''';
+
+      debugPrint('Generating offer share message...');
+      final response = await _model!.generateContent([Content.text(prompt)]);
+      _trackUsage(response);
+
+      return response.text?.trim();
+    } catch (e) {
+      debugPrint('Gemini offer message generation failed: $e');
+      return null;
+    }
+  }
 }
 
 final geminiService = GeminiService();

@@ -74,7 +74,8 @@
     "add": "Add",
     "user_added": "User added!",
     "add_error": "Error adding user",
-    "undo": "Undo"
+    "undo": "Undo",
+    "retry": "Try again"
   },
   "drawer": {
     "admin_badge": "Admin",
@@ -245,7 +246,21 @@
     "position_quantity": "Quantity",
     "position_price": "Unit Price",
     "position_remark": "Remark",
-    "invalid_number": "Invalid number"
+    "invalid_number": "Invalid number",
+    "share": "Share",
+    "share_title": "Share Offer",
+    "share_generating": "Generating message...",
+    "share_generate_error": "Error generating message.",
+    "share_message_label": "WhatsApp Message",
+    "share_copy": "Copy",
+    "share_copied": "Message copied to clipboard!",
+    "share_whatsapp": "WhatsApp",
+    "share_whatsapp_unavailable": "Could not open WhatsApp.",
+    "share_regenerate": "Regenerate",
+    "share_pdf": "Share PDF & copy message",
+    "share_pdf_tip": "Tip: \"Share PDF\" copies the message to your clipboard and opens the share sheet. Select WhatsApp → paste the message.",
+    "share_pdf_hint": "Message copied! Paste it in WhatsApp.",
+    "share_pdf_error": "Could not share the PDF."
   },
   "invoice": {
     "title": "Create Order Confirmation",

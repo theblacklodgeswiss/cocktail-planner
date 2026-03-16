@@ -15,6 +15,7 @@ import '../../utils/currency.dart';
 import 'widgets/event_type_selector.dart';
 import 'widgets/offer_action_buttons.dart';
 import 'widgets/offer_price_preview.dart';
+import 'widgets/offer_share_dialog.dart';
 import 'widgets/section_header.dart';
 
 /// Screen to create and export an Offer (Angebot) from a [SavedOrder].
@@ -382,6 +383,36 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     }
   }
 
+  Future<void> _shareOffer() async {
+    final cocktails = _cocktailsCtrl.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    // Build a snapshot of the offer data at the time the dialog opens
+    final offerSnapshot = _buildOfferData();
+    final safeNameLower = offerSnapshot.orderName.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '_',
+    );
+    final dateTag =
+        '${offerSnapshot.eventDate.year}${offerSnapshot.eventDate.month.toString().padLeft(2, '0')}${offerSnapshot.eventDate.day.toString().padLeft(2, '0')}';
+    final pdfFilename = 'angebot_${safeNameLower}_$dateTag.pdf';
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => OfferShareDialog(
+        clientName: _clientNameCtrl.text.trim(),
+        editorName: _editorNameCtrl.text.trim(),
+        selectedCocktails: cocktails,
+        generatePdfBytes: () => OfferPdfGenerator.generatePdfBytes(offerSnapshot),
+        pdfFilename: pdfFilename,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final curr = Currency.fromCode(widget.order.currency);
@@ -438,6 +469,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       onPreview: _previewPdf,
                       onGeneratePdf: _confirmGeneratePdf,
                       onPrint: _printPdf,
+                      onShare: _shareOffer,
                     ),
                   ),
                 ),
