@@ -24,7 +24,15 @@ import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
 
 /// Shows the order details in a modal bottom sheet.
+/// For form orders without a shopping list, starts the shopping list creation
+/// flow with all available data pre-filled.
 void showOrderDetails(BuildContext context, SavedOrder order) {
+  if (order.isFromForm && !order.hasShoppingList) {
+    appState.setPendingFormOrder(order);
+    context.push('/order-form');
+    return;
+  }
+
   final colorScheme = Theme.of(context).colorScheme;
   final currency = Currency.fromCode(order.currency);
 
@@ -39,6 +47,7 @@ void showOrderDetails(BuildContext context, SavedOrder order) {
     ),
   );
 }
+
 
 class _OrderDetailSheet extends StatefulWidget {
   const _OrderDetailSheet({
@@ -58,12 +67,29 @@ class _OrderDetailSheet extends StatefulWidget {
 class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   late OrderStatus _currentStatus;
   late List<String> _assignedEmployees;
+  late DateTime _currentDate;
 
   @override
   void initState() {
     super.initState();
     _currentStatus = widget.order.status;
     _assignedEmployees = List.from(widget.order.assignedEmployees);
+    _currentDate = widget.order.date;
+  }
+
+  Future<void> _editDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _currentDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _currentDate = picked);
+    await orderRepository.updateOrder(
+      widget.order.id,
+      {'date': picked.toIso8601String()},
+    );
   }
 
   Future<void> _updateStatus(OrderStatus newStatus) async {
@@ -254,14 +280,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
     // Build recipe list from structured cocktails + shots stored on the order
     final allRecipes = <Recipe>[];
-    for (final name in [...order.cocktails, ...order.shots]) {
+    // For form orders, cocktails may only be in requestedCocktails
+    final cocktailNames = order.cocktails.isNotEmpty
+        ? [...order.cocktails, ...order.shots]
+        : [...order.requestedCocktails, ...order.shots];
+    for (final name in cocktailNames) {
       final recipe = cocktailData.recipes.firstWhere(
         (r) => r.name == name,
         orElse: () => Recipe(
           id: name.toLowerCase().replaceAll(' ', '_'),
           name: name,
           ingredients: [],
-          type: order.cocktails.contains(name) ? 'cocktail' : 'shot',
+          type: order.shots.contains(name) ? 'shot' : 'cocktail',
         ),
       );
       allRecipes.add(recipe);
@@ -349,14 +379,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
     // Build recipe list
     final allRecipes = <Recipe>[];
-    for (final name in [...order.cocktails, ...order.shots]) {
+    // For form orders, cocktails may only be in requestedCocktails
+    final cocktailNames = order.cocktails.isNotEmpty
+        ? [...order.cocktails, ...order.shots]
+        : [...order.requestedCocktails, ...order.shots];
+    for (final name in cocktailNames) {
       final recipe = cocktailData.recipes.firstWhere(
         (r) => r.name == name,
         orElse: () => Recipe(
           id: name.toLowerCase().replaceAll(' ', '_'),
           name: name,
           ingredients: [],
-          type: order.cocktails.contains(name) ? 'cocktail' : 'shot',
+          type: order.shots.contains(name) ? 'shot' : 'cocktail',
         ),
       );
       allRecipes.add(recipe);
@@ -1153,7 +1187,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   color: widget.colorScheme.outline,
                 ),
                 const SizedBox(width: 8),
-                Text(formatDate(widget.order.date)),
+                InkWell(
+                  onTap: _editDate,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(formatDate(_currentDate)),
+                      const SizedBox(width: 4),
+                      Icon(Icons.edit, size: 14, color: widget.colorScheme.outline),
+                    ],
+                  ),
+                ),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(

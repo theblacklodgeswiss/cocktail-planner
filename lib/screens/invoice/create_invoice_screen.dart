@@ -118,7 +118,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     );
 
     // Pre-fill from order data
-    _cocktailsCtrl.text = widget.order.cocktails.join(', ');
+    // For form orders, cocktails may be in requestedCocktails (not yet in cocktails)
+    final cocktailSource = widget.order.cocktails.isNotEmpty
+        ? widget.order.cocktails
+        : widget.order.requestedCocktails;
+    _cocktailsCtrl.text = cocktailSource.join(', ');
     _shotsCtrl.text = widget.order.shots.join(', ');
     _barDescCtrl.text = widget.order.bar;
     _distanceKmCtrl.text = widget.order.distanceKm > 0

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/order.dart';
 import '../models/recipe.dart';
 
 /// Suggested material with quantity for shopping list.
@@ -32,6 +33,19 @@ class AppState extends ChangeNotifier {
   
   /// Saved order items for editing (includes quantities from saved order).
   List<Map<String, dynamic>>? savedOrderItems;
+
+  /// Form order to pre-fill in ModernOrderFormScreen.
+  /// Set before navigating to /order-form; cleared after reading in initState.
+  SavedOrder? pendingFormOrder;
+
+  void setPendingFormOrder(SavedOrder order) {
+    pendingFormOrder = order;
+    // No notifyListeners needed – read once on navigation
+  }
+
+  void clearPendingFormOrder() {
+    pendingFormOrder = null;
+  }
   
   /// Gemini-suggested recipes with quantities (cocktailName -> quantity).
   @Deprecated('Use materialSuggestions instead')

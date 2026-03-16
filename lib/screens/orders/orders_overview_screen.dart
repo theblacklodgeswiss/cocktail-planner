@@ -165,10 +165,41 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
   static const _excelFileName = 'Cocktail- & Barservice Anftragformular.xlsx';
 
-  Future<void> _syncForms() async {
-    if (!microsoftGraphService.isLoggedIn) {
+  Future<void> _loginAndSync() async {
+    final account = await microsoftGraphService.login();
+    if (!mounted) return;
+    if (account != null) {
+      setState(() {});
+      _syncForms();
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('orders.sync_login_required'.tr())),
+      );
+    }
+  }
+
+  Future<void> _syncForms() async {
+    if (!microsoftGraphService.isLoggedIn) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('orders.sync_login_required'.tr()),
+          content: const Text('Bitte melde dich mit dem Microsoft-Konto an, um Formulare zu synchronisieren.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Abbrechen'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.login),
+              label: const Text('Mit Microsoft anmelden'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _loginAndSync();
+              },
+            ),
+          ],
+        ),
       );
       return;
     }

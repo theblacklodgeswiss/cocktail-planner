@@ -297,11 +297,6 @@ class InvoicePdfGenerator {
                 '${isEn ? 'Contact' : 'Kontakt'}: ${order.offerClientContact}',
                 style: const pw.TextStyle(fontSize: 9),
               ),
-              if (order.offerEventTime.isNotEmpty)
-                pw.Text(
-                  '${isEn ? 'Time' : 'Uhrzeit'}: ${order.offerEventTime} ${isEn ? '' : 'Uhr'}',
-                  style: const pw.TextStyle(fontSize: 9),
-                ),
             ],
           ),
         ),
@@ -445,7 +440,7 @@ class InvoicePdfGenerator {
                   ),
                 ),
                 pw.TextSpan(
-                  text: order.cocktails.join(', '),
+                  text: order.cocktails.map((c) => c.contains('(') ? c.substring(0, c.indexOf('(')).trim() : c).join(', '),
                   style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
@@ -652,8 +647,8 @@ class InvoicePdfGenerator {
             cell(curr.format(travelTotal), align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Travel costs Allschwil CH - ${order.name}'
-                  : 'Reisekosten von Allschwil CH nach ${order.name}',
+                  ? 'Travel costs Allschwil CH - ${order.location}'
+                  : 'Reisekosten von Allschwil CH nach ${order.location}',
             ),
           ],
         ),

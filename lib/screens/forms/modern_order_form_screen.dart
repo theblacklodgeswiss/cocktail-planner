@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/url_utils.dart';
 import '../../data/cocktail_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/cocktail_data.dart';
+import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
@@ -27,10 +29,12 @@ class OrderFormResult {
 
 /// Modern multi-step order form inspired by Roamy app design.
 /// Features card-based UI, smooth transitions, and touch-optimized controls.
+/// Pass [prefill] to pre-populate all fields from an existing form order.
 class ModernOrderFormScreen extends StatefulWidget {
   final void Function(OrderFormResult result)? onSubmit;
+  final SavedOrder? prefill;
 
-  const ModernOrderFormScreen({super.key, this.onSubmit});
+  const ModernOrderFormScreen({super.key, this.onSubmit, this.prefill});
 
   @override
   State<ModernOrderFormScreen> createState() => _ModernOrderFormScreenState();
@@ -42,6 +46,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final int _totalSteps = 9;
   
   Future<CocktailData>? _dataFuture;
+
+  /// Resolved prefill order (from widget.prefill or appState.pendingFormOrder).
+  SavedOrder? _prefillOrder;
 
   // Form data
   String _serviceType = 'cocktail_barservice';
@@ -66,6 +73,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   @override
   void initState() {
     super.initState();
+    _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
     _loadCocktailData();
     // Read step from URL query parameter
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -88,6 +96,80 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   void _loadCocktailData() {
     _dataFuture = cocktailRepository.load();
+    // After data loads, pre-select cocktails from prefill
+    final prefillOrder = _prefillOrder;
+    if (prefillOrder != null) {
+      _dataFuture = _dataFuture!.then((data) {
+        final order = prefillOrder;
+        final cocktailNames = order.cocktails.isNotEmpty
+            ? order.cocktails
+            : order.requestedCocktails;
+        if (mounted) {
+          setState(() {
+            for (final name in cocktailNames) {
+              final clean = name.contains('(') ? name.substring(0, name.indexOf('(')).trim() : name;
+              final recipe = data.recipes.firstWhere(
+                (r) => r.name.toLowerCase() == clean.toLowerCase(),
+                orElse: () => Recipe(
+                  id: clean.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_'),
+                  name: clean,
+                  ingredients: [],
+                  type: 'cocktail',
+                ),
+              );
+              if (!_selectedRecipes.any((r) => r.name == recipe.name)) {
+                _selectedRecipes.add(recipe);
+              }
+            }
+            for (final name in order.shots) {
+              final recipe = data.recipes.firstWhere(
+                (r) => r.name == name,
+                orElse: () => Recipe(
+                  id: name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_'),
+                  name: name,
+                  ingredients: [],
+                  type: 'shot',
+                ),
+              );
+              if (!_selectedRecipes.any((r) => r.name == recipe.name)) {
+                _selectedRecipes.add(recipe);
+              }
+            }
+          });
+        }
+        return data;
+      });
+    }
+  }
+
+  void _applyPrefill() {
+    // widget.prefill for programmatic use; appState.pendingFormOrder for push-navigation (avoids GoRouter extra being lost on web)
+    final order = widget.prefill ?? appState.pendingFormOrder;
+    if (order == null) return;
+    _prefillOrder = order;
+    appState.clearPendingFormOrder();
+    _nameController.text = order.name;
+    _phoneController.text = order.phone;
+    _addressController.text = order.location;
+    _eventDate = order.date;
+    _personCount = order.personCount > 0 ? order.personCount : _personCount;
+    _currency = order.currency.isNotEmpty ? order.currency : _currency;
+    _drinkerType = order.drinkerType.isNotEmpty ? order.drinkerType : _drinkerType;
+    if (order.serviceType.isNotEmpty) _serviceType = order.serviceType;
+    if (order.distanceKm > 0) _distanceKm = order.distanceKm;
+    // Parse event time
+    final timeStr = order.offerEventTime.isNotEmpty ? order.offerEventTime : order.eventTime;
+    if (timeStr.isNotEmpty) {
+      try {
+        final parts = timeStr.split(':');
+        if (parts.length == 2) {
+          _eventTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }
+      } catch (_) {}
+    }
   }
 
   @override
@@ -382,6 +464,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     if (!isAdmin) {
       // Customer flow: Save as pending order and show thank you dialog
       await _savePendingOrderAndShowThanks(setupData);
+    } else if (_prefillOrder != null) {
+      // Admin prefill flow: update existing form order with new data, then go to shopping list
+      await _updateFormOrderAndNavigate(setupData);
     } else {
       // Admin flow: Sync selected recipes + popularity to global state and navigate
       appState.setSelectedRecipes(_selectedRecipes);
@@ -393,6 +478,45 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       } else {
         context.go('/shopping-list', extra: setupData);
       }
+    }
+  }
+
+  Future<void> _updateFormOrderAndNavigate(OrderSetupData setupData) async {
+    final order = _prefillOrder!;
+    final cocktailNames = _selectedRecipes.where((r) => !r.isShot).map((r) => r.name).toList();
+    final shotNames = _selectedRecipes.where((r) => r.isShot).map((r) => r.name).toList();
+    final eventTimeStr = setupData.eventTime != null
+        ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}'
+        : '';
+    await orderRepository.updateOrder(order.id, {
+      'name': setupData.orderName,
+      'date': (setupData.eventDate ?? order.date).toIso8601String(),
+      'phone': setupData.phoneNumber ?? '',
+      'location': setupData.address ?? '',
+      'personCount': setupData.personCount,
+      'distanceKm': setupData.distanceKm ?? 0,
+      'currency': setupData.currency,
+      'drinkerType': setupData.drinkerType,
+      'serviceType': setupData.serviceType,
+      'cocktails': cocktailNames,
+      'shots': shotNames,
+      'eventTime': eventTimeStr,
+      'offerEventTime': eventTimeStr,
+      'offerClientName': setupData.orderName,
+      'offerClientContact': setupData.phoneNumber ?? '',
+    });
+    appState.setLinkedOrder(
+      order.id,
+      setupData.orderName,
+      requestedCocktails: order.requestedCocktails,
+      savedItems: order.items,
+    );
+    appState.setSelectedRecipes(_selectedRecipes);
+    for (final entry in _cocktailPopularity.entries) {
+      appState.setCocktailPopularity(entry.key, entry.value);
+    }
+    if (mounted) {
+      context.go('/shopping-list', extra: setupData);
     }
   }
 
@@ -1230,6 +1354,86 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 ),
           ),
           const SizedBox(height: 32),
+          if (_prefillOrder != null && (_prefillOrder!.location.isNotEmpty || _prefillOrder!.guestCountRange.isNotEmpty)) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_prefillOrder!.location.isNotEmpty) ...[
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        final origin = Uri.encodeComponent('Allschwil, 4123');
+                        final dest = Uri.encodeComponent(_prefillOrder!.location);
+                        launchUrl(
+                          Uri.parse('https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$dest&travelmode=driving'),
+                          mode: LaunchMode.externalApplication,
+                        );
+                      },
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _prefillOrder!.location,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.open_in_new,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_prefillOrder!.location.isNotEmpty && _prefillOrder!.guestCountRange.isNotEmpty)
+                    const SizedBox(height: 8),
+                  if (_prefillOrder!.guestCountRange.isNotEmpty) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.people_outline,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Formular: ${_prefillOrder!.guestCountRange} Personen → Mittelwert: $_personCount',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
           _buildPersonCountSlider(),
           const SizedBox(height: 32),
           _buildDistanceSlider(),

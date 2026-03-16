@@ -84,7 +84,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/order-form',
-      builder: (context, state) => const ModernOrderFormScreen(),
+      builder: (context, state) {
+        final prefill = state.extra is SavedOrder ? state.extra as SavedOrder : null;
+        return ModernOrderFormScreen(prefill: prefill);
+      },
     ),
     GoRoute(
       path: '/admin',

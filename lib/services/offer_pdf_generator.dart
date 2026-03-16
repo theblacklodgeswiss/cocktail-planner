@@ -214,11 +214,6 @@ class OfferPdfGenerator {
                 '${isEn ? 'Contact' : 'Kontakt'}: ${offer.clientContact}',
                 style: const pw.TextStyle(fontSize: 9),
               ),
-              if (offer.eventTime.isNotEmpty)
-                pw.Text(
-                  '${isEn ? 'Time' : 'Uhrzeit'}: ${offer.eventTime}',
-                  style: const pw.TextStyle(fontSize: 9),
-                ),
               if (offer.eventLocation.isNotEmpty)
                 pw.Text(
                   '${isEn ? 'Location' : 'Adresse'}: ${offer.eventLocation}',
@@ -401,7 +396,7 @@ class OfferPdfGenerator {
                   ),
                 ),
                 pw.TextSpan(
-                  text: offer.cocktails.join(', '),
+                  text: offer.cocktails.map((c) => c.contains('(') ? c.substring(0, c.indexOf('(')).trim() : c).join(', '),
                   style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
@@ -597,8 +592,8 @@ class OfferPdfGenerator {
             cell(curr.format(travelTotal), align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Travel from Allschwil CH to'
-                  : 'Reisekosten von Allschwil CH nach ${offer.orderName}',
+                  ? 'Travel from Allschwil CH to ${offer.eventLocation}'
+                  : 'Reisekosten von Allschwil CH nach ${offer.eventLocation}',
             ),
           ],
         ),

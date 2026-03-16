@@ -552,8 +552,7 @@ class OrderRepository {
           'drinkerType': 'normal',
           'status': OrderStatus.quote.value,
           'hasShoppingList': false,
-          'createdAt':
-              formCreatedAt?.toIso8601String() ?? FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
           'createdBy': authService.email ?? authService.currentUser?.uid,
         });
         debugPrint('Created form submission: $name');
