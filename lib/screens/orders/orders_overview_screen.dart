@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/firestore_service.dart';
 import '../../data/order_repository.dart';
@@ -34,10 +35,10 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   bool _isSyncing = false;
   bool _firestoreReady = false;
   String _searchQuery = '';
-  OrderSortOption _sortOption = OrderSortOption.eventDate;
+  OrderSortOption _sortOption = OrderSortOption.createdAt;
   bool _sortAscending = false;
   OrderStatusFilter _statusFilter = OrderStatusFilter.all;
-  final _searchController = TextEditingController();
+  List<SavedOrder> _latestOrders = [];
 
   @override
   void initState() {
@@ -65,8 +66,20 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
   @override
   void dispose() {
-    _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openSearch() async {
+    final result = await showSearch<String>(
+      context: context,
+      delegate: _OrderSearchDelegate(
+        orders: _latestOrders,
+        initialQuery: _searchQuery,
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => _searchQuery = result);
+    }
   }
 
   Stream<List<SavedOrder>> get _ordersStream {
@@ -79,17 +92,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     }
     // Otherwise, filter by selected year
     return orderRepository.watchOrders(year: _selectedYear);
-  }
-
-  void _changeYear(int year) {
-    setState(() {
-      _selectedYear = year;
-      _selectedMonth = null; // Reset month when changing year
-    });
-  }
-
-  void _changeMonth(int? month) {
-    setState(() => _selectedMonth = month);
   }
 
   List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) {
@@ -274,6 +276,13 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       appBar: AppBar(
         title: Text('orders.title'.tr()),
         actions: [
+          IconButton(
+            icon: _searchQuery.isNotEmpty
+                ? const Icon(Icons.search_off)
+                : const Icon(Icons.search),
+            tooltip: 'orders.search_hint'.tr(),
+            onPressed: _openSearch,
+          ),
           if (authService.isAdmin)
             IconButton(
               icon: const Icon(Icons.dashboard_outlined),
@@ -301,9 +310,44 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                         case 'reset_sync':
                           _resetAndSyncForms();
                           break;
+                        case 'onedrive':
+                          launchUrl(
+                            Uri.parse('https://1drv.ms/x/c/80c90daf53662538/IQAw81_OoMv4QpDZTEsq13cvAf3yftB-9O812MAPGRy6mfs?e=FfusWZ'),
+                            mode: LaunchMode.externalApplication,
+                          );
+                          break;
                       }
                     },
                     itemBuilder: (context) => [
+                      // Info hint – non-interactive
+                      PopupMenuItem(
+                        enabled: false,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: Colors.amber.shade700),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Excel muss zuerst im Browser geöffnet werden (mit dem Microsoft Blacklodge-Konto), damit die neuesten Anträge ins OneDrive geladen werden. Dann hier synchronisieren.',
+                                style: TextStyle(fontSize: 12, height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      PopupMenuItem(
+                        value: 'onedrive',
+                        child: ListTile(
+                          leading: const Icon(Icons.table_chart_outlined),
+                          title: const Text('Formular OneDrive'),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      const PopupMenuDivider(),
                       PopupMenuItem(
                         value: 'sync',
                         child: ListTile(
@@ -335,6 +379,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
           }
 
           final allOrders = snapshot.data ?? [];
+          _latestOrders = allOrders;
           final orders = _filterAndSortOrders(allOrders);
 
           return SingleChildScrollView(
@@ -345,13 +390,23 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildFiltersSection(),
-                    const SizedBox(height: 12),
                     _buildPendingOrdersBanner(),
                     const SizedBox(height: 20),
                     _SummaryCardsSection(orders: orders),
                     const SizedBox(height: 20),
-                    _buildSearchAndSortBar(),
+                    _buildFilterDropdowns(colorScheme),
+                    if (_searchQuery.isNotEmpty) ...[  
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          InputChip(
+                            avatar: const Icon(Icons.search, size: 16),
+                            label: Text(_searchQuery),
+                            onDeleted: () => setState(() => _searchQuery = ''),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     _buildListHeader(orders),
                     const SizedBox(height: 12),
@@ -372,101 +427,10 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  /// Compact filters section with year, month, and status in 2 rows
-  Widget _buildFiltersSection() {
-    final colorScheme = Theme.of(context).colorScheme;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Row 1: Years
-        _buildYearSelector(),
-        const SizedBox(height: 8),
-        // Row 2: Months + Status Dropdown
-        if (_searchQuery.isEmpty) ...[
-          Row(
-            children: [
-              Expanded(child: _buildMonthSelector()),
-              const SizedBox(width: 12),
-              _buildStatusDropdown(colorScheme),
-            ],
-          ),
-        ] else
-          // When searching, just show status dropdown
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _buildStatusDropdown(colorScheme),
-          ),
-      ],
-    );
-  }
 
-  Widget _buildYearSelector() {
-    final currentYear = DateTime.now().year;
-    final years = List.generate(5, (i) => currentYear - i);
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: years.map((year) {
-          final isSelected = year == _selectedYear;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(year.toString()),
-              selected: isSelected,
-              onSelected: (_) {
-                if (_selectedYear != year) {
-                  _changeYear(year);
-                }
-              },
-              visualDensity: VisualDensity.compact,
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildMonthSelector() {
-    const monthNames = [
-      'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'
-    ];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: const Text('Alle'),
-              selected: _selectedMonth == null,
-              onSelected: (_) => _changeMonth(null),
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-          ...List.generate(12, (index) {
-            final month = index + 1;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(monthNames[index]),
-                selected: _selectedMonth == month,
-                onSelected: (_) => _changeMonth(month),
-                visualDensity: VisualDensity.compact,
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  /// Compact status dropdown menu
+  /// Compact status dropdown menu (kept for potential reuse)
+  // ignore: unused_element
   Widget _buildStatusDropdown(ColorScheme colorScheme) {
     // Map status to icon and color
     IconData getIcon(OrderStatusFilter status) {
@@ -573,124 +537,143 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  Widget _buildSearchAndSortBar() {
-    final colorScheme = Theme.of(context).colorScheme;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+
+
+  Widget _buildFilterDropdowns(ColorScheme colorScheme) {
+    final currentYear = DateTime.now().year;
+    final years = List.generate(5, (i) => currentYear - i);
+
+    const monthNames = [
+      'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez',
+    ];
+
+    // Period dropdown items: "2026 – Alle", "2026 – Jan", ...
+    final periodItems = <DropdownMenuItem<String>>[];
+    for (final year in years) {
+      periodItems.add(DropdownMenuItem(
+        value: '$year-0',
+        child: Text('$year – Alle'),
+      ));
+      for (int m = 1; m <= 12; m++) {
+        periodItems.add(DropdownMenuItem(
+          value: '$year-$m',
+          child: Text('$year – ${monthNames[m - 1]}'),
+        ));
+      }
+    }
+    final periodValue = '$_selectedYear-${_selectedMonth ?? 0}';
+
+    // Sort dropdown items
+    const sortItems = [
+      (OrderSortOption.createdAt, 'Erstellt am'),
+      (OrderSortOption.eventDate, 'Eventdatum'),
+      (OrderSortOption.guests, 'Gäste'),
+      (OrderSortOption.name, 'Name'),
+      (OrderSortOption.status, 'Status'),
+    ];
+
+    // Status filter items
+    const statusItems = [
+      (OrderStatusFilter.all, 'Alle'),
+      (OrderStatusFilter.quotes, 'Angebote'),
+      (OrderStatusFilter.accepted, 'Angenommen'),
+      (OrderStatusFilter.declined, 'Abgelehnt'),
+    ];
+
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: colorScheme.surfaceContainerHigh,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      isDense: true,
+    );
+
+    return Row(
       children: [
-        // Modern search field
-        _buildSearchField(colorScheme),
-        const SizedBox(height: 12),
-        // Sort chips row
-        _buildSortChips(colorScheme),
+        // Zeitraum
+        Expanded(
+          flex: 5,
+          child: DropdownButtonFormField<String>(
+            initialValue: periodValue,
+            decoration: inputDecoration.copyWith(
+              labelText: 'Zeitraum',
+              prefixIcon: const Icon(Icons.calendar_month, size: 18),
+            ),
+            isExpanded: true,
+            items: periodItems,
+            onChanged: (val) {
+              if (val == null) return;
+              final parts = val.split('-');
+              final year = int.parse(parts[0]);
+              final month = int.parse(parts[1]);
+              setState(() {
+                _selectedYear = year;
+                _selectedMonth = month == 0 ? null : month;
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        // Sortierung
+        Expanded(
+          flex: 4,
+          child: DropdownButtonFormField<OrderSortOption>(
+            initialValue: _sortOption,
+            decoration: inputDecoration.copyWith(
+              labelText: 'Sortierung',
+              prefixIcon: GestureDetector(
+                onTap: () => setState(() => _sortAscending = !_sortAscending),
+                child: Tooltip(
+                  message: _sortAscending ? 'Aufsteigend' : 'Absteigend',
+                  child: Icon(
+                    _sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                    size: 18,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+            isExpanded: true,
+            items: sortItems.map((e) => DropdownMenuItem(
+              value: e.$1,
+              child: Text(e.$2),
+            )).toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _sortOption = val);
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        // Status
+        Expanded(
+          flex: 4,
+          child: DropdownButtonFormField<OrderStatusFilter>(
+            initialValue: _statusFilter,
+            decoration: inputDecoration.copyWith(
+              labelText: 'Status',
+              prefixIcon: const Icon(Icons.flag_outlined, size: 18),
+            ),
+            isExpanded: true,
+            items: statusItems.map((e) => DropdownMenuItem(
+              value: e.$1,
+              child: Text(e.$2),
+            )).toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _statusFilter = val);
+            },
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildSearchField(ColorScheme colorScheme) {
-    return SearchBar(
-      hintText: 'orders.search_hint'.tr(),
-      leading: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
-      trailing: _searchQuery.isNotEmpty
-          ? [
-              IconButton(
-                icon: Icon(Icons.close, color: colorScheme.onSurfaceVariant),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() => _searchQuery = '');
-                },
-              ),
-            ]
-          : null,
-      elevation: WidgetStateProperty.all(0),
-      backgroundColor: WidgetStateProperty.all(
-        colorScheme.surfaceContainerHigh,
-      ),
-      padding: WidgetStateProperty.all(
-        const EdgeInsets.symmetric(horizontal: 16),
-      ),
-      controller: _searchController,
-      onChanged: (value) => setState(() => _searchQuery = value),
-    );
-  }
 
-  Widget _buildSortChips(ColorScheme colorScheme) {
-    return SizedBox(
-      height: 44,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            // Direction toggle - prominent at the start
-            _buildDirectionChip(colorScheme),
-            const SizedBox(width: 12),
-            Text(
-              'Sortieren:',
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(width: 8),
-            _buildSortChip(OrderSortOption.eventDate, 'orders.sort_event_date'.tr(), Icons.event, colorScheme),
-            _buildSortChip(OrderSortOption.createdAt, 'orders.sort_created_at'.tr(), Icons.schedule, colorScheme),
-            _buildSortChip(OrderSortOption.guests, 'orders.sort_guests'.tr(), Icons.people, colorScheme),
-            _buildSortChip(OrderSortOption.name, 'orders.sort_name'.tr(), Icons.sort_by_alpha, colorScheme),
-            _buildSortChip(OrderSortOption.status, 'orders.sort_status'.tr(), Icons.flag, colorScheme),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildDirectionChip(ColorScheme colorScheme) {
-    return ActionChip(
-      avatar: Icon(
-        _sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-        size: 18,
-        color: colorScheme.primary,
-      ),
-      label: Text(
-        _sortAscending ? 'orders.sort_asc'.tr() : 'orders.sort_desc'.tr(),
-        style: TextStyle(
-          color: colorScheme.primary,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      onPressed: () => setState(() => _sortAscending = !_sortAscending),
-      backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.5),
-      side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
-    );
-  }
 
-  Widget _buildSortChip(OrderSortOption option, String label, IconData icon, ColorScheme colorScheme) {
-    final isSelected = _sortOption == option;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: FilterChip(
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16),
-            const SizedBox(width: 4),
-            Text(label),
-          ],
-        ),
-        selected: isSelected,
-        onSelected: (_) => setState(() => _sortOption = option),
-        showCheckmark: false,
-        selectedColor: colorScheme.primaryContainer,
-        backgroundColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        labelStyle: TextStyle(
-          color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
-          fontSize: 13,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        visualDensity: VisualDensity.compact,
-      ),
-    );
-  }
 
   Widget _buildPendingOrdersBanner() {
     return StreamBuilder<List<SavedOrder>>(
@@ -789,31 +772,16 @@ class _SummaryCardsSection extends StatelessWidget {
       ),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 600;
-        if (isWide) {
-          return Row(
-            children: cards
-                .map((c) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: c,
-                      ),
-                    ))
-                .toList(),
-          );
-        }
-        return GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 1.6,
-          children: cards,
-        );
-      },
+    return Row(
+      children: [
+        for (int i = 0; i < cards.length; i++)
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: i < cards.length - 1 ? 8 : 0),
+              child: cards[i],
+            ),
+          ),
+      ],
     );
   }
 
@@ -827,5 +795,79 @@ class _SummaryCardsSection extends StatelessWidget {
     return currencyCounts.entries
         .reduce((a, b) => a.value > b.value ? a : b)
         .key;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Search delegate
+// ---------------------------------------------------------------------------
+
+class _OrderSearchDelegate extends SearchDelegate<String> {
+  _OrderSearchDelegate({required this.orders, String initialQuery = ''}) {
+    // Pre-fill the search field with the current active query
+    if (initialQuery.isNotEmpty) {
+      query = initialQuery;
+    }
+  }
+
+  final List<SavedOrder> orders;
+
+  List<SavedOrder> _filter(String q) {
+    if (q.isEmpty) return orders.take(20).toList();
+    final lower = q.toLowerCase();
+    return orders
+        .where((o) =>
+            o.name.toLowerCase().contains(lower) ||
+            o.personCount.toString().contains(lower) ||
+            o.guestCountRange.toLowerCase().contains(lower))
+        .toList();
+  }
+
+  @override
+  String get searchFieldLabel => 'Name oder Gästeanzahl';
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+        if (query.isNotEmpty)
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => query = '',
+          ),
+      ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => close(context, query),
+      );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildList(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildList(context);
+
+  Widget _buildList(BuildContext context) {
+    final results = _filter(query);
+    if (results.isEmpty) {
+      return Center(
+        child: Text(
+          'Keine Ergebnisse',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+    }
+    return ListView.builder(
+      itemCount: results.length,
+      itemBuilder: (context, i) {
+        final order = results[i];
+        return ListTile(
+          leading: const Icon(Icons.receipt_long_outlined),
+          title: Text(order.name),
+          subtitle: Text('${order.personCount} Gäste · ${DateFormat('dd.MM.yyyy').format(order.date)}'),
+          onTap: () => close(context, order.name),
+        );
+      },
+    );
   }
 }

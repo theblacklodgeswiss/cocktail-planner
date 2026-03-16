@@ -41,6 +41,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _initializeAndLoad() async {
     if (!_initialized) {
       await authService.checkIsAdmin();
+      if (!authService.isAdmin && mounted) {
+        context.go('/');
+        return;
+      }
       await cocktailRepository.initialize();
       _initialized = true;
     }

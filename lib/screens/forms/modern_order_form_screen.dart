@@ -11,6 +11,8 @@ import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
+import '../../services/gemini_service.dart';
+import '../../widgets/gemini_material_review_dialog.dart';
 
 /// Result from the modern order form containing both setup data and selected recipes
 class OrderFormResult {
@@ -37,7 +39,7 @@ class ModernOrderFormScreen extends StatefulWidget {
 class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
-  final int _totalSteps = 7;
+  final int _totalSteps = 9;
   
   Future<CocktailData>? _dataFuture;
 
@@ -53,6 +55,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   String _currency = 'CHF';
   String _drinkerType = 'normal';
   final List<Recipe> _selectedRecipes = [];
+  final Map<String, double> _cocktailPopularity = {};
   String _searchQuery = '';
   String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
   final Set<String> _selectedBarDrinks = {};
@@ -335,7 +338,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       _updateUrlWithoutNavigation(2);
     } else if (_selectedRecipes.isEmpty) {
       errorMessage = 'order_setup.required_cocktails'.tr();
-      _currentStep = 5; // Jump to Cocktail Selection step (updated from 4 to 5)
+      _currentStep = 5; // Jump to Cocktail Selection step
       _updateUrlWithoutNavigation(5);
     }
     
@@ -380,8 +383,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       // Customer flow: Save as pending order and show thank you dialog
       await _savePendingOrderAndShowThanks(setupData);
     } else {
-      // Admin flow: Sync selected recipes to global state and navigate to shopping list
+      // Admin flow: Sync selected recipes + popularity to global state and navigate
       appState.setSelectedRecipes(_selectedRecipes);
+      for (final entry in _cocktailPopularity.entries) {
+        appState.setCocktailPopularity(entry.key, entry.value);
+      }
       if (widget.onSubmit != null) {
         widget.onSubmit!(result);
       } else {
@@ -414,6 +420,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         alcoholPurchase: setupData.alcoholPurchase ?? [],
         additionalServices: setupData.additionalServices ?? [],
         remarks: setupData.remarks ?? '',
+        cocktailPopularity: _cocktailPopularity,
       );
 
       if (orderId == null) {
@@ -467,6 +474,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (_currentStep > 0) {
+              _previousStep();
+            } else if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/dashboard');
+            }
+          },
+        ),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -518,7 +537,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               _buildPreferencesStep(),
               _buildBarAlcoholStep(),
               _buildCocktailSelectionStep(),
+              _buildCocktailPopularityStep(),
               _buildAdditionalServicesStep(),
+              _buildOrderOverviewStep(),
             ],
           ),
         ),
@@ -526,41 +547,73 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _currentStep > 0
-                      ? OutlinedButton(
-                          onPressed: _previousStep,
+            child: _currentStep == _totalSteps - 1
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _generateShoppingListWithGemini,
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('Mit Gemini Einkaufsliste generieren'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: Text('common.back'.tr()),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _nextStep,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      _currentStep < _totalSteps - 1
-                          ? 'common.next'.tr()
-                          : 'common.finish'.tr(),
-                    ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _nextStep,
+                          icon: const Icon(Icons.shopping_cart),
+                          label: const Text('Einkaufsliste generieren'),
+                          iconAlignment: IconAlignment.end,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _currentStep > 0
+                            ? OutlinedButton(
+                                onPressed: _previousStep,
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text('common.back'.tr()),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _nextStep,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text('common.next'.tr()),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ],
@@ -637,9 +690,21 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     ),
                     _buildStepperItem(
                       6,
+                      Icons.bar_chart,
+                      'Wahrscheinlichkeiten',
+                      'Beliebtheit',
+                    ),
+                    _buildStepperItem(
+                      7,
                       Icons.miscellaneous_services,
                       'Zusatzleistungen',
                       'Optional',
+                    ),
+                    _buildStepperItem(
+                      8,
+                      Icons.checklist,
+                      'Übersicht',
+                      'Zusammenfassung',
                     ),
                   ],
                 ),
@@ -775,8 +840,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ? 'Keine ausgewählt'
             : '${_selectedRecipes.length} Cocktails';
       case 6:
-        final count = _selectedAdditionalServices.length;
-        return count == 0 ? 'Keine' : '$count ausgewählt';
+        return _selectedRecipes.isEmpty ? 'Keine Cocktails' : '${_selectedRecipes.length} konfiguriert';
+      case 7:
+        final count7 = _selectedAdditionalServices.length;
+        return count7 == 0 ? 'Keine' : '$count7 ausgewählt';
+      case 8:
+        return 'Alles prüfen & abschließen';
       default:
         return '';
     }
@@ -797,7 +866,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       case 5:
         return _buildCocktailSelectionStep();
       case 6:
+        return _buildCocktailPopularityStep();
+      case 7:
         return _buildAdditionalServicesStep();
+      case 8:
+        return _buildOrderOverviewStep();
       default:
         return Container();
     }
@@ -1994,6 +2067,397 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
+  Widget _buildCocktailPopularityStep() {
+    if (_selectedRecipes.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Bitte zuerst Cocktails auswählen (Schritt 6).',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Initialize missing entries with 50%
+    for (final recipe in _selectedRecipes) {
+      _cocktailPopularity.putIfAbsent(recipe.name, () => 50.0);
+    }
+    // Remove stale entries
+    _cocktailPopularity.removeWhere(
+      (name, _) => !_selectedRecipes.any((r) => r.name == name),
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Wie beliebt werden die Cocktails sein?',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Schätze die Wahrscheinlichkeit, wie oft jeder Cocktail bestellt wird. Das hilft uns, die richtigen Mengen einzukaufen.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 32),
+          ..._selectedRecipes.map((recipe) {
+            final popularity = _cocktailPopularity[recipe.name] ?? 50.0;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            recipe.name,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${popularity.round()}%',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      value: popularity,
+                      min: 0,
+                      max: 100,
+                      divisions: 20,
+                      onChanged: (val) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _cocktailPopularity[recipe.name] = val);
+                      },
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Selten', style: Theme.of(context).textTheme.labelSmall),
+                        Text('Sehr beliebt', style: Theme.of(context).textTheme.labelSmall),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          if (MediaQuery.of(context).size.width >= 600) ...[  
+            const SizedBox(height: 32),
+            _buildDesktopActionButtons(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderOverviewStep() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    String formatDate(DateTime? d) => d != null ? DateFormat('EEEE, dd. MMMM yyyy').format(d) : '–';
+    String formatTime(TimeOfDay? t) => t != null ? t.format(context) : '–';
+
+    Widget section(String title, List<_OverviewRow> rows) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                const SizedBox(height: 12),
+                ...rows.map((row) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 130,
+                            child: Text(row.label,
+                                style: theme.textTheme.bodySmall
+                                    ?.copyWith(color: colorScheme.onSurfaceVariant)),
+                          ),
+                          Expanded(
+                            child: Text(row.value,
+                                style: theme.textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w500)),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final serviceLabel = _serviceType == 'cocktail_barservice'
+        ? 'Cocktail & Bar'
+        : _serviceType == 'cocktail_service'
+            ? 'Nur Cocktails'
+            : 'Nur Bar';
+
+    final drinkerLabel = _drinkerType == 'light'
+        ? 'Leichte Trinker'
+        : _drinkerType == 'heavy'
+            ? 'Starke Trinker'
+            : 'Normal';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Auftragsübersicht',
+            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Bitte alles prüfen, bevor du den Auftrag abschließt.',
+            style: theme.textTheme.bodyLarge
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+          section('Service', [
+            _OverviewRow('Service-Typ', serviceLabel),
+          ]),
+          section('Kontakt', [
+            _OverviewRow('Name', _nameController.text.trim().isEmpty ? '–' : _nameController.text.trim()),
+            _OverviewRow('Telefon', _phoneController.text.trim().isEmpty ? '–' : _phoneController.text.trim()),
+          ]),
+          section('Event-Details', [
+            _OverviewRow('Datum', formatDate(_eventDate)),
+            _OverviewRow('Uhrzeit', formatTime(_eventTime)),
+            _OverviewRow('Ort', _addressController.text.trim().isEmpty ? '–' : _addressController.text.trim()),
+          ]),
+          section('Präferenzen', [
+            _OverviewRow('Personen', '$_personCount'),
+            _OverviewRow('Entfernung', '$_distanceKm km'),
+            _OverviewRow('Währung', _currency),
+            _OverviewRow('Trinkverhalten', drinkerLabel),
+          ]),
+          if (_selectedRecipes.isNotEmpty)
+            section('Cocktails (${_selectedRecipes.length})', [
+              ..._selectedRecipes.map((r) {
+                final pop = (_cocktailPopularity[r.name] ?? 50).round();
+                return _OverviewRow(r.name, '$pop% Beliebtheit');
+              }),
+            ]),
+          if (_selectedBarDrinks.isNotEmpty || _selectedAlcoholItems.isNotEmpty)
+            section('Bardrinks & Alkohol', [
+              if (_selectedBarDrinks.isNotEmpty)
+                _OverviewRow('Bardrinks', _selectedBarDrinks.join(', ')),
+              if (_selectedAlcoholItems.isNotEmpty)
+                _OverviewRow('Alkohol', _selectedAlcoholItems.join(', ')),
+            ]),
+          if (_selectedAdditionalServices.isNotEmpty)
+            section('Zusatzleistungen', [
+              _OverviewRow('Services', '${_selectedAdditionalServices.length} ausgewählt'),
+            ]),
+          if (_remarksController.text.trim().isNotEmpty)
+            section('Bemerkungen', [
+              _OverviewRow('Hinweis', _remarksController.text.trim()),
+            ]),
+          const SizedBox(height: 8),
+          if (MediaQuery.of(context).size.width >= 600) ...[  
+            OutlinedButton.icon(
+              onPressed: _generateShoppingListWithGemini,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Mit Gemini Einkaufsliste generieren'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildDesktopActionButtons(),
+          ] else
+            const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateShoppingListWithGemini() async {
+    if (!geminiService.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.gemini_not_configured'.tr())),
+      );
+      return;
+    }
+    if (_selectedRecipes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bitte zuerst Cocktails auswählen.')),
+      );
+      return;
+    }
+
+    final cocktailData = await _dataFuture;
+    if (cocktailData == null || !mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('orders.gemini_generating'.tr()),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final materials = cocktailData.materials
+          .where((m) => m.visible)
+          .map((m) => {
+                'name': m.name,
+                'unit': m.unit,
+                'price': m.price,
+                'currency': m.currency,
+              })
+          .toList();
+
+      final recipeIngredients = _selectedRecipes
+          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
+          .toList();
+
+      final suggestion = await geminiService.generateMaterialSuggestions(
+        guestCount: _personCount,
+        guestRange: '',
+        requestedCocktails: _selectedRecipes.map((r) => r.name).toList(),
+        eventType: _drinkerType,
+        drinkerType: _drinkerType,
+        availableMaterials: materials,
+        recipeIngredients: recipeIngredients,
+        cocktailPopularity: _cocktailPopularity,
+      );
+
+      if (mounted) Navigator.pop(context);
+
+      if (suggestion == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('orders.gemini_error'.tr()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => GeminiMaterialReviewDialog(
+            suggestion: suggestion,
+            personCount: _personCount,
+            cocktailNames: _selectedRecipes.map((r) => r.name).toList(),
+            onConfirm: (confirmedSuggestions, explanation) {
+              // Sync recipes & popularity to global state
+              appState.setSelectedRecipes(_selectedRecipes);
+              for (final entry in _cocktailPopularity.entries) {
+                appState.setCocktailPopularity(entry.key, entry.value);
+              }
+              appState.setMaterialSuggestions(confirmedSuggestions, explanation);
+
+              // Build setup data and navigate to shopping list
+              final setupData = OrderSetupData(
+                orderName: _nameController.text.trim(),
+                phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+                eventDate: _eventDate,
+                eventTime: _eventTime,
+                address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+                personCount: _personCount,
+                distanceKm: _distanceKm,
+                currency: _currency,
+                drinkerType: _drinkerType,
+                serviceType: _serviceType,
+                barDrinks: _selectedBarDrinks.isEmpty ? null : _selectedBarDrinks.toList(),
+                alcoholPurchase: _selectedAlcoholItems.isEmpty ? null : _selectedAlcoholItems.toList(),
+                additionalServices: _selectedAdditionalServices.isEmpty ? null : _selectedAdditionalServices.toList(),
+                remarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+              );
+              context.go('/shopping-list', extra: setupData);
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.gemini_error'.tr()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildDesktopActionButtons() {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
@@ -2016,11 +2480,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             const SizedBox.shrink(),
           FilledButton.icon(
             onPressed: _nextStep,
-            icon: Icon(_currentStep < _totalSteps - 1 ? Icons.arrow_forward : Icons.check),
+            icon: Icon(_currentStep < _totalSteps - 1 ? Icons.arrow_forward : Icons.shopping_cart),
             label: Text(
               _currentStep < _totalSteps - 1
                   ? 'common.next'.tr()
-                  : 'common.finish'.tr(),
+                  : 'Einkaufsliste generieren',
             ),
             iconAlignment: IconAlignment.end,
             style: FilledButton.styleFrom(
@@ -2034,4 +2498,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       ),
     );
   }
+}
+
+class _OverviewRow {
+  final String label;
+  final String value;
+  const _OverviewRow(this.label, this.value);
 }
