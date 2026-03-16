@@ -260,7 +260,9 @@
     "share_pdf": "Share PDF & copy message",
     "share_pdf_tip": "Tip: \"Share PDF\" copies the message to your clipboard and opens the share sheet. Select WhatsApp → paste the message.",
     "share_pdf_hint": "Message copied! Paste it in WhatsApp.",
-    "share_pdf_error": "Could not share the PDF."
+    "share_pdf_error": "Could not share the PDF.",
+    "share_cocktail_selection": "Adjust cocktails (optional)",
+    "share_regenerate_hint": "Regenerate message"
   },
   "invoice": {
     "title": "Create Order Confirmation",

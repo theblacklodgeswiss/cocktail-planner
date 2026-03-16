@@ -43,9 +43,19 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
   String? _error;
   bool _pdfSharing = false;
 
+  /// Mutable copy of selectedCocktails — updated by swap dropdowns.
+  late List<String> _currentCocktails;
+
+  /// All cocktail names from the repository, used to populate dropdowns.
+  List<String> _allCocktails = [];
+
+  /// True when the user has swapped a cocktail but Gemini hasn't been re-called yet.
+  bool _isDirty = false;
+
   @override
   void initState() {
     super.initState();
+    _currentCocktails = List.from(widget.selectedCocktails);
     _messageCtrl = TextEditingController();
     _generate();
   }
@@ -72,23 +82,26 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
     setState(() {
       _loading = true;
       _error = null;
+      _isDirty = false;
     });
 
     try {
       // Load all available cocktail names from the repository for context
-      List<String> allCocktails = [];
-      try {
-        final data = await cocktailRepository.load();
-        allCocktails = data.recipes.map((r) => r.name).toList();
-      } catch (_) {
-        // Fallback: continue without full recipe list
+      if (_allCocktails.isEmpty) {
+        try {
+          final data = await cocktailRepository.load();
+          _allCocktails = data.recipes.map((r) => r.name).toList();
+        } catch (_) {
+          // Fallback: continue without full recipe list
+        }
       }
 
       String? middlePart;
       if (geminiService.isConfigured) {
         middlePart = await geminiService.generateOfferShareMessage(
-          selectedCocktails: widget.selectedCocktails,
-          allAvailableCocktails: allCocktails,
+          originalCocktails: widget.selectedCocktails,
+          selectedCocktails: _currentCocktails,
+          allAvailableCocktails: _allCocktails,
         );
       }
 
@@ -140,6 +153,48 @@ Schönen Tag noch! 😊
 
 Beste Grüße,
 $editorFirst''';
+  }
+
+  void _swapCocktail(int index, String newValue) {
+    setState(() {
+      _currentCocktails[index] = newValue;
+      _isDirty = true;
+    });
+  }
+
+  Widget _buildSwapSection(ColorScheme colorScheme) {
+    if (_allCocktails.isEmpty || _currentCocktails.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'offer.share_cocktail_selection'.tr(),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (int i = 0; i < _currentCocktails.length; i++)
+              _CocktailDropdown(
+                value: _currentCocktails[i],
+                allCocktails: _allCocktails,
+                isChanged: _currentCocktails[i] != widget.selectedCocktails[i],
+                onChanged: (val) {
+                  if (val != null) _swapCocktail(i, val);
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
   }
 
   Future<void> _copyToClipboard() async {
@@ -265,14 +320,43 @@ $editorFirst''';
                       ),
                     )
                   : SingleChildScrollView(
-                      child: TextField(
-                        controller: _messageCtrl,
-                        maxLines: null,
-                        decoration: InputDecoration(
-                          border: const OutlineInputBorder(),
-                          labelText: 'offer.share_message_label'.tr(),
-                        ),
-                        style: const TextStyle(fontSize: 14, height: 1.5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSwapSection(colorScheme),
+                          // Regenerate button above the text field
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              if (_isDirty)
+                                FilledButton.tonalIcon(
+                                  onPressed: _pdfSharing ? null : _generate,
+                                  icon: const Icon(Icons.auto_awesome, size: 18),
+                                  label: Text('offer.share_regenerate_hint'.tr()),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: colorScheme.tertiaryContainer,
+                                    foregroundColor: colorScheme.onTertiaryContainer,
+                                  ),
+                                )
+                              else
+                                IconButton.outlined(
+                                  onPressed: _pdfSharing ? null : _generate,
+                                  icon: const Icon(Icons.refresh, size: 20),
+                                  tooltip: 'offer.share_regenerate'.tr(),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _messageCtrl,
+                            maxLines: null,
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
+                              labelText: 'offer.share_message_label'.tr(),
+                            ),
+                            style: const TextStyle(fontSize: 14, height: 1.5),
+                          ),
+                        ],
                       ),
                     ),
             ),
@@ -311,12 +395,6 @@ $editorFirst''';
                 runSpacing: 8,
                 alignment: WrapAlignment.end,
                 children: [
-                  // Regenerate
-                  IconButton.outlined(
-                    onPressed: _loading || _pdfSharing ? null : _generate,
-                    icon: const Icon(Icons.refresh, size: 20),
-                    tooltip: 'offer.share_regenerate'.tr(),
-                  ),
                   // Copy text
                   OutlinedButton.icon(
                     onPressed: _loading || _pdfSharing ? null : _copyToClipboard,
@@ -361,6 +439,56 @@ $editorFirst''';
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Compact dropdown for selecting a cocktail replacement.
+/// Highlighted in tertiary color when the value differs from the original.
+class _CocktailDropdown extends StatelessWidget {
+  const _CocktailDropdown({
+    required this.value,
+    required this.allCocktails,
+    required this.isChanged,
+    required this.onChanged,
+  });
+
+  final String value;
+  final List<String> allCocktails;
+  final bool isChanged;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final effectiveValue = allCocktails.contains(value) ? value : null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: isChanged
+            ? colorScheme.tertiaryContainer
+            : colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isChanged ? colorScheme.tertiary : colorScheme.outline,
+          width: isChanged ? 1.5 : 1.0,
+        ),
+      ),
+      child: DropdownButton<String>(
+        value: effectiveValue,
+        underline: const SizedBox.shrink(),
+        isDense: true,
+        style: TextStyle(
+          fontSize: 13,
+          color: isChanged ? colorScheme.onTertiaryContainer : colorScheme.onSurface,
+          fontWeight: isChanged ? FontWeight.w600 : FontWeight.normal,
+        ),
+        items: allCocktails.map((name) {
+          return DropdownMenuItem(value: name, child: Text(name));
+        }).toList(),
+        onChanged: onChanged,
       ),
     );
   }

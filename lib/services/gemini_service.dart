@@ -909,6 +909,7 @@ Schreibe den Plan professionell, motivierend und auf Deutsch. Verwende Markdown-
   /// Generate the middle part of a WhatsApp offer share message.
   /// Returns the cocktail commentary text to be inserted into the message template.
   Future<String?> generateOfferShareMessage({
+    required List<String> originalCocktails,
     required List<String> selectedCocktails,
     required List<String> allAvailableCocktails,
   }) async {
@@ -922,29 +923,51 @@ Schreibe den Plan professionell, motivierend und auf Deutsch. Verwende Markdown-
     }
 
     try {
-      final prompt = '''
+      // Detect which cocktails were swapped
+    final swaps = <String>[];
+    for (int i = 0; i < originalCocktails.length && i < selectedCocktails.length; i++) {
+      if (originalCocktails[i] != selectedCocktails[i]) {
+        swaps.add('"${originalCocktails[i]}" → "${selectedCocktails[i]}"');
+      }
+    }
+    // Build the swap suggestion lines (one per swap)
+    final swapLines = swaps.isEmpty
+        ? ''
+        : '\n\nUNSERE VORSCHLÄGE (noch NICHT entschieden – als offene Frage formulieren):\n'
+          '${swaps.map((s) => '- $s').join('\n')}';
+
+    final swapRule = swaps.isEmpty
+        ? '- Kommentiere nur die aktuelle Auswahl des Kunden'
+        : '''- Kommentiere kurz die aktuelle Kundenauswahl
+- Mache dann für JEDEN Vorschlag einen eigenen Satz als offene Frage/Angebot an den Kunden
+- ⚠️ PFLICHT: Formuliere AUSSCHLIESSLICH im Konjunktiv oder als Frage. NIEMALS im Vollzug oder Vergangenheit.
+  FALSCH: "Den Fruit Blush reinzunehmen war ein super Griff"
+  FALSCH: "Du hast gut daran getan, X durch Y zu ersetzen"
+  RICHTIG: "Wir hätten noch einen Tipp: Wie wäre es, den [original] durch den [neu] zu ersetzen? [Grund]"
+  RICHTIG: "Falls du magst, könntest du [original] noch durch [neu] tauschen – [Grund]"''';
+
+    final prompt = '''
 Du bist ein freundlicher Berater des Premium Cocktail-Catering-Services "Black Lodge" aus der Schweiz.
 
 AUFGABE:
 Schreibe einen kurzen, natürlichen Kommentar zur Cocktail-Auswahl des Kunden für eine WhatsApp-Nachricht.
 
-AUSGEWÄHLTE COCKTAILS:
-${selectedCocktails.map((c) => '- $c').join('\n')}
+KUNDENAUSWAHL (was der Kunde aktuell gewählt hat):
+${originalCocktails.map((c) => '- $c').join('\n')}$swapLines
 
 ALLE VERFÜGBAREN COCKTAILS IM REPERTOIRE:
 ${allAvailableCocktails.map((c) => '- $c').join('\n')}
 
 REGELN:
-- Schreibe 2-4 Sätze als Kommentar zur Auswahl
-- Bewerte die Harmonie (z.B. gute Balance zwischen süß/frisch/tropisch/herb)
-- Falls die Auswahl sehr einseitig ist (z.B. nur süsse Cocktails), schlage 1-2 ergänzende Alternativen aus dem Repertoire vor
-- Schreibe locker und persönlich, nicht werblich
+- Schreibe 2-4 Sätze insgesamt
+- Bewerte kurz die Harmonie der Kundenauswahl
+$swapRule
+- Schreibe locker und persönlich, wie ein Barkeeper-Tipp, nicht werblich
 - Auf Deutsch
-- KEINE Anrede (kein "Hallo" etc.) – die kommt separat in der Nachricht
+- KEINE Anrede (kein "Hallo" etc.) – die kommt separat
 - KEIN Abschlussgruss – der kommt separat
-- Maximal 1-2 Emojis wenn es natürlich wirkt (z.B. ☀️ 🍹 😊)
+- Maximal 1-2 Emojis wenn es natürlich wirkt
 - Variiere den Schreibstil – keine Standardformulierungen
-- Jedes Mal etwas anders formulieren
 
 Antworte NUR mit dem Kommentar-Text, kein JSON, kein Markdown.
 ''';

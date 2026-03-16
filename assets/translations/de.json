@@ -264,7 +264,9 @@
     "share_pdf": "PDF teilen & Nachricht kopieren",
     "share_pdf_tip": "Tipp: \"PDF teilen\" kopiert die Nachricht in die Zwischenablage und öffnet den Teilen-Dialog. PDF auswählen → WhatsApp öffnet sich → Nachricht einfügen.",
     "share_pdf_hint": "Nachricht wurde kopiert! Füge sie in WhatsApp ein.",
-    "share_pdf_error": "PDF konnte nicht geteilt werden."
+    "share_pdf_error": "PDF konnte nicht geteilt werden.",
+    "share_cocktail_selection": "Cocktails anpassen (optional)",
+    "share_regenerate_hint": "Neu generieren"
   },
   "invoice": {
     "title": "Auftragsbestätigung erstellen",
