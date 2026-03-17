@@ -78,6 +78,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final _barCostCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
   final _discountRemarkCtrl = TextEditingController();
+  late final TextEditingController _firstPositionTextCtrl;
   late final TextEditingController _additionalInfoCtrl;
 
   // Event types
@@ -122,7 +123,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         : '0.70';
     _barCostCtrl.text = widget.order.offerBarCost > 0
         ? widget.order.offerBarCost.toStringAsFixed(2)
-        : (widget.order.thekeCost > 0 ? widget.order.thekeCost.toStringAsFixed(2) : '');
+        : (widget.order.thekeCost > 0
+              ? widget.order.thekeCost.toStringAsFixed(2)
+              : '');
 
     // Load saved offer data from order, or use order name/phone/time as fallback
     _clientNameCtrl.text = widget.order.offerClientName.isEmpty
@@ -160,9 +163,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _selectedEmployees = Set.from(widget.order.assignedEmployees);
 
     // Set service type
-    _serviceType = widget.order.serviceType.isNotEmpty
-        ? widget.order.serviceType
-        : 'cocktail_barservice';
+    _serviceType = _normalizeServiceType(
+      widget.order.serviceType.isNotEmpty
+          ? widget.order.serviceType
+          : 'cocktail_barservice',
+    );
+
+    _firstPositionTextCtrl = TextEditingController(
+      text: widget.order.offerFirstPositionText.trim().isNotEmpty
+          ? widget.order.offerFirstPositionText.trim()
+          : _defaultServicePositionText(serviceType: _serviceType),
+    );
 
     // Set additional info based on language
     _additionalInfoCtrl = TextEditingController(
@@ -189,16 +200,72 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _barCostCtrl.dispose();
     _discountCtrl.dispose();
     _discountRemarkCtrl.dispose();
+    _firstPositionTextCtrl.dispose();
     _additionalInfoCtrl.dispose();
     super.dispose();
   }
 
+  String _defaultServicePositionText({String? serviceType, String? language}) {
+    final resolvedServiceType = serviceType ?? _serviceType;
+    final isEn = (language ?? _language) == 'en';
+    return switch (resolvedServiceType) {
+      'cocktail_barservice' =>
+        isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+      'cocktail_service' =>
+        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+      'mocktail_service' =>
+        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
+      'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
+      _ => isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+    };
+  }
+
+  String _normalizeServiceType(String serviceType) {
+    return switch (serviceType) {
+      'cocktailservice' => 'cocktail_service',
+      'barservice' => 'bar_service',
+      _ => serviceType,
+    };
+  }
+
+  void _onServiceTypeChanged(String value) {
+    final previousDefault = _defaultServicePositionText(
+      serviceType: _serviceType,
+    );
+    final currentText = _firstPositionTextCtrl.text.trim();
+    final shouldSyncDefault =
+        currentText.isEmpty || currentText == previousDefault;
+
+    setState(() {
+      _serviceType = value;
+      if (shouldSyncDefault) {
+        _firstPositionTextCtrl.text = _defaultServicePositionText(
+          serviceType: value,
+        );
+      }
+    });
+  }
+
   void _onLanguageChanged(String lang) {
+    final previousDefault = _defaultServicePositionText(
+      serviceType: _serviceType,
+      language: _language,
+    );
+    final currentText = _firstPositionTextCtrl.text.trim();
+    final shouldSyncDefault =
+        currentText.isEmpty || currentText == previousDefault;
+
     setState(() {
       _language = lang;
       _additionalInfoCtrl.text = lang == 'en'
           ? OfferData.defaultAdditionalInfoEn
           : OfferData.defaultAdditionalInfoDe;
+      if (shouldSyncDefault) {
+        _firstPositionTextCtrl.text = _defaultServicePositionText(
+          serviceType: _serviceType,
+          language: lang,
+        );
+      }
     });
   }
 
@@ -240,6 +307,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
       serviceType: _serviceType,
+      servicePositionText: _firstPositionTextCtrl.text.trim(),
       extraPositions: List.of(_extraPositions),
       assignedEmployees: _selectedEmployees.toList(),
       supervisorItems: widget.order.items
@@ -266,12 +334,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
       assignedEmployees: _selectedEmployees.toList(),
       serviceType: _serviceType,
+      firstPositionText: _firstPositionTextCtrl.text.trim(),
       distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
-      travelCostPerKm: double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
+      travelCostPerKm:
+          double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
       barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
       location: _locationCtrl.text.trim(),
     );
-    
+
     // Also update cocktails, shots, and bar description
     await orderRepository.updateOrderCocktailsAndBar(
       orderId: widget.order.id,
@@ -407,7 +477,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         clientName: _clientNameCtrl.text.trim(),
         editorName: _editorNameCtrl.text.trim(),
         selectedCocktails: cocktails,
-        generatePdfBytes: () => OfferPdfGenerator.generatePdfBytes(offerSnapshot),
+        generatePdfBytes: () =>
+            OfferPdfGenerator.generatePdfBytes(offerSnapshot),
         pdfFilename: pdfFilename,
       ),
     );
@@ -587,10 +658,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       )
                     : Column(
                         children: fields
-                            .map((f) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: f,
-                                ))
+                            .map(
+                              (f) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: f,
+                              ),
+                            )
                             .toList(),
                       ),
                 const SizedBox(height: 8),
@@ -826,16 +899,26 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 child: Text('orders.service_cocktail_only'.tr()),
               ),
               DropdownMenuItem(
+                value: 'mocktail_service',
+                child: Text('orders.service_mocktail_only'.tr()),
+              ),
+              DropdownMenuItem(
                 value: 'bar_service',
                 child: Text('orders.service_bar_only'.tr()),
               ),
             ],
             onChanged: (value) {
               if (value != null) {
-                setState(() => _serviceType = value);
+                _onServiceTypeChanged(value);
               }
             },
           ),
+        ),
+        const SizedBox(height: 8),
+        _field(
+          controller: _firstPositionTextCtrl,
+          label: 'offer.first_position_text'.tr(),
+          hint: 'offer.first_position_text_hint'.tr(),
         ),
       ],
     );

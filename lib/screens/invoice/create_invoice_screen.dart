@@ -187,9 +187,19 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     _selectedEmployees = Set.from(widget.order.assignedEmployees);
 
     // Set service type
-    _serviceType = widget.order.serviceType.isNotEmpty
-        ? widget.order.serviceType
-        : 'cocktail_barservice';
+    _serviceType = _normalizeServiceType(
+      widget.order.serviceType.isNotEmpty
+          ? widget.order.serviceType
+          : 'cocktail_barservice',
+    );
+  }
+
+  String _normalizeServiceType(String serviceType) {
+    return switch (serviceType) {
+      'cocktailservice' => 'cocktail_service',
+      'barservice' => 'bar_service',
+      _ => serviceType,
+    };
   }
 
   @override
@@ -812,6 +822,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 child: Text('orders.service_cocktail_only'.tr()),
               ),
               DropdownMenuItem(
+                value: 'mocktail_service',
+                child: Text('orders.service_mocktail_only'.tr()),
+              ),
+              DropdownMenuItem(
                 value: 'bar_service',
                 child: Text('orders.service_bar_only'.tr()),
               ),
@@ -833,7 +847,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       children: [
         SectionHeader(label: 'invoice.positions'.tr()),
         const SizedBox(height: 8),
-        
+
         // Main pricing card (like offer screen)
         Card(
           child: Padding(
@@ -1002,8 +1016,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               width: 250,
               child: _field(
                 controller: _discountCtrl,
-                label:
-                    '${'invoice.discount'.tr()} (${widget.order.currency})',
+                label: '${'invoice.discount'.tr()} (${widget.order.currency})',
                 hint: '0',
                 keyboard: TextInputType.number,
               ),

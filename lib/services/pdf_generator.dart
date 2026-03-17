@@ -292,7 +292,10 @@ class PdfGenerator {
   ) {
     final serviceLabel = switch (serviceType) {
       'cocktail_barservice' => 'Cocktail- & Barservice',
+      'cocktail_service' => 'Nur Cocktailservice',
       'cocktailservice' => 'Nur Cocktailservice',
+      'mocktail_service' => 'Nur Mocktailservice',
+      'bar_service' => 'Nur Barservice',
       'barservice' => 'Nur Barservice',
       _ => serviceType,
     };

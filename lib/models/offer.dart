@@ -72,6 +72,7 @@ class OfferData {
     required this.additionalInfo,
     required this.language,
     this.serviceType = 'cocktail_barservice',
+    this.servicePositionText = '',
     this.discountRemark = '',
     this.eventLocation = '',
     this.extraPositions = const [],
@@ -88,6 +89,9 @@ class OfferData {
 
   /// Service type (e.g. "cocktail_barservice", "cocktailservice", "barservice")
   final String serviceType;
+
+  /// Editable text for the first package position in the offer table.
+  final String servicePositionText;
 
   /// Date of the event (from SavedOrder.date)
   final DateTime eventDate;
@@ -160,13 +164,13 @@ class OfferData {
 
   /// Selected bar drinks categories (e.g., "Bier", "Wein", "Softdrinks")
   final List<String> barDrinks;
-  
+
   /// Selected alcohol items for purchase (e.g., "Wodka", "Chivas")
   final List<String> alcoholPurchase;
-  
+
   /// Selected additional services (e.g., "360 Booth", "PhotoBox Classic")
   final List<String> additionalServices;
-  
+
   /// Free-form remarks/notes for additional services
   final String remarks;
 

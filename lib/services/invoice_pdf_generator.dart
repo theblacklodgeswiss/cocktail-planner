@@ -110,8 +110,13 @@ class InvoicePdfGenerator {
     final serviceLabel = switch (order.serviceType) {
       'cocktail_barservice' =>
         isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+      'cocktail_service' =>
+        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
       'cocktailservice' =>
         isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+      'mocktail_service' =>
+        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
+      'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
       'barservice' => isEn ? 'Bar Service only' : 'Nur Barservice',
       _ =>
         order.serviceType.isEmpty
@@ -440,7 +445,13 @@ class InvoicePdfGenerator {
                   ),
                 ),
                 pw.TextSpan(
-                  text: order.cocktails.map((c) => c.contains('(') ? c.substring(0, c.indexOf('(')).trim() : c).join(', '),
+                  text: order.cocktails
+                      .map(
+                        (c) => c.contains('(')
+                            ? c.substring(0, c.indexOf('(')).trim()
+                            : c,
+                      )
+                      .join(', '),
                   style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
@@ -711,33 +722,42 @@ class InvoicePdfGenerator {
             cell(dateStr),
             cell(isEn ? 'Bar Drinks' : 'Bargetränke'),
             cell('1', align: pw.TextAlign.center),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
             cell(order.barDrinks.join(', ')),
           ],
         ),
       // Alcohol purchase (if selected)
-      ...order.alcoholPurchase.map(
-        (alcohol) {
-          final isUsageBased = alcohol.toLowerCase().contains('wodka') || 
-                               alcohol.toLowerCase().contains('chivas');
-          final note = isUsageBased
-              ? (isEn 
-                  ? 'Usage-based billing' 
-                  : 'Nach Verbrauch abgerechnet')
-              : '';
-          return pw.TableRow(
-            children: [
-              cell(dateStr),
-              cell(alcohol),
-              cell('1', align: pw.TextAlign.center),
-              cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-              cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-              cell(note),
-            ],
-          );
-        },
-      ),
+      ...order.alcoholPurchase.map((alcohol) {
+        final isUsageBased =
+            alcohol.toLowerCase().contains('wodka') ||
+            alcohol.toLowerCase().contains('chivas');
+        final note = isUsageBased
+            ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
+            : '';
+        return pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(alcohol),
+            cell('1', align: pw.TextAlign.center),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(note),
+          ],
+        );
+      }),
       // Additional services (if selected)
       ...order.additionalServices.map(
         (service) => pw.TableRow(
@@ -745,8 +765,14 @@ class InvoicePdfGenerator {
             cell(dateStr),
             cell(service),
             cell('1', align: pw.TextAlign.center),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
             cell(order.remarks.isNotEmpty ? order.remarks : ''),
           ],
         ),

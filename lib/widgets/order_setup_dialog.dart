@@ -97,6 +97,12 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                         setState(() => serviceType = 'cocktail_service'),
                   ),
                   ChoiceChip(
+                    label: Text('order_setup.service_mocktailservice'.tr()),
+                    selected: serviceType == 'mocktail_service',
+                    onSelected: (_) =>
+                        setState(() => serviceType = 'mocktail_service'),
+                  ),
+                  ChoiceChip(
                     label: Text('order_setup.service_barservice'.tr()),
                     selected: serviceType == 'bar_service',
                     onSelected: (_) =>
@@ -161,7 +167,8 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                 onTap: () async {
                   final time = await showTimePicker(
                     context: context,
-                    initialTime: _eventTime ?? const TimeOfDay(hour: 18, minute: 0),
+                    initialTime:
+                        _eventTime ?? const TimeOfDay(hour: 18, minute: 0),
                   );
                   if (time != null) {
                     setState(() => _eventTime = time);

@@ -136,10 +136,16 @@ class OrderRepository {
       if (eventTime != null) updateData['eventTime'] = eventTime;
       if (eventDate != null) updateData['date'] = eventDate.toIso8601String();
       if (serviceType != null) updateData['serviceType'] = serviceType;
-      if (cocktailPopularity != null) updateData['cocktailPopularity'] = cocktailPopularity;
+      if (cocktailPopularity != null) {
+        updateData['cocktailPopularity'] = cocktailPopularity;
+      }
       if (barDrinks != null) updateData['barDrinks'] = barDrinks;
-      if (alcoholPurchase != null) updateData['alcoholPurchase'] = alcoholPurchase;
-      if (additionalServices != null) updateData['additionalServices'] = additionalServices;
+      if (alcoholPurchase != null) {
+        updateData['alcoholPurchase'] = alcoholPurchase;
+      }
+      if (additionalServices != null) {
+        updateData['additionalServices'] = additionalServices;
+      }
       if (remarks != null) updateData['remarks'] = remarks;
 
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
@@ -169,6 +175,7 @@ class OrderRepository {
     double extraHourRate = 50.0,
     List<String> assignedEmployees = const [],
     String? serviceType,
+    String? firstPositionText,
     int distanceKm = 0,
     double travelCostPerKm = 0.70,
     double barCost = 0,
@@ -198,14 +205,17 @@ class OrderRepository {
         'offerTravelCostPerKm': travelCostPerKm,
         'offerBarCost': barCost,
       };
-      
+
       if (serviceType != null) {
         updateData['serviceType'] = serviceType;
+      }
+      if (firstPositionText != null) {
+        updateData['offerFirstPositionText'] = firstPositionText;
       }
       if (location.isNotEmpty) {
         updateData['location'] = location;
       }
-      
+
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
@@ -233,11 +243,11 @@ class OrderRepository {
         'thekeCost': thekeCost,
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      
+
       if (cocktails != null) updateData['cocktails'] = cocktails;
       if (shots != null) updateData['shots'] = shots;
       if (bar != null) updateData['bar'] = bar;
-      
+
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
@@ -259,11 +269,11 @@ class OrderRepository {
       final updateData = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      
+
       if (cocktails != null) updateData['cocktails'] = cocktails;
       if (shots != null) updateData['shots'] = shots;
       if (bar != null) updateData['bar'] = bar;
-      
+
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
@@ -299,7 +309,9 @@ class OrderRepository {
     int? year,
     bool includePending = false,
   }) {
-    debugPrint('📡 watchOrders called - Firestore available: ${firestoreService.isAvailable}, year: $year, includePending: $includePending');
+    debugPrint(
+      '📡 watchOrders called - Firestore available: ${firestoreService.isAvailable}, year: $year, includePending: $includePending',
+    );
     if (!firestoreService.isAvailable) {
       debugPrint('⚠️ Firestore not available, returning empty stream');
       return Stream.value([]);
@@ -310,7 +322,9 @@ class OrderRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          debugPrint('📦 Received ${snapshot.docs.length} orders from Firestore');
+          debugPrint(
+            '📦 Received ${snapshot.docs.length} orders from Firestore',
+          );
           var orders = snapshot.docs
               .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
               .toList();
@@ -319,17 +333,23 @@ class OrderRepository {
           if (!includePending) {
             final beforeFilter = orders.length;
             orders = orders.where((o) => o.total > 0).toList();
-            debugPrint('🔸 Filtered pending orders: $beforeFilter → ${orders.length}');
+            debugPrint(
+              '🔸 Filtered pending orders: $beforeFilter → ${orders.length}',
+            );
           }
 
           if (year != null) {
             final beforeYearFilter = orders.length;
             // Filter by year, but keep pending orders (total == 0) regardless of year
             // because they need attention even if the event date is in another year
-            orders = orders.where((o) => o.year == year || o.total == 0).toList();
-            debugPrint('🔸 Filtered by year $year (keeping pending): $beforeYearFilter → ${orders.length}');
+            orders = orders
+                .where((o) => o.year == year || o.total == 0)
+                .toList();
+            debugPrint(
+              '🔸 Filtered by year $year (keeping pending): $beforeYearFilter → ${orders.length}',
+            );
           }
-          
+
           debugPrint('✅ Returning ${orders.length} orders');
           return orders;
         })

@@ -21,10 +21,7 @@ class OrderFormResult {
   final OrderSetupData setupData;
   final List<Recipe> selectedRecipes;
 
-  OrderFormResult({
-    required this.setupData,
-    required this.selectedRecipes,
-  });
+  OrderFormResult({required this.setupData, required this.selectedRecipes});
 }
 
 /// Modern multi-step order form inspired by Roamy app design.
@@ -44,7 +41,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
   final int _totalSteps = 9;
-  
+
   Future<CocktailData>? _dataFuture;
 
   /// Resolved prefill order (from widget.prefill or appState.pendingFormOrder).
@@ -107,11 +104,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         if (mounted) {
           setState(() {
             for (final name in cocktailNames) {
-              final clean = name.contains('(') ? name.substring(0, name.indexOf('(')).trim() : name;
+              final clean = name.contains('(')
+                  ? name.substring(0, name.indexOf('(')).trim()
+                  : name;
               final recipe = data.recipes.firstWhere(
                 (r) => r.name.toLowerCase() == clean.toLowerCase(),
                 orElse: () => Recipe(
-                  id: clean.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_'),
+                  id: clean.toLowerCase().replaceAll(
+                    RegExp(r'[^a-z0-9]+'),
+                    '_',
+                  ),
                   name: clean,
                   ingredients: [],
                   type: 'cocktail',
@@ -142,6 +144,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     }
   }
 
+  String _normalizeServiceType(String serviceType) {
+    return switch (serviceType) {
+      'cocktailservice' => 'cocktail_service',
+      'barservice' => 'bar_service',
+      _ => serviceType,
+    };
+  }
+
   void _applyPrefill() {
     // widget.prefill for programmatic use; appState.pendingFormOrder for push-navigation (avoids GoRouter extra being lost on web)
     final order = widget.prefill ?? appState.pendingFormOrder;
@@ -154,11 +164,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _eventDate = order.date;
     _personCount = order.personCount > 0 ? order.personCount : _personCount;
     _currency = order.currency.isNotEmpty ? order.currency : _currency;
-    _drinkerType = order.drinkerType.isNotEmpty ? order.drinkerType : _drinkerType;
-    if (order.serviceType.isNotEmpty) _serviceType = order.serviceType;
+    _drinkerType = order.drinkerType.isNotEmpty
+        ? order.drinkerType
+        : _drinkerType;
+    if (order.serviceType.isNotEmpty) {
+      _serviceType = _normalizeServiceType(order.serviceType);
+    }
     if (order.distanceKm > 0) _distanceKm = order.distanceKm;
     // Parse event time
-    final timeStr = order.offerEventTime.isNotEmpty ? order.offerEventTime : order.eventTime;
+    final timeStr = order.offerEventTime.isNotEmpty
+        ? order.offerEventTime
+        : order.eventTime;
     if (timeStr.isNotEmpty) {
       try {
         final parts = timeStr.split(':');
@@ -202,7 +218,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   // Update browser URL without affecting GoRouter's navigation stack
   void _updateUrlWithoutNavigation(int step) {
     final currentUrl = Uri.base;
-    final newUrl = currentUrl.replace(queryParameters: {'step': step.toString()});
+    final newUrl = currentUrl.replace(
+      queryParameters: {'step': step.toString()},
+    );
     updateBrowserUrl(newUrl.toString());
   }
 
@@ -224,11 +242,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             children: [
               // Header with Cancel and OK buttons
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withValues(alpha: 0.2),
                     ),
                   ),
                 ),
@@ -240,14 +263,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       onPressed: () => Navigator.of(context).pop(),
                       child: Text(
                         'common.cancel'.tr(),
-                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                     Text(
                       'order_setup.event_date_label'.tr(),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
@@ -305,11 +330,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             children: [
               // Header with Cancel and OK buttons
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withValues(alpha: 0.2),
                     ),
                   ),
                 ),
@@ -321,14 +351,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       onPressed: () => Navigator.of(context).pop(),
                       child: Text(
                         'common.cancel'.tr(),
-                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                     Text(
                       'order_setup.event_time_label'.tr(),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
@@ -409,7 +441,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   void _submitForm() async {
     // Validate required fields
     String? errorMessage;
-    
+
     if (_nameController.text.trim().isEmpty) {
       errorMessage = 'order_setup.required_name'.tr();
       _currentStep = 1; // Jump to Basic Info step
@@ -423,11 +455,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       _currentStep = 5; // Jump to Cocktail Selection step
       _updateUrlWithoutNavigation(5);
     }
-    
+
     if (errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
       setState(() {}); // Update UI to show correct step
       return;
     }
@@ -447,10 +479,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       currency: _currency,
       drinkerType: _drinkerType,
       serviceType: _serviceType,
-      barDrinks: _selectedBarDrinks.isEmpty ? null : _selectedBarDrinks.toList(),
-      alcoholPurchase: _selectedAlcoholItems.isEmpty ? null : _selectedAlcoholItems.toList(),
-      additionalServices: _selectedAdditionalServices.isEmpty ? null : _selectedAdditionalServices.toList(),
-      remarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+      barDrinks: _selectedBarDrinks.isEmpty
+          ? null
+          : _selectedBarDrinks.toList(),
+      alcoholPurchase: _selectedAlcoholItems.isEmpty
+          ? null
+          : _selectedAlcoholItems.toList(),
+      additionalServices: _selectedAdditionalServices.isEmpty
+          ? null
+          : _selectedAdditionalServices.toList(),
+      remarks: _remarksController.text.trim().isEmpty
+          ? null
+          : _remarksController.text.trim(),
     );
 
     final result = OrderFormResult(
@@ -483,8 +523,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   Future<void> _updateFormOrderAndNavigate(OrderSetupData setupData) async {
     final order = _prefillOrder!;
-    final cocktailNames = _selectedRecipes.where((r) => !r.isShot).map((r) => r.name).toList();
-    final shotNames = _selectedRecipes.where((r) => r.isShot).map((r) => r.name).toList();
+    final cocktailNames = _selectedRecipes
+        .where((r) => !r.isShot)
+        .map((r) => r.name)
+        .toList();
+    final shotNames = _selectedRecipes
+        .where((r) => r.isShot)
+        .map((r) => r.name)
+        .toList();
     final eventTimeStr = setupData.eventTime != null
         ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}'
         : '';
@@ -537,8 +583,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         distanceKm: setupData.distanceKm ?? 0,
         phone: setupData.phoneNumber ?? '',
         location: setupData.address ?? '',
-        eventTime: setupData.eventTime != null 
-            ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}' 
+        eventTime: setupData.eventTime != null
+            ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}'
             : '',
         barDrinks: setupData.barDrinks ?? [],
         alcoholPurchase: setupData.alcoholPurchase ?? [],
@@ -557,11 +603,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            icon: const Icon(
-              Icons.celebration,
-              size: 64,
-              color: Colors.green,
-            ),
+            icon: const Icon(Icons.celebration, size: 64, color: Colors.green),
             title: Text('order_form.thank_you_title'.tr()),
             content: Text('order_form.thank_you_message'.tr()),
             actions: [
@@ -636,7 +678,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               (index) => Expanded(
                 child: Container(
                   height: 4,
-                  margin: EdgeInsets.only(right: index < _totalSteps - 1 ? 8 : 0),
+                  margin: EdgeInsets.only(
+                    right: index < _totalSteps - 1 ? 8 : 0,
+                  ),
                   decoration: BoxDecoration(
                     color: index <= _currentStep
                         ? Theme.of(context).colorScheme.primary
@@ -680,7 +724,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _generateShoppingListWithGemini,
                           icon: const Icon(Icons.auto_awesome),
-                          label: const Text('Mit Gemini Einkaufsliste generieren'),
+                          label: const Text(
+                            'Mit Gemini Einkaufsliste generieren',
+                          ),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -714,7 +760,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                             ? OutlinedButton(
                                 onPressed: _previousStep,
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -767,8 +815,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 child: Text(
                   'order_setup.title'.tr(),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -859,7 +907,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
-  Widget _buildStepperItem(int step, IconData icon, String title, String subtitle) {
+  Widget _buildStepperItem(
+    int step,
+    IconData icon,
+    String title,
+    String subtitle,
+  ) {
     final isActive = _currentStep == step;
     final isCompleted = _currentStep > step;
 
@@ -907,20 +960,22 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: isActive
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: isActive
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         _getStepTitle(step),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                              color: isActive
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
+                          fontWeight: isActive
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: isActive
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -941,8 +996,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         return _serviceType == 'cocktail_barservice'
             ? 'Cocktail & Bar'
             : _serviceType == 'cocktail_service'
-                ? 'Nur Cocktail'
-                : 'Nur Bar';
+            ? 'Nur Cocktail'
+            : _serviceType == 'mocktail_service'
+            ? 'Nur Mocktails'
+            : 'Nur Bar';
       case 1:
         return _nameController.text.trim().isEmpty
             ? 'Nicht ausgefüllt'
@@ -954,17 +1011,23 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       case 3:
         return '$_personCount Personen';
       case 4:
-        if (_serviceType == 'cocktail_barservice' || _serviceType == 'bar_service') {
-          final total = _selectedBarDrinks.length + _selectedAlcoholItems.length;
+        if (_serviceType == 'cocktail_barservice' ||
+            _serviceType == 'bar_service') {
+          final total =
+              _selectedBarDrinks.length + _selectedAlcoholItems.length;
           return total == 0 ? 'Keine ausgewählt' : '$total ausgewählt';
         }
         return 'Übersprungen';
       case 5:
         return _selectedRecipes.isEmpty
             ? 'Keine ausgewählt'
+            : _serviceType == 'mocktail_service'
+            ? '${_selectedRecipes.length} Mocktails'
             : '${_selectedRecipes.length} Cocktails';
       case 6:
-        return _selectedRecipes.isEmpty ? 'Keine Cocktails' : '${_selectedRecipes.length} konfiguriert';
+        return _selectedRecipes.isEmpty
+            ? 'Keine Cocktails'
+            : '${_selectedRecipes.length} konfiguriert';
       case 7:
         final count7 = _selectedAdditionalServices.length;
         return count7 == 0 ? 'Keine' : '$count7 ausgewählt';
@@ -1008,16 +1071,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'order_setup.service_type_title'.tr(),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'order_setup.service_type_subtitle'.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
           _buildServiceCard(
@@ -1032,6 +1095,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             Icons.local_bar,
             'order_setup.service_cocktailservice'.tr(),
             'order_setup.service_cocktailservice_desc'.tr(),
+          ),
+          const SizedBox(height: 16),
+          _buildServiceCard(
+            'mocktail_service',
+            Icons.no_drinks,
+            'order_setup.service_mocktailservice'.tr(),
+            'order_setup.service_mocktailservice_desc'.tr(),
           ),
           const SizedBox(height: 16),
           _buildServiceCard(
@@ -1071,7 +1141,19 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       child: InkWell(
         onTap: () {
           HapticFeedback.selectionClick();
-          setState(() => _serviceType = value);
+          setState(() {
+            _serviceType = value;
+            if (value == 'mocktail_service') {
+              _selectedRecipes.removeWhere((recipe) => recipe.isShot);
+              _cocktailPopularity.removeWhere(
+                (name, _) =>
+                    !_selectedRecipes.any((recipe) => recipe.name == name),
+              );
+              if (_cocktailFilter == 'shots') {
+                _cocktailFilter = 'all';
+              }
+            }
+          });
         },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
@@ -1102,15 +1184,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       description,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -1136,16 +1218,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'order_setup.basic_info_title'.tr(),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'order_setup.basic_info_subtitle'.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
           TextField(
@@ -1193,16 +1275,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'order_setup.event_details_title'.tr(),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'order_setup.event_details_subtitle'.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
           _buildDateTimePicker(),
@@ -1270,11 +1352,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         const SizedBox(height: 4),
                         Text(
                           _eventDate != null
-                              ? DateFormat('EEEE, dd. MMMM yyyy').format(_eventDate!)
+                              ? DateFormat(
+                                  'EEEE, dd. MMMM yyyy',
+                                ).format(_eventDate!)
                               : 'order_setup.event_date_hint'.tr(),
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -1284,7 +1367,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ),
             ),
           ),
-          Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+          Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+          ),
           InkWell(
             onTap: () async {
               HapticFeedback.lightImpact();
@@ -1294,7 +1380,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 setState(() => _eventTime = time);
               }
             },
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -1317,9 +1405,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                           _eventTime != null
                               ? _eventTime!.format(context)
                               : 'order_setup.event_time_hint'.tr(),
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -1342,27 +1429,33 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'order_setup.preferences_title'.tr(),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'order_setup.preferences_subtitle'.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
-          if (_prefillOrder != null && (_prefillOrder!.location.isNotEmpty || _prefillOrder!.guestCountRange.isNotEmpty)) ...[
+          if (_prefillOrder != null &&
+              (_prefillOrder!.location.isNotEmpty ||
+                  _prefillOrder!.guestCountRange.isNotEmpty)) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.3),
                 ),
               ),
               child: Column(
@@ -1373,9 +1466,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       borderRadius: BorderRadius.circular(8),
                       onTap: () {
                         final origin = Uri.encodeComponent('Allschwil, 4123');
-                        final dest = Uri.encodeComponent(_prefillOrder!.location);
+                        final dest = Uri.encodeComponent(
+                          _prefillOrder!.location,
+                        );
                         launchUrl(
-                          Uri.parse('https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$dest&travelmode=driving'),
+                          Uri.parse(
+                            'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$dest&travelmode=driving',
+                          ),
                           mode: LaunchMode.externalApplication,
                         );
                       },
@@ -1391,8 +1488,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                           Expanded(
                             child: Text(
                               _prefillOrder!.location,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     decoration: TextDecoration.underline,
                                   ),
                             ),
@@ -1406,7 +1506,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       ),
                     ),
                   ],
-                  if (_prefillOrder!.location.isNotEmpty && _prefillOrder!.guestCountRange.isNotEmpty)
+                  if (_prefillOrder!.location.isNotEmpty &&
+                      _prefillOrder!.guestCountRange.isNotEmpty)
                     const SizedBox(height: 8),
                   if (_prefillOrder!.guestCountRange.isNotEmpty) ...[
                     Row(
@@ -1421,8 +1522,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         Expanded(
                           child: Text(
                             'Formular: ${_prefillOrder!.guestCountRange} Personen → Mittelwert: $_personCount',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                           ),
                         ),
@@ -1459,9 +1563,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           children: [
             Text(
               'order_setup.person_count_label'.tr(),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1472,9 +1576,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               child: Text(
                 '$_personCount',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
               ),
             ),
           ],
@@ -1511,9 +1615,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           children: [
             Text(
               'order_setup.distance_label'.tr(),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1524,9 +1628,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               child: Text(
                 '$_distanceKm km',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSecondaryContainer,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                ),
               ),
             ),
           ],
@@ -1560,9 +1664,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       children: [
         Text(
           'order_setup.currency_label'.tr(),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
         SegmentedButton<String>(
@@ -1593,18 +1697,30 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       children: [
         Text(
           'order_setup.drinker_type_label'.tr(),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            _buildDrinkerChip('light', Icons.local_drink, 'order_setup.drinker_light'.tr()),
-            _buildDrinkerChip('normal', Icons.local_bar, 'order_setup.drinker_normal'.tr()),
-            _buildDrinkerChip('heavy', Icons.sports_bar, 'order_setup.drinker_heavy'.tr()),
+            _buildDrinkerChip(
+              'light',
+              Icons.local_drink,
+              'order_setup.drinker_light'.tr(),
+            ),
+            _buildDrinkerChip(
+              'normal',
+              Icons.local_bar,
+              'order_setup.drinker_normal'.tr(),
+            ),
+            _buildDrinkerChip(
+              'heavy',
+              Icons.sports_bar,
+              'order_setup.drinker_heavy'.tr(),
+            ),
           ],
         ),
       ],
@@ -1617,11 +1733,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       selected: isSelected,
       label: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(label),
-        ],
+        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(label)],
       ),
       onSelected: (_) {
         HapticFeedback.selectionClick();
@@ -1637,16 +1749,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       children: [
         Text(
           'order_setup.bar_drinks_title'.tr(),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Text(
           'order_setup.bar_drinks_subtitle'.tr(),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -1689,30 +1801,48 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       children: [
         Text(
           'order_setup.alcohol_purchase_title'.tr(),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Text(
           'order_setup.alcohol_purchase_subtitle'.tr(),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            _buildAlcoholCheckbox('whiskey_chivas', 'Whiskey Chivas 0.7L - 35,-'),
-            _buildAlcoholCheckbox('whiskey_black_label', 'Whiskey Black Label 0.7L - 35,-'),
+            _buildAlcoholCheckbox(
+              'whiskey_chivas',
+              'Whiskey Chivas 0.7L - 35,-',
+            ),
+            _buildAlcoholCheckbox(
+              'whiskey_black_label',
+              'Whiskey Black Label 0.7L - 35,-',
+            ),
             _buildAlcoholCheckbox('vodka_absolut', 'Vodka Absolut 0.7L - 25,-'),
-            _buildAlcoholCheckbox('vodka_three_sixty', 'Vodka Three Sixty 0.7L - 25,-'),
+            _buildAlcoholCheckbox(
+              'vodka_three_sixty',
+              'Vodka Three Sixty 0.7L - 25,-',
+            ),
             _buildAlcoholCheckbox('vodka_ciroc', 'Vodka Ciroc 0.7L - 40,-'),
-            _buildAlcoholCheckbox('vodka_belvedere', 'Vodka Belvedere 0.7L - 45,-'),
-            _buildAlcoholCheckbox('vodka_grey_goose', 'Vodka Grey Goose 0.7L - 45,-'),
-            _buildAlcoholCheckbox('gin_bombay', 'Gin Bombay Saphire 0.7L - 25,-'),
+            _buildAlcoholCheckbox(
+              'vodka_belvedere',
+              'Vodka Belvedere 0.7L - 45,-',
+            ),
+            _buildAlcoholCheckbox(
+              'vodka_grey_goose',
+              'Vodka Grey Goose 0.7L - 45,-',
+            ),
+            _buildAlcoholCheckbox(
+              'gin_bombay',
+              'Gin Bombay Saphire 0.7L - 25,-',
+            ),
             _buildAlcoholCheckbox('gin_bulldog', 'Gin Bulldog 0.7L - 35,-'),
           ],
         ),
@@ -1741,7 +1871,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   Widget _buildBarAlcoholStep() {
     // Skip this step if service type doesn't include bar service
-    if (_serviceType != 'cocktail_barservice' && _serviceType != 'bar_service') {
+    if (_serviceType != 'cocktail_barservice' &&
+        _serviceType != 'bar_service') {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -1751,15 +1882,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               Icon(
                 Icons.info_outline,
                 size: 64,
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 'Dieser Schritt ist für Ihren ausgewählten Service nicht erforderlich.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -1774,16 +1907,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'Barservice - Welche Getränke sollen ausgeschenkt werden?',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'Wähle alle zutreffenden Kategorien',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
           _buildBarDrinksSelector(),
@@ -1821,7 +1954,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         }
 
         final recipes = snapshot.data?.recipes ?? [];
-        
+        final isMocktailService = _serviceType == 'mocktail_service';
+        final selectedLabelSingular = isMocktailService
+            ? 'Mocktail'
+            : 'Cocktail';
+        final selectedLabelPlural = isMocktailService
+            ? 'Mocktails'
+            : 'Cocktails';
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -1830,16 +1970,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               Text(
                 'order_setup.cocktail_selection_title'.tr(),
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
-                Text(
-                  'order_setup.cocktail_selection_subtitle'.tr(),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+              Text(
+                'order_setup.cocktail_selection_subtitle'.tr(),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+              ),
               const SizedBox(height: 16),
               TextField(
                 decoration: InputDecoration(
@@ -1869,27 +2009,32 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     selected: _cocktailFilter == 'cocktails',
-                    label: Text('Cocktails'),
+                    label: Text(isMocktailService ? 'Mocktails' : 'Cocktails'),
                     onSelected: (_) {
                       HapticFeedback.selectionClick();
                       setState(() => _cocktailFilter = 'cocktails');
                     },
                   ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _cocktailFilter == 'shots',
-                    label: Text('Shots'),
-                    onSelected: (_) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _cocktailFilter = 'shots');
-                    },
-                  ),
+                  if (!isMocktailService) ...[
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      selected: _cocktailFilter == 'shots',
+                      label: Text('Shots'),
+                      onSelected: (_) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _cocktailFilter = 'shots');
+                      },
+                    ),
+                  ],
                 ],
               ),
               if (_selectedRecipes.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(12),
@@ -1902,11 +2047,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '${_selectedRecipes.length} ${_selectedRecipes.length == 1 ? "Cocktail" : "Cocktails"} ausgewählt',
+                        '${_selectedRecipes.length} ${_selectedRecipes.length == 1 ? selectedLabelSingular : selectedLabelPlural} ausgewählt',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -1928,7 +2075,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   Widget _buildCocktailList(List<Recipe> recipes) {
     final filtered = recipes.where((recipe) {
       // Suchfilter
-      if (_searchQuery.isNotEmpty && !recipe.name.toLowerCase().contains(_searchQuery)) {
+      if (_searchQuery.isNotEmpty &&
+          !recipe.name.toLowerCase().contains(_searchQuery)) {
+        return false;
+      }
+      // Mocktail-Service: keine Shots anzeigen
+      if (_serviceType == 'mocktail_service' && recipe.isShot) {
         return false;
       }
       // Typ-Filter
@@ -1939,8 +2091,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         return false;
       }
       return true;
-    }).toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    }).toList()..sort((a, b) => a.name.compareTo(b.name));
 
     if (filtered.isEmpty) {
       return Center(
@@ -1970,13 +2121,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     if (screenWidth >= 600) {
       // Berücksichtige die Sidebar (280px) bei der Berechnung
       final availableWidth = screenWidth - 280 - 64; // Sidebar + Padding
-      final crossAxisCount = availableWidth > 1400 ? 8 
-          : availableWidth > 1200 ? 7 
-          : availableWidth > 1000 ? 6 
-          : availableWidth > 800 ? 5 
-          : availableWidth > 600 ? 4 
+      final crossAxisCount = availableWidth > 1400
+          ? 8
+          : availableWidth > 1200
+          ? 7
+          : availableWidth > 1000
+          ? 6
+          : availableWidth > 800
+          ? 5
+          : availableWidth > 600
+          ? 4
           : 3;
-      
+
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -1992,7 +2148,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         },
       );
     }
-    
+
     // Liste für Mobile
     return Column(
       children: filtered.map((recipe) => _buildCocktailCard(recipe)).toList(),
@@ -2050,9 +2206,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     child: Text(
                       recipe.name,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -2071,13 +2227,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.secondaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           'Shot',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSecondaryContainer,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 9,
                               ),
@@ -2135,9 +2296,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     Expanded(
                       child: Text(
                         recipe.name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -2150,13 +2310,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.secondaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           'Shot',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSecondaryContainer,
                               ),
                         ),
                       ),
@@ -2166,9 +2331,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ),
               const SizedBox(width: 12),
               Icon(
-                isSelected
-                    ? Icons.check_circle
-                    : Icons.radio_button_unchecked,
+                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                 color: isSelected
                     ? Theme.of(context).colorScheme.primary
                     : Theme.of(context).colorScheme.outline,
@@ -2189,48 +2352,75 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'order_setup.additional_services_title'.tr(),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'order_setup.additional_services_subtitle'.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildServiceCheckbox('booth_360', 'BlackLodge - 360 Booth (600 CHF)'),
-              _buildServiceCheckbox('photobox_print', 'BlackLodge - PhotoBox inkl. 300 Druck (500 CHF)'),
-              _buildServiceCheckbox('photobox_qr', 'BlackLodge - PhotoBox Digal mit QR Code (300 CHF)'),
-              _buildServiceCheckbox('bubble_waffles', 'BlackLodge - Bubble Waffles (250 CHF)'),
-              _buildServiceCheckbox('catering', 'BlackLodge - Catering (Preis auf Anfrage)'),
-              _buildServiceCheckbox('choreographer', 'Nirosi Singh - Choreographer (Preis auf Anfrage)'),
+              _buildServiceCheckbox(
+                'booth_360',
+                'BlackLodge - 360 Booth (600 CHF)',
+              ),
+              _buildServiceCheckbox(
+                'photobox_print',
+                'BlackLodge - PhotoBox inkl. 300 Druck (500 CHF)',
+              ),
+              _buildServiceCheckbox(
+                'photobox_qr',
+                'BlackLodge - PhotoBox Digal mit QR Code (300 CHF)',
+              ),
+              _buildServiceCheckbox(
+                'bubble_waffles',
+                'BlackLodge - Bubble Waffles (250 CHF)',
+              ),
+              _buildServiceCheckbox(
+                'catering',
+                'BlackLodge - Catering (Preis auf Anfrage)',
+              ),
+              _buildServiceCheckbox(
+                'choreographer',
+                'Nirosi Singh - Choreographer (Preis auf Anfrage)',
+              ),
               _buildServiceCheckbox('dj', 'Extern - DJs (Preis auf Anfrage)'),
-              _buildServiceCheckbox('led_screen', 'Extern - LED Screen (Preis auf Anfrage)'),
-              _buildServiceCheckbox('security', 'Mudanca Security (min. 2 Securitys á 40 CHF/H)'),
-              _buildServiceCheckbox('entry_song', 'Entry Song mit Geige - Praveen (300 CHF)'),
+              _buildServiceCheckbox(
+                'led_screen',
+                'Extern - LED Screen (Preis auf Anfrage)',
+              ),
+              _buildServiceCheckbox(
+                'security',
+                'Mudanca Security (min. 2 Securitys á 40 CHF/H)',
+              ),
+              _buildServiceCheckbox(
+                'entry_song',
+                'Entry Song mit Geige - Praveen (300 CHF)',
+              ),
               _buildServiceCheckbox('other_services', 'Sonstiges'),
             ],
           ),
           const SizedBox(height: 32),
           Text(
             'order_setup.remarks_title'.tr(),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
             'order_setup.remarks_subtitle'.tr(),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -2282,15 +2472,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               Icon(
                 Icons.info_outline,
                 size: 64,
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 'Bitte zuerst Cocktails auswählen (Schritt 6).',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -2314,16 +2506,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'Wie beliebt werden die Cocktails sein?',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             'Schätze die Wahrscheinlichkeit, wie oft jeder Cocktail bestellt wird. Das hilft uns, die richtigen Mengen einzukaufen.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 32),
           ..._selectedRecipes.map((recipe) {
@@ -2347,22 +2539,29 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         Expanded(
                           child: Text(
                             recipe.name,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primaryContainer,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             '${popularity.round()}%',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
                                 ),
                           ),
                         ),
@@ -2381,8 +2580,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Selten', style: Theme.of(context).textTheme.labelSmall),
-                        Text('Sehr beliebt', style: Theme.of(context).textTheme.labelSmall),
+                        Text(
+                          'Selten',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        Text(
+                          'Sehr beliebt',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
                       ],
                     ),
                   ],
@@ -2390,7 +2595,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ),
             );
           }),
-          if (MediaQuery.of(context).size.width >= 600) ...[  
+          if (MediaQuery.of(context).size.width >= 600) ...[
             const SizedBox(height: 32),
             _buildDesktopActionButtons(),
           ],
@@ -2403,7 +2608,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    String formatDate(DateTime? d) => d != null ? DateFormat('EEEE, dd. MMMM yyyy').format(d) : '–';
+    String formatDate(DateTime? d) =>
+        d != null ? DateFormat('EEEE, dd. MMMM yyyy').format(d) : '–';
     String formatTime(TimeOfDay? t) => t != null ? t.format(context) : '–';
 
     Widget section(String title, List<_OverviewRow> rows) {
@@ -2420,29 +2626,41 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
                 const SizedBox(height: 12),
-                ...rows.map((row) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 130,
-                            child: Text(row.label,
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: colorScheme.onSurfaceVariant)),
+                ...rows.map(
+                  (row) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 130,
+                          child: Text(
+                            row.label,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                          Expanded(
-                            child: Text(row.value,
-                                style: theme.textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w500)),
+                        ),
+                        Expanded(
+                          child: Text(
+                            row.value,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ],
-                      ),
-                    )),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -2453,14 +2671,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final serviceLabel = _serviceType == 'cocktail_barservice'
         ? 'Cocktail & Bar'
         : _serviceType == 'cocktail_service'
-            ? 'Nur Cocktails'
-            : 'Nur Bar';
+        ? 'Nur Cocktails'
+        : _serviceType == 'mocktail_service'
+        ? 'Nur Mocktails'
+        : 'Nur Bar';
 
     final drinkerLabel = _drinkerType == 'light'
         ? 'Leichte Trinker'
         : _drinkerType == 'heavy'
-            ? 'Starke Trinker'
-            : 'Normal';
+        ? 'Starke Trinker'
+        : 'Normal';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -2469,26 +2689,42 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         children: [
           Text(
             'Auftragsübersicht',
-            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Bitte alles prüfen, bevor du den Auftrag abschließt.',
-            style: theme.textTheme.bodyLarge
-                ?.copyWith(color: colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 24),
-          section('Service', [
-            _OverviewRow('Service-Typ', serviceLabel),
-          ]),
+          section('Service', [_OverviewRow('Service-Typ', serviceLabel)]),
           section('Kontakt', [
-            _OverviewRow('Name', _nameController.text.trim().isEmpty ? '–' : _nameController.text.trim()),
-            _OverviewRow('Telefon', _phoneController.text.trim().isEmpty ? '–' : _phoneController.text.trim()),
+            _OverviewRow(
+              'Name',
+              _nameController.text.trim().isEmpty
+                  ? '–'
+                  : _nameController.text.trim(),
+            ),
+            _OverviewRow(
+              'Telefon',
+              _phoneController.text.trim().isEmpty
+                  ? '–'
+                  : _phoneController.text.trim(),
+            ),
           ]),
           section('Event-Details', [
             _OverviewRow('Datum', formatDate(_eventDate)),
             _OverviewRow('Uhrzeit', formatTime(_eventTime)),
-            _OverviewRow('Ort', _addressController.text.trim().isEmpty ? '–' : _addressController.text.trim()),
+            _OverviewRow(
+              'Ort',
+              _addressController.text.trim().isEmpty
+                  ? '–'
+                  : _addressController.text.trim(),
+            ),
           ]),
           section('Präferenzen', [
             _OverviewRow('Personen', '$_personCount'),
@@ -2512,20 +2748,26 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ]),
           if (_selectedAdditionalServices.isNotEmpty)
             section('Zusatzleistungen', [
-              _OverviewRow('Services', '${_selectedAdditionalServices.length} ausgewählt'),
+              _OverviewRow(
+                'Services',
+                '${_selectedAdditionalServices.length} ausgewählt',
+              ),
             ]),
           if (_remarksController.text.trim().isNotEmpty)
             section('Bemerkungen', [
               _OverviewRow('Hinweis', _remarksController.text.trim()),
             ]),
           const SizedBox(height: 8),
-          if (MediaQuery.of(context).size.width >= 600) ...[  
+          if (MediaQuery.of(context).size.width >= 600) ...[
             OutlinedButton.icon(
               onPressed: _generateShoppingListWithGemini,
               icon: const Icon(Icons.auto_awesome),
               label: const Text('Mit Gemini Einkaufsliste generieren'),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -2575,12 +2817,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     try {
       final materials = cocktailData.materials
           .where((m) => m.visible)
-          .map((m) => {
-                'name': m.name,
-                'unit': m.unit,
-                'price': m.price,
-                'currency': m.currency,
-              })
+          .map(
+            (m) => {
+              'name': m.name,
+              'unit': m.unit,
+              'price': m.price,
+              'currency': m.currency,
+            },
+          )
           .toList();
 
       final recipeIngredients = _selectedRecipes
@@ -2625,24 +2869,39 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               for (final entry in _cocktailPopularity.entries) {
                 appState.setCocktailPopularity(entry.key, entry.value);
               }
-              appState.setMaterialSuggestions(confirmedSuggestions, explanation);
+              appState.setMaterialSuggestions(
+                confirmedSuggestions,
+                explanation,
+              );
 
               // Build setup data and navigate to shopping list
               final setupData = OrderSetupData(
                 orderName: _nameController.text.trim(),
-                phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+                phoneNumber: _phoneController.text.trim().isEmpty
+                    ? null
+                    : _phoneController.text.trim(),
                 eventDate: _eventDate,
                 eventTime: _eventTime,
-                address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+                address: _addressController.text.trim().isEmpty
+                    ? null
+                    : _addressController.text.trim(),
                 personCount: _personCount,
                 distanceKm: _distanceKm,
                 currency: _currency,
                 drinkerType: _drinkerType,
                 serviceType: _serviceType,
-                barDrinks: _selectedBarDrinks.isEmpty ? null : _selectedBarDrinks.toList(),
-                alcoholPurchase: _selectedAlcoholItems.isEmpty ? null : _selectedAlcoholItems.toList(),
-                additionalServices: _selectedAdditionalServices.isEmpty ? null : _selectedAdditionalServices.toList(),
-                remarks: _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+                barDrinks: _selectedBarDrinks.isEmpty
+                    ? null
+                    : _selectedBarDrinks.toList(),
+                alcoholPurchase: _selectedAlcoholItems.isEmpty
+                    ? null
+                    : _selectedAlcoholItems.toList(),
+                additionalServices: _selectedAdditionalServices.isEmpty
+                    ? null
+                    : _selectedAdditionalServices.toList(),
+                remarks: _remarksController.text.trim().isEmpty
+                    ? null
+                    : _remarksController.text.trim(),
               );
               context.go('/shopping-list', extra: setupData);
             },
@@ -2674,7 +2933,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               icon: const Icon(Icons.arrow_back),
               label: Text('common.back'.tr()),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -2684,7 +2946,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             const SizedBox.shrink(),
           FilledButton.icon(
             onPressed: _nextStep,
-            icon: Icon(_currentStep < _totalSteps - 1 ? Icons.arrow_forward : Icons.shopping_cart),
+            icon: Icon(
+              _currentStep < _totalSteps - 1
+                  ? Icons.arrow_forward
+                  : Icons.shopping_cart,
+            ),
             label: Text(
               _currentStep < _totalSteps - 1
                   ? 'common.next'.tr()

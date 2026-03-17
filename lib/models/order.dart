@@ -60,6 +60,7 @@ class SavedOrder {
     this.offerDiscount = 0,
     this.offerDiscountRemark = '',
     this.offerLanguage = 'de',
+    this.offerFirstPositionText = '',
     this.offerExtraPositions = const [],
     this.offerShotsCount = 0,
     this.offerShotsPricePerPiece = 1.50,
@@ -114,6 +115,7 @@ class SavedOrder {
   final double offerDiscount;
   final String offerDiscountRemark;
   final String offerLanguage;
+  final String offerFirstPositionText;
   final List<Map<String, dynamic>> offerExtraPositions;
   final int offerShotsCount;
   final double offerShotsPricePerPiece;
@@ -133,34 +135,35 @@ class SavedOrder {
   final bool mobileBar;
   final String eventType;
   final String serviceType;
+
   /// Cocktails requested in the form submission (from Excel column 15).
   final List<String> requestedCocktails;
-  
+
   /// If true, this pending order (total == 0) is dismissed from pending list.
   final bool isPendingDismissed;
-  
+
   /// Popularity/probability percentage for each cocktail (0-100).
   /// Key: cocktail name, Value: popularity percentage.
   final Map<String, double> cocktailPopularity;
 
   /// Selected bar drinks categories (e.g., "Bier", "Wein", "Softdrinks")
   final List<String> barDrinks;
-  
+
   /// Selected alcohol items for purchase (e.g., "Wodka", "Chivas")
   final List<String> alcoholPurchase;
-  
+
   /// Selected additional services (e.g., "360 Booth", "PhotoBox Classic")
   final List<String> additionalServices;
-  
+
   /// Free-form remarks/notes for additional services
   final String remarks;
 
   int get year => date.year;
-  
+
   bool get isAccepted => status == OrderStatus.accepted;
-  
+
   bool get isFromForm => source == OrderSource.form;
-  
+
   bool get needsShoppingList => isFromForm && !hasShoppingList;
 
   factory SavedOrder.fromFirestore(String id, Map<String, dynamic> data) {
@@ -203,29 +206,38 @@ class SavedOrder {
       bar: data['bar'] as String? ?? '',
       distanceKm: (data['distanceKm'] as num?)?.toInt() ?? 0,
       thekeCost: (data['thekeCost'] as num?)?.toDouble() ?? 0,
-      offerTravelCostPerKm: (data['offerTravelCostPerKm'] as num?)?.toDouble() ?? 0.70,
+      offerTravelCostPerKm:
+          (data['offerTravelCostPerKm'] as num?)?.toDouble() ?? 0.70,
       offerBarCost: (data['offerBarCost'] as num?)?.toDouble() ?? 0,
       // Offer-related fields
       offerClientName: data['offerClientName'] as String? ?? '',
       offerClientContact: data['offerClientContact'] as String? ?? '',
       offerEventTime: data['offerEventTime'] as String? ?? '',
-      offerEventTypes: (data['offerEventTypes'] as List<dynamic>?)?.cast<String>() ?? [],
+      offerEventTypes:
+          (data['offerEventTypes'] as List<dynamic>?)?.cast<String>() ?? [],
       offerDiscount: (data['offerDiscount'] as num?)?.toDouble() ?? 0,
       offerDiscountRemark: data['offerDiscountRemark'] as String? ?? '',
       offerLanguage: data['offerLanguage'] as String? ?? 'de',
-      offerExtraPositions: (data['offerExtraPositions'] as List<dynamic>?)
-          ?.map((e) => Map<String, dynamic>.from(e as Map))
-          .toList() ?? [],
+      offerFirstPositionText: data['offerFirstPositionText'] as String? ?? '',
+      offerExtraPositions:
+          (data['offerExtraPositions'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
       offerShotsCount: (data['offerShotsCount'] as num?)?.toInt() ?? 0,
-      offerShotsPricePerPiece: (data['offerShotsPricePerPiece'] as num?)?.toDouble() ?? 1.50,
+      offerShotsPricePerPiece:
+          (data['offerShotsPricePerPiece'] as num?)?.toDouble() ?? 1.50,
       offerShotsRemark: data['offerShotsRemark'] as String? ?? '',
       offerExtraHours: (data['offerExtraHours'] as num?)?.toInt() ?? 0,
-      offerExtraHourRate: (data['offerExtraHourRate'] as num?)?.toDouble() ?? 50.0,
-      assignedEmployees: (data['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
+      offerExtraHourRate:
+          (data['offerExtraHourRate'] as num?)?.toDouble() ?? 50.0,
+      assignedEmployees:
+          (data['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
       // Form sync fields
       source: OrderSource.fromString(data['source'] as String?),
       // hasShoppingList is true if explicitly set, or if items/total exist
-      hasShoppingList: ((data['hasShoppingList'] as bool?) ?? false) ||
+      hasShoppingList:
+          ((data['hasShoppingList'] as bool?) ?? false) ||
           (data['items'] as List<dynamic>? ?? []).isNotEmpty ||
           ((data['total'] as num?)?.toDouble() ?? 0) > 0,
       formSubmissionId: data['formSubmissionId'] as String? ?? '',
@@ -237,13 +249,19 @@ class SavedOrder {
       mobileBar: data['mobileBar'] as bool? ?? false,
       eventType: data['eventType'] as String? ?? '',
       serviceType: data['serviceType'] as String? ?? '',
-      requestedCocktails: (data['requestedCocktails'] as List<dynamic>?)?.cast<String>() ?? [],
+      requestedCocktails:
+          (data['requestedCocktails'] as List<dynamic>?)?.cast<String>() ?? [],
       isPendingDismissed: data['isPendingDismissed'] as bool? ?? false,
-      cocktailPopularity: (data['cocktailPopularity'] as Map<String, dynamic>?)
-          ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
+      cocktailPopularity:
+          (data['cocktailPopularity'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, (v as num).toDouble()),
+          ) ??
+          {},
       barDrinks: (data['barDrinks'] as List<dynamic>?)?.cast<String>() ?? [],
-      alcoholPurchase: (data['alcoholPurchase'] as List<dynamic>?)?.cast<String>() ?? [],
-      additionalServices: (data['additionalServices'] as List<dynamic>?)?.cast<String>() ?? [],
+      alcoholPurchase:
+          (data['alcoholPurchase'] as List<dynamic>?)?.cast<String>() ?? [],
+      additionalServices:
+          (data['additionalServices'] as List<dynamic>?)?.cast<String>() ?? [],
       remarks: data['remarks'] as String? ?? '',
     );
   }

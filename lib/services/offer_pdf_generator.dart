@@ -306,7 +306,12 @@ class OfferPdfGenerator {
         isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
       'cocktail_service' =>
         isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+      'cocktailservice' =>
+        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+      'mocktail_service' =>
+        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
       'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
+      'barservice' => isEn ? 'Bar Service only' : 'Nur Barservice',
       _ =>
         offer.serviceType.isEmpty
             ? (isEn ? 'Cocktail & Bar Service' : 'Cocktail & Barservice')
@@ -396,7 +401,13 @@ class OfferPdfGenerator {
                   ),
                 ),
                 pw.TextSpan(
-                  text: offer.cocktails.map((c) => c.contains('(') ? c.substring(0, c.indexOf('(')).trim() : c).join(', '),
+                  text: offer.cocktails
+                      .map(
+                        (c) => c.contains('(')
+                            ? c.substring(0, c.indexOf('(')).trim()
+                            : c,
+                      )
+                      .join(', '),
                   style: const pw.TextStyle(fontSize: 9),
                 ),
               ],
@@ -456,6 +467,7 @@ class OfferPdfGenerator {
   ) {
     final dateStr =
         '${offer.eventDate.day.toString().padLeft(2, '0')}.${offer.eventDate.month.toString().padLeft(2, '0')}.${offer.eventDate.year}';
+    final customFirstPositionText = offer.servicePositionText.trim();
 
     pw.Widget headerCell(String text) => pw.Container(
       color: PdfColors.grey200,
@@ -513,21 +525,32 @@ class OfferPdfGenerator {
         children: [
           cell(dateStr),
           cell(
-            (() {
-              return switch (offer.serviceType) {
-                'cocktail_barservice' =>
-                  isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
-                'cocktail_service' =>
-                  isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
-                _ =>
-                  offer.serviceType.isEmpty
-                      ? (isEn
+            customFirstPositionText.isNotEmpty
+                ? customFirstPositionText
+                : (() {
+                    return switch (offer.serviceType) {
+                      'cocktail_barservice' =>
+                        isEn
                             ? 'Cocktail & Bar Service'
-                            : 'Cocktail- & Barservice')
-                      : offer.serviceType,
-              };
-            })(),
+                            : 'Cocktail- & Barservice',
+                      'cocktail_service' =>
+                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                      'cocktailservice' =>
+                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                      'mocktail_service' =>
+                        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
+                      'bar_service' =>
+                        isEn ? 'Bar Service only' : 'Nur Barservice',
+                      'barservice' =>
+                        isEn ? 'Bar Service only' : 'Nur Barservice',
+                      _ =>
+                        offer.serviceType.isEmpty
+                            ? (isEn
+                                  ? 'Cocktail & Bar Service'
+                                  : 'Cocktail- & Barservice')
+                            : offer.serviceType,
+                    };
+                  })(),
           ),
           // Quantity is always 1
           cell('1', align: pw.TextAlign.center),
@@ -540,8 +563,13 @@ class OfferPdfGenerator {
               final serviceLabel = switch (offer.serviceType) {
                 'cocktail_barservice' =>
                   isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
+                'cocktail_service' =>
+                  isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
                 'cocktailservice' =>
                   isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                'mocktail_service' =>
+                  isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
+                'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
                 'barservice' => isEn ? 'Bar Service only' : 'Nur Barservice',
                 _ =>
                   offer.serviceType.isEmpty
@@ -648,33 +676,42 @@ class OfferPdfGenerator {
             cell(dateStr),
             cell(isEn ? 'Bar Drinks' : 'Bargetränke'),
             cell('1', align: pw.TextAlign.center),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
             cell(offer.barDrinks.join(', ')),
           ],
         ),
       // Alcohol purchase (if selected)
-      ...offer.alcoholPurchase.map(
-        (alcohol) {
-          final isUsageBased = alcohol.toLowerCase().contains('wodka') || 
-                               alcohol.toLowerCase().contains('chivas');
-          final note = isUsageBased
-              ? (isEn 
-                  ? 'Usage-based billing' 
-                  : 'Nach Verbrauch abgerechnet')
-              : '';
-          return pw.TableRow(
-            children: [
-              cell(dateStr),
-              cell(alcohol),
-              cell('1', align: pw.TextAlign.center),
-              cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-              cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-              cell(note),
-            ],
-          );
-        },
-      ),
+      ...offer.alcoholPurchase.map((alcohol) {
+        final isUsageBased =
+            alcohol.toLowerCase().contains('wodka') ||
+            alcohol.toLowerCase().contains('chivas');
+        final note = isUsageBased
+            ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
+            : '';
+        return pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(alcohol),
+            cell('1', align: pw.TextAlign.center),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(note),
+          ],
+        );
+      }),
       // Additional services (if selected)
       ...offer.additionalServices.map(
         (service) => pw.TableRow(
@@ -682,8 +719,14 @@ class OfferPdfGenerator {
             cell(dateStr),
             cell(service),
             cell('1', align: pw.TextAlign.center),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
-            cell(isEn ? 'On request' : 'Auf Anfrage', align: pw.TextAlign.right),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
+            cell(
+              isEn ? 'On request' : 'Auf Anfrage',
+              align: pw.TextAlign.right,
+            ),
             cell(offer.remarks.isNotEmpty ? offer.remarks : ''),
           ],
         ),
