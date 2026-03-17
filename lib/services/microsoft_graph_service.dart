@@ -660,14 +660,22 @@ class MicrosoftGraphService {
       ..sort();
   }
 
+  /// Returns the list of relevant import years: from 2025 up to 2 years ahead of the current year.
+  List<String> _relevantImportYears(List<String> allYears) {
+    final maxYear = DateTime.now().year + 2;
+    return allYears.where((y) {
+      final year = int.tryParse(y);
+      return year != null && year >= 2025 && year <= maxYear;
+    }).toList();
+  }
+
   /// Find event file pairs (Auftrag + Einkaufsliste) from Aufträge folder.
   /// Returns list of maps with 'folder', 'auftragFile', and 'einkaufslisteFile'.
-  /// Only imports from 2025 and 2026.
   Future<List<Map<String, String?>>> findEventFilePairs() async {
     final pairs = <Map<String, String?>>[];
     
     final allYears = await getAuftraegeYears();
-    final years = allYears.where((y) => y == '2025' || y == '2026').toList();
+    final years = _relevantImportYears(allYears);
     debugPrint('Scanning years: $years (filtered from $allYears)');
     
     for (final year in years) {
@@ -717,13 +725,12 @@ class MicrosoftGraphService {
 
   /// Get all Einkaufsliste files from Aufträge folder structure.
   /// Returns list of file paths.
-  /// Only imports from 2025 and 2026.
+  /// Only imports from 2025 to 2028.
   Future<List<String>> findEinkaufslistenFiles() async {
     final files = <String>[];
     
     final allYears = await getAuftraegeYears();
-    // Only import from 2025 and 2026
-    final years = allYears.where((y) => y == '2025' || y == '2026').toList();
+    final years = _relevantImportYears(allYears);
     debugPrint('Importing from years: $years (filtered from $allYears)');
     for (final year in years) {
       final months = await listOneDriveFolder('Aufträge/$year');

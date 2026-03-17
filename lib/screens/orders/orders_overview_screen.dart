@@ -572,7 +572,12 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
   Widget _buildFilterDropdowns(ColorScheme colorScheme) {
     final currentYear = DateTime.now().year;
-    final years = List.generate(5, (i) => currentYear - i);
+    const futureYears = 2;
+    const pastYears = 4;
+    final years = List.generate(
+      futureYears + pastYears + 1,
+      (i) => currentYear + futureYears - i,
+    );
 
     const monthNames = [
       'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
