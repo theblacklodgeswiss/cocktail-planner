@@ -1,14 +1,14 @@
+import 'package:cocktail_planer/data/firestore_service.dart';
+import 'package:cocktail_planer/data/order_repository.dart';
+import 'package:cocktail_planer/models/order.dart';
+import 'package:cocktail_planer/services/auth_service.dart';
+import 'package:cocktail_planer/services/microsoft_graph_service.dart';
+import 'package:cocktail_planer/widgets/admin_protected_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../data/firestore_service.dart';
-import '../../data/order_repository.dart';
-import '../../services/auth_service.dart';
-import '../../models/order.dart';
-import '../../services/microsoft_graph_service.dart';
-import '../../widgets/admin_protected_screen.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/orders_table.dart';
 import 'widgets/summary_card.dart';
@@ -123,7 +123,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       final query = _searchQuery.toLowerCase();
       filtered = filtered.where((o) {
         final nameMatch = o.name.toLowerCase().contains(query);
-        final guestMatch = o.personCount.toString().contains(query) ||
+        final guestMatch =
+            o.personCount.toString().contains(query) ||
             o.guestCountRange.toLowerCase().contains(query);
         return nameMatch || guestMatch;
       }).toList();
@@ -184,7 +185,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text('orders.sync_login_required'.tr()),
-          content: const Text('Bitte melde dich mit dem Microsoft-Konto an, um Formulare zu synchronisieren.'),
+          content: const Text(
+            'Bitte melde dich mit dem Microsoft-Konto an, um Formulare zu synchronisieren.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -237,9 +240,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
           ),
         );
       } else if (count == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('orders.sync_no_new'.tr())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('orders.sync_no_new'.tr())));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -295,9 +298,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AdminProtectedScreen(
-      child: _buildContent(context),
-    );
+    return AdminProtectedScreen(child: _buildContent(context));
   }
 
   Widget _buildContent(BuildContext context) {
@@ -343,7 +344,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                           break;
                         case 'onedrive':
                           launchUrl(
-                            Uri.parse('https://1drv.ms/x/c/80c90daf53662538/IQAw81_OoMv4QpDZTEsq13cvAf3yftB-9O812MAPGRy6mfs?e=FfusWZ'),
+                            Uri.parse(
+                              'https://1drv.ms/x/c/80c90daf53662538/IQAw81_OoMv4QpDZTEsq13cvAf3yftB-9O812MAPGRy6mfs?e=FfusWZ',
+                            ),
                             mode: LaunchMode.externalApplication,
                           );
                           break;
@@ -353,11 +356,18 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                       // Info hint – non-interactive
                       PopupMenuItem(
                         enabled: false,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.amber.shade700),
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: Colors.amber.shade700,
+                            ),
                             const SizedBox(width: 8),
                             const Expanded(
                               child: Text(
@@ -426,7 +436,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                     _SummaryCardsSection(orders: orders),
                     const SizedBox(height: 20),
                     _buildFilterDropdowns(colorScheme),
-                    if (_searchQuery.isNotEmpty) ...[  
+                    if (_searchQuery.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -445,7 +455,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                       orders: orders,
                       colorScheme: colorScheme,
                       selectedYear: _selectedYear,
-                      showMonthSubtitle: _searchQuery.isNotEmpty || _selectedMonth == null,
+                      showMonthSubtitle:
+                          _searchQuery.isNotEmpty || _selectedMonth == null,
                       onOrderTap: (order) => showOrderDetails(context, order),
                     ),
                   ],
@@ -457,8 +468,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       ),
     );
   }
-
-
 
   /// Compact status dropdown menu (kept for potential reuse)
   // ignore: unused_element
@@ -504,7 +513,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     }
 
     final currentColor = getColor(_statusFilter);
-    
+
     return MenuAnchor(
       builder: (context, controller, child) {
         return OutlinedButton.icon(
@@ -515,11 +524,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               controller.open();
             }
           },
-          icon: Icon(
-            getIcon(_statusFilter),
-            size: 18,
-            color: currentColor,
-          ),
+          icon: Icon(getIcon(_statusFilter), size: 18, color: currentColor),
           label: Text(
             getLabel(_statusFilter),
             style: TextStyle(color: currentColor),
@@ -535,7 +540,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
         final color = getColor(status);
         final label = getLabel(status);
         final isSelected = _statusFilter == status;
-        
+
         return MenuItemButton(
           leadingIcon: Icon(icon, size: 18, color: color),
           trailingIcon: isSelected ? const Icon(Icons.check, size: 18) : null,
@@ -552,8 +557,18 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       title = '${orders.length} ${'orders.search_results'.tr()}';
     } else if (_selectedMonth != null) {
       const monthNames = [
-        'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+        'Januar',
+        'Februar',
+        'März',
+        'April',
+        'Mai',
+        'Juni',
+        'Juli',
+        'August',
+        'September',
+        'Oktober',
+        'November',
+        'Dezember',
       ];
       title = '${monthNames[_selectedMonth! - 1]} $_selectedYear';
     } else {
@@ -562,13 +577,11 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+      style: Theme.of(
+        context,
+      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
     );
   }
-
-
 
   Widget _buildFilterDropdowns(ColorScheme colorScheme) {
     final currentYear = DateTime.now().year;
@@ -580,23 +593,35 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
 
     const monthNames = [
-      'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez',
+      'Jan',
+      'Feb',
+      'Mär',
+      'Apr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Dez',
     ];
 
-    // Period dropdown items: "2026 – Alle", "2026 – Jan", ...
+    // Period dropdown items: all years + months only for the currently selected year
+    // This keeps the mobile dropdown much shorter.
     final periodItems = <DropdownMenuItem<String>>[];
     for (final year in years) {
-      periodItems.add(DropdownMenuItem(
-        value: '$year-0',
-        child: Text('$year – Alle'),
-      ));
-      for (int m = 1; m <= 12; m++) {
-        periodItems.add(DropdownMenuItem(
-          value: '$year-$m',
-          child: Text('$year – ${monthNames[m - 1]}'),
-        ));
-      }
+      periodItems.add(
+        DropdownMenuItem(value: '$year-0', child: Text('$year – Alle')),
+      );
+    }
+    for (int m = 1; m <= 12; m++) {
+      periodItems.add(
+        DropdownMenuItem(
+          value: '$_selectedYear-$m',
+          child: Text('$_selectedYear – ${monthNames[m - 1]}'),
+        ),
+      );
     }
     final periodValue = '$_selectedYear-${_selectedMonth ?? 0}';
 
@@ -666,7 +691,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                 child: Tooltip(
                   message: _sortAscending ? 'Aufsteigend' : 'Absteigend',
                   child: Icon(
-                    _sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                    _sortAscending
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
                     size: 18,
                     color: colorScheme.primary,
                   ),
@@ -674,10 +701,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               ),
             ),
             isExpanded: true,
-            items: sortItems.map((e) => DropdownMenuItem(
-              value: e.$1,
-              child: Text(e.$2),
-            )).toList(),
+            items: sortItems
+                .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
+                .toList(),
             onChanged: (val) {
               if (val != null) setState(() => _sortOption = val);
             },
@@ -694,10 +720,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               prefixIcon: const Icon(Icons.flag_outlined, size: 18),
             ),
             isExpanded: true,
-            items: statusItems.map((e) => DropdownMenuItem(
-              value: e.$1,
-              child: Text(e.$2),
-            )).toList(),
+            items: statusItems
+                .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
+                .toList(),
             onChanged: (val) {
               if (val != null) setState(() => _statusFilter = val);
             },
@@ -706,10 +731,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       ],
     );
   }
-
-
-
-
 
   Widget _buildPendingOrdersBanner() {
     return StreamBuilder<List<SavedOrder>>(
@@ -738,17 +759,16 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'orders.pending_banner'.tr(args: [pendingOrders.length.toString()]),
+                    'orders.pending_banner'.tr(
+                      args: [pendingOrders.length.toString()],
+                    ),
                     style: TextStyle(
                       color: colorScheme.onErrorContainer,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  color: colorScheme.onErrorContainer,
-                ),
+                Icon(Icons.chevron_right, color: colorScheme.onErrorContainer),
               ],
             ),
           ),
@@ -768,14 +788,20 @@ class _SummaryCardsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalOrders = orders.length;
     final acceptedOrders = orders.where((o) => o.isAccepted).toList();
-    final quoteOrders =
-        orders.where((o) => o.status == OrderStatus.quote).toList();
-    final totalRevenue =
-        acceptedOrders.fold<double>(0, (sum, o) => sum + o.total);
-    final totalPersons =
-        acceptedOrders.fold<int>(0, (sum, o) => sum + o.personCount);
-    final avgTotal =
-        acceptedOrders.isNotEmpty ? totalRevenue / acceptedOrders.length : 0.0;
+    final quoteOrders = orders
+        .where((o) => o.status == OrderStatus.quote)
+        .toList();
+    final totalRevenue = acceptedOrders.fold<double>(
+      0,
+      (sum, o) => sum + o.total,
+    );
+    final totalPersons = acceptedOrders.fold<int>(
+      0,
+      (sum, o) => sum + o.personCount,
+    );
+    final avgTotal = acceptedOrders.isNotEmpty
+        ? totalRevenue / acceptedOrders.length
+        : 0.0;
 
     // Get most common currency from accepted orders
     final dominantCurrency = _getDominantCurrency(acceptedOrders);
@@ -852,10 +878,12 @@ class _OrderSearchDelegate extends SearchDelegate<String> {
     if (q.isEmpty) return orders.take(20).toList();
     final lower = q.toLowerCase();
     return orders
-        .where((o) =>
-            o.name.toLowerCase().contains(lower) ||
-            o.personCount.toString().contains(lower) ||
-            o.guestCountRange.toLowerCase().contains(lower))
+        .where(
+          (o) =>
+              o.name.toLowerCase().contains(lower) ||
+              o.personCount.toString().contains(lower) ||
+              o.guestCountRange.toLowerCase().contains(lower),
+        )
         .toList();
   }
 
@@ -864,18 +892,15 @@ class _OrderSearchDelegate extends SearchDelegate<String> {
 
   @override
   List<Widget> buildActions(BuildContext context) => [
-        if (query.isNotEmpty)
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => query = '',
-          ),
-      ];
+    if (query.isNotEmpty)
+      IconButton(icon: const Icon(Icons.close), onPressed: () => query = ''),
+  ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => close(context, query),
-      );
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, query),
+  );
 
   @override
   Widget buildResults(BuildContext context) => _buildList(context);
@@ -900,7 +925,9 @@ class _OrderSearchDelegate extends SearchDelegate<String> {
         return ListTile(
           leading: const Icon(Icons.receipt_long_outlined),
           title: Text(order.name),
-          subtitle: Text('${order.personCount} Gäste · ${DateFormat('dd.MM.yyyy').format(order.date)}'),
+          subtitle: Text(
+            '${order.personCount} Gäste · ${DateFormat('dd.MM.yyyy').format(order.date)}',
+          ),
           onTap: () => close(context, order.name),
         );
       },
