@@ -923,28 +923,29 @@ Schreibe den Plan professionell, motivierend und auf Deutsch. Verwende Markdown-
     }
 
     try {
-      // Detect which cocktails were swapped
-    final swaps = <String>[];
+    // Detect which cocktails were swapped
+    final swaps = <Map<String, String>>[];
     for (int i = 0; i < originalCocktails.length && i < selectedCocktails.length; i++) {
       if (originalCocktails[i] != selectedCocktails[i]) {
-        swaps.add('"${originalCocktails[i]}" → "${selectedCocktails[i]}"');
+        swaps.add({'original': originalCocktails[i], 'vorschlag': selectedCocktails[i]});
       }
     }
-    // Build the swap suggestion lines (one per swap)
+
+    // Build the swap suggestion block for Gemini
     final swapLines = swaps.isEmpty
         ? ''
-        : '\n\nUNSERE VORSCHLÄGE (noch NICHT entschieden – als offene Frage formulieren):\n'
-          '${swaps.map((s) => '- $s').join('\n')}';
+        : '\n\nUNSERE TAUSCH-VORSCHLÄGE (der Kunde hat diese noch NICHT bestätigt):\n'
+          '${swaps.map((s) => '  - ORIGINAL (vom Kunden gewählt): "${s['original']}"\n    UNSER VORSCHLAG (noch offen): "${s['vorschlag']}"').join('\n')}';
 
     final swapRule = swaps.isEmpty
         ? '- Kommentiere nur die aktuelle Auswahl des Kunden'
         : '''- Kommentiere kurz die aktuelle Kundenauswahl
-- Mache dann für JEDEN Vorschlag einen eigenen Satz als offene Frage/Angebot an den Kunden
-- ⚠️ PFLICHT: Formuliere AUSSCHLIESSLICH im Konjunktiv oder als Frage. NIEMALS im Vollzug oder Vergangenheit.
-  FALSCH: "Den Fruit Blush reinzunehmen war ein super Griff"
-  FALSCH: "Du hast gut daran getan, X durch Y zu ersetzen"
-  RICHTIG: "Wir hätten noch einen Tipp: Wie wäre es, den [original] durch den [neu] zu ersetzen? [Grund]"
-  RICHTIG: "Falls du magst, könntest du [original] noch durch [neu] tauschen – [Grund]"''';
+- Formuliere dann für JEDEN Tausch-Vorschlag eine freundliche Empfehlung an den Kunden
+- ⚠️ PFLICHT: Der Tausch ist NOCH NICHT vollzogen. Schreibe IMMER als Vorschlag/Frage, NIE als Vollzug.
+  FALSCH (Vollzug): "Den Fruit Blush statt des Maracuja Mojitos reinzunehmen war ein super Griff"
+  FALSCH (Vergangenheit): "Du hast gut daran getan, X durch Y zu ersetzen"
+  RICHTIG (Vorschlag): "Wir würden dir noch empfehlen: Wie wäre es, den [ORIGINAL] durch den [VORSCHLAG] zu ersetzen? [Begründung]"
+  RICHTIG (Frage): "Falls du magst, könntest du den [ORIGINAL] noch durch den [VORSCHLAG] tauschen – [Begründung]"''';
 
     final prompt = '''
 Du bist ein freundlicher Berater des Premium Cocktail-Catering-Services "Black Lodge" aus der Schweiz.
