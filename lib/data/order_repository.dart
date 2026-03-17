@@ -176,6 +176,7 @@ class OrderRepository {
     List<String> assignedEmployees = const [],
     String? serviceType,
     String? firstPositionText,
+    String? firstPositionRemark,
     int distanceKm = 0,
     double travelCostPerKm = 0.70,
     double barCost = 0,
@@ -211,6 +212,9 @@ class OrderRepository {
       }
       if (firstPositionText != null) {
         updateData['offerFirstPositionText'] = firstPositionText;
+      }
+      if (firstPositionRemark != null) {
+        updateData['offerFirstPositionRemark'] = firstPositionRemark;
       }
       if (location.isNotEmpty) {
         updateData['location'] = location;

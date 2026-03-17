@@ -73,6 +73,7 @@ class OfferData {
     required this.language,
     this.serviceType = 'cocktail_barservice',
     this.servicePositionText = '',
+    this.servicePositionRemark = '',
     this.discountRemark = '',
     this.eventLocation = '',
     this.extraPositions = const [],
@@ -92,6 +93,9 @@ class OfferData {
 
   /// Editable text for the first package position in the offer table.
   final String servicePositionText;
+
+  /// Editable remark for the first package position in the offer table.
+  final String servicePositionRemark;
 
   /// Date of the event (from SavedOrder.date)
   final DateTime eventDate;

@@ -219,6 +219,8 @@
     "services": "Leistungen (Cocktails / Bar / Shots)",
     "first_position_text": "Text für Position 1 (Paket)",
     "first_position_text_hint": "z.B. Nur Mocktailservice",
+    "first_position_remark": "Bemerkung für Position 1",
+    "first_position_remark_hint": "z.B. Inkl. 3 Barkeeper, max. 5h Service",
     "cocktails": "Cocktails (kommagetrennt)",
     "cocktails_hint": "Mojito, Mango Mojito, Blue Lagoon",
     "bar_description": "Bar (leer = nicht inkludiert)",

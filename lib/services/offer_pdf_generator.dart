@@ -468,6 +468,7 @@ class OfferPdfGenerator {
     final dateStr =
         '${offer.eventDate.day.toString().padLeft(2, '0')}.${offer.eventDate.month.toString().padLeft(2, '0')}.${offer.eventDate.year}';
     final customFirstPositionText = offer.servicePositionText.trim();
+    final customFirstPositionRemark = offer.servicePositionRemark.trim();
 
     pw.Widget headerCell(String text) => pw.Container(
       color: PdfColors.grey200,
@@ -558,54 +559,64 @@ class OfferPdfGenerator {
           cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
           cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
           cell(
-            // Summary of roles from supervisor items, or fallback
-            (() {
-              final serviceLabel = switch (offer.serviceType) {
-                'cocktail_barservice' =>
-                  isEn ? 'Cocktail & Bar Service' : 'Cocktail- & Barservice',
-                'cocktail_service' =>
-                  isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                'cocktailservice' =>
-                  isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                'mocktail_service' =>
-                  isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
-                'bar_service' => isEn ? 'Bar Service only' : 'Nur Barservice',
-                'barservice' => isEn ? 'Bar Service only' : 'Nur Barservice',
-                _ =>
-                  offer.serviceType.isEmpty
-                      ? (isEn
+            customFirstPositionRemark.isNotEmpty
+                ? customFirstPositionRemark
+                :
+                  // Summary of roles from supervisor items, or fallback
+                  (() {
+                    final serviceLabel = switch (offer.serviceType) {
+                      'cocktail_barservice' =>
+                        isEn
                             ? 'Cocktail & Bar Service'
-                            : 'Cocktail- & Barservice')
-                      : offer.serviceType,
-              };
+                            : 'Cocktail- & Barservice',
+                      'cocktail_service' =>
+                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                      'cocktailservice' =>
+                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
+                      'mocktail_service' =>
+                        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
+                      'bar_service' =>
+                        isEn ? 'Bar Service only' : 'Nur Barservice',
+                      'barservice' =>
+                        isEn ? 'Bar Service only' : 'Nur Barservice',
+                      _ =>
+                        offer.serviceType.isEmpty
+                            ? (isEn
+                                  ? 'Cocktail & Bar Service'
+                                  : 'Cocktail- & Barservice')
+                            : offer.serviceType,
+                    };
 
-              final supervisorSummary = offer.supervisorItems
-                  .map(
-                    (item) =>
-                        "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
-                  )
-                  .join(", ");
+                    final supervisorSummary = offer.supervisorItems
+                        .map(
+                          (item) =>
+                              "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
+                        )
+                        .join(', ');
 
-              final count = offer.supervisorItems.fold<int>(
-                0,
-                (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
-              );
-              final finalCount = count > 0
-                  ? count
-                  : (offer.assignedEmployees.isNotEmpty
-                        ? offer.assignedEmployees.length
-                        : 3);
+                    final count = offer.supervisorItems.fold<int>(
+                      0,
+                      (sum, item) =>
+                          sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+                    );
+                    final finalCount = count > 0
+                        ? count
+                        : (offer.assignedEmployees.isNotEmpty
+                              ? offer.assignedEmployees.length
+                              : 3);
 
-              final rolesText = supervisorSummary.isNotEmpty
-                  ? (isEn
-                        ? 'Incl. $supervisorSummary'
-                        : 'Inkl. $supervisorSummary')
-                  : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
+                    final rolesText = supervisorSummary.isNotEmpty
+                        ? (isEn
+                              ? 'Incl. $supervisorSummary'
+                              : 'Inkl. $supervisorSummary')
+                        : (isEn
+                              ? '$finalCount Barkeepers'
+                              : '$finalCount Barkeeper');
 
-              return isEn
-                  ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
-                  : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
-            })(),
+                    return isEn
+                        ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
+                        : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
+                  })(),
           ),
         ],
       ),

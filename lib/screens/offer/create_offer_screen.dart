@@ -79,6 +79,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final _discountCtrl = TextEditingController();
   final _discountRemarkCtrl = TextEditingController();
   late final TextEditingController _firstPositionTextCtrl;
+  late final TextEditingController _firstPositionRemarkCtrl;
   late final TextEditingController _additionalInfoCtrl;
 
   // Event types
@@ -174,6 +175,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           ? widget.order.offerFirstPositionText.trim()
           : _defaultServicePositionText(serviceType: _serviceType),
     );
+    _firstPositionRemarkCtrl = TextEditingController(
+      text: widget.order.offerFirstPositionRemark.trim().isNotEmpty
+          ? widget.order.offerFirstPositionRemark.trim()
+          : _defaultServicePositionRemark(serviceType: _serviceType),
+    );
 
     // Set additional info based on language
     _additionalInfoCtrl = TextEditingController(
@@ -201,6 +207,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _discountCtrl.dispose();
     _discountRemarkCtrl.dispose();
     _firstPositionTextCtrl.dispose();
+    _firstPositionRemarkCtrl.dispose();
     _additionalInfoCtrl.dispose();
     super.dispose();
   }
@@ -220,6 +227,45 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     };
   }
 
+  String _defaultServicePositionRemark({
+    String? serviceType,
+    String? language,
+  }) {
+    final resolvedLanguage = language ?? _language;
+    final isEn = resolvedLanguage == 'en';
+    final serviceLabel = _defaultServicePositionText(
+      serviceType: serviceType,
+      language: resolvedLanguage,
+    );
+
+    final supervisorItems = widget.order.items
+        .where((item) => item['category'] == 'supervisor')
+        .toList();
+    final supervisorSummary = supervisorItems
+        .map(
+          (item) =>
+              "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
+        )
+        .join(', ');
+
+    final count = supervisorItems.fold<int>(
+      0,
+      (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+    );
+    final fallbackCount = _selectedEmployees.isNotEmpty
+        ? _selectedEmployees.length
+        : 3;
+    final finalCount = count > 0 ? count : fallbackCount;
+
+    final rolesText = supervisorSummary.isNotEmpty
+        ? (isEn ? 'Incl. $supervisorSummary' : 'Inkl. $supervisorSummary')
+        : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
+
+    return isEn
+        ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
+        : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
+  }
+
   String _normalizeServiceType(String serviceType) {
     return switch (serviceType) {
       'cocktailservice' => 'cocktail_service',
@@ -232,14 +278,25 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final previousDefault = _defaultServicePositionText(
       serviceType: _serviceType,
     );
+    final previousRemarkDefault = _defaultServicePositionRemark(
+      serviceType: _serviceType,
+    );
     final currentText = _firstPositionTextCtrl.text.trim();
-    final shouldSyncDefault =
+    final currentRemark = _firstPositionRemarkCtrl.text.trim();
+    final shouldSyncTextDefault =
         currentText.isEmpty || currentText == previousDefault;
+    final shouldSyncRemarkDefault =
+        currentRemark.isEmpty || currentRemark == previousRemarkDefault;
 
     setState(() {
       _serviceType = value;
-      if (shouldSyncDefault) {
+      if (shouldSyncTextDefault) {
         _firstPositionTextCtrl.text = _defaultServicePositionText(
+          serviceType: value,
+        );
+      }
+      if (shouldSyncRemarkDefault) {
+        _firstPositionRemarkCtrl.text = _defaultServicePositionRemark(
           serviceType: value,
         );
       }
@@ -251,17 +308,30 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       serviceType: _serviceType,
       language: _language,
     );
+    final previousRemarkDefault = _defaultServicePositionRemark(
+      serviceType: _serviceType,
+      language: _language,
+    );
     final currentText = _firstPositionTextCtrl.text.trim();
-    final shouldSyncDefault =
+    final currentRemark = _firstPositionRemarkCtrl.text.trim();
+    final shouldSyncTextDefault =
         currentText.isEmpty || currentText == previousDefault;
+    final shouldSyncRemarkDefault =
+        currentRemark.isEmpty || currentRemark == previousRemarkDefault;
 
     setState(() {
       _language = lang;
       _additionalInfoCtrl.text = lang == 'en'
           ? OfferData.defaultAdditionalInfoEn
           : OfferData.defaultAdditionalInfoDe;
-      if (shouldSyncDefault) {
+      if (shouldSyncTextDefault) {
         _firstPositionTextCtrl.text = _defaultServicePositionText(
+          serviceType: _serviceType,
+          language: lang,
+        );
+      }
+      if (shouldSyncRemarkDefault) {
+        _firstPositionRemarkCtrl.text = _defaultServicePositionRemark(
           serviceType: _serviceType,
           language: lang,
         );
@@ -308,6 +378,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       language: _language,
       serviceType: _serviceType,
       servicePositionText: _firstPositionTextCtrl.text.trim(),
+      servicePositionRemark: _firstPositionRemarkCtrl.text.trim(),
       extraPositions: List.of(_extraPositions),
       assignedEmployees: _selectedEmployees.toList(),
       supervisorItems: widget.order.items
@@ -335,6 +406,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       assignedEmployees: _selectedEmployees.toList(),
       serviceType: _serviceType,
       firstPositionText: _firstPositionTextCtrl.text.trim(),
+      firstPositionRemark: _firstPositionRemarkCtrl.text.trim(),
       distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
       travelCostPerKm:
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
@@ -920,6 +992,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           label: 'offer.first_position_text'.tr(),
           hint: 'offer.first_position_text_hint'.tr(),
         ),
+        const SizedBox(height: 8),
+        _field(
+          controller: _firstPositionRemarkCtrl,
+          label: 'offer.first_position_remark'.tr(),
+          hint: 'offer.first_position_remark_hint'.tr(),
+          maxLines: 4,
+        ),
       ],
     );
   }
@@ -1288,11 +1367,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     bool required = false,
     TextInputType? keyboard,
     List<TextInputFormatter>? inputFormatters,
+    int maxLines = 1,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboard,
       inputFormatters: inputFormatters,
+      maxLines: maxLines,
       decoration: InputDecoration(labelText: label, hintText: hint),
       validator: required
           ? (v) => (v == null || v.trim().isEmpty)

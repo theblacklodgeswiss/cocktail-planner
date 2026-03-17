@@ -61,6 +61,7 @@ class SavedOrder {
     this.offerDiscountRemark = '',
     this.offerLanguage = 'de',
     this.offerFirstPositionText = '',
+    this.offerFirstPositionRemark = '',
     this.offerExtraPositions = const [],
     this.offerShotsCount = 0,
     this.offerShotsPricePerPiece = 1.50,
@@ -116,6 +117,7 @@ class SavedOrder {
   final String offerDiscountRemark;
   final String offerLanguage;
   final String offerFirstPositionText;
+  final String offerFirstPositionRemark;
   final List<Map<String, dynamic>> offerExtraPositions;
   final int offerShotsCount;
   final double offerShotsPricePerPiece;
@@ -219,6 +221,8 @@ class SavedOrder {
       offerDiscountRemark: data['offerDiscountRemark'] as String? ?? '',
       offerLanguage: data['offerLanguage'] as String? ?? 'de',
       offerFirstPositionText: data['offerFirstPositionText'] as String? ?? '',
+      offerFirstPositionRemark:
+          data['offerFirstPositionRemark'] as String? ?? '',
       offerExtraPositions:
           (data['offerExtraPositions'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
