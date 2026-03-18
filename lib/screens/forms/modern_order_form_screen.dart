@@ -14,6 +14,7 @@ import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
 import '../../services/gemini_service.dart';
+import '../../utils/order_option_labels.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 
 /// Result from the modern order form containing both setup data and selected recipes
@@ -72,6 +73,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     super.initState();
     _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
     _loadCocktailData();
+    authService.checkIsAdmin().then((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     // Read step from URL query parameter
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uri = Uri.base;
@@ -161,12 +167,25 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _nameController.text = order.name;
     _phoneController.text = order.phone;
     _addressController.text = order.location;
+    _remarksController.text = order.remarks;
     _eventDate = order.date;
     _personCount = order.personCount > 0 ? order.personCount : _personCount;
     _currency = order.currency.isNotEmpty ? order.currency : _currency;
     _drinkerType = order.drinkerType.isNotEmpty
         ? order.drinkerType
         : _drinkerType;
+    _selectedBarDrinks
+      ..clear()
+      ..addAll(order.barDrinks);
+    _selectedAlcoholItems
+      ..clear()
+      ..addAll(order.alcoholPurchase);
+    _selectedAdditionalServices
+      ..clear()
+      ..addAll(order.additionalServices);
+    _cocktailPopularity
+      ..clear()
+      ..addAll(order.cocktailPopularity);
     if (order.serviceType.isNotEmpty) {
       _serviceType = _normalizeServiceType(order.serviceType);
     }
@@ -187,6 +206,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       } catch (_) {}
     }
   }
+
+  bool get _isAdminUser => authService.isAdmin;
 
   @override
   void didChangeDependencies() {
@@ -716,32 +737,54 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: _currentStep == _totalSteps - 1
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _generateShoppingListWithGemini,
-                          icon: const Icon(Icons.auto_awesome),
-                          label: const Text(
-                            'Mit Gemini Einkaufsliste generieren',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                ? _isAdminUser
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _generateShoppingListWithGemini,
+                              icon: const Icon(Icons.auto_awesome),
+                              label: Text(
+                                'order_form.generate_with_gemini'.tr(),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _nextStep,
+                              icon: const Icon(Icons.shopping_cart),
+                              label: Text('dashboard.generate_list'.tr()),
+                              iconAlignment: IconAlignment.end,
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
                           onPressed: _nextStep,
-                          icon: const Icon(Icons.shopping_cart),
-                          label: const Text('Einkaufsliste generieren'),
+                          icon: const Icon(Icons.send_outlined),
+                          label: Text('order_form.submit_request'.tr()),
                           iconAlignment: IconAlignment.end,
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -750,9 +793,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  )
+                      )
                 : Row(
                     children: [
                       Expanded(
@@ -2378,7 +2419,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ),
               _buildServiceCheckbox(
                 'photobox_qr',
-                'BlackLodge - PhotoBox Digal mit QR Code (300 CHF)',
+                'BlackLodge - PhotoBox Digital mit QR Code (300 CHF)',
               ),
               _buildServiceCheckbox(
                 'bubble_waffles',
@@ -2607,6 +2648,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   Widget _buildOrderOverviewStep() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isEnglish = context.locale.languageCode == 'en';
 
     String formatDate(DateTime? d) =>
         d != null ? DateFormat('EEEE, dd. MMMM yyyy').format(d) : '–';
@@ -2669,18 +2711,31 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     }
 
     final serviceLabel = _serviceType == 'cocktail_barservice'
-        ? 'Cocktail & Bar'
+        ? (isEnglish ? 'Cocktail & bar' : 'Cocktail & Bar')
         : _serviceType == 'cocktail_service'
-        ? 'Nur Cocktails'
+        ? (isEnglish ? 'Cocktails only' : 'Nur Cocktails')
         : _serviceType == 'mocktail_service'
-        ? 'Nur Mocktails'
-        : 'Nur Bar';
+        ? (isEnglish ? 'Mocktails only' : 'Nur Mocktails')
+        : (isEnglish ? 'Bar only' : 'Nur Bar');
 
     final drinkerLabel = _drinkerType == 'light'
-        ? 'Leichte Trinker'
+        ? (isEnglish ? 'Light drinkers' : 'Leichte Trinker')
         : _drinkerType == 'heavy'
-        ? 'Starke Trinker'
+        ? (isEnglish ? 'Heavy drinkers' : 'Starke Trinker')
         : 'Normal';
+
+    final barDrinkLabels = formatOrderBarDrinkLabels(
+      _selectedBarDrinks,
+      isEnglish: isEnglish,
+    );
+    final alcoholLabels = formatOrderAlcoholLabels(
+      _selectedAlcoholItems,
+      isEnglish: isEnglish,
+    );
+    final additionalServiceLabels = formatOrderAdditionalServiceLabels(
+      _selectedAdditionalServices,
+      isEnglish: isEnglish,
+    );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -2688,14 +2743,22 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Auftragsübersicht',
+            _isAdminUser
+                ? (isEnglish ? 'Order review' : 'Auftragsübersicht')
+                : (isEnglish ? 'Request review' : 'Anfrageübersicht'),
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Bitte alles prüfen, bevor du den Auftrag abschließt.',
+            _isAdminUser
+                ? (isEnglish
+                      ? 'Please review everything before you generate the shopping list.'
+                      : 'Bitte alles prüfen, bevor du den Auftrag abschließt.')
+                : (isEnglish
+                      ? 'Please review everything before you submit your request.'
+                      : 'Bitte alles prüfen, bevor du deine Anfrage einreichst.'),
             style: theme.textTheme.bodyLarge?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -2741,16 +2804,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ]),
           if (_selectedBarDrinks.isNotEmpty || _selectedAlcoholItems.isNotEmpty)
             section('Bardrinks & Alkohol', [
-              if (_selectedBarDrinks.isNotEmpty)
-                _OverviewRow('Bardrinks', _selectedBarDrinks.join(', ')),
-              if (_selectedAlcoholItems.isNotEmpty)
-                _OverviewRow('Alkohol', _selectedAlcoholItems.join(', ')),
+              if (barDrinkLabels.isNotEmpty)
+                _OverviewRow('Bardrinks', barDrinkLabels.join(', ')),
+              ...alcoholLabels.map((label) => _OverviewRow('Alkohol', label)),
             ]),
-          if (_selectedAdditionalServices.isNotEmpty)
+          if (additionalServiceLabels.isNotEmpty)
             section('Zusatzleistungen', [
-              _OverviewRow(
-                'Services',
-                '${_selectedAdditionalServices.length} ausgewählt',
+              ...additionalServiceLabels.map(
+                (label) => _OverviewRow('Service', label),
               ),
             ]),
           if (_remarksController.text.trim().isNotEmpty)
@@ -2758,11 +2819,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               _OverviewRow('Hinweis', _remarksController.text.trim()),
             ]),
           const SizedBox(height: 8),
-          if (MediaQuery.of(context).size.width >= 600) ...[
+          if (MediaQuery.of(context).size.width >= 600 && _isAdminUser) ...[
             OutlinedButton.icon(
               onPressed: _generateShoppingListWithGemini,
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Mit Gemini Einkaufsliste generieren'),
+              label: Text('order_form.generate_with_gemini'.tr()),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
@@ -2922,6 +2983,27 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildDesktopActionButtons() {
+    if (_currentStep == _totalSteps - 1 && !_isAdminUser) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: _nextStep,
+            icon: const Icon(Icons.send_outlined),
+            label: Text('order_form.submit_request'.tr()),
+            iconAlignment: IconAlignment.end,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Row(
@@ -2954,7 +3036,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             label: Text(
               _currentStep < _totalSteps - 1
                   ? 'common.next'.tr()
-                  : 'Einkaufsliste generieren',
+              : 'dashboard.generate_list'.tr(),
             ),
             iconAlignment: IconAlignment.end,
             style: FilledButton.styleFrom(

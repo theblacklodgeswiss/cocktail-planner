@@ -7,6 +7,7 @@ import '../data/settings_repository.dart';
 import '../models/app_settings.dart';
 import '../models/offer.dart';
 import '../utils/currency.dart';
+import '../utils/order_option_labels.dart';
 
 /// Generates a PDF offer document (Angebot) from [OfferData].
 class OfferPdfGenerator {
@@ -724,21 +725,24 @@ class OfferPdfGenerator {
               isEn ? 'On request' : 'Auf Anfrage',
               align: pw.TextAlign.right,
             ),
-            cell(offer.barDrinks.join(', ')),
+            cell(
+              formatOrderBarDrinkLabels(
+                offer.barDrinks,
+                isEnglish: isEn,
+              ).join(', '),
+            ),
           ],
         ),
       // Alcohol purchase (if selected)
       ...offer.alcoholPurchase.map((alcohol) {
-        final isUsageBased =
-            alcohol.toLowerCase().contains('wodka') ||
-            alcohol.toLowerCase().contains('chivas');
+        final isUsageBased = isUsageBasedAlcoholOption(alcohol);
         final note = isUsageBased
             ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
             : '';
         return pw.TableRow(
           children: [
             cell(dateStr),
-            cell(alcohol),
+            cell(formatOrderAlcoholLabel(alcohol, isEnglish: isEn)),
             cell('1', align: pw.TextAlign.center),
             cell(
               isEn ? 'On request' : 'Auf Anfrage',
@@ -757,7 +761,9 @@ class OfferPdfGenerator {
         (service) => pw.TableRow(
           children: [
             cell(dateStr),
-            cell(service),
+            cell(
+              formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+            ),
             cell('1', align: pw.TextAlign.center),
             cell(
               isEn ? 'On request' : 'Auf Anfrage',

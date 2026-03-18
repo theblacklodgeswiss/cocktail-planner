@@ -50,7 +50,9 @@
   },  "order_form": {
     "thank_you_title": "Thank You!",
     "thank_you_message": "We have received your request and will process it as soon as possible. You will receive a personalized offer from us shortly.",
-    "save_error": "Error saving your request. Please try again later."
+    "save_error": "Error saving your request. Please try again later.",
+    "submit_request": "Submit request",
+    "generate_with_gemini": "Generate shopping list with Gemini"
   },
   "customer": {
     "welcome_title": "Welcome to The Blacklodge",

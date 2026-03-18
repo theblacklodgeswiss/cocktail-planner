@@ -8,6 +8,7 @@ import '../models/app_settings.dart';
 import '../models/offer.dart';
 import '../models/order.dart';
 import '../utils/currency.dart';
+import '../utils/order_option_labels.dart';
 
 /// Generates an invoice/confirmation PDF (Auftragsbestätigung) from a [SavedOrder].
 class InvoicePdfGenerator {
@@ -749,21 +750,24 @@ class InvoicePdfGenerator {
               isEn ? 'On request' : 'Auf Anfrage',
               align: pw.TextAlign.right,
             ),
-            cell(order.barDrinks.join(', ')),
+            cell(
+              formatOrderBarDrinkLabels(
+                order.barDrinks,
+                isEnglish: isEn,
+              ).join(', '),
+            ),
           ],
         ),
       // Alcohol purchase (if selected)
       ...order.alcoholPurchase.map((alcohol) {
-        final isUsageBased =
-            alcohol.toLowerCase().contains('wodka') ||
-            alcohol.toLowerCase().contains('chivas');
+        final isUsageBased = isUsageBasedAlcoholOption(alcohol);
         final note = isUsageBased
             ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
             : '';
         return pw.TableRow(
           children: [
             cell(dateStr),
-            cell(alcohol),
+            cell(formatOrderAlcoholLabel(alcohol, isEnglish: isEn)),
             cell('1', align: pw.TextAlign.center),
             cell(
               isEn ? 'On request' : 'Auf Anfrage',
@@ -782,7 +786,9 @@ class InvoicePdfGenerator {
         (service) => pw.TableRow(
           children: [
             cell(dateStr),
-            cell(service),
+            cell(
+              formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+            ),
             cell('1', align: pw.TextAlign.center),
             cell(
               isEn ? 'On request' : 'Auf Anfrage',
