@@ -6,6 +6,29 @@ import 'firestore_service.dart';
 
 /// Repository for order operations.
 class OrderRepository {
+  Map<String, dynamic> _ownerMetadata() {
+    final data = <String, dynamic>{};
+    final userId = authService.currentUser?.uid;
+    final userEmail = authService.email;
+
+    if (userId != null && userId.isNotEmpty) {
+      data['userId'] = userId;
+    }
+    if (userEmail != null && userEmail.isNotEmpty) {
+      data['userEmail'] = userEmail;
+    }
+
+    return data;
+  }
+
+  String _formatError(Object error) {
+    if (error is FirebaseException) {
+      final message = error.message;
+      return message == null ? '[${error.code}]' : '[${error.code}] $message';
+    }
+    return error.toString();
+  }
+
   /// Save an order to Firestore.
   /// Returns the order ID if successful, null if Firebase unavailable.
   Future<String?> saveOrder({
@@ -61,12 +84,13 @@ class OrderRepository {
         'alcoholPurchase': alcoholPurchase,
         'additionalServices': additionalServices,
         'remarks': remarks,
+        ..._ownerMetadata(),
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': authService.email ?? authService.currentUser?.uid,
       });
       return docRef.id;
     } catch (e) {
-      debugPrint('Failed to save order: $e');
+      debugPrint('Failed to save order: ${_formatError(e)}');
       return null;
     }
   }
@@ -127,6 +151,7 @@ class OrderRepository {
         'hasShoppingList': true,
         'shoppingListCreatedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        ..._ownerMetadata(),
       };
 
       // Only update optional fields if provided
@@ -150,7 +175,9 @@ class OrderRepository {
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
-      debugPrint('Failed to update order shopping list: $e');
+      debugPrint(
+        'Failed to update order shopping list: ${_formatError(e)}',
+      );
       return false;
     }
   }
@@ -167,6 +194,7 @@ class OrderRepository {
     required DateTime eventDate,
     String discountRemark = '',
     List<Map<String, dynamic>> extraPositions = const [],
+    List<Map<String, dynamic>> offerPositions = const [],
     int shotsCount = 0,
     double shotsPricePerPiece = 1.50,
     String shotsRemark = '',
@@ -180,6 +208,7 @@ class OrderRepository {
     double travelCostPerKm = 0.70,
     double barCost = 0,
     String location = '',
+    String? currency,
   }) async {
     if (!firestoreService.isAvailable) return false;
 
@@ -193,6 +222,7 @@ class OrderRepository {
         'offerDiscountRemark': discountRemark,
         'offerLanguage': language,
         'offerExtraPositions': extraPositions,
+        'offerPositions': offerPositions,
         'offerShotsCount': shotsCount,
         'offerShotsPricePerPiece': shotsPricePerPiece,
         'offerShotsRemark': shotsRemark,
@@ -204,6 +234,7 @@ class OrderRepository {
         'distanceKm': distanceKm,
         'offerTravelCostPerKm': travelCostPerKm,
         'offerBarCost': barCost,
+        ..._ownerMetadata(),
       };
 
       if (serviceType != null) {
@@ -218,11 +249,14 @@ class OrderRepository {
       if (location.isNotEmpty) {
         updateData['location'] = location;
       }
+      if (currency != null && currency.isNotEmpty) {
+        updateData['currency'] = currency;
+      }
 
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
-      debugPrint('Failed to update order offer data: $e');
+      debugPrint('Failed to update order offer data: ${_formatError(e)}');
       return false;
     }
   }
@@ -245,6 +279,7 @@ class OrderRepository {
         'distanceKm': distanceKm,
         'thekeCost': thekeCost,
         'updatedAt': FieldValue.serverTimestamp(),
+        ..._ownerMetadata(),
       };
 
       if (cocktails != null) updateData['cocktails'] = cocktails;
@@ -254,7 +289,7 @@ class OrderRepository {
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
-      debugPrint('Failed to update order totals: $e');
+      debugPrint('Failed to update order totals: ${_formatError(e)}');
       return false;
     }
   }
@@ -271,6 +306,7 @@ class OrderRepository {
     try {
       final updateData = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
+        ..._ownerMetadata(),
       };
 
       if (cocktails != null) updateData['cocktails'] = cocktails;
@@ -280,7 +316,9 @@ class OrderRepository {
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
-      debugPrint('Failed to update order cocktails and bar: $e');
+      debugPrint(
+        'Failed to update order cocktails and bar: ${_formatError(e)}',
+      );
       return false;
     }
   }
@@ -568,6 +606,7 @@ class OrderRepository {
         'offerEventTypes': [eventType],
         // Requested cocktails from form
         'requestedCocktails': requestedCocktails,
+        ..._ownerMetadata(),
       };
 
       if (existingDocId != null) {
@@ -592,7 +631,9 @@ class OrderRepository {
         return docRef.id;
       }
     } catch (e) {
-      debugPrint('Failed to save/update form submission: $e');
+      debugPrint(
+        'Failed to save/update form submission: ${_formatError(e)}',
+      );
       return null;
     }
   }

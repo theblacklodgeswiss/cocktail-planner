@@ -491,11 +491,13 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         )
         .toList();
 
+    var saveSucceeded = false;
+
     // Check if linking to existing order (from form submission)
     final linkedOrderId = appState.linkedOrderId;
     if (linkedOrderId != null) {
       // Update existing order with shopping list data
-      await orderRepository.updateOrderShoppingList(
+      saveSucceeded = await orderRepository.updateOrderShoppingList(
         orderId: linkedOrderId,
         items: itemsData,
         total: total,
@@ -517,11 +519,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         additionalServices: _additionalServices.isNotEmpty ? _additionalServices : null,
         remarks: _remarks.isNotEmpty ? _remarks : null,
       );
-      // Clear linked order after saving
-      appState.clearLinkedOrder();
+      if (saveSucceeded) {
+        appState.clearLinkedOrder();
+      }
     } else {
       // Create new order
-      await orderRepository.saveOrder(
+      final orderId = await orderRepository.saveOrder(
         name: result.name,
         date: orderDate,
         items: itemsData,
@@ -543,9 +546,15 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         additionalServices: _additionalServices,
         remarks: _remarks,
       );
+      saveSucceeded = orderId != null;
     }
 
     if (!mounted) return;
+    if (!saveSucceeded) {
+      _showError('shopping.save_failed'.tr());
+      return;
+    }
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('shopping.order_saved'.tr())));

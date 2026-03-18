@@ -63,6 +63,7 @@ class SavedOrder {
     this.offerFirstPositionText = '',
     this.offerFirstPositionRemark = '',
     this.offerExtraPositions = const [],
+    this.offerPositions = const [],
     this.offerShotsCount = 0,
     this.offerShotsPricePerPiece = 1.50,
     this.offerShotsRemark = '',
@@ -119,6 +120,11 @@ class SavedOrder {
   final String offerFirstPositionText;
   final String offerFirstPositionRemark;
   final List<Map<String, dynamic>> offerExtraPositions;
+
+  /// All offer positions (stored from offer screen, same schema as ExtraPosition).
+  /// When non-empty, these are used directly for PDF rendering and invoice pre-fill.
+  final List<Map<String, dynamic>> offerPositions;
+
   final int offerShotsCount;
   final double offerShotsPricePerPiece;
   final String offerShotsRemark;
@@ -225,6 +231,11 @@ class SavedOrder {
           data['offerFirstPositionRemark'] as String? ?? '',
       offerExtraPositions:
           (data['offerExtraPositions'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
+      offerPositions:
+          (data['offerPositions'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [],

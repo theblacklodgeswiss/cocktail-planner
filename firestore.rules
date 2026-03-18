@@ -28,6 +28,17 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+
+    function isOrderOwner() {
+      return request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.createdBy == request.auth.uid ||
+        (request.auth.token.email != null && (
+          resource.data.createdBy == request.auth.token.email ||
+          resource.data.userEmail == request.auth.token.email
+        ))
+      );
+    }
     
     // Materials collection
     match /materials/{document=**} {
@@ -51,7 +62,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isAdmin() || isSuperAdmin() || resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin() || isSuperAdmin() || isOrderOwner();
     }
     
     // Users collection - for user profiles

@@ -521,165 +521,194 @@ class OfferPdfGenerator {
           headerCell(isEn ? 'Note' : 'Bemerkung'),
         ],
       ),
-      // Cocktail & Barservice
-      pw.TableRow(
-        children: [
-          cell(dateStr),
-          cell(
-            customFirstPositionText.isNotEmpty
-                ? customFirstPositionText
-                : (() {
-                    return switch (offer.serviceType) {
-                      'cocktail_barservice' =>
-                        isEn
-                            ? 'Cocktail & Bar Service'
-                            : 'Cocktail- & Barservice',
-                      'cocktail_service' =>
-                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                      'cocktailservice' =>
-                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                      'mocktail_service' =>
-                        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
-                      'bar_service' =>
-                        isEn ? 'Bar Service only' : 'Nur Barservice',
-                      'barservice' =>
-                        isEn ? 'Bar Service only' : 'Nur Barservice',
-                      _ =>
-                        offer.serviceType.isEmpty
-                            ? (isEn
-                                  ? 'Cocktail & Bar Service'
-                                  : 'Cocktail- & Barservice')
-                            : offer.serviceType,
-                    };
-                  })(),
-          ),
-          // Quantity is always 1
-          cell('1', align: pw.TextAlign.center),
-          // Price is the full bar service cost
-          cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
-          cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
-          cell(
-            customFirstPositionRemark.isNotEmpty
-                ? customFirstPositionRemark
-                :
-                  // Summary of roles from supervisor items, or fallback
-                  (() {
-                    final serviceLabel = switch (offer.serviceType) {
-                      'cocktail_barservice' =>
-                        isEn
-                            ? 'Cocktail & Bar Service'
-                            : 'Cocktail- & Barservice',
-                      'cocktail_service' =>
-                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                      'cocktailservice' =>
-                        isEn ? 'Cocktail Service only' : 'Nur Cocktailservice',
-                      'mocktail_service' =>
-                        isEn ? 'Mocktail Service only' : 'Nur Mocktailservice',
-                      'bar_service' =>
-                        isEn ? 'Bar Service only' : 'Nur Barservice',
-                      'barservice' =>
-                        isEn ? 'Bar Service only' : 'Nur Barservice',
-                      _ =>
-                        offer.serviceType.isEmpty
-                            ? (isEn
-                                  ? 'Cocktail & Bar Service'
-                                  : 'Cocktail- & Barservice')
-                            : offer.serviceType,
-                    };
-
-                    final supervisorSummary = offer.supervisorItems
-                        .map(
-                          (item) =>
-                              "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
-                        )
-                        .join(', ');
-
-                    final count = offer.supervisorItems.fold<int>(
-                      0,
-                      (sum, item) =>
-                          sum + ((item['quantity'] as num?)?.toInt() ?? 0),
-                    );
-                    final finalCount = count > 0
-                        ? count
-                        : (offer.assignedEmployees.isNotEmpty
-                              ? offer.assignedEmployees.length
-                              : 3);
-
-                    final rolesText = supervisorSummary.isNotEmpty
-                        ? (isEn
-                              ? 'Incl. $supervisorSummary'
-                              : 'Inkl. $supervisorSummary')
-                        : (isEn
-                              ? '$finalCount Barkeepers'
-                              : '$finalCount Barkeeper');
-
-                    return isEn
-                        ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
-                        : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
-                  })(),
-          ),
-        ],
-      ),
-      // Travel cost (only if distance > 0)
-      if (offer.distanceKm > 0)
+      // ── Position rows ──────────────────────────────────────────────────
+      // When offerPositions is set, render those directly; otherwise compute.
+      if (offer.offerPositions.isNotEmpty)
+        ...offer.offerPositions.map((pos) {
+          final isTbd = pos.quantity == 0;
+          final posDate =
+              pos.date.isNotEmpty ? pos.date : dateStr;
+          final qtyText = isTbd
+              ? 'X'
+              : (pos.quantity > 1 ? '${pos.quantity}' : '1');
+          final priceText = isTbd ? 'tbd' : curr.format(pos.price);
+          final totalText = isTbd ? 'tbd' : curr.format(pos.total);
+          return pw.TableRow(
+            children: [
+              cell(posDate),
+              cell(pos.name),
+              cell(qtyText, align: pw.TextAlign.center),
+              cell(priceText, align: pw.TextAlign.right),
+              cell(totalText, align: pw.TextAlign.right),
+              cell(pos.remark),
+            ],
+          );
+        })
+      else ...[
+        // Legacy computed rows (backward compat when offerPositions is not set)
+        // Cocktail & Barservice
         pw.TableRow(
           children: [
             cell(dateStr),
-            cell(isEn ? 'Travel Costs' : 'Reisekosten'),
-            cell('${offer.distanceKm} km', align: pw.TextAlign.center),
-            cell(curr.format(offer.travelCostPerKm), align: pw.TextAlign.right),
-            cell(curr.format(travelTotal), align: pw.TextAlign.right),
             cell(
-              isEn
-                  ? 'Travel from Allschwil CH to ${offer.eventLocation}'
-                  : 'Reisekosten von Allschwil CH nach ${offer.eventLocation}',
+              customFirstPositionText.isNotEmpty
+                  ? customFirstPositionText
+                  : (() {
+                      return switch (offer.serviceType) {
+                        'cocktail_barservice' =>
+                          isEn
+                              ? 'Cocktail & Bar Service'
+                              : 'Cocktail- & Barservice',
+                        'cocktail_service' =>
+                          isEn
+                              ? 'Cocktail Service only'
+                              : 'Nur Cocktailservice',
+                        'cocktailservice' =>
+                          isEn
+                              ? 'Cocktail Service only'
+                              : 'Nur Cocktailservice',
+                        'mocktail_service' =>
+                          isEn
+                              ? 'Mocktail Service only'
+                              : 'Nur Mocktailservice',
+                        'bar_service' =>
+                          isEn ? 'Bar Service only' : 'Nur Barservice',
+                        'barservice' =>
+                          isEn ? 'Bar Service only' : 'Nur Barservice',
+                        _ =>
+                          offer.serviceType.isEmpty
+                              ? (isEn
+                                    ? 'Cocktail & Bar Service'
+                                    : 'Cocktail- & Barservice')
+                              : offer.serviceType,
+                      };
+                    })(),
+            ),
+            cell('1', align: pw.TextAlign.center),
+            cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
+            cell(curr.format(offer.barServiceCost), align: pw.TextAlign.right),
+            cell(
+              customFirstPositionRemark.isNotEmpty
+                  ? customFirstPositionRemark
+                  : (() {
+                      final serviceLabel = switch (offer.serviceType) {
+                        'cocktail_barservice' =>
+                          isEn
+                              ? 'Cocktail & Bar Service'
+                              : 'Cocktail- & Barservice',
+                        'cocktail_service' =>
+                          isEn
+                              ? 'Cocktail Service only'
+                              : 'Nur Cocktailservice',
+                        'cocktailservice' =>
+                          isEn
+                              ? 'Cocktail Service only'
+                              : 'Nur Cocktailservice',
+                        'mocktail_service' =>
+                          isEn
+                              ? 'Mocktail Service only'
+                              : 'Nur Mocktailservice',
+                        'bar_service' =>
+                          isEn ? 'Bar Service only' : 'Nur Barservice',
+                        'barservice' =>
+                          isEn ? 'Bar Service only' : 'Nur Barservice',
+                        _ =>
+                          offer.serviceType.isEmpty
+                              ? (isEn
+                                    ? 'Cocktail & Bar Service'
+                                    : 'Cocktail- & Barservice')
+                              : offer.serviceType,
+                      };
+                      final supervisorSummary = offer.supervisorItems
+                          .map(
+                            (item) =>
+                                "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
+                          )
+                          .join(', ');
+                      final count = offer.supervisorItems.fold<int>(
+                        0,
+                        (sum, item) =>
+                            sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+                      );
+                      final finalCount = count > 0
+                          ? count
+                          : (offer.assignedEmployees.isNotEmpty
+                                ? offer.assignedEmployees.length
+                                : 3);
+                      final rolesText = supervisorSummary.isNotEmpty
+                          ? (isEn
+                                ? 'Incl. $supervisorSummary'
+                                : 'Inkl. $supervisorSummary')
+                          : (isEn
+                                ? '$finalCount Barkeepers'
+                                : '$finalCount Barkeeper');
+                      return isEn
+                          ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
+                          : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
+                    })(),
             ),
           ],
         ),
-      // Extra staff note row
-      pw.TableRow(
-        children: [
-          cell(dateStr),
-          cell(isEn ? 'Extra hours' : 'Extrastunden'),
-          cell('X', align: pw.TextAlign.center),
-          cell('tbd', align: pw.TextAlign.right),
-          cell('tbd', align: pw.TextAlign.right),
-          cell(
-            isEn
-                ? '50 ${offer.currency}/Barkeeper/h extra'
-                : '50 ${offer.currency}/Barkeeper/Std. extra',
+        if (offer.distanceKm > 0)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(isEn ? 'Travel Costs' : 'Reisekosten'),
+              cell('${offer.distanceKm} km', align: pw.TextAlign.center),
+              cell(
+                curr.format(offer.travelCostPerKm),
+                align: pw.TextAlign.right,
+              ),
+              cell(curr.format(travelTotal), align: pw.TextAlign.right),
+              cell(
+                isEn
+                    ? 'Travel from Allschwil CH to ${offer.eventLocation}'
+                    : 'Reisekosten von Allschwil CH nach ${offer.eventLocation}',
+              ),
+            ],
           ),
-        ],
-      ),
-      // Bar/Theke (only if cost > 0)
-      if (offer.barCost > 0)
         pw.TableRow(
           children: [
             cell(dateStr),
-            cell(isEn ? 'Bar Counter' : 'Theke'),
-            cell('1', align: pw.TextAlign.center),
-            cell(curr.format(offer.barCost), align: pw.TextAlign.right),
-            cell(curr.format(offer.barCost), align: pw.TextAlign.right),
+            cell(isEn ? 'Extra hours' : 'Extrastunden'),
+            cell('X', align: pw.TextAlign.center),
+            cell('tbd', align: pw.TextAlign.right),
+            cell('tbd', align: pw.TextAlign.right),
             cell(
               isEn
-                  ? 'Mobile bar counter provided'
-                  : 'Mobile Theke wird gestellt',
+                  ? '50 ${offer.currency}/Barkeeper/h extra'
+                  : '50 ${offer.currency}/Barkeeper/Std. extra',
             ),
           ],
         ),
-      // Extra positions (custom line items)
-      ...offer.extraPositions.map(
-        (pos) => pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(pos.name),
-            cell('1', align: pw.TextAlign.center),
-            cell(curr.format(pos.price), align: pw.TextAlign.right),
-            cell(curr.format(pos.price), align: pw.TextAlign.right),
-            cell(pos.remark),
-          ],
+        if (offer.barCost > 0)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(isEn ? 'Bar Counter' : 'Theke'),
+              cell('1', align: pw.TextAlign.center),
+              cell(curr.format(offer.barCost), align: pw.TextAlign.right),
+              cell(curr.format(offer.barCost), align: pw.TextAlign.right),
+              cell(
+                isEn
+                    ? 'Mobile bar counter provided'
+                    : 'Mobile Theke wird gestellt',
+              ),
+            ],
+          ),
+        ...offer.extraPositions.map(
+          (pos) => pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(pos.name),
+              cell('1', align: pw.TextAlign.center),
+              cell(curr.format(pos.price), align: pw.TextAlign.right),
+              cell(curr.format(pos.price), align: pw.TextAlign.right),
+              cell(pos.remark),
+            ],
+          ),
         ),
-      ),
+      ],
       // Bar drinks (if selected)
       if (offer.barDrinks.isNotEmpty)
         pw.TableRow(

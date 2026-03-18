@@ -518,6 +518,27 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         widget.order.offerEventTypes.isNotEmpty;
   }
 
+  Future<SavedOrder> _loadLatestOrder() async {
+    final freshOrder = await orderRepository.getOrderById(widget.order.id);
+    return freshOrder ?? widget.order;
+  }
+
+  Future<void> _openOfferEditor() async {
+    final router = GoRouter.of(context);
+    final order = await _loadLatestOrder();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    router.push('/create-offer', extra: order);
+  }
+
+  Future<void> _openInvoiceEditor() async {
+    final router = GoRouter.of(context);
+    final order = await _loadLatestOrder();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    router.push('/create-invoice', extra: order);
+  }
+
   /// Show message that offer needs to be completed first
   void _showOfferIncompleteMessage() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -525,10 +546,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         content: Text('orders.offer_incomplete'.tr()),
         action: SnackBarAction(
           label: 'orders.complete_offer'.tr(),
-          onPressed: () {
-            Navigator.pop(context);
-            context.push('/create-offer', extra: widget.order);
-          },
+          onPressed: _openOfferEditor,
         ),
       ),
     );
@@ -720,9 +738,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _generateInvoice() async {
-    // Navigate to the CreateInvoiceScreen instead of generating directly
-    Navigator.pop(context);
-    context.push('/create-invoice', extra: widget.order);
+    await _openInvoiceEditor();
   }
 
   Future<void> _deleteOrder() async {
@@ -822,10 +838,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      context.push('/create-offer', extra: widget.order);
-                    },
+                    onPressed: _openOfferEditor,
                     icon: const Icon(Icons.description_outlined),
                     label: Text('orders.offer'.tr()),
                   ),
@@ -870,10 +883,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               child: Row(
                 children: [
                   FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      context.push('/create-offer', extra: widget.order);
-                    },
+                    onPressed: _openOfferEditor,
                     icon: const Icon(Icons.description_outlined),
                     label: Text('orders.offer'.tr()),
                   ),
@@ -956,10 +966,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    context.push('/create-offer', extra: widget.order);
-                  },
+                  onPressed: _openOfferEditor,
                   icon: const Icon(Icons.edit_document),
                   label: Text('orders.complete_offer'.tr()),
                   style: FilledButton.styleFrom(backgroundColor: Colors.orange),

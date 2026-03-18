@@ -91,8 +91,16 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   // Event types
   final Set<EventType> _eventTypes = {};
 
-  // Extra positions
+  // Extra positions (used in fields mode, backward compat)
   final List<ExtraPosition> _extraPositions = [];
+
+  /// All offer positions loaded from offerPositions field.
+  /// When non-empty, the screen operates in "positions mode":
+  /// the grand total is derived from these positions instead of from
+  /// the individual bar service / travel / theke fields.
+  final List<ExtraPosition> _offerPositions = [];
+
+  bool get _usePositionsMode => _offerPositions.isNotEmpty;
 
   bool _isGenerating = false;
   String? _totalValidationError;
@@ -168,9 +176,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       if (type != null) _eventTypes.add(type);
     }
 
-    // Load extra positions
-    for (final posData in widget.order.offerExtraPositions) {
-      _extraPositions.add(ExtraPosition.fromJson(posData));
+    // Load positions: prefer offerPositions (positions mode); else load extra positions (fields mode)
+    if (widget.order.offerPositions.isNotEmpty) {
+      for (final posData in widget.order.offerPositions) {
+        _offerPositions.add(ExtraPosition.fromJson(posData));
+      }
+    } else {
+      for (final posData in widget.order.offerExtraPositions) {
+        _extraPositions.add(ExtraPosition.fromJson(posData));
+      }
     }
 
     // Load extra hours
@@ -260,8 +274,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       _extraHoursTotal +
       _extraPositionsTotal;
 
+  /// Sum of all offer positions (positions mode)
+  double get _offerPositionsSum =>
+      _offerPositions.fold(0.0, (sum, p) => sum + p.total);
+
   /// Grand total after discount
-  double get _grandTotal => _positionsSum - _discount;
+  double get _grandTotal => _usePositionsMode
+      ? (_offerPositionsSum + _shotsCostTotal + _extraHoursTotal - _discount)
+      : (_positionsSum - _discount);
 
   /// Validates that employees are assigned
   bool _validateEmployees() {
@@ -304,8 +324,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   /// Build updated order with invoice data
   SavedOrder _buildUpdatedOrder() {
-    // Calculate new total from positions (without shots - they are separate)
-    final newTotal = _barServiceCost + _travelCostTotal + _thekeCost;
+    // In positions mode: total = sum of all offer positions
+    // In fields mode: total = barServiceCost + travelCostTotal + thekeCost
+    final newTotal = _usePositionsMode
+        ? _offerPositionsSum
+        : (_barServiceCost + _travelCostTotal + _thekeCost);
 
     return SavedOrder(
       id: widget.order.id,
@@ -339,7 +362,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       offerEventTypes: _eventTypes.map((e) => e.name).toList(),
       offerDiscount: _discount,
       offerLanguage: _language,
-      offerExtraPositions: _extraPositions.map((e) => e.toJson()).toList(),
+      offerExtraPositions: _usePositionsMode
+          ? []
+          : _extraPositions.map((e) => e.toJson()).toList(),
+      offerPositions: _usePositionsMode
+          ? _offerPositions.map((e) => e.toJson()).toList()
+          : widget.order.offerPositions,
       offerShotsCount: _shotsCount,
       offerShotsPricePerPiece: _shotsPricePerPiece,
       offerShotsRemark: _shotsRemarkCtrl.text.trim(),
@@ -360,8 +388,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     );
   }
 
-  Future<void> _saveInvoiceData() async {
-    await orderRepository.updateOfferData(
+  Future<bool> _saveInvoiceData() async {
+    final offerSaved = await orderRepository.updateOfferData(
       orderId: widget.order.id,
       clientName: _clientNameCtrl.text.trim(),
       clientContact: _clientContactCtrl.text.trim(),
@@ -370,7 +398,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       discount: _discount,
       language: _language,
       eventDate: _eventDate,
-      extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
+      extraPositions: _usePositionsMode
+          ? []
+          : _extraPositions.map((e) => e.toJson()).toList(),
+      offerPositions: _usePositionsMode
+          ? _offerPositions.map((e) => e.toJson()).toList()
+          : [],
       shotsCount: _shotsCount,
       shotsPricePerPiece: _shotsPricePerPiece,
       shotsRemark: _shotsRemarkCtrl.text.trim(),
@@ -380,12 +413,18 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       serviceType: _serviceType,
     );
 
+    if (!offerSaved) {
+      return false;
+    }
+
     // Also update the order totals and cocktails/bar/shots
-    await orderRepository.updateOrderTotals(
+    return orderRepository.updateOrderTotals(
       orderId: widget.order.id,
-      total: _barServiceCost + _travelCostTotal + _thekeCost,
-      distanceKm: _distanceKm,
-      thekeCost: _thekeCost,
+      total: _usePositionsMode
+          ? _offerPositionsSum
+          : (_barServiceCost + _travelCostTotal + _thekeCost),
+      distanceKm: _usePositionsMode ? 0 : _distanceKm,
+      thekeCost: _usePositionsMode ? 0 : _thekeCost,
       cocktails: _cocktailsCtrl.text
           .split(',')
           .map((s) => s.trim())
@@ -411,7 +450,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
     setState(() => _isGenerating = true);
     try {
-      await _saveInvoiceData();
+      final saved = await _saveInvoiceData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -433,7 +480,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
     setState(() => _isGenerating = true);
     try {
-      await _saveInvoiceData();
+      final saved = await _saveInvoiceData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
+        }
+        return;
+      }
       final updatedOrder = _buildUpdatedOrder();
       final pdfBytes = await InvoicePdfGenerator.generateBytes(
         updatedOrder,
@@ -458,7 +513,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
     setState(() => _isGenerating = true);
     try {
-      await _saveInvoiceData();
+      final saved = await _saveInvoiceData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
+        }
+        return;
+      }
       final updatedOrder = _buildUpdatedOrder();
       final pdfBytes = await InvoicePdfGenerator.generateBytes(
         updatedOrder,
@@ -848,87 +911,92 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         SectionHeader(label: 'invoice.positions'.tr()),
         const SizedBox(height: 8),
 
-        // Main pricing card (like offer screen)
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Bar Service Cost
-                _field(
-                  controller: _barServiceCostCtrl,
-                  label:
-                      '${'invoice.bar_service_cost'.tr()} (${widget.order.currency})',
-                  keyboard: TextInputType.number,
-                  required: true,
-                ),
-                const SizedBox(height: 12),
+        // ── Positions mode (loaded from offerPositions) ──────────────────
+        if (_usePositionsMode) ...[
+          _buildInvoiceOfferPositionsCard(curr),
+          const SizedBox(height: 12),
+        ],
 
-                // Travel costs in one row
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth >= 500;
-                    final fields = [
-                      _field(
-                        controller: _distanceKmCtrl,
-                        label: 'invoice.distance_km'.tr(),
-                        hint: '150',
-                        keyboard: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                      ),
-                      _field(
-                        controller: _travelCostPerKmCtrl,
-                        label:
-                            '${'invoice.travel_cost_per_km'.tr()} (${widget.order.currency})',
-                        keyboard: TextInputType.number,
-                      ),
-                    ];
-                    return wide
-                        ? Row(
-                            children: fields
-                                .map(
-                                  (f) => Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(right: 8),
+        // ── Fields mode (classic individual fields, shown when no offerPositions) ──
+        if (!_usePositionsMode) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _field(
+                    controller: _barServiceCostCtrl,
+                    label:
+                        '${'invoice.bar_service_cost'.tr()} (${widget.order.currency})',
+                    keyboard: TextInputType.number,
+                    required: true,
+                  ),
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wide = constraints.maxWidth >= 500;
+                      final fields = [
+                        _field(
+                          controller: _distanceKmCtrl,
+                          label: 'invoice.distance_km'.tr(),
+                          hint: '150',
+                          keyboard: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                        ),
+                        _field(
+                          controller: _travelCostPerKmCtrl,
+                          label:
+                              '${'invoice.travel_cost_per_km'.tr()} (${widget.order.currency})',
+                          keyboard: TextInputType.number,
+                        ),
+                      ];
+                      return wide
+                          ? Row(
+                              children: fields
+                                  .map(
+                                    (f) => Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8,
+                                        ),
+                                        child: f,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            )
+                          : Column(
+                              children: fields
+                                  .map(
+                                    (f) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
                                       child: f,
                                     ),
-                                  ),
-                                )
-                                .toList(),
-                          )
-                        : Column(
-                            children: fields
-                                .map(
-                                  (f) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: f,
-                                  ),
-                                )
-                                .toList(),
-                          );
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // Theke cost
-                SizedBox(
-                  width: 250,
-                  child: _field(
-                    controller: _thekeCostCtrl,
-                    label:
-                        '${'invoice.theke_cost'.tr()} (${widget.order.currency})',
-                    hint: '0',
-                    keyboard: TextInputType.number,
+                                  )
+                                  .toList(),
+                            );
+                    },
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: 250,
+                    child: _field(
+                      controller: _thekeCostCtrl,
+                      label:
+                          '${'invoice.theke_cost'.tr()} (${widget.order.currency})',
+                      hint: '0',
+                      keyboard: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ],
 
         // Shots Section - separate card
         if (_shotsCtrl.text.trim().isNotEmpty) ...[
@@ -1034,8 +1102,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Extra positions
-        _buildExtraPositionsSection(curr),
+        // Extra positions (fields mode only)
+        if (!_usePositionsMode) _buildExtraPositionsSection(curr),
       ],
     );
   }
@@ -1220,6 +1288,333 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         );
       },
     );
+  }
+
+  // ── Invoice positions mode ──────────────────────────────────────────────
+
+  Widget _buildInvoiceOfferPositionsCard(Currency curr) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 620;
+                final titleRow = Row(
+                  children: [
+                    Icon(
+                      Icons.list_alt,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Angebotspositionen',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                  ],
+                );
+                final addButton = FilledButton.tonalIcon(
+                  onPressed: () => _showInvoicePositionDialog(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text('invoice.add_position'.tr()),
+                );
+
+                if (isCompact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleRow,
+                      const SizedBox(height: 12),
+                      addButton,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: titleRow),
+                    const SizedBox(width: 12),
+                    addButton,
+                  ],
+                );
+              },
+            ),
+            if (_offerPositions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              ..._offerPositions.asMap().entries.map((entry) {
+                final index = entry.key;
+                final pos = entry.value;
+                final isTbd = pos.quantity == 0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isCompact = constraints.maxWidth < 460;
+                      final dateChip = pos.date.isNotEmpty
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                pos.date,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            )
+                          : null;
+                      final titleColumn = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (dateChip != null) ...[dateChip, const SizedBox(height: 6)],
+                          Text(
+                            pos.quantity > 1
+                                ? '${pos.quantity}\u00d7 ${pos.name}'
+                                : pos.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (pos.remark.isNotEmpty)
+                            Text(
+                              pos.remark.split('\n').first,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      );
+                      final totalText = Text(
+                        isTbd ? 'tbd' : curr.format(pos.total),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isTbd
+                              ? Theme.of(context).colorScheme.outline
+                              : null,
+                        ),
+                      );
+                      final actionButtons = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 18),
+                            onPressed: () =>
+                                _showInvoicePositionDialog(index: index),
+                            tooltip: 'common.edit'.tr(),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.delete,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            onPressed: () =>
+                                setState(() => _offerPositions.removeAt(index)),
+                            tooltip: 'common.delete'.tr(),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
+                      );
+
+                      if (isCompact) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: titleColumn),
+                                const SizedBox(width: 8),
+                                actionButtons,
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            totalText,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: titleColumn),
+                          const SizedBox(width: 8),
+                          totalText,
+                          const SizedBox(width: 4),
+                          actionButtons,
+                        ],
+                      );
+                    },
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showInvoicePositionDialog({int? index}) async {
+    final existing = index != null ? _offerPositions[index] : null;
+    final defaultDate =
+        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
+
+    final dateCtrl = TextEditingController(
+      text: existing?.date.isNotEmpty == true ? existing!.date : defaultDate,
+    );
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final quantityCtrl = TextEditingController(
+      text: existing != null ? existing.quantity.toString() : '1',
+    );
+    final priceCtrl = TextEditingController(
+      text: existing != null ? existing.price.toStringAsFixed(2) : '',
+    );
+    final remarkCtrl = TextEditingController(text: existing?.remark ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    final result = await showDialog<ExtraPosition>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          existing == null
+              ? 'invoice.add_position'.tr()
+              : 'invoice.edit_position'.tr(),
+        ),
+        content: Form(
+          key: formKey,
+          child: SizedBox(
+            width: 380,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: dateCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Datum',
+                      hintText: 'dd.MM.yyyy',
+                      prefixIcon: Icon(Icons.calendar_today, size: 18),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'invoice.position_name'.tr(),
+                      prefixIcon: const Icon(Icons.label_outline),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'invoice.field_required'.tr()
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: quantityCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: InputDecoration(
+                            labelText: 'invoice.position_quantity'.tr(),
+                            prefixIcon: const Icon(Icons.numbers, size: 18),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: priceCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText:
+                                '${'invoice.position_price'.tr()} (${widget.order.currency})',
+                            prefixIcon:
+                                const Icon(Icons.attach_money, size: 18),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'invoice.field_required'.tr();
+                            }
+                            if (double.tryParse(v.trim()) == null) {
+                              return 'invoice.invalid_number'.tr();
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: remarkCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'invoice.position_remark'.tr(),
+                      prefixIcon: const Icon(Icons.notes),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(
+                  ctx,
+                  ExtraPosition(
+                    date: dateCtrl.text.trim(),
+                    name: nameCtrl.text.trim(),
+                    quantity: int.tryParse(quantityCtrl.text.trim()) ?? 1,
+                    price: double.tryParse(priceCtrl.text.trim()) ?? 0,
+                    remark: remarkCtrl.text.trim(),
+                  ),
+                );
+              }
+            },
+            child: Text('common.save'.tr()),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (index != null) {
+          _offerPositions[index] = result;
+        } else {
+          _offerPositions.add(result);
+        }
+      });
+    }
   }
 
   Widget _buildExtraPositionsSection(Currency curr) {
@@ -1459,44 +1854,80 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _PreviewRow(
-              label: 'invoice.bar_service_cost'.tr(),
-              value: curr.format(_barServiceCost),
-            ),
-            if (_distanceKm > 0)
-              _PreviewRow(
-                label: 'invoice.travel_cost'.tr(),
-                value:
-                    '${_distanceKm * 2} km × ${curr.format(_travelCostPerKm)} = ${curr.format(_travelCostTotal)}',
+            // Positions mode: show each offer position
+            if (_usePositionsMode) ...[
+              ..._offerPositions.map(
+                (pos) => _PreviewRow(
+                  label: pos.quantity > 1
+                      ? '${pos.quantity}\u00d7 ${pos.name}'
+                      : pos.name,
+                  value: pos.quantity == 0
+                      ? 'tbd'
+                      : curr.format(pos.total),
+                ),
               ),
-            if (_thekeCost > 0)
+              if (_shotsCount > 0)
+                _PreviewRow(
+                  label: 'Shots',
+                  value:
+                      '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
+                ),
+              if (_extraHoursTotal > 0)
+                _PreviewRow(
+                  label: 'invoice.extra_hours_label'.tr(),
+                  value:
+                      '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
+                ),
+              const Divider(),
               _PreviewRow(
-                label: 'invoice.theke_cost'.tr(),
-                value: curr.format(_thekeCost),
+                label: 'invoice.positions_sum'.tr(),
+                value: curr.format(
+                  _offerPositionsSum + _shotsCostTotal + _extraHoursTotal,
+                ),
+                bold: true,
               ),
-            if (_shotsCount > 0)
+            ],
+            // Fields mode: show individual field sums
+            if (!_usePositionsMode) ...[
               _PreviewRow(
-                label: 'Shots',
-                value:
-                    '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
+                label: 'invoice.bar_service_cost'.tr(),
+                value: curr.format(_barServiceCost),
               ),
-            if (_extraHoursTotal > 0)
+              if (_distanceKm > 0)
+                _PreviewRow(
+                  label: 'invoice.travel_cost'.tr(),
+                  value:
+                      '${_distanceKm * 2} km × ${curr.format(_travelCostPerKm)} = ${curr.format(_travelCostTotal)}',
+                ),
+              if (_thekeCost > 0)
+                _PreviewRow(
+                  label: 'invoice.theke_cost'.tr(),
+                  value: curr.format(_thekeCost),
+                ),
+              if (_shotsCount > 0)
+                _PreviewRow(
+                  label: 'Shots',
+                  value:
+                      '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
+                ),
+              if (_extraHoursTotal > 0)
+                _PreviewRow(
+                  label: 'invoice.extra_hours_label'.tr(),
+                  value:
+                      '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
+                ),
+              if (_extraPositionsTotal > 0)
+                _PreviewRow(
+                  label: 'invoice.extra_positions'.tr(),
+                  value: curr.format(_extraPositionsTotal),
+                ),
+              const Divider(),
               _PreviewRow(
-                label: 'invoice.extra_hours_label'.tr(),
-                value:
-                    '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
+                label: 'invoice.positions_sum'.tr(),
+                value: curr.format(_positionsSum),
+                bold: true,
               ),
-            if (_extraPositionsTotal > 0)
-              _PreviewRow(
-                label: 'invoice.extra_positions'.tr(),
-                value: curr.format(_extraPositionsTotal),
-              ),
-            const Divider(),
-            _PreviewRow(
-              label: 'invoice.positions_sum'.tr(),
-              value: curr.format(_positionsSum),
-              bold: true,
-            ),
+            ],
             if (_discount > 0)
               _PreviewRow(
                 label: 'invoice.discount'.tr(),

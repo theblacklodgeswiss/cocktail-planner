@@ -95,12 +95,17 @@ class InvoicePdfGenerator {
         order.assignedEmployees.length *
         order.offerExtraHours *
         order.offerExtraHourRate;
-    final grandTotal =
-        order.total +
-        shotsCost +
-        extraPositionsTotal +
-        extraHoursCost -
-        order.offerDiscount;
+    final offerPositionsTotal = order.offerPositions.fold<double>(
+      0.0,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
+    );
+    final grandTotal = order.offerPositions.isNotEmpty
+        ? offerPositionsTotal + shotsCost + extraHoursCost - order.offerDiscount
+        : order.total +
+              shotsCost +
+              extraPositionsTotal +
+              extraHoursCost -
+              order.offerDiscount;
     // Payment split: ~2/3 deposit, ~1/3 on-site (rounded UP to nearest 100)
     final oneThird = grandTotal / 3;
     final remainingAmount =
@@ -580,18 +585,40 @@ class InvoicePdfGenerator {
           headerCell(isEn ? 'Note' : 'Bemerkung'),
         ],
       ),
-      // First position (Package name based on serviceType)
-      pw.TableRow(
-        children: [
-          cell(dateStr),
-          cell(serviceLabel),
-          // Quantity is always 1
-          cell('1', align: pw.TextAlign.center),
-          // Price is the full package cost
-          cell(curr.format(barServiceCost), align: pw.TextAlign.right),
-          cell(curr.format(barServiceCost), align: pw.TextAlign.right),
-          cell(
-            (() {
+      // ── Position rows ──────────────────────────────────────────────────
+      // When offerPositions is set, render those directly (same positions
+      // as in the offer); otherwise compute from individual order fields.
+      if (order.offerPositions.isNotEmpty)
+        ...order.offerPositions.map((posMap) {
+          final pos = ExtraPosition.fromJson(posMap);
+          final isTbd = pos.quantity == 0;
+          final posDate = pos.date.isNotEmpty ? pos.date : dateStr;
+          final qtyText = isTbd
+              ? 'X'
+              : (pos.quantity > 1 ? '${pos.quantity}' : '1');
+          final priceText = isTbd ? 'tbd' : curr.format(pos.price);
+          final totalText = isTbd ? 'tbd' : curr.format(pos.total);
+          return pw.TableRow(
+            children: [
+              cell(posDate),
+              cell(pos.name),
+              cell(qtyText, align: pw.TextAlign.center),
+              cell(priceText, align: pw.TextAlign.right),
+              cell(totalText, align: pw.TextAlign.right),
+              cell(pos.remark),
+            ],
+          );
+        })
+      else ...[
+        // Legacy computed rows (backward compat when offerPositions is not set)
+        pw.TableRow(
+          children: [
+            cell(dateStr),
+            cell(serviceLabel),
+            cell('1', align: pw.TextAlign.center),
+            cell(curr.format(barServiceCost), align: pw.TextAlign.right),
+            cell(curr.format(barServiceCost), align: pw.TextAlign.right),
+            cell((() {
               final supervisorItems = order.items
                   .where((item) => item['category'] == 'supervisor')
                   .toList();
@@ -600,121 +627,113 @@ class InvoicePdfGenerator {
                     (item) =>
                         "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
                   )
-                  .join(", ");
-
+                  .join(', ');
               final count = supervisorItems.fold<int>(
                 0,
                 (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
               );
               final finalCount = count > 0 ? count : 4;
-
               final rolesText = supervisorSummary.isNotEmpty
                   ? (isEn
                         ? 'Incl. $supervisorSummary'
                         : 'Inkl. $supervisorSummary')
                   : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
-
               return isEn
                   ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
                   : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
-            })(),
-          ),
-        ],
-      ),
-      // Shots (if present and count > 0)
-      if (order.shots.isNotEmpty && order.offerShotsCount > 0)
-        pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell('Shots'),
-            cell('${order.offerShotsCount}', align: pw.TextAlign.center),
-            cell(
-              curr.format(order.offerShotsPricePerPiece),
-              align: pw.TextAlign.right,
-            ),
-            cell(
-              curr.format(
-                order.offerShotsCount * order.offerShotsPricePerPiece,
+            })()),
+          ],
+        ),
+        if (order.shots.isNotEmpty && order.offerShotsCount > 0)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell('Shots'),
+              cell('${order.offerShotsCount}', align: pw.TextAlign.center),
+              cell(
+                curr.format(order.offerShotsPricePerPiece),
+                align: pw.TextAlign.right,
               ),
-              align: pw.TextAlign.right,
-            ),
-            cell(
-              order.offerShotsRemark.isNotEmpty
-                  ? order.offerShotsRemark
-                  : (isEn
-                        ? 'Shots – ${order.shots.join(", ")}\nServed in 0.4 CL shot glasses'
-                        : 'Shots – ${order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern'),
-            ),
-          ],
-        ),
-      // Travel cost (if distance > 0)
-      if (order.distanceKm > 0)
-        pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(isEn ? 'Travel Costs' : 'Reisekosten'),
-            cell('${order.distanceKm} km', align: pw.TextAlign.center),
-            cell(curr.format(0.70), align: pw.TextAlign.right),
-            cell(curr.format(travelTotal), align: pw.TextAlign.right),
-            cell(
-              isEn
-                  ? 'Travel costs Allschwil CH - ${order.location}'
-                  : 'Reisekosten von Allschwil CH nach ${order.location}',
-            ),
-          ],
-        ),
-      // Extra hours row (if hours > 0)
-      if (order.offerExtraHours > 0 && order.assignedEmployees.isNotEmpty)
-        pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(isEn ? 'Extra hours' : 'Extrastunden'),
-            cell(
-              '${order.assignedEmployees.length} × ${order.offerExtraHours}h',
-              align: pw.TextAlign.center,
-            ),
-            cell(
-              curr.format(order.offerExtraHourRate),
-              align: pw.TextAlign.right,
-            ),
-            cell(curr.format(extraHoursCost), align: pw.TextAlign.right),
-            cell(
-              isEn
-                  ? 'Price is determined as follows:\n${curr.format(order.offerExtraHourRate)} per Barkeeper per hour'
-                  : 'Der Preis setzt sich, wie folgt zusammen:\n${curr.format(order.offerExtraHourRate)} a Barkeeper pro Stunde',
-            ),
-          ],
-        ),
-      // Theke (if cost > 0)
-      if (order.thekeCost > 0)
-        pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(isEn ? 'Bar Counter' : 'Theke'),
-            cell('1', align: pw.TextAlign.center),
-            cell(curr.format(order.thekeCost), align: pw.TextAlign.right),
-            cell(curr.format(order.thekeCost), align: pw.TextAlign.right),
-            cell(
-              isEn
-                  ? 'Mobile bar counter will be set up and provided'
-                  : 'Mobile Theke wird aufgebaut und zur Verfügung gestellt',
-            ),
-          ],
-        ),
-      // Extra positions
-      ...order.offerExtraPositions.map((posMap) {
-        final pos = ExtraPosition.fromJson(posMap);
-        return pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(pos.name),
-            cell(pos.quantity.toString(), align: pw.TextAlign.center),
-            cell(curr.format(pos.price), align: pw.TextAlign.right),
-            cell(curr.format(pos.total), align: pw.TextAlign.right),
-            cell(pos.remark),
-          ],
-        );
-      }),
+              cell(
+                curr.format(
+                  order.offerShotsCount * order.offerShotsPricePerPiece,
+                ),
+                align: pw.TextAlign.right,
+              ),
+              cell(
+                order.offerShotsRemark.isNotEmpty
+                    ? order.offerShotsRemark
+                    : (isEn
+                          ? 'Shots – ${order.shots.join(", ")}\nServed in 0.4 CL shot glasses'
+                          : 'Shots – ${order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern'),
+              ),
+            ],
+          ),
+        if (order.distanceKm > 0)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(isEn ? 'Travel Costs' : 'Reisekosten'),
+              cell('${order.distanceKm} km', align: pw.TextAlign.center),
+              cell(curr.format(0.70), align: pw.TextAlign.right),
+              cell(curr.format(travelTotal), align: pw.TextAlign.right),
+              cell(
+                isEn
+                    ? 'Travel costs Allschwil CH - ${order.location}'
+                    : 'Reisekosten von Allschwil CH nach ${order.location}',
+              ),
+            ],
+          ),
+        if (order.offerExtraHours > 0 && order.assignedEmployees.isNotEmpty)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(isEn ? 'Extra hours' : 'Extrastunden'),
+              cell(
+                '${order.assignedEmployees.length} × ${order.offerExtraHours}h',
+                align: pw.TextAlign.center,
+              ),
+              cell(
+                curr.format(order.offerExtraHourRate),
+                align: pw.TextAlign.right,
+              ),
+              cell(curr.format(extraHoursCost), align: pw.TextAlign.right),
+              cell(
+                isEn
+                    ? 'Price is determined as follows:\n${curr.format(order.offerExtraHourRate)} per Barkeeper per hour'
+                    : 'Der Preis setzt sich, wie folgt zusammen:\n${curr.format(order.offerExtraHourRate)} a Barkeeper pro Stunde',
+              ),
+            ],
+          ),
+        if (order.thekeCost > 0)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(isEn ? 'Bar Counter' : 'Theke'),
+              cell('1', align: pw.TextAlign.center),
+              cell(curr.format(order.thekeCost), align: pw.TextAlign.right),
+              cell(curr.format(order.thekeCost), align: pw.TextAlign.right),
+              cell(
+                isEn
+                    ? 'Mobile bar counter will be set up and provided'
+                    : 'Mobile Theke wird aufgebaut und zur Verfügung gestellt',
+              ),
+            ],
+          ),
+        ...order.offerExtraPositions.map((posMap) {
+          final pos = ExtraPosition.fromJson(posMap);
+          return pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(pos.name),
+              cell(pos.quantity.toString(), align: pw.TextAlign.center),
+              cell(curr.format(pos.price), align: pw.TextAlign.right),
+              cell(curr.format(pos.total), align: pw.TextAlign.right),
+              cell(pos.remark),
+            ],
+          );
+        }),
+      ],
       // Bar drinks (if selected)
       if (order.barDrinks.isNotEmpty)
         pw.TableRow(

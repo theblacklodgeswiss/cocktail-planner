@@ -101,6 +101,14 @@ jobs:
           path: build/web/
           projectId: '${{ secrets.DEV_FIREBASE_PROJECT_ID }}'
 
+      - name: Deploy Firestore Rules (Dev)
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore:rules
+        env:
+          GCP_SA_KEY: ${{ secrets.DEV_FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: cocktail-planer-dev
+
       - name: Deploy to Firebase Hosting (Dev)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

@@ -57,6 +57,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   // Language
   String _language = 'de';
+  late Currency _currency;
 
   // Event date (editable)
   late DateTime _eventDate;
@@ -76,8 +77,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final _distanceKmCtrl = TextEditingController();
   final _travelCostPerKmCtrl = TextEditingController(text: '0.70');
   final _barCostCtrl = TextEditingController();
-  final _discountCtrl = TextEditingController();
-  final _discountRemarkCtrl = TextEditingController();
   late final TextEditingController _firstPositionTextCtrl;
   late final TextEditingController _firstPositionRemarkCtrl;
   late final TextEditingController _additionalInfoCtrl;
@@ -88,8 +87,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   // Assigned employees (names)
   late Set<String> _selectedEmployees;
 
-  // Extra positions
-  final List<ExtraPosition> _extraPositions = [];
+  // Offer positions (all positions: standard + custom)
+  // Replaces the old _extraPositions — these are saved as offerPositions in Firebase.
+  final List<ExtraPosition> _offerPositions = [];
 
   bool _isGenerating = false;
 
@@ -101,6 +101,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   void _initializeControllers() {
     _eventDate = widget.order.date;
+    _currency = Currency.fromCode(widget.order.currency);
     _guestCountCtrl = TextEditingController(
       text: widget.order.personCount.toString(),
     );
@@ -137,27 +138,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         : widget.order.offerClientContact;
     _locationCtrl.text = widget.order.location;
     _eventTimeCtrl.text = widget.order.offerEventTime.isEmpty
-        ? widget.order.eventTime
-        : widget.order.offerEventTime;
-    _discountCtrl.text = widget.order.offerDiscount > 0
-        ? widget.order.offerDiscount.toStringAsFixed(2)
-        : '';
-    _discountRemarkCtrl.text = widget.order.offerDiscountRemark.isEmpty
-        ? (_language == 'en'
-              ? 'Family/Friend discount'
-              : 'Familie/Freunde Rabatt')
-        : widget.order.offerDiscountRemark;
+      ? widget.order.eventTime
+      : widget.order.offerEventTime;
     _language = widget.order.offerLanguage;
 
     // Load event types
     for (final typeStr in widget.order.offerEventTypes) {
       final type = EventType.values.where((e) => e.name == typeStr).firstOrNull;
       if (type != null) _eventTypes.add(type);
-    }
-
-    // Load extra positions
-    for (final posData in widget.order.offerExtraPositions) {
-      _extraPositions.add(ExtraPosition.fromJson(posData));
     }
 
     // Load assigned employees from order
@@ -187,6 +175,22 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           ? OfferData.defaultAdditionalInfoEn
           : OfferData.defaultAdditionalInfoDe,
     );
+
+    if (widget.order.offerPositions.isNotEmpty) {
+      for (final posData in widget.order.offerPositions) {
+        _offerPositions.add(ExtraPosition.fromJson(posData));
+      }
+    } else {
+      final legacyCustomPositions = widget.order.offerExtraPositions
+          .map((posData) => ExtraPosition.fromJson(posData))
+          .where((position) => position.name.trim().isNotEmpty)
+          .toList();
+      _offerPositions.addAll(
+        _buildGeneratedOfferPositions(customPositions: legacyCustomPositions),
+      );
+    }
+    _migrateLegacyDiscountToPosition();
+    _syncLegacyServicePositionControllers();
   }
 
   @override
@@ -204,8 +208,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _distanceKmCtrl.dispose();
     _travelCostPerKmCtrl.dispose();
     _barCostCtrl.dispose();
-    _discountCtrl.dispose();
-    _discountRemarkCtrl.dispose();
     _firstPositionTextCtrl.dispose();
     _firstPositionRemarkCtrl.dispose();
     _additionalInfoCtrl.dispose();
@@ -266,6 +268,154 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
   }
 
+  String _resolvedServicePositionText() {
+    if (_offerPositions.isNotEmpty && _offerPositions.first.name.trim().isNotEmpty) {
+      return _offerPositions.first.name.trim();
+    }
+    final current = _firstPositionTextCtrl.text.trim();
+    return current.isNotEmpty ? current : _defaultServicePositionText();
+  }
+
+  String _resolvedServicePositionRemark() {
+    if (_offerPositions.isNotEmpty && _offerPositions.first.remark.trim().isNotEmpty) {
+      return _offerPositions.first.remark.trim();
+    }
+    final current = _firstPositionRemarkCtrl.text.trim();
+    return current.isNotEmpty ? current : _defaultServicePositionRemark();
+  }
+
+  void _syncLegacyServicePositionControllers() {
+    if (_offerPositions.isEmpty) {
+      _firstPositionTextCtrl.text = _defaultServicePositionText();
+      _firstPositionRemarkCtrl.text = _defaultServicePositionRemark();
+      return;
+    }
+
+    _firstPositionTextCtrl.text = _offerPositions.first.name;
+    _firstPositionRemarkCtrl.text = _offerPositions.first.remark;
+  }
+
+  String _discountPositionName() => _language == 'en' ? 'Discount' : 'Rabatt';
+
+  String _discountPositionRemark() {
+    final existing = widget.order.offerDiscountRemark.trim();
+    if (existing.isNotEmpty) {
+      return existing;
+    }
+    return _language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt';
+  }
+
+  bool _isDiscountPosition(ExtraPosition position) {
+    final normalized = position.name.trim().toLowerCase();
+    return position.total < 0 && (normalized == 'rabatt' || normalized == 'discount');
+  }
+
+  void _migrateLegacyDiscountToPosition() {
+    if (widget.order.offerDiscount <= 0) {
+      return;
+    }
+
+    final hasDiscountPosition = _offerPositions.any(_isDiscountPosition);
+    if (hasDiscountPosition) {
+      return;
+    }
+
+    final dateStr =
+        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
+
+    _offerPositions.add(
+      ExtraPosition(
+        date: dateStr,
+        name: _discountPositionName(),
+        price: -widget.order.offerDiscount,
+        quantity: 1,
+        remark: _discountPositionRemark(),
+      ),
+    );
+  }
+
+  void _syncPrimaryPositionDefaults({
+    required String previousText,
+    required String nextText,
+    required String previousRemark,
+    required String nextRemark,
+  }) {
+    if (_offerPositions.isEmpty) return;
+
+    final firstPosition = _offerPositions.first;
+    final currentText = firstPosition.name.trim();
+    final currentRemark = firstPosition.remark.trim();
+    final shouldSyncText = currentText.isEmpty || currentText == previousText;
+    final shouldSyncRemark =
+        currentRemark.isEmpty || currentRemark == previousRemark;
+
+    if (!shouldSyncText && !shouldSyncRemark) return;
+
+    _offerPositions[0] = firstPosition.copyWith(
+      name: shouldSyncText ? nextText : null,
+      remark: shouldSyncRemark ? nextRemark : null,
+    );
+  }
+
+  List<ExtraPosition> _buildGeneratedOfferPositions({
+    List<ExtraPosition> customPositions = const [],
+  }) {
+    final dateStr =
+        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
+    final orderTotal =
+        double.tryParse(_orderTotalCtrl.text.trim()) ?? widget.order.total;
+    final distanceKm = int.tryParse(_distanceKmCtrl.text.trim()) ?? 0;
+    final travelCostPerKm =
+        double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70;
+    final barCost = double.tryParse(_barCostCtrl.text.trim()) ?? 0;
+    final travelTotal = distanceKm * travelCostPerKm;
+    final barServiceCost = orderTotal - travelTotal - barCost;
+
+    return [
+      ExtraPosition(
+        date: dateStr,
+        name: _firstPositionTextCtrl.text.trim().isNotEmpty
+            ? _firstPositionTextCtrl.text.trim()
+            : _defaultServicePositionText(),
+        price: barServiceCost,
+        quantity: 1,
+        remark: _firstPositionRemarkCtrl.text.trim().isNotEmpty
+            ? _firstPositionRemarkCtrl.text.trim()
+            : _defaultServicePositionRemark(),
+      ),
+      if (distanceKm > 0)
+        ExtraPosition(
+          date: dateStr,
+          name: _language == 'en' ? 'Travel Costs' : 'Reisekosten',
+          price: travelCostPerKm,
+          quantity: distanceKm,
+          remark: _language == 'en'
+              ? 'Travel from Allschwil CH to ${_locationCtrl.text.trim()}'
+              : 'Reisekosten von Allschwil CH nach ${_locationCtrl.text.trim()}',
+        ),
+      ExtraPosition(
+        date: dateStr,
+        name: _language == 'en' ? 'Extra hours' : 'Extrastunden',
+        price: 50,
+        quantity: 0,
+        remark: _language == 'en'
+            ? '50 CHF/Barkeeper/h extra'
+            : '50 CHF/Barkeeper/Std. extra',
+      ),
+      if (barCost > 0)
+        ExtraPosition(
+          date: dateStr,
+          name: _language == 'en' ? 'Bar Counter' : 'Theke',
+          price: barCost,
+          quantity: 1,
+          remark: _language == 'en'
+              ? 'Mobile bar counter provided'
+              : 'Mobile Theke wird gestellt',
+        ),
+      ...customPositions,
+    ];
+  }
+
   String _normalizeServiceType(String serviceType) {
     return switch (serviceType) {
       'cocktailservice' => 'cocktail_service',
@@ -281,6 +431,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final previousRemarkDefault = _defaultServicePositionRemark(
       serviceType: _serviceType,
     );
+    final nextDefault = _defaultServicePositionText(serviceType: value);
+    final nextRemarkDefault = _defaultServicePositionRemark(serviceType: value);
     final currentText = _firstPositionTextCtrl.text.trim();
     final currentRemark = _firstPositionRemarkCtrl.text.trim();
     final shouldSyncTextDefault =
@@ -291,15 +443,18 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     setState(() {
       _serviceType = value;
       if (shouldSyncTextDefault) {
-        _firstPositionTextCtrl.text = _defaultServicePositionText(
-          serviceType: value,
-        );
+        _firstPositionTextCtrl.text = nextDefault;
       }
       if (shouldSyncRemarkDefault) {
-        _firstPositionRemarkCtrl.text = _defaultServicePositionRemark(
-          serviceType: value,
-        );
+        _firstPositionRemarkCtrl.text = nextRemarkDefault;
       }
+      _syncPrimaryPositionDefaults(
+        previousText: previousDefault,
+        nextText: nextDefault,
+        previousRemark: previousRemarkDefault,
+        nextRemark: nextRemarkDefault,
+      );
+      _syncLegacyServicePositionControllers();
     });
   }
 
@@ -336,6 +491,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           language: lang,
         );
       }
+      _syncPrimaryPositionDefaults(
+        previousText: previousDefault,
+        nextText: _defaultServicePositionText(
+          serviceType: _serviceType,
+          language: lang,
+        ),
+        previousRemark: previousRemarkDefault,
+        nextRemark: _defaultServicePositionRemark(
+          serviceType: _serviceType,
+          language: lang,
+        ),
+      );
+      _syncLegacyServicePositionControllers();
     });
   }
 
@@ -355,7 +523,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       orderName: widget.order.name,
       eventDate: _eventDate,
       eventTime: _eventTimeCtrl.text.trim(),
-      currency: widget.order.currency,
+      currency: _currency.code,
       guestCount:
           int.tryParse(_guestCountCtrl.text.trim()) ?? widget.order.personCount,
       editorName: _editorNameCtrl.text.trim(),
@@ -372,14 +540,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       travelCostPerKm:
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
       barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
-      discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
-      discountRemark: _discountRemarkCtrl.text.trim(),
+      discount: 0,
+      discountRemark: '',
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
       serviceType: _serviceType,
-      servicePositionText: _firstPositionTextCtrl.text.trim(),
-      servicePositionRemark: _firstPositionRemarkCtrl.text.trim(),
-      extraPositions: List.of(_extraPositions),
+      servicePositionText: _resolvedServicePositionText(),
+      servicePositionRemark: _resolvedServicePositionRemark(),
+      extraPositions: List.of(_offerPositions),
+      offerPositions: List.of(_offerPositions),
       assignedEmployees: _selectedEmployees.toList(),
       supervisorItems: widget.order.items
           .where((item) => item['category'] == 'supervisor')
@@ -391,31 +560,37 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     );
   }
 
-  Future<void> _saveOfferData() async {
-    await orderRepository.updateOfferData(
+  Future<bool> _saveOfferData() async {
+    final offerSaved = await orderRepository.updateOfferData(
       orderId: widget.order.id,
       clientName: _clientNameCtrl.text.trim(),
       clientContact: _clientContactCtrl.text.trim(),
       eventTime: _eventTimeCtrl.text.trim(),
       eventTypes: _eventTypes.map((e) => e.name).toList(),
-      discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
-      discountRemark: _discountRemarkCtrl.text.trim(),
+      discount: 0,
+      discountRemark: '',
       language: _language,
       eventDate: _eventDate,
-      extraPositions: _extraPositions.map((e) => e.toJson()).toList(),
+      extraPositions: _offerPositions.map((e) => e.toJson()).toList(),
+      offerPositions: _offerPositions.map((e) => e.toJson()).toList(),
       assignedEmployees: _selectedEmployees.toList(),
       serviceType: _serviceType,
-      firstPositionText: _firstPositionTextCtrl.text.trim(),
-      firstPositionRemark: _firstPositionRemarkCtrl.text.trim(),
+        firstPositionText: _resolvedServicePositionText(),
+        firstPositionRemark: _resolvedServicePositionRemark(),
       distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
       travelCostPerKm:
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
       barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
       location: _locationCtrl.text.trim(),
+        currency: _currency.code,
     );
 
+    if (!offerSaved) {
+      return false;
+    }
+
     // Also update cocktails, shots, and bar description
-    await orderRepository.updateOrderCocktailsAndBar(
+    return orderRepository.updateOrderCocktailsAndBar(
       orderId: widget.order.id,
       cocktails: _cocktailsCtrl.text
           .split(',')
@@ -435,7 +610,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
     try {
-      await _saveOfferData();
+      final saved = await _saveOfferData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('offer.save_failed'.tr())));
+        }
+        return;
+      }
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -450,7 +633,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
     try {
-      await _saveOfferData();
+      final saved = await _saveOfferData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('offer.save_failed'.tr())));
+        }
+        return;
+      }
       final offer = _buildOfferData();
       final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
       if (mounted) {
@@ -465,7 +656,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
     try {
-      await _saveOfferData();
+      final saved = await _saveOfferData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('offer.save_failed'.tr())));
+        }
+        return;
+      }
       final offer = _buildOfferData();
       final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
 
@@ -510,7 +709,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isGenerating = true);
     try {
-      await _saveOfferData();
+      final saved = await _saveOfferData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('offer.save_failed'.tr())));
+        }
+        return;
+      }
       final offer = _buildOfferData();
       final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
       if (mounted) {
@@ -558,7 +765,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final curr = Currency.fromCode(widget.order.currency);
+    final curr = _currency;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -630,21 +837,37 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       children: [
                         _buildOrderInfoBanner(colorScheme, curr),
                         const SizedBox(height: 20),
+                        _buildCurrencySection(),
+                        const SizedBox(height: 20),
                         _buildEditorSection(),
                         const SizedBox(height: 20),
                         _buildClientSection(),
                         const SizedBox(height: 20),
-                        _buildEventTypeSection(),
-                        const SizedBox(height: 12),
-                        _buildEmployeeSelectionSection(),
-                        const SizedBox(height: 20),
                         _buildGuestCountSection(),
+                        const SizedBox(height: 20),
+                        _buildEventTypeSection(),
                         const SizedBox(height: 20),
                         _buildServiceTypeSection(),
                         const SizedBox(height: 20),
                         _buildServicesSection(),
                         const SizedBox(height: 20),
-                        _buildPricingSection(curr),
+                        _buildEmployeeSelectionSection(),
+                        const SizedBox(height: 20),
+                        _buildOfferPositionsSection(curr),
+                        const SizedBox(height: 20),
+                        OfferPricePreview(
+                          currency: curr,
+                          orderTotal: double.tryParse(_orderTotalCtrl.text.trim()) ?? 0,
+                          distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
+                          travelCostPerKm:
+                              double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
+                          barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
+                          discount: 0,
+                          positionsTotal: _offerPositions.fold<double>(
+                            0.0,
+                            (sum, position) => sum + position.total,
+                          ),
+                        ),
                         const SizedBox(height: 20),
                         _buildAdditionalInfoSection(),
                         const SizedBox(height: 32),
@@ -671,6 +894,35 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           ' • ${curr.format(widget.order.total)}',
         ),
       ),
+    );
+  }
+
+  Widget _buildCurrencySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(label: 'shopping.currency'.tr()),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<Currency>(
+            segments: Currency.values
+                .map(
+                  (currency) => ButtonSegment<Currency>(
+                    value: currency,
+                    label: Text(currency.code),
+                  ),
+                )
+                .toList(),
+            selected: {_currency},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _currency = selection.first;
+              });
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -987,245 +1239,297 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        _field(
-          controller: _firstPositionTextCtrl,
-          label: 'offer.first_position_text'.tr(),
-          hint: 'offer.first_position_text_hint'.tr(),
-        ),
-        const SizedBox(height: 8),
-        _field(
-          controller: _firstPositionRemarkCtrl,
-          label: 'offer.first_position_remark'.tr(),
-          hint: 'offer.first_position_remark_hint'.tr(),
-          maxLines: 4,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPricingSection(Currency curr) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'offer.pricing'.tr()),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 500;
-            final row1 = [
-              _field(
-                controller: _orderTotalCtrl,
-                label: '${'offer.order_total'.tr()} (${widget.order.currency})',
-                keyboard: TextInputType.number,
-                required: true,
-              ),
-              _field(
-                controller: _distanceKmCtrl,
-                label: 'offer.distance_km'.tr(),
-                hint: '150',
-                keyboard: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-            ];
-            final row2 = [
-              _field(
-                controller: _travelCostPerKmCtrl,
-                label:
-                    '${'offer.travel_cost_per_km'.tr()} (${widget.order.currency})',
-                keyboard: TextInputType.number,
-              ),
-              _field(
-                controller: _barCostCtrl,
-                label: '${'offer.bar_cost'.tr()} (${widget.order.currency})',
-                hint: '0',
-                keyboard: TextInputType.number,
-              ),
-            ];
-            if (wide) {
-              return Column(
-                children: [
-                  Row(
-                    children: row1
-                        .map(
-                          (f) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: f,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: row2
-                        .map(
-                          (f) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: f,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              );
-            }
-            return Column(
-              children: [...row1, ...row2]
-                  .map(
-                    (f) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: f,
-                    ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 500;
-            final discountFields = [
-              Expanded(
-                flex: 1,
-                child: _field(
-                  controller: _discountCtrl,
-                  label: '${'offer.discount'.tr()} (${widget.order.currency})',
-                  hint: '0',
-                  keyboard: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
-                child: _field(
-                  controller: _discountRemarkCtrl,
-                  label: 'offer.discount_remark'.tr(),
-                  hint: _language == 'en'
-                      ? 'Family/Friend discount'
-                      : 'Familie/Freunde Rabatt',
-                ),
-              ),
-            ];
-            if (wide) {
-              return Row(children: discountFields);
-            }
-            return Column(
-              children: discountFields.map((f) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: f,
-                );
-              }).toList(),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        // Extra positions section
-        _buildExtraPositionsSection(curr),
-        const SizedBox(height: 12),
-        OfferPricePreview(
-          currency: curr,
-          orderTotal: double.tryParse(_orderTotalCtrl.text.trim()) ?? 0,
-          distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
-          travelCostPerKm:
-              double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
-          barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
-          discount: double.tryParse(_discountCtrl.text.trim()) ?? 0,
-          extraPositionsTotal: _extraPositions.fold(
-            0.0,
-            (sum, p) => sum + p.price,
+        Text(
+          'offer.positions_manage_hint'.tr(),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.outline,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildExtraPositionsSection(Currency curr) {
+  // ── Offer positions ─────────────────────────────────────────────────────
+
+  /// Auto-generate all offer positions from the current form values.
+  void _generateOfferPositions() {
+    final autoNames = {
+      _defaultServicePositionText(),
+      'Reisekosten',
+      'Travel Costs',
+      'Extrastunden',
+      'Extra hours',
+      'Theke',
+      'Bar Counter',
+    };
+    final existingCustom = _offerPositions
+        .asMap()
+        .entries
+        .where((entry) => entry.key > 0 && !autoNames.contains(entry.value.name))
+        .map((entry) => entry.value)
+        .toList();
+
+    setState(() {
+      _offerPositions
+        ..clear()
+        ..addAll(_buildGeneratedOfferPositions(customPositions: existingCustom));
+      _syncLegacyServicePositionControllers();
+    });
+  }
+
+  Widget _buildPositionMetaChip({
+    required IconData icon,
+    required String label,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferPositionsSection(Currency curr) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.add_circle_outline,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'offer.extra_positions'.tr(),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const Spacer(),
-                FilledButton.tonalIcon(
-                  onPressed: _showAddExtraPositionDialog,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text('offer.add_position'.tr()),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 620;
+                final titleRow = Row(
+                  children: [
+                    Icon(
+                      Icons.list_alt,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'offer.positions_list'.tr(),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                  ],
+                );
+                final actionButtons = [
+                  OutlinedButton.icon(
+                    onPressed: _generateOfferPositions,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: Text('offer.rebuild_positions'.tr()),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _showOfferPositionDialog(),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text('offer.add_position'.tr()),
+                  ),
+                ];
+
+                if (isCompact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleRow,
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: actionButtons,
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: titleRow),
+                    const SizedBox(width: 12),
+                    ...[
+                      actionButtons.first,
+                      const SizedBox(width: 8),
+                      actionButtons.last,
+                    ],
+                  ],
+                );
+              },
             ),
-            if (_extraPositions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'offer.positions_help'.tr(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            if (_offerPositions.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'offer.positions_empty'.tr(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              )
+            else ...[
               const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              ..._extraPositions.asMap().entries.map((entry) {
+              ..._offerPositions.asMap().entries.map((entry) {
                 final index = entry.key;
                 final pos = entry.value;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
+                final isTbd = pos.quantity == 0;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              pos.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (pos.remark.isNotEmpty)
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isCompact = constraints.maxWidth < 460;
+                          final titleInfo = Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                pos.remark,
-                                style: Theme.of(context).textTheme.bodySmall
+                                pos.name,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '#${index + 1}',
+                                style: Theme.of(context).textTheme.labelSmall
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
                                       ).colorScheme.outline,
                                     ),
                               ),
-                          ],
+                            ],
+                          );
+                          final totalInfo = Column(
+                            crossAxisAlignment: isCompact
+                                ? CrossAxisAlignment.start
+                                : CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'offer.total'.tr(),
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                              Text(
+                                isTbd ? 'tbd' : curr.format(pos.total),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          );
+                          final actionButtons = Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 18),
+                                onPressed: () =>
+                                    _showOfferPositionDialog(index: index),
+                                tooltip: 'common.edit'.tr(),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _offerPositions.removeAt(index);
+                                    _syncLegacyServicePositionControllers();
+                                  });
+                                },
+                                tooltip: 'common.delete'.tr(),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ],
+                          );
+
+                          if (isCompact) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: titleInfo),
+                                    const SizedBox(width: 8),
+                                    actionButtons,
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                totalInfo,
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: titleInfo),
+                              const SizedBox(width: 12),
+                              totalInfo,
+                              actionButtons,
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (pos.date.isNotEmpty)
+                            _buildPositionMetaChip(
+                              icon: Icons.calendar_today,
+                              label: pos.date,
+                            ),
+                          _buildPositionMetaChip(
+                            icon: Icons.numbers,
+                            label:
+                                '${'offer.position_quantity'.tr()}: ${isTbd ? 'tbd' : pos.quantity}',
+                          ),
+                          _buildPositionMetaChip(
+                            icon: Icons.attach_money,
+                            label:
+                                '${'offer.position_price'.tr()}: ${isTbd ? 'tbd' : curr.format(pos.price)}',
+                          ),
+                        ],
+                      ),
+                      if (pos.remark.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          pos.remark,
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                      ),
-                      Text(
-                        curr.format(pos.price),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 18),
-                        onPressed: () => _showEditExtraPositionDialog(index),
-                        tooltip: 'common.edit'.tr(),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.delete,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        onPressed: () =>
-                            setState(() => _extraPositions.removeAt(index)),
-                        tooltip: 'common.delete'.tr(),
-                      ),
+                      ],
                     ],
                   ),
                 );
@@ -1237,33 +1541,25 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     );
   }
 
-  Future<void> _showAddExtraPositionDialog() async {
-    final result = await _showExtraPositionDialog();
-    if (result != null) {
-      setState(() => _extraPositions.add(result));
-    }
-  }
+  Future<void> _showOfferPositionDialog({int? index}) async {
+    final existing = index != null ? _offerPositions[index] : null;
+    final defaultDate =
+        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
 
-  Future<void> _showEditExtraPositionDialog(int index) async {
-    final result = await _showExtraPositionDialog(
-      existing: _extraPositions[index],
+    final dateCtrl = TextEditingController(
+      text: existing?.date.isNotEmpty == true ? existing!.date : defaultDate,
     );
-    if (result != null) {
-      setState(() => _extraPositions[index] = result);
-    }
-  }
-
-  Future<ExtraPosition?> _showExtraPositionDialog({
-    ExtraPosition? existing,
-  }) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final quantityCtrl = TextEditingController(
+      text: existing != null ? existing.quantity.toString() : '1',
+    );
     final priceCtrl = TextEditingController(
       text: existing != null ? existing.price.toStringAsFixed(2) : '',
     );
     final remarkCtrl = TextEditingController(text: existing?.remark ?? '');
     final formKey = GlobalKey<FormState>();
 
-    return showDialog<ExtraPosition>(
+    final result = await showDialog<ExtraPosition>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
@@ -1274,49 +1570,85 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         content: Form(
           key: formKey,
           child: SizedBox(
-            width: 350,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'offer.position_name'.tr(),
-                    prefixIcon: const Icon(Icons.label_outline),
+            width: 380,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: dateCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Datum',
+                      hintText: 'dd.MM.yyyy',
+                      prefixIcon: Icon(Icons.calendar_today, size: 18),
+                    ),
                   ),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'offer.field_required'.tr()
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: priceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText:
-                        '${'offer.position_price'.tr()} (${widget.order.currency})',
-                    prefixIcon: const Icon(Icons.attach_money),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'offer.position_name'.tr(),
+                      prefixIcon: const Icon(Icons.label_outline),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'offer.field_required'.tr()
+                        : null,
                   ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'offer.field_required'.tr();
-                    }
-                    if (double.tryParse(v.trim()) == null) {
-                      return 'offer.invalid_number'.tr();
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: remarkCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'offer.position_remark'.tr(),
-                    prefixIcon: const Icon(Icons.notes),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: quantityCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: InputDecoration(
+                            labelText: 'offer.position_quantity'.tr(),
+                            prefixIcon: const Icon(Icons.numbers, size: 18),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          controller: priceCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText:
+                                '${'offer.position_price'.tr()} (${_currency.code})',
+                            prefixIcon:
+                                const Icon(Icons.attach_money, size: 18),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'offer.field_required'.tr();
+                            }
+                            if (double.tryParse(v.trim()) == null) {
+                              return 'offer.invalid_number'.tr();
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  maxLines: 2,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: remarkCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'offer.position_remark'.tr(),
+                      prefixIcon: const Icon(Icons.notes),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1331,8 +1663,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 Navigator.pop(
                   ctx,
                   ExtraPosition(
+                    date: dateCtrl.text.trim(),
                     name: nameCtrl.text.trim(),
-                    price: double.parse(priceCtrl.text.trim()),
+                    quantity: int.tryParse(quantityCtrl.text.trim()) ?? 1,
+                    price: double.tryParse(priceCtrl.text.trim()) ?? 0,
                     remark: remarkCtrl.text.trim(),
                   ),
                 );
@@ -1343,6 +1677,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ],
       ),
     );
+
+    if (result != null) {
+      setState(() {
+        if (index != null) {
+          _offerPositions[index] = result;
+        } else {
+          _offerPositions.add(result);
+        }
+        _syncLegacyServicePositionControllers();
+      });
+    }
   }
 
   Widget _buildAdditionalInfoSection() {

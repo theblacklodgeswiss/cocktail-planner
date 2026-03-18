@@ -8,12 +8,16 @@ class ExtraPosition {
     required this.price,
     this.quantity = 1,
     this.remark = '',
+    this.date = '',
   });
 
   final String name;
   final double price;
   final int quantity;
   final String remark;
+
+  /// Date of this position in "dd.MM.yyyy" format (matches Datum column in offer table)
+  final String date;
 
   /// Total price = price × quantity
   double get total => price * quantity;
@@ -23,6 +27,7 @@ class ExtraPosition {
     'price': price,
     'quantity': quantity,
     'remark': remark,
+    'date': date,
   };
 
   factory ExtraPosition.fromJson(Map<String, dynamic> json) {
@@ -31,6 +36,7 @@ class ExtraPosition {
       price: (json['price'] as num?)?.toDouble() ?? 0,
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       remark: json['remark'] as String? ?? '',
+      date: json['date'] as String? ?? '',
     );
   }
 
@@ -39,12 +45,14 @@ class ExtraPosition {
     double? price,
     int? quantity,
     String? remark,
+    String? date,
   }) {
     return ExtraPosition(
       name: name ?? this.name,
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
       remark: remark ?? this.remark,
+      date: date ?? this.date,
     );
   }
 }
@@ -83,6 +91,7 @@ class OfferData {
     this.alcoholPurchase = const [],
     this.additionalServices = const [],
     this.remarks = '',
+    this.offerPositions = const [],
   });
 
   /// Event / order name (from SavedOrder.name)
@@ -177,6 +186,10 @@ class OfferData {
 
   /// Free-form remarks/notes for additional services
   final String remarks;
+
+  /// All offer positions (when set, these are rendered directly in the PDF table
+  /// instead of auto-computing bar service / travel rows).
+  final List<ExtraPosition> offerPositions;
 
   double get travelCostTotal => distanceKm * travelCostPerKm;
 

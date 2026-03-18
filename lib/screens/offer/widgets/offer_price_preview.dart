@@ -14,6 +14,7 @@ class OfferPricePreview extends StatelessWidget {
     required this.barCost,
     required this.discount,
     this.extraPositionsTotal = 0,
+    this.positionsTotal,
   });
 
   final Currency currency;
@@ -23,13 +24,16 @@ class OfferPricePreview extends StatelessWidget {
   final double barCost;
   final double discount;
   final double extraPositionsTotal;
+  final double? positionsTotal;
 
   @override
   Widget build(BuildContext context) {
     final travel = distanceKm * 2 * travelCostPerKm;
     // barServiceCost is orderTotal minus travel and theke (already included)
     final barService = orderTotal - travel - barCost;
-    final total = orderTotal + extraPositionsTotal - discount;
+    final total = positionsTotal != null
+        ? positionsTotal! - discount
+        : orderTotal + extraPositionsTotal - discount;
 
     return Card(
       color: Theme.of(context)
@@ -49,26 +53,33 @@ class OfferPricePreview extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _PreviewRow(
-              label: 'offer.bar_service_cost'.tr(),
-              value: currency.format(barService),
-            ),
-            if (distanceKm > 0)
+            if (positionsTotal != null)
               _PreviewRow(
-                label: 'offer.travel_cost'.tr(),
-                value:
-                    '${distanceKm * 2} km × ${currency.format(travelCostPerKm)} = ${currency.format(travel)}',
-              ),
-            if (barCost > 0)
+                label: 'offer.positions_sum'.tr(),
+                value: currency.format(positionsTotal!),
+              )
+            else ...[
               _PreviewRow(
-                label: 'offer.bar_cost'.tr(),
-                value: currency.format(barCost),
+                label: 'offer.bar_service_cost'.tr(),
+                value: currency.format(barService),
               ),
-            if (extraPositionsTotal > 0)
-              _PreviewRow(
-                label: 'offer.extra_positions'.tr(),
-                value: currency.format(extraPositionsTotal),
-              ),
+              if (distanceKm > 0)
+                _PreviewRow(
+                  label: 'offer.travel_cost'.tr(),
+                  value:
+                      '${distanceKm * 2} km × ${currency.format(travelCostPerKm)} = ${currency.format(travel)}',
+                ),
+              if (barCost > 0)
+                _PreviewRow(
+                  label: 'offer.bar_cost'.tr(),
+                  value: currency.format(barCost),
+                ),
+              if (extraPositionsTotal > 0)
+                _PreviewRow(
+                  label: 'offer.extra_positions'.tr(),
+                  value: currency.format(extraPositionsTotal),
+                ),
+            ],
             if (discount > 0)
               _PreviewRow(
                 label: 'offer.discount'.tr(),
