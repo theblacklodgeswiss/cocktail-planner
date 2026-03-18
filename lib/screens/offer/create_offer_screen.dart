@@ -1389,7 +1389,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
@@ -1397,8 +1397,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: colorScheme.primary),
-          const SizedBox(width: 6),
+          Icon(icon, size: 12, color: colorScheme.primary),
+          const SizedBox(width: 4),
           Text(label, style: Theme.of(context).textTheme.labelSmall),
         ],
       ),
@@ -1416,7 +1416,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1457,10 +1457,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       titleRow,
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: actionButtons,
                       ),
                     ],
@@ -1490,7 +1490,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
             if (_positionsError != null) _buildSectionErrorText(_positionsError!),
             if (_offerPositions.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Text(
                   'offer.positions_empty'.tr(),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1499,19 +1499,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 ),
               )
             else ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               ..._offerPositions.asMap().entries.map((entry) {
                 final index = entry.key;
                 final pos = entry.value;
                 final isTbd = pos.quantity == 0;
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     border: Border.all(
                       color: Theme.of(context).colorScheme.outlineVariant,
                     ),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1529,7 +1529,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                                     .titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w600),
                               ),
-                              const SizedBox(height: 4),
                               Text(
                                 '#${index + 1}',
                                 style: Theme.of(context).textTheme.labelSmall
@@ -1568,6 +1567,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                                     _showOfferPositionDialog(index: index),
                                 tooltip: 'common.edit'.tr(),
                                 visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 30,
+                                  height: 30,
+                                ),
                               ),
                               IconButton(
                                 icon: Icon(
@@ -1583,6 +1587,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                                 },
                                 tooltip: 'common.delete'.tr(),
                                 visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 30,
+                                  height: 30,
+                                ),
                               ),
                             ],
                           );
@@ -1595,11 +1604,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(child: titleInfo),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     actionButtons,
                                   ],
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 6),
                                 totalInfo,
                               ],
                             );
@@ -1609,17 +1618,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(child: titleInfo),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               totalInfo,
                               actionButtons,
                             ],
                           );
                         },
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
                           if (pos.date.isNotEmpty)
                             _buildPositionMetaChip(
@@ -1639,7 +1648,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         ],
                       ),
                       if (pos.remark.isNotEmpty) ...[
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 6),
                         Text(
                           pos.remark,
                           style: Theme.of(context).textTheme.bodyMedium,

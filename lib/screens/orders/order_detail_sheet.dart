@@ -334,6 +334,30 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     }
 
     final order = widget.order;
+    var resetExistingShoppingList = false;
+
+    if (order.hasShoppingList) {
+      final confirmedReset = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('orders.gemini_reset_confirm_title'.tr()),
+          content: Text('orders.gemini_reset_confirm_message'.tr()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('orders.gemini_reset_confirm'.tr()),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmedReset != true) return;
+      resetExistingShoppingList = true;
+    }
 
     // Parse eventTime
     TimeOfDay? eventTime;
@@ -475,7 +499,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           order.id,
           order.name,
           requestedCocktails: order.requestedCocktails,
-          savedItems: order.items,
+          savedItems: resetExistingShoppingList ? const [] : order.items,
         );
         showDialog(
           context: context,
@@ -840,7 +864,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   FilledButton.icon(
                     onPressed: _openOfferEditor,
                     icon: const Icon(Icons.description_outlined),
-                    label: Text('orders.offer'.tr()),
+                    label: Text('orders.finalize_offer'.tr()),
                   ),
                   if (_currentStatus == OrderStatus.accepted) ...[
                     const SizedBox(height: 8),
@@ -855,15 +879,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     TextButton.icon(
                       onPressed: _editShoppingList,
                       icon: const Icon(Icons.edit),
-                      label: Text('common.edit'.tr()),
+                      label: Text('orders.edit_shopping_list'.tr()),
                     ),
                   ],
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     onPressed: _generateWithGemini,
                     icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                    label: const Text(
-                      'Mit Gemini generieren',
+                    label: Text(
+                      'orders.regenerate_with_gemini'.tr(),
                       style: TextStyle(color: Colors.white),
                     ),
                     style: FilledButton.styleFrom(
@@ -885,7 +909,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   FilledButton.icon(
                     onPressed: _openOfferEditor,
                     icon: const Icon(Icons.description_outlined),
-                    label: Text('orders.offer'.tr()),
+                    label: Text('orders.finalize_offer'.tr()),
                   ),
                   if (_currentStatus == OrderStatus.accepted) ...[
                     const SizedBox(width: 8),
@@ -900,15 +924,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     TextButton.icon(
                       onPressed: _editShoppingList,
                       icon: const Icon(Icons.edit),
-                      label: Text('common.edit'.tr()),
+                      label: Text('orders.edit_shopping_list'.tr()),
                     ),
                   ],
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     onPressed: _generateWithGemini,
                     icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                    label: const Text(
-                      'Mit Gemini generieren',
+                    label: Text(
+                      'orders.regenerate_with_gemini'.tr(),
                       style: TextStyle(color: Colors.white),
                     ),
                     style: FilledButton.styleFrom(
