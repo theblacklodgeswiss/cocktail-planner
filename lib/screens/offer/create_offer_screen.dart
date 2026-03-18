@@ -92,6 +92,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final List<ExtraPosition> _offerPositions = [];
 
   bool _isGenerating = false;
+  bool _showValidationErrors = false;
 
   @override
   void initState() {
@@ -303,6 +304,79 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       return existing;
     }
     return _language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt';
+  }
+
+  bool get _requiresCocktails => _serviceType != 'bar_service';
+
+  bool get _hasEventTypeSelection => _eventTypes.isNotEmpty;
+
+  bool get _hasOfferPositions => _offerPositions.isNotEmpty;
+
+  String? get _eventTypeError =>
+      _showValidationErrors && !_hasEventTypeSelection
+          ? 'offer.event_type_required'.tr()
+          : null;
+
+  String? get _positionsError =>
+      _showValidationErrors && !_hasOfferPositions
+          ? 'offer.positions_required'.tr()
+          : null;
+
+  String? _validateGuestCount(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'offer.field_required'.tr();
+    }
+    final guestCount = int.tryParse(value.trim());
+    if (guestCount == null || guestCount <= 0) {
+      return 'offer.invalid_number'.tr();
+    }
+    return null;
+  }
+
+  String? _validateCocktails(String? value) {
+    if (!_requiresCocktails) {
+      return null;
+    }
+    final cocktails = value
+            ?.split(',')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (cocktails.isEmpty) {
+      return 'offer.cocktails_required'.tr();
+    }
+    return null;
+  }
+
+  bool _validateOfferBeforeAction() {
+    FocusScope.of(context).unfocus();
+    setState(() => _showValidationErrors = true);
+
+    final isFormValid = _formKey.currentState!.validate();
+    final hasRequiredSections = _hasEventTypeSelection && _hasOfferPositions;
+    final isValid = isFormValid && hasRequiredSections;
+
+    if (!isValid && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('offer.validation_error'.tr())),
+      );
+    }
+
+    return isValid;
+  }
+
+  Widget _buildSectionErrorText(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.error,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 
   bool _isDiscountPosition(ExtraPosition position) {
@@ -607,7 +681,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _saveOnly() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validateOfferBeforeAction()) return;
     setState(() => _isGenerating = true);
     try {
       final saved = await _saveOfferData();
@@ -630,7 +704,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _previewPdf() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validateOfferBeforeAction()) return;
     setState(() => _isGenerating = true);
     try {
       final saved = await _saveOfferData();
@@ -653,7 +727,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _generatePdf() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validateOfferBeforeAction()) return;
     setState(() => _isGenerating = true);
     try {
       final saved = await _saveOfferData();
@@ -706,7 +780,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _printPdf() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validateOfferBeforeAction()) return;
     setState(() => _isGenerating = true);
     try {
       final saved = await _saveOfferData();
@@ -733,6 +807,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   Future<void> _shareOffer() async {
+    if (!_validateOfferBeforeAction()) return;
+
     final cocktails = _cocktailsCtrl.text
         .split(',')
         .map((s) => s.trim())
@@ -963,6 +1039,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 controller: _clientContactCtrl,
                 label: 'offer.client_contact'.tr(),
                 hint: 'offer.client_contact_hint'.tr(),
+                required: true,
               ),
             ];
             return Column(
@@ -995,6 +1072,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   controller: _locationCtrl,
                   label: 'orders.location'.tr(),
                   hint: 'z.B. Musterstrasse 123, 3000 Bern',
+                  required: true,
                 ),
               ],
             );
@@ -1010,13 +1088,25 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       children: [
         SectionHeader(label: 'offer.event_type'.tr()),
         const SizedBox(height: 8),
-        EventTypeSelector(
-          selectedTypes: _eventTypes,
-          onChanged: (newTypes) => setState(() {
-            _eventTypes.clear();
-            _eventTypes.addAll(newTypes);
-          }),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: _eventTypeError != null
+                  ? Theme.of(context).colorScheme.error
+                  : Colors.transparent,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: EventTypeSelector(
+            selectedTypes: _eventTypes,
+            onChanged: (newTypes) => setState(() {
+              _eventTypes.clear();
+              _eventTypes.addAll(newTypes);
+            }),
+          ),
         ),
+        if (_eventTypeError != null) _buildSectionErrorText(_eventTypeError!),
       ],
     );
   }
@@ -1105,7 +1195,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   label: 'offer.guest_count'.tr(),
                   keyboard: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  required: true,
+                  validator: _validateGuestCount,
                 ),
               ),
               SizedBox(
@@ -1114,6 +1204,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   controller: _eventTimeCtrl,
                   label: 'offer.event_time'.tr(),
                   hint: '17:30',
+                  required: true,
                 ),
               ),
               SizedBox(width: 200, child: _buildDatePicker()),
@@ -1181,6 +1272,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           controller: _cocktailsCtrl,
           label: 'offer.cocktails'.tr(),
           hint: 'offer.cocktails_hint'.tr(),
+          validator: _validateCocktails,
         ),
         const SizedBox(height: 8),
         _field(
@@ -1301,6 +1393,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   Widget _buildOfferPositionsSection(Currency curr) {
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: _positionsError != null
+              ? Theme.of(context).colorScheme.error
+              : Colors.transparent,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1373,6 +1473,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 color: Theme.of(context).colorScheme.outline,
               ),
             ),
+            if (_positionsError != null) _buildSectionErrorText(_positionsError!),
             if (_offerPositions.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1710,6 +1811,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     required String label,
     String? hint,
     bool required = false,
+    FormFieldValidator<String>? validator,
     TextInputType? keyboard,
     List<TextInputFormatter>? inputFormatters,
     int maxLines = 1,
@@ -1720,11 +1822,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       inputFormatters: inputFormatters,
       maxLines: maxLines,
       decoration: InputDecoration(labelText: label, hintText: hint),
-      validator: required
-          ? (v) => (v == null || v.trim().isEmpty)
-                ? 'offer.field_required'.tr()
-                : null
-          : null,
+      autovalidateMode: _showValidationErrors
+          ? AutovalidateMode.onUserInteraction
+          : AutovalidateMode.disabled,
+      validator: validator ??
+          (required
+              ? (v) => (v == null || v.trim().isEmpty)
+                    ? 'offer.field_required'.tr()
+                    : null
+              : null),
       onChanged: (_) => setState(() {}),
     );
   }
