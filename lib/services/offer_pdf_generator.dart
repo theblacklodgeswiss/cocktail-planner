@@ -710,73 +710,75 @@ class OfferPdfGenerator {
           ),
         ),
       ],
-      // Bar drinks (if selected)
-      if (offer.barDrinks.isNotEmpty)
-        pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(isEn ? 'Bar Drinks' : 'Bargetränke'),
-            cell('1', align: pw.TextAlign.center),
-            cell(
-              isEn ? 'On request' : 'Auf Anfrage',
-              align: pw.TextAlign.right,
-            ),
-            cell(
-              isEn ? 'On request' : 'Auf Anfrage',
-              align: pw.TextAlign.right,
-            ),
-            cell(
-              formatOrderBarDrinkLabels(
-                offer.barDrinks,
-                isEnglish: isEn,
-              ).join(', '),
-            ),
-          ],
+      if (offer.offerPositions.isEmpty) ...[
+        // Bar drinks (if selected)
+        if (offer.barDrinks.isNotEmpty)
+          pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(isEn ? 'Bar Drinks' : 'Bargetränke'),
+              cell('1', align: pw.TextAlign.center),
+              cell(
+                isEn ? 'On request' : 'Auf Anfrage',
+                align: pw.TextAlign.right,
+              ),
+              cell(
+                isEn ? 'On request' : 'Auf Anfrage',
+                align: pw.TextAlign.right,
+              ),
+              cell(
+                formatOrderBarDrinkLabels(
+                  offer.barDrinks,
+                  isEnglish: isEn,
+                ).join(', '),
+              ),
+            ],
+          ),
+        // Alcohol purchase (if selected)
+        ...offer.alcoholPurchase.map((alcohol) {
+          final isUsageBased = isUsageBasedAlcoholOption(alcohol);
+          final note = isUsageBased
+              ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
+              : '';
+          return pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(formatOrderAlcoholLabel(alcohol, isEnglish: isEn)),
+              cell('1', align: pw.TextAlign.center),
+              cell(
+                isEn ? 'On request' : 'Auf Anfrage',
+                align: pw.TextAlign.right,
+              ),
+              cell(
+                isEn ? 'On request' : 'Auf Anfrage',
+                align: pw.TextAlign.right,
+              ),
+              cell(note),
+            ],
+          );
+        }),
+        // Additional services (if selected)
+        ...offer.additionalServices.map(
+          (service) => pw.TableRow(
+            children: [
+              cell(dateStr),
+              cell(
+                formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+              ),
+              cell('1', align: pw.TextAlign.center),
+              cell(
+                isEn ? 'On request' : 'Auf Anfrage',
+                align: pw.TextAlign.right,
+              ),
+              cell(
+                isEn ? 'On request' : 'Auf Anfrage',
+                align: pw.TextAlign.right,
+              ),
+              cell(offer.remarks.isNotEmpty ? offer.remarks : ''),
+            ],
+          ),
         ),
-      // Alcohol purchase (if selected)
-      ...offer.alcoholPurchase.map((alcohol) {
-        final isUsageBased = isUsageBasedAlcoholOption(alcohol);
-        final note = isUsageBased
-            ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
-            : '';
-        return pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(formatOrderAlcoholLabel(alcohol, isEnglish: isEn)),
-            cell('1', align: pw.TextAlign.center),
-            cell(
-              isEn ? 'On request' : 'Auf Anfrage',
-              align: pw.TextAlign.right,
-            ),
-            cell(
-              isEn ? 'On request' : 'Auf Anfrage',
-              align: pw.TextAlign.right,
-            ),
-            cell(note),
-          ],
-        );
-      }),
-      // Additional services (if selected)
-      ...offer.additionalServices.map(
-        (service) => pw.TableRow(
-          children: [
-            cell(dateStr),
-            cell(
-              formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
-            ),
-            cell('1', align: pw.TextAlign.center),
-            cell(
-              isEn ? 'On request' : 'Auf Anfrage',
-              align: pw.TextAlign.right,
-            ),
-            cell(
-              isEn ? 'On request' : 'Auf Anfrage',
-              align: pw.TextAlign.right,
-            ),
-            cell(offer.remarks.isNotEmpty ? offer.remarks : ''),
-          ],
-        ),
-      ),
+      ],
       // Discount row (only if > 0)
       if (offer.discount > 0)
         pw.TableRow(

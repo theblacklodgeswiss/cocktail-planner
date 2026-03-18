@@ -195,13 +195,22 @@ class OfferData {
 
   /// Sum of all extra positions
   double get extraPositionsTotal =>
-      extraPositions.fold(0.0, (sum, pos) => sum + pos.price);
+      extraPositions.fold(0.0, (sum, pos) => sum + pos.total);
+
+    /// Sum of all explicitly saved offer positions.
+    double get offerPositionsTotal =>
+      offerPositions.fold(0.0, (sum, pos) => sum + pos.total);
 
   /// Cocktail & Barservice cost (orderTotal minus travel and theke)
   double get barServiceCost => orderTotal - travelCostTotal - barCost;
 
-  /// Grand total = orderTotal + extraPositions - discount
-  double get grandTotal => orderTotal + extraPositionsTotal - discount;
+  /// Grand total.
+  ///
+  /// When explicit offer positions exist, they are the single source of truth.
+  /// Otherwise, keep legacy fallback based on order total + extra positions.
+  double get grandTotal => offerPositions.isNotEmpty
+      ? offerPositionsTotal - discount
+      : orderTotal + extraPositionsTotal - discount;
 
   /// Default Zusatzinformation text in German
   static const String defaultAdditionalInfoDe =

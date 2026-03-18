@@ -12,6 +12,7 @@ import '../../models/order.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
 import '../../utils/currency.dart';
+import '../../utils/order_option_labels.dart';
 import 'widgets/event_type_selector.dart';
 import 'widgets/offer_action_buttons.dart';
 import 'widgets/offer_price_preview.dart';
@@ -190,6 +191,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         _buildGeneratedOfferPositions(customPositions: legacyCustomPositions),
       );
     }
+    _ensureRequestDerivedOfferPositions();
     _migrateLegacyDiscountToPosition();
     _syncLegacyServicePositionControllers();
   }
@@ -445,7 +447,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final travelTotal = distanceKm * travelCostPerKm;
     final barServiceCost = orderTotal - travelTotal - barCost;
 
-    return [
+    final generated = <ExtraPosition>[
       ExtraPosition(
         date: dateStr,
         name: _firstPositionTextCtrl.text.trim().isNotEmpty
@@ -488,6 +490,18 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ),
       ...customPositions,
     ];
+
+    final existingKeys = generated
+        .map((position) => _positionNameKey(position.name))
+        .toSet();
+    for (final requestPosition in _buildRequestDerivedOfferPositions()) {
+      final key = _positionNameKey(requestPosition.name);
+      if (existingKeys.add(key)) {
+        generated.add(requestPosition);
+      }
+    }
+
+    return generated;
   }
 
   String _normalizeServiceType(String serviceType) {
@@ -1640,6 +1654,78 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ),
       ),
     );
+  }
+
+  String _positionNameKey(String value) => value.trim().toLowerCase();
+
+  List<ExtraPosition> _buildRequestDerivedOfferPositions() {
+    final isEn = _language == 'en';
+    final dateStr =
+        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
+    final rows = <ExtraPosition>[];
+
+    if (widget.order.barDrinks.isNotEmpty) {
+      rows.add(
+        ExtraPosition(
+          date: dateStr,
+          name: isEn ? 'Bar Drinks' : 'Bargetränke',
+          quantity: 1,
+          price: 0,
+          remark: formatOrderBarDrinkLabels(
+            widget.order.barDrinks,
+            isEnglish: isEn,
+          ).join(', '),
+        ),
+      );
+    }
+
+    for (final alcohol in widget.order.alcoholPurchase) {
+      rows.add(
+        ExtraPosition(
+          date: dateStr,
+          name: formatOrderAlcoholLabel(alcohol, isEnglish: isEn),
+          quantity: 1,
+          price: 0,
+          remark: isUsageBasedAlcoholOption(alcohol)
+              ? (isEn ? 'Usage-based billing' : 'Nach Verbrauch abgerechnet')
+              : '',
+        ),
+      );
+    }
+
+    for (final service in widget.order.additionalServices) {
+      rows.add(
+        ExtraPosition(
+          date: dateStr,
+          name: formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+          quantity: 1,
+          price: 0,
+          remark: widget.order.remarks,
+        ),
+      );
+    }
+
+    final deduped = <ExtraPosition>[];
+    final seen = <String>{};
+    for (final row in rows) {
+      final key = _positionNameKey(row.name);
+      if (seen.add(key)) {
+        deduped.add(row);
+      }
+    }
+    return deduped;
+  }
+
+  void _ensureRequestDerivedOfferPositions() {
+    final existing = _offerPositions
+        .map((position) => _positionNameKey(position.name))
+        .toSet();
+    for (final row in _buildRequestDerivedOfferPositions()) {
+      final key = _positionNameKey(row.name);
+      if (existing.add(key)) {
+        _offerPositions.add(row);
+      }
+    }
   }
 
   Future<void> _showOfferPositionDialog({int? index}) async {

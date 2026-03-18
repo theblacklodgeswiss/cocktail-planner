@@ -280,7 +280,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   /// Grand total after discount
   double get _grandTotal => _usePositionsMode
-      ? (_offerPositionsSum + _shotsCostTotal + _extraHoursTotal - _discount)
+      ? (_offerPositionsSum - _discount)
       : (_positionsSum - _discount);
 
   /// Validates that employees are assigned
@@ -368,11 +368,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       offerPositions: _usePositionsMode
           ? _offerPositions.map((e) => e.toJson()).toList()
           : widget.order.offerPositions,
-      offerShotsCount: _shotsCount,
-      offerShotsPricePerPiece: _shotsPricePerPiece,
-      offerShotsRemark: _shotsRemarkCtrl.text.trim(),
-      offerExtraHours: _extraHours,
-      offerExtraHourRate: _extraHourRate,
+        offerShotsCount: _usePositionsMode ? 0 : _shotsCount,
+        offerShotsPricePerPiece: _usePositionsMode ? 0 : _shotsPricePerPiece,
+        offerShotsRemark: _usePositionsMode ? '' : _shotsRemarkCtrl.text.trim(),
+        offerExtraHours: _usePositionsMode ? 0 : _extraHours,
+        offerExtraHourRate: _usePositionsMode ? 0 : _extraHourRate,
       assignedEmployees: _selectedEmployees.toList(),
       source: widget.order.source,
       hasShoppingList: widget.order.hasShoppingList,
@@ -404,11 +404,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       offerPositions: _usePositionsMode
           ? _offerPositions.map((e) => e.toJson()).toList()
           : [],
-      shotsCount: _shotsCount,
-      shotsPricePerPiece: _shotsPricePerPiece,
-      shotsRemark: _shotsRemarkCtrl.text.trim(),
-      extraHours: _extraHours,
-      extraHourRate: _extraHourRate,
+        shotsCount: _usePositionsMode ? 0 : _shotsCount,
+        shotsPricePerPiece: _usePositionsMode ? 0 : _shotsPricePerPiece,
+        shotsRemark: _usePositionsMode ? '' : _shotsRemarkCtrl.text.trim(),
+        extraHours: _usePositionsMode ? 0 : _extraHours,
+        extraHourRate: _usePositionsMode ? 0 : _extraHourRate,
       assignedEmployees: _selectedEmployees.toList(),
       serviceType: _serviceType,
     );
@@ -999,7 +999,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ],
 
         // Shots Section - separate card
-        if (_shotsCtrl.text.trim().isNotEmpty) ...[
+        if (!_usePositionsMode && _shotsCtrl.text.trim().isNotEmpty) ...[
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -1094,13 +1094,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         const SizedBox(height: 12),
 
         // Extra hours - separate card
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: _buildExtraHoursSection(),
+        if (!_usePositionsMode) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildExtraHoursSection(),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ],
 
         // Extra positions (fields mode only)
         if (!_usePositionsMode) _buildExtraPositionsSection(curr),
@@ -1866,24 +1868,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       : curr.format(pos.total),
                 ),
               ),
-              if (_shotsCount > 0)
-                _PreviewRow(
-                  label: 'Shots',
-                  value:
-                      '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
-                ),
-              if (_extraHoursTotal > 0)
-                _PreviewRow(
-                  label: 'invoice.extra_hours_label'.tr(),
-                  value:
-                      '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
-                ),
               const Divider(),
               _PreviewRow(
                 label: 'invoice.positions_sum'.tr(),
-                value: curr.format(
-                  _offerPositionsSum + _shotsCostTotal + _extraHoursTotal,
-                ),
+                value: curr.format(_offerPositionsSum),
                 bold: true,
               ),
             ],
