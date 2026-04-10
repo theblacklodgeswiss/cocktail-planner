@@ -162,7 +162,7 @@ void main() {
     });
 
     group('Material Generation (without real API)', () {
-      test('generateMaterialSuggestions returns null when not configured', () async {
+      test('generateMaterialSuggestions returns error when not configured', () async {
         geminiService.clearApiKey();
 
         final result = await geminiService.generateMaterialSuggestions(
@@ -175,7 +175,8 @@ void main() {
           recipeIngredients: [],
         );
 
-        expect(result, isNull);
+        expect(result.hasError, isTrue);
+        expect(result.errorType, equals(GeminiErrorType.notConfigured));
       });
 
       test('matchCocktailNames returns empty map when not configured', () async {
@@ -301,8 +302,9 @@ void main() {
           ],
         );
 
-        // Without real API, should return null (but not crash)
-        expect(result, isNull);
+        // Without real API, should return error (with invalid API key)
+        expect(result.hasError, isTrue);
+        expect(result.errorType, equals(GeminiErrorType.invalidApiKey));
       });
 
       test('error scenario: generate without configuration', () async {
@@ -318,7 +320,8 @@ void main() {
           recipeIngredients: [],
         );
 
-        expect(result, isNull);
+        expect(result.hasError, isTrue);
+        expect(result.errorType, equals(GeminiErrorType.notConfigured));
       });
 
       test('usage tracking scenario', () {
@@ -367,8 +370,9 @@ void main() {
           recipeIngredients: [],
         );
 
-        // Should handle gracefully (return null without API)
-        expect(result, isNull);
+        // Should return error due to invalid API key
+        expect(result.hasError, isTrue);
+        expect(result.errorType, equals(GeminiErrorType.invalidApiKey));
       });
 
       test('suggestion handles optional cocktail popularity', () async {
@@ -398,9 +402,11 @@ void main() {
           cocktailPopularity: {'Mojito': 0.8, 'Aperol Spritz': 0.2},
         );
 
-        // Both should handle gracefully
-        expect(result1, isNull);
-        expect(result2, isNull);
+        // Both should return errors (invalid API key)
+        expect(result1.hasError, isTrue);
+        expect(result1.errorType, equals(GeminiErrorType.invalidApiKey));
+        expect(result2.hasError, isTrue);
+        expect(result2.errorType, equals(GeminiErrorType.invalidApiKey));
       });
     });
 

@@ -481,12 +481,13 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
       if (mounted) Navigator.pop(context); // close loading
 
-      if (suggestion == null) {
+      if (suggestion.hasError) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('orders.gemini_error'.tr()),
+              content: Text(suggestion.errorMessage ?? 'orders.gemini_error'.tr()),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 6),
             ),
           );
         }

@@ -40,13 +40,58 @@ class GeminiMaterialSuggestion {
   final int trainingDataCount;
   /// Cocktail names Gemini actually used when computing the quantities.
   final List<String> usedCocktails;
+  /// Error message if generation failed.
+  final String? errorMessage;
+  /// Error type for UI handling.
+  final GeminiErrorType? errorType;
 
   const GeminiMaterialSuggestion({
     required this.materials,
     required this.explanation,
     required this.trainingDataCount,
     this.usedCocktails = const [],
+    this.errorMessage,
+    this.errorType,
   });
+
+  /// Check if this result has an error.
+  bool get hasError => errorMessage != null;
+
+  /// Check if this result is successful.
+  bool get isSuccess => !hasError && materials.isNotEmpty;
+
+  /// Create an error result.
+  factory GeminiMaterialSuggestion.error({
+    required String message,
+    required GeminiErrorType type,
+    int trainingDataCount = 0,
+  }) {
+    return GeminiMaterialSuggestion(
+      materials: const [],
+      explanation: '',
+      trainingDataCount: trainingDataCount,
+      errorMessage: message,
+      errorType: type,
+    );
+  }
+}
+
+/// Types of errors that can occur with Gemini API.
+enum GeminiErrorType {
+  /// Service temporarily unavailable (503)
+  serviceUnavailable,
+  /// Rate limit exceeded (429)
+  rateLimitExceeded,
+  /// Invalid API key
+  invalidApiKey,
+  /// API not configured
+  notConfigured,
+  /// Network error
+  networkError,
+  /// Invalid response format
+  invalidResponse,
+  /// Unknown error
+  unknown,
 }
 
 /// Service for generating shopping lists using Gemini AI.
@@ -257,6 +302,50 @@ class GeminiService {
     _model = null;
   }
 
+  /// Helper method to generate content with retry logic for transient errors.
+  /// Retries on 503 (service unavailable) and 429 (rate limit) errors.
+  Future<GenerateContentResponse?> _generateContentWithRetry(
+    List<Content> content,
+    String operationName, {
+    int maxRetries = 3,
+    Duration initialDelay = const Duration(seconds: 2),
+  }) async {
+    if (_model == null) return null;
+
+    int attempt = 0;
+    Duration delay = initialDelay;
+
+    while (attempt < maxRetries) {
+      try {
+        final response = await _model!.generateContent(content);
+        return response;
+      } catch (e) {
+        attempt++;
+        final isRetryable = e.toString().contains('503') || 
+                           e.toString().contains('429') ||
+                           e.toString().contains('UNAVAILABLE') ||
+                           e.toString().contains('RESOURCE_EXHAUSTED');
+
+        if (!isRetryable || attempt >= maxRetries) {
+          debugPrint(
+            'Gemini $operationName failed after $attempt attempts: $e',
+          );
+          rethrow;
+        }
+
+        debugPrint(
+          'Gemini $operationName attempt $attempt failed (${e.runtimeType}), '
+          'retrying in ${delay.inSeconds}s... Error: $e',
+        );
+        
+        await Future.delayed(delay);
+        delay *= 2; // Exponential backoff
+      }
+    }
+
+    return null;
+  }
+
   /// Get training data from existing orders with shopping lists.
   Future<List<Map<String, dynamic>>> _getTrainingData() async {
     final trainingData = <Map<String, dynamic>>[];
@@ -327,7 +416,7 @@ class GeminiService {
   }
 
   /// Generate material list suggestions using Gemini AI.
-  Future<GeminiMaterialSuggestion?> generateMaterialSuggestions({
+  Future<GeminiMaterialSuggestion> generateMaterialSuggestions({
     required int guestCount,
     required String guestRange,
     required List<String> requestedCocktails,
@@ -339,7 +428,10 @@ class GeminiService {
   }) async {
     if (!isConfigured || _model == null) {
       debugPrint('Gemini not configured');
-      return null;
+      return GeminiMaterialSuggestion.error(
+        message: 'Gemini API ist nicht konfiguriert. Bitte API-Key in den Einstellungen hinterlegen.',
+        type: GeminiErrorType.notConfigured,
+      );
     }
 
     try {
@@ -361,23 +453,73 @@ class GeminiService {
 
       debugPrint('Sending material prompt to Gemini...');
 
-      // Generate content
-      final response = await _model!.generateContent([Content.text(prompt)]);
+      // Generate content with retry logic
+      final response = await _generateContentWithRetry(
+        [Content.text(prompt)],
+        'material suggestions',
+      );
+      
+      if (response == null) {
+        return GeminiMaterialSuggestion.error(
+          message: 'Keine Antwort von Gemini erhalten.',
+          type: GeminiErrorType.networkError,
+          trainingDataCount: trainingData.length,
+        );
+      }
+      
       _trackUsage(response);
       final responseText = response.text;
 
       if (responseText == null || responseText.isEmpty) {
         debugPrint('Empty response from Gemini');
-        return null;
+        return GeminiMaterialSuggestion.error(
+          message: 'Leere Antwort von Gemini erhalten.',
+          type: GeminiErrorType.invalidResponse,
+          trainingDataCount: trainingData.length,
+        );
       }
 
       debugPrint('Gemini response received');
 
       // Parse the JSON response
-      return _parseMaterialResponse(responseText, trainingData.length);
+      final result = _parseMaterialResponse(responseText, trainingData.length);
+      if (result == null) {
+        return GeminiMaterialSuggestion.error(
+          message: 'Antwort von Gemini konnte nicht verarbeitet werden. Ungültiges Format.',
+          type: GeminiErrorType.invalidResponse,
+          trainingDataCount: trainingData.length,
+        );
+      }
+      
+      return result;
     } catch (e) {
       debugPrint('Gemini generation failed: $e');
-      return null;
+      
+      // Parse error type from exception message
+      final errorString = e.toString();
+      GeminiErrorType errorType = GeminiErrorType.unknown;
+      String userMessage = 'Ein unbekannter Fehler ist aufgetreten.';
+
+      if (errorString.contains('503') || errorString.contains('UNAVAILABLE')) {
+        errorType = GeminiErrorType.serviceUnavailable;
+        userMessage = 'Gemini ist derzeit überlastet. Bitte versuchen Sie es in ein paar Minuten erneut. (Fehler 503)';
+      } else if (errorString.contains('429') || errorString.contains('RESOURCE_EXHAUSTED')) {
+        errorType = GeminiErrorType.rateLimitExceeded;
+        userMessage = 'Tageslimit erreicht. Nächster Reset in $resetTimeFormatted. (Fehler 429)';
+      } else if (errorString.contains('API key not valid') || errorString.contains('invalid API key')) {
+        errorType = GeminiErrorType.invalidApiKey;
+        userMessage = 'Ungültiger API-Key. Bitte prüfen Sie die Einstellungen.';
+      } else if (errorString.contains('network') || errorString.contains('Failed host lookup')) {
+        errorType = GeminiErrorType.networkError;
+        userMessage = 'Keine Internetverbindung. Bitte prüfen Sie Ihre Netzwerkverbindung.';
+      } else {
+        userMessage = 'Fehler: ${errorString.length > 200 ? "${errorString.substring(0, 200)}..." : errorString}';
+      }
+
+      return GeminiMaterialSuggestion.error(
+        message: userMessage,
+        type: errorType,
+      );
     }
   }
 
