@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'app.dart';
+import 'data/firestore_service.dart';
 import 'data/settings_repository.dart';
 import 'firebase_options_dev.dart' as dev;
 import 'firebase_options_prod.dart' as prod;
@@ -36,6 +37,9 @@ Future<void> main() async {
     debugPrint('🔧 Firebase Project: ${firebaseOptions.projectId}');
     await Firebase.initializeApp(options: firebaseOptions);
     debugPrint('✅ Firebase initialized successfully');
+
+    // Initialize Firestore connection
+    await firestoreService.initialize();
 
     // Initialize Auth Service with environment specific client ID
     authService.initialize(googleClientId: googleClientId);

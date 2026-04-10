@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
 import '../../config/env_config.dart';
@@ -94,6 +95,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   bool _isGenerating = false;
   bool _showValidationErrors = false;
+  bool _savedSuccessfully = false;
 
   @override
   void initState() {
@@ -711,6 +713,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('offer.saved'.tr())));
+        // Mark as saved and navigate back to orders overview
+        setState(() => _savedSuccessfully = true);
+        context.go('/orders');
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -858,10 +863,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final curr = _currency;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('offer.title'.tr()),
-        actions: [
+    return PopScope(
+      canPop: !_savedSuccessfully,
+      onPopInvokedWithResult: (didPop, result) {
+        if (_savedSuccessfully && !didPop) {
+          context.go('/orders');
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('offer.title'.tr()),
+          actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: SegmentedButton<String>(
@@ -970,7 +982,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           ],
         ),
       ),
-    );
+    ), // Scaffold
+    ); // PopScope
   }
 
   Widget _buildOrderInfoBanner(ColorScheme colorScheme, Currency curr) {

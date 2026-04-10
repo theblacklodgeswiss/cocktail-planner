@@ -6,6 +6,13 @@ import 'firestore_service.dart';
 
 /// Repository for order operations.
 class OrderRepository {
+  /// Ensures Firestore is initialized before operations.
+  Future<bool> _ensureFirestoreAvailable() async {
+    if (firestoreService.isAvailable) return true;
+    debugPrint('⚠️ Firestore not initialized, attempting initialization...');
+    return await firestoreService.initialize();
+  }
+
   Map<String, dynamic> _ownerMetadata() {
     final data = <String, dynamic>{};
     final userId = authService.currentUser?.uid;
@@ -55,8 +62,8 @@ class OrderRepository {
     List<String> additionalServices = const [],
     String remarks = '',
   }) async {
-    if (!firestoreService.isAvailable) {
-      debugPrint('Firebase not available, order not saved to cloud');
+    if (!await _ensureFirestoreAvailable()) {
+      debugPrint('❌ Firebase not available, order not saved to cloud');
       return null;
     }
 
@@ -97,7 +104,7 @@ class OrderRepository {
 
   /// Update order status in Firestore.
   Future<bool> updateStatus(String orderId, String status) async {
-    if (!firestoreService.isAvailable) return false;
+    if (!await _ensureFirestoreAvailable()) return false;
 
     try {
       await firestoreService.ordersCollection.doc(orderId).update({
@@ -210,7 +217,10 @@ class OrderRepository {
     String location = '',
     String? currency,
   }) async {
-    if (!firestoreService.isAvailable) return false;
+    if (!await _ensureFirestoreAvailable()) {
+      debugPrint('❌ Firebase not available, offer data not saved');
+      return false;
+    }
 
     try {
       final updateData = <String, dynamic>{

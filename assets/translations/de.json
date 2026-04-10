@@ -361,6 +361,7 @@
     "articles": "Artikel",
     "status": "Status",
     "date": "Datum",
+    "created_at": "Erstellt am",
     "total": "Gesamt",
     "status_quote": "Angebot",
     "status_accepted": "Angenommen",

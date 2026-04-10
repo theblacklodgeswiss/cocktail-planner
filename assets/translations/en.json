@@ -357,6 +357,7 @@
     "articles": "Items",
     "status": "Status",
     "date": "Date",
+    "created_at": "Created at",
     "total": "Total",
     "status_quote": "Quote",
     "status_accepted": "Accepted",
