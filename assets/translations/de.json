@@ -53,7 +53,8 @@
     "thank_you_message": "Wir haben deine Anfrage erhalten und werden sie so schnell wie möglich bearbeiten. Du erhältst in Kürze ein persönliches Angebot von uns.",
     "save_error": "Fehler beim Speichern der Anfrage. Bitte versuche es später erneut.",
     "submit_request": "Antrag einreichen",
-    "generate_with_gemini": "Mit Gemini Einkaufsliste generieren"
+    "generate_with_gemini": "Mit Gemini Einkaufsliste generieren",
+    "back_to_home": "Zurück zur Startseite"
   },
   "customer": {
     "welcome_title": "Willkommen bei The Blacklodge",

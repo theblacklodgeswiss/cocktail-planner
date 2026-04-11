@@ -7,6 +7,7 @@ import '../screens/admin/admin_screen.dart';
 import '../screens/dashboard/customer_landing_screen.dart';
 import '../screens/dashboard/simple_dashboard_screen.dart';
 import '../screens/forms/modern_order_form_screen.dart';
+import '../screens/forms/order_success_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
@@ -88,6 +89,10 @@ final GoRouter appRouter = GoRouter(
         final prefill = state.extra is SavedOrder ? state.extra as SavedOrder : null;
         return ModernOrderFormScreen(prefill: prefill);
       },
+    ),
+    GoRoute(
+      path: '/order-success',
+      builder: (context, state) => const OrderSuccessScreen(),
     ),
     GoRoute(
       path: '/admin',

@@ -443,7 +443,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     // Use master data from initial setup dialog (no need for second dialog)
     final result = (
-      name: _orderName,
+      name: _orderName, 
       personCount: _personCount,
       drinkerType: _drinkerType,
       currency: _currency,

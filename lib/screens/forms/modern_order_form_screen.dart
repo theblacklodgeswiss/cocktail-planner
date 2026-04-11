@@ -618,26 +618,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         throw Exception('Failed to save order');
       }
 
-      // Show thank you dialog
+      // Navigate to success screen
       if (mounted) {
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            icon: const Icon(Icons.celebration, size: 64, color: Colors.green),
-            title: Text('order_form.thank_you_title'.tr()),
-            content: Text('order_form.thank_you_message'.tr()),
-            actions: [
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  context.go('/orders'); // Navigate to orders overview
-                },
-                child: Text('common.ok'.tr()),
-              ),
-            ],
-          ),
-        );
+        context.go('/order-success');
       }
     } catch (e) {
       // Show error
@@ -2835,9 +2818,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _buildDesktopActionButtons(),
-          ] else
-            const SizedBox(height: 16),
+          ],
+          _buildDesktopActionButtons(),
         ],
       ),
     );
