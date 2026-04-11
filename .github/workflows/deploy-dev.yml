@@ -99,7 +99,6 @@ jobs:
         with:
           name: web-build
           path: build/web/
-          projectId: '${{ secrets.DEV_FIREBASE_PROJECT_ID }}'
 
       - name: Deploy Firestore Rules (Dev)
         uses: w9jds/firebase-action@master
