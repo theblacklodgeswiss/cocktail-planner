@@ -5,6 +5,7 @@ import '../../data/order_repository.dart';
 import '../../data/firestore_service.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
+import '../../utils/currency.dart';
 import 'user_menu_sheet.dart';
 import 'customer_landing_screen.dart';
 
@@ -40,9 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     // Show loading while checking admin status
     if (!_initialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     // Non-admin users see the customer landing screen
@@ -59,7 +58,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text('dashboard.title'.tr()),
             Text(
               '${'dashboard.year'.tr()} ${DateTime.now().year}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -92,7 +94,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'Fehler beim Laden',
@@ -111,10 +117,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('🔥 Firebase: ${firestoreService.isAvailable ? "✅ Verfügbar" : "❌ Nicht verfügbar"}'),
-                            Text('👤 User: ${authService.currentUser?.email ?? "Nicht eingeloggt"}'),
-                            Text('🔐 Authenticated: ${authService.isSignedIn ? "Ja" : "Nein"}'),
-                            Text('👑 Admin: ${authService.isAdmin ? "Ja" : "Nein"}'),
+                            Text(
+                              '🔥 Firebase: ${firestoreService.isAvailable ? "✅ Verfügbar" : "❌ Nicht verfügbar"}',
+                            ),
+                            Text(
+                              '👤 User: ${authService.currentUser?.email ?? "Nicht eingeloggt"}',
+                            ),
+                            Text(
+                              '🔐 Authenticated: ${authService.isSignedIn ? "Ja" : "Nein"}',
+                            ),
+                            Text(
+                              '👑 Admin: ${authService.isAdmin ? "Ja" : "Nein"}',
+                            ),
                           ],
                         ),
                       ),
@@ -127,35 +141,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           final orders = snapshot.data ?? [];
           debugPrint('Dashboard loaded ${orders.length} orders from Firebase');
-          
+
           // Debug: Log all orders with their years
           for (final order in orders) {
-            debugPrint('  Order: ${order.name} - Year: ${order.year} - Status: ${order.status.value} - Total: ${order.total}');
+            debugPrint(
+              '  Order: ${order.name} - Year: ${order.year} - Status: ${order.status.value} - Total: ${order.total}',
+            );
           }
-          
+
           // Compute counts
           // Pending orders: total == 0 (incomplete forms), regardless of status
-          final pendingCount = orders.where((o) => o.total == 0 && !o.isPendingDismissed).length;
-          
+          final pendingCount = orders
+              .where((o) => o.total == 0 && !o.isPendingDismissed)
+              .length;
+
           // Only count orders with total > 0 for status counts
           final completedOrders = orders.where((o) => o.total > 0).toList();
-          final acceptedCount = completedOrders.where((o) => o.status == OrderStatus.accepted).length;
-          final openOffersCount = completedOrders.where((o) => o.status == OrderStatus.quote).length;
-          
+          final acceptedCount = completedOrders
+              .where((o) => o.status == OrderStatus.accepted)
+              .length;
+          final openOffersCount = completedOrders
+              .where((o) => o.status == OrderStatus.quote)
+              .length;
+
           // Compute statistics from accepted orders
-          final acceptedOrders = completedOrders.where((o) => o.status == OrderStatus.accepted).toList();
-          final totalRevenue = acceptedOrders.fold<double>(0, (sum, o) => sum + o.total);
-          final totalPersons = acceptedOrders.fold<int>(0, (sum, o) => sum + o.personCount);
-          final avgPerOrder = acceptedOrders.isNotEmpty ? totalRevenue / acceptedOrders.length : 0.0;
-          
-          debugPrint('📊 Counts for year ${DateTime.now().year}: accepted=$acceptedCount, pending=$pendingCount, quotes=$openOffersCount');
-          debugPrint('💰 Statistics: revenue=$totalRevenue, persons=$totalPersons, avg=$avgPerOrder');
-          
+          final acceptedOrders = completedOrders
+              .where((o) => o.status == OrderStatus.accepted)
+              .toList();
+          final totalRevenue = acceptedOrders.fold<double>(
+            0,
+            (sum, o) => sum + o.total,
+          );
+          final totalPersons = acceptedOrders.fold<int>(
+            0,
+            (sum, o) => sum + o.personCount,
+          );
+          final avgPerOrder = acceptedOrders.isNotEmpty
+              ? totalRevenue / acceptedOrders.length
+              : 0.0;
+
+          debugPrint(
+            '📊 Counts for year ${DateTime.now().year}: accepted=$acceptedCount, pending=$pendingCount, quotes=$openOffersCount',
+          );
+          debugPrint(
+            '💰 Statistics: revenue=$totalRevenue, persons=$totalPersons, avg=$avgPerOrder',
+          );
+
           // Debug: Show pending orders details
-          final pendingOrders = orders.where((o) => o.total == 0 && !o.isPendingDismissed).toList();
+          final pendingOrders = orders
+              .where((o) => o.total == 0 && !o.isPendingDismissed)
+              .toList();
           debugPrint('🔵 Pending orders (${pendingOrders.length}):');
           for (final p in pendingOrders) {
-            debugPrint('  - ${p.name}: total=${p.total}, dismissed=${p.isPendingDismissed}');
+            debugPrint(
+              '  - ${p.name}: total=${p.total}, dismissed=${p.isPendingDismissed}',
+            );
           }
 
           return SingleChildScrollView(
@@ -166,36 +206,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // Status-Kacheln
                 _buildStatusCards(acceptedCount, pendingCount, openOffersCount),
                 const SizedBox(height: 24),
-                
+
                 // Statistics Bar
                 _buildStatisticsBar(
-                  openOffersCount, 
-                  acceptedCount, 
-                  totalRevenue, 
-                  totalPersons, 
+                  openOffersCount,
+                  acceptedCount,
+                  totalRevenue,
+                  totalPersons,
                   avgPerOrder,
-                  completedOrders.firstOrNull?.currency ?? 'CHF',
+                  completedOrders.firstOrNull?.currency ?? defaultCurrency.code,
                 ),
                 const SizedBox(height: 32),
 
                 // Drei Haupt-Navigation Buttons
                 Text(
                   'dashboard.section_orders'.tr(),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-                _buildNavigationTiles(acceptedCount, pendingCount, openOffersCount),
+                _buildNavigationTiles(
+                  acceptedCount,
+                  pendingCount,
+                  openOffersCount,
+                ),
 
                 const SizedBox(height: 32),
 
                 // Quick Actions
                 Text(
                   'dashboard.section_actions'.tr(),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
                 _buildQuickActions(),
@@ -212,7 +256,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStatusCards(int acceptedCount, int pendingCount, int openOffersCount) {
+  Widget _buildStatusCards(
+    int acceptedCount,
+    int pendingCount,
+    int openOffersCount,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 600;
@@ -225,7 +273,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               value: pendingCount.toString(),
               icon: Icons.pending_outlined,
               color: Colors.blue,
-              width: isWide ? (constraints.maxWidth - 32) / 3 : constraints.maxWidth,
+              width: isWide
+                  ? (constraints.maxWidth - 32) / 3
+                  : constraints.maxWidth,
               onTap: () => context.push('/pending-orders'),
             ),
             _StatusCard(
@@ -233,7 +283,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               value: openOffersCount.toString(),
               icon: Icons.description_outlined,
               color: Colors.orange,
-              width: isWide ? (constraints.maxWidth - 32) / 3 : constraints.maxWidth,
+              width: isWide
+                  ? (constraints.maxWidth - 32) / 3
+                  : constraints.maxWidth,
               onTap: () => context.push('/orders?status=quote'),
             ),
             _StatusCard(
@@ -241,7 +293,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               value: acceptedCount.toString(),
               icon: Icons.check_circle_outline,
               color: Colors.green,
-              width: isWide ? (constraints.maxWidth - 32) / 3 : constraints.maxWidth,
+              width: isWide
+                  ? (constraints.maxWidth - 32) / 3
+                  : constraints.maxWidth,
               onTap: () => context.push('/orders?status=accepted'),
             ),
           ],
@@ -267,7 +321,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isWide = constraints.maxWidth >= 600;
-          
+
           final stats = [
             _StatisticItem(
               icon: Icons.description_outlined,
@@ -279,7 +333,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.attach_money,
               label: 'dashboard.stats_revenue'.tr(),
               value: '${totalRevenue.toStringAsFixed(2)} $currency',
-              subtitle: '$acceptedCount ${'dashboard.stats_accepted_suffix'.tr()}',
+              subtitle:
+                  '$acceptedCount ${'dashboard.stats_accepted_suffix'.tr()}',
               color: Colors.green,
             ),
             _StatisticItem(
@@ -299,9 +354,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (isWide) {
             // Desktop: Horizontal layout
             return Row(
-              children: stats
-                  .map((stat) => Expanded(child: stat))
-                  .toList(),
+              children: stats.map((stat) => Expanded(child: stat)).toList(),
             );
           } else {
             // Mobile: 2x2 Grid
@@ -330,7 +383,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildNavigationTiles(int acceptedCount, int pendingCount, int openOffersCount) {
+  Widget _buildNavigationTiles(
+    int acceptedCount,
+    int pendingCount,
+    int openOffersCount,
+  ) {
     return Column(
       children: [
         Card(
@@ -340,7 +397,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: const Icon(Icons.pending, color: Colors.blue),
             ),
             title: Text('dashboard.nav_pending'.tr()),
-            subtitle: Text('dashboard.pending_count'.tr(args: [pendingCount.toString()])),
+            subtitle: Text(
+              'dashboard.pending_count'.tr(args: [pendingCount.toString()]),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/pending-orders'),
           ),
@@ -353,7 +412,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: const Icon(Icons.description, color: Colors.orange),
             ),
             title: Text('dashboard.nav_offers'.tr()),
-            subtitle: Text('dashboard.offers_count'.tr(args: [openOffersCount.toString()])),
+            subtitle: Text(
+              'dashboard.offers_count'.tr(args: [openOffersCount.toString()]),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/orders?status=quote'),
           ),
@@ -366,7 +427,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: const Icon(Icons.check_circle, color: Colors.green),
             ),
             title: Text('dashboard.nav_accepted'.tr()),
-            subtitle: Text('dashboard.orders_count'.tr(args: [acceptedCount.toString()])),
+            subtitle: Text(
+              'dashboard.orders_count'.tr(args: [acceptedCount.toString()]),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/orders?status=accepted'),
           ),
@@ -400,7 +463,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Card(
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.secondaryContainer,
                 child: Icon(
                   Icons.admin_panel_settings,
                   color: Theme.of(context).colorScheme.secondary,
@@ -462,16 +527,16 @@ class _StatusCard extends StatelessWidget {
                 Text(
                   value,
                   style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   title,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -509,17 +574,17 @@ class _StatisticItem extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             textAlign: TextAlign.center,
           ),
           if (subtitle != null) ...[
@@ -527,9 +592,9 @@ class _StatisticItem extends StatelessWidget {
             Text(
               subtitle!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 10,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 10,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

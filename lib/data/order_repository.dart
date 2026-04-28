@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cocktail_planer/models/order.dart';
+import 'package:cocktail_planer/utils/currency.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'firestore_service.dart';
@@ -182,9 +183,7 @@ class OrderRepository {
       await firestoreService.ordersCollection.doc(orderId).update(updateData);
       return true;
     } catch (e) {
-      debugPrint(
-        'Failed to update order shopping list: ${_formatError(e)}',
-      );
+      debugPrint('Failed to update order shopping list: ${_formatError(e)}');
       return false;
     }
   }
@@ -630,7 +629,7 @@ class OrderRepository {
           ...data,
           'items': <Map<String, dynamic>>[],
           'total': 0.0,
-          'currency': 'CHF',
+          'currency': defaultCurrency.code,
           'drinkerType': 'normal',
           'status': OrderStatus.quote.value,
           'hasShoppingList': false,
@@ -641,9 +640,7 @@ class OrderRepository {
         return docRef.id;
       }
     } catch (e) {
-      debugPrint(
-        'Failed to save/update form submission: ${_formatError(e)}',
-      );
+      debugPrint('Failed to save/update form submission: ${_formatError(e)}');
       return null;
     }
   }

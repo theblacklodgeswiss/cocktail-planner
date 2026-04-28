@@ -1,3 +1,5 @@
+import 'currency.dart';
+
 String _resolveOrderOptionLabel(
   String value,
   Map<String, String> germanLabels,
@@ -49,32 +51,36 @@ const Map<String, String> _alcoholLabelsEn = {
 };
 
 const Map<String, String> _additionalServiceLabelsDe = {
-  'booth_360': 'BlackLodge - 360 Booth (600 CHF)',
-  'photobox_print': 'BlackLodge - PhotoBox inkl. 300 Druck (500 CHF)',
-  'photobox_qr': 'BlackLodge - PhotoBox Digital mit QR Code (300 CHF)',
-  'bubble_waffles': 'BlackLodge - Bubble Waffles (250 CHF)',
+  'booth_360': 'BlackLodge - 360 Booth (600 {currency})',
+  'photobox_print': 'BlackLodge - PhotoBox inkl. 300 Druck (500 {currency})',
+  'photobox_qr': 'BlackLodge - PhotoBox Digital mit QR Code (300 {currency})',
+  'bubble_waffles': 'BlackLodge - Bubble Waffles (250 {currency})',
   'catering': 'BlackLodge - Catering (Preis auf Anfrage)',
   'choreographer': 'Nirosi Singh - Choreographer (Preis auf Anfrage)',
   'dj': 'Extern - DJs (Preis auf Anfrage)',
   'led_screen': 'Extern - LED Screen (Preis auf Anfrage)',
-  'security': 'Mudanca Security (min. 2 Securitys á 40 CHF/H)',
-  'entry_song': 'Entry Song mit Geige - Praveen (300 CHF)',
+  'security': 'Mudanca Security (min. 2 Securitys á 40 {currency}/H)',
+  'entry_song': 'Entry Song mit Geige - Praveen (300 {currency})',
   'other_services': 'Sonstiges',
 };
 
 const Map<String, String> _additionalServiceLabelsEn = {
-  'booth_360': 'BlackLodge - 360 Booth (600 CHF)',
-  'photobox_print': 'BlackLodge - PhotoBox incl. 300 prints (500 CHF)',
-  'photobox_qr': 'BlackLodge - PhotoBox digital with QR code (300 CHF)',
-  'bubble_waffles': 'BlackLodge - Bubble Waffles (250 CHF)',
+  'booth_360': 'BlackLodge - 360 Booth (600 {currency})',
+  'photobox_print': 'BlackLodge - PhotoBox incl. 300 prints (500 {currency})',
+  'photobox_qr': 'BlackLodge - PhotoBox digital with QR code (300 {currency})',
+  'bubble_waffles': 'BlackLodge - Bubble Waffles (250 {currency})',
   'catering': 'BlackLodge - Catering (price on request)',
   'choreographer': 'Nirosi Singh - Choreographer (price on request)',
   'dj': 'External - DJs (price on request)',
   'led_screen': 'External - LED screen (price on request)',
-  'security': 'Mudanca Security (min. 2 security staff at 40 CHF/h)',
-  'entry_song': 'Entry song with violin - Praveen (300 CHF)',
+  'security': 'Mudanca Security (min. 2 security staff at 40 {currency}/h)',
+  'entry_song': 'Entry song with violin - Praveen (300 {currency})',
   'other_services': 'Other',
 };
+
+String _injectCurrency(String label, String currencyCode) {
+  return label.replaceAll('{currency}', currencyCode);
+}
 
 String formatOrderBarDrinkLabel(String value, {bool isEnglish = false}) {
   return _resolveOrderOptionLabel(
@@ -115,23 +121,30 @@ List<String> formatOrderAlcoholLabels(
 String formatOrderAdditionalServiceLabel(
   String value, {
   bool isEnglish = false,
+  String? currencyCode,
 }) {
-  return _resolveOrderOptionLabel(
+  final effectiveCurrencyCode = currencyCode ?? defaultCurrency.code;
+  final label = _resolveOrderOptionLabel(
     value,
     _additionalServiceLabelsDe,
     _additionalServiceLabelsEn,
     isEnglish: isEnglish,
   );
+  return _injectCurrency(label, effectiveCurrencyCode);
 }
 
 List<String> formatOrderAdditionalServiceLabels(
   Iterable<String> values, {
   bool isEnglish = false,
+  String? currencyCode,
 }) {
   return values
       .map(
-        (value) =>
-            formatOrderAdditionalServiceLabel(value, isEnglish: isEnglish),
+        (value) => formatOrderAdditionalServiceLabel(
+          value,
+          isEnglish: isEnglish,
+          currencyCode: currencyCode,
+        ),
       )
       .toList(growable: false);
 }

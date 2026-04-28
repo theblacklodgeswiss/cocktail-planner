@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 
+import '../utils/currency.dart';
+
 class OrderSetupData {
   final String orderName;
   final String? phoneNumber;
@@ -52,7 +54,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
   final distanceCtrl = TextEditingController();
   DateTime? _eventDate;
   TimeOfDay? _eventTime;
-  String currency = 'CHF';
+  String currency = defaultCurrency.code;
   String drinkerType = 'normal';
   String serviceType = 'cocktail_barservice';
 
@@ -232,20 +234,12 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                     padding: const EdgeInsets.only(right: 8),
                     child: Text('order_setup.currency_label'.tr()),
                   ),
-                  ChoiceChip(
-                    label: const Text('CHF'),
-                    selected: currency == 'CHF',
-                    onSelected: (_) => setState(() => currency = 'CHF'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('EUR'),
-                    selected: currency == 'EUR',
-                    onSelected: (_) => setState(() => currency = 'EUR'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('USD'),
-                    selected: currency == 'USD',
-                    onSelected: (_) => setState(() => currency = 'USD'),
+                  ...Currency.values.map(
+                    (entry) => ChoiceChip(
+                      label: Text(entry.code),
+                      selected: currency == entry.code,
+                      onSelected: (_) => setState(() => currency = entry.code),
+                    ),
                   ),
                 ],
               ),

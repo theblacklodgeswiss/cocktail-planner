@@ -142,8 +142,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         : widget.order.offerClientContact;
     _locationCtrl.text = widget.order.location;
     _eventTimeCtrl.text = widget.order.offerEventTime.isEmpty
-      ? widget.order.eventTime
-      : widget.order.offerEventTime;
+        ? widget.order.eventTime
+        : widget.order.offerEventTime;
     _language = widget.order.offerLanguage;
 
     // Load event types
@@ -274,7 +274,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   String _resolvedServicePositionText() {
-    if (_offerPositions.isNotEmpty && _offerPositions.first.name.trim().isNotEmpty) {
+    if (_offerPositions.isNotEmpty &&
+        _offerPositions.first.name.trim().isNotEmpty) {
       return _offerPositions.first.name.trim();
     }
     final current = _firstPositionTextCtrl.text.trim();
@@ -282,7 +283,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   String _resolvedServicePositionRemark() {
-    if (_offerPositions.isNotEmpty && _offerPositions.first.remark.trim().isNotEmpty) {
+    if (_offerPositions.isNotEmpty &&
+        _offerPositions.first.remark.trim().isNotEmpty) {
       return _offerPositions.first.remark.trim();
     }
     final current = _firstPositionRemarkCtrl.text.trim();
@@ -307,7 +309,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (existing.isNotEmpty) {
       return existing;
     }
-    return _language == 'en' ? 'Family/Friend discount' : 'Familie/Freunde Rabatt';
+    return _language == 'en'
+        ? 'Family/Friend discount'
+        : 'Familie/Freunde Rabatt';
   }
 
   bool get _requiresCocktails => _serviceType != 'bar_service';
@@ -318,13 +322,12 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   String? get _eventTypeError =>
       _showValidationErrors && !_hasEventTypeSelection
-          ? 'offer.event_type_required'.tr()
-          : null;
+      ? 'offer.event_type_required'.tr()
+      : null;
 
-  String? get _positionsError =>
-      _showValidationErrors && !_hasOfferPositions
-          ? 'offer.positions_required'.tr()
-          : null;
+  String? get _positionsError => _showValidationErrors && !_hasOfferPositions
+      ? 'offer.positions_required'.tr()
+      : null;
 
   String? _validateGuestCount(String? value) {
     if (value == null || value.trim().isEmpty) {
@@ -341,7 +344,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     if (!_requiresCocktails) {
       return null;
     }
-    final cocktails = value
+    final cocktails =
+        value
             ?.split(',')
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty)
@@ -362,9 +366,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final isValid = isFormValid && hasRequiredSections;
 
     if (!isValid && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('offer.validation_error'.tr())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('offer.validation_error'.tr())));
     }
 
     return isValid;
@@ -385,7 +389,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   bool _isDiscountPosition(ExtraPosition position) {
     final normalized = position.name.trim().toLowerCase();
-    return position.total < 0 && (normalized == 'rabatt' || normalized == 'discount');
+    return position.total < 0 &&
+        (normalized == 'rabatt' || normalized == 'discount');
   }
 
   void _migrateLegacyDiscountToPosition() {
@@ -477,8 +482,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         price: 50,
         quantity: 0,
         remark: _language == 'en'
-            ? '50 CHF/Barkeeper/h extra'
-            : '50 CHF/Barkeeper/Std. extra',
+            ? '50 ${_currency.code}/Barkeeper/h extra'
+            : '50 ${_currency.code}/Barkeeper/Std. extra',
       ),
       if (barCost > 0)
         ExtraPosition(
@@ -665,14 +670,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       offerPositions: _offerPositions.map((e) => e.toJson()).toList(),
       assignedEmployees: _selectedEmployees.toList(),
       serviceType: _serviceType,
-        firstPositionText: _resolvedServicePositionText(),
-        firstPositionRemark: _resolvedServicePositionRemark(),
+      firstPositionText: _resolvedServicePositionText(),
+      firstPositionRemark: _resolvedServicePositionRemark(),
       distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
       travelCostPerKm:
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
       barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
       location: _locationCtrl.text.trim(),
-        currency: _currency.code,
+      currency: _currency.code,
     );
 
     if (!offerSaved) {
@@ -874,115 +879,122 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         appBar: AppBar(
           title: Text('offer.title'.tr()),
           actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'de', label: Text('DE')),
-                ButtonSegment(value: 'en', label: Text('EN')),
-              ],
-              selected: {_language},
-              onSelectionChanged: (v) => _onLanguageChanged(v.first),
-              style: SegmentedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            // ── Sticky action bar ──────────────────────────────────────────
-            Material(
-              elevation: 4,
-              color: colorScheme.surface,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: colorScheme.primary.withValues(alpha: 0.3),
-                      width: 2,
-                    ),
-                  ),
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 800),
-                    child: OfferActionButtons(
-                      isGenerating: _isGenerating,
-                      onSaveOnly: _saveOnly,
-                      onPreview: _previewPdf,
-                      onGeneratePdf: _confirmGeneratePdf,
-                      onPrint: _printPdf,
-                      onShare: _shareOffer,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // ── Scrollable form ───────────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 800),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildOrderInfoBanner(colorScheme, curr),
-                        const SizedBox(height: 20),
-                        _buildCurrencySection(),
-                        const SizedBox(height: 20),
-                        _buildEditorSection(),
-                        const SizedBox(height: 20),
-                        _buildClientSection(),
-                        const SizedBox(height: 20),
-                        _buildGuestCountSection(),
-                        const SizedBox(height: 20),
-                        _buildEventTypeSection(),
-                        const SizedBox(height: 20),
-                        _buildServiceTypeSection(),
-                        const SizedBox(height: 20),
-                        _buildServicesSection(),
-                        const SizedBox(height: 20),
-                        _buildEmployeeSelectionSection(),
-                        const SizedBox(height: 20),
-                        _buildOfferPositionsSection(curr),
-                        const SizedBox(height: 20),
-                        OfferPricePreview(
-                          currency: curr,
-                          orderTotal: double.tryParse(_orderTotalCtrl.text.trim()) ?? 0,
-                          distanceKm: int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
-                          travelCostPerKm:
-                              double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
-                          barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
-                          discount: 0,
-                          positionsTotal: _offerPositions.fold<double>(
-                            0.0,
-                            (sum, position) => sum + position.total,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        _buildAdditionalInfoSection(),
-                        const SizedBox(height: 32),
-                      ],
-                    ),
-                  ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'de', label: Text('DE')),
+                  ButtonSegment(value: 'en', label: Text('EN')),
+                ],
+                selected: {_language},
+                onSelectionChanged: (v) => _onLanguageChanged(v.first),
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
                 ),
               ),
             ),
           ],
         ),
-      ),
-    ), // Scaffold
+        body: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // ── Sticky action bar ──────────────────────────────────────────
+              Material(
+                elevation: 4,
+                color: colorScheme.surface,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: colorScheme.primary.withValues(alpha: 0.3),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: OfferActionButtons(
+                        isGenerating: _isGenerating,
+                        onSaveOnly: _saveOnly,
+                        onPreview: _previewPdf,
+                        onGeneratePdf: _confirmGeneratePdf,
+                        onPrint: _printPdf,
+                        onShare: _shareOffer,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // ── Scrollable form ───────────────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildOrderInfoBanner(colorScheme, curr),
+                          const SizedBox(height: 20),
+                          _buildCurrencySection(),
+                          const SizedBox(height: 20),
+                          _buildEditorSection(),
+                          const SizedBox(height: 20),
+                          _buildClientSection(),
+                          const SizedBox(height: 20),
+                          _buildGuestCountSection(),
+                          const SizedBox(height: 20),
+                          _buildEventTypeSection(),
+                          const SizedBox(height: 20),
+                          _buildServiceTypeSection(),
+                          const SizedBox(height: 20),
+                          _buildServicesSection(),
+                          const SizedBox(height: 20),
+                          _buildEmployeeSelectionSection(),
+                          const SizedBox(height: 20),
+                          _buildOfferPositionsSection(curr),
+                          const SizedBox(height: 20),
+                          OfferPricePreview(
+                            currency: curr,
+                            orderTotal:
+                                double.tryParse(_orderTotalCtrl.text.trim()) ??
+                                0,
+                            distanceKm:
+                                int.tryParse(_distanceKmCtrl.text.trim()) ?? 0,
+                            travelCostPerKm:
+                                double.tryParse(
+                                  _travelCostPerKmCtrl.text.trim(),
+                                ) ??
+                                0.70,
+                            barCost:
+                                double.tryParse(_barCostCtrl.text.trim()) ?? 0,
+                            discount: 0,
+                            positionsTotal: _offerPositions.fold<double>(
+                              0.0,
+                              (sum, position) => sum + position.total,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _buildAdditionalInfoSection(),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ), // Scaffold
     ); // PopScope
   }
 
@@ -1384,14 +1396,18 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final existingCustom = _offerPositions
         .asMap()
         .entries
-        .where((entry) => entry.key > 0 && !autoNames.contains(entry.value.name))
+        .where(
+          (entry) => entry.key > 0 && !autoNames.contains(entry.value.name),
+        )
         .map((entry) => entry.value)
         .toList();
 
     setState(() {
       _offerPositions
         ..clear()
-        ..addAll(_buildGeneratedOfferPositions(customPositions: existingCustom));
+        ..addAll(
+          _buildGeneratedOfferPositions(customPositions: existingCustom),
+        );
       _syncLegacyServicePositionControllers();
     });
   }
@@ -1471,11 +1487,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                     children: [
                       titleRow,
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: actionButtons,
-                      ),
+                      Wrap(spacing: 6, runSpacing: 6, children: actionButtons),
                     ],
                   );
                 }
@@ -1500,7 +1512,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 color: Theme.of(context).colorScheme.outline,
               ),
             ),
-            if (_positionsError != null) _buildSectionErrorText(_positionsError!),
+            if (_positionsError != null)
+              _buildSectionErrorText(_positionsError!),
             if (_offerPositions.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1537,9 +1550,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                             children: [
                               Text(
                                 pos.name,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
+                                style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w600),
                               ),
                               Text(
@@ -1564,9 +1575,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                               ),
                               Text(
                                 isTbd ? 'tbd' : curr.format(pos.total),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
+                                style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                             ],
@@ -1719,7 +1728,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       rows.add(
         ExtraPosition(
           date: dateStr,
-          name: formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+          name: formatOrderAdditionalServiceLabel(
+            service,
+            isEnglish: isEn,
+            currencyCode: _currency.code,
+          ),
           quantity: 1,
           price: 0,
           remark: widget.order.remarks,
@@ -1831,8 +1844,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                           decoration: InputDecoration(
                             labelText:
                                 '${'offer.position_price'.tr()} (${_currency.code})',
-                            prefixIcon:
-                                const Icon(Icons.attach_money, size: 18),
+                            prefixIcon: const Icon(
+                              Icons.attach_money,
+                              size: 18,
+                            ),
                           ),
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) {
@@ -1933,7 +1948,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       autovalidateMode: _showValidationErrors
           ? AutovalidateMode.onUserInteraction
           : AutovalidateMode.disabled,
-      validator: validator ??
+      validator:
+          validator ??
           (required
               ? (v) => (v == null || v.trim().isEmpty)
                     ? 'offer.field_required'.tr()

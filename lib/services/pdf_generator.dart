@@ -122,17 +122,18 @@ class PdfGenerator {
   }
 
   /// Generate and download PDF from a saved order
-  static Future<void> generateFromSavedOrder(SavedOrder order) async {
-    final bytes = await generateBytesFromSavedOrder(order);
+  static Future<void> generateFromSavedOrder(SavedOrder order, {bool includePrices = true}) async {
+    final bytes = await generateBytesFromSavedOrder(order, includePrices: includePrices);
+    final suffix = includePrices ? '' : '_ohne_preise';
     await Printing.sharePdf(
       bytes: bytes,
       filename:
-          'einkaufsliste_${_sanitizeFilename(order.name)}_${_formatDate(order.date)}.pdf',
+          'einkaufsliste${suffix}_${_sanitizeFilename(order.name)}_${_formatDate(order.date)}.pdf',
     );
   }
 
   /// Generate PDF bytes from a saved order without downloading
-  static Future<Uint8List> generateBytesFromSavedOrder(SavedOrder order) async {
+  static Future<Uint8List> generateBytesFromSavedOrder(SavedOrder order, {bool includePrices = true}) async {
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
@@ -188,10 +189,11 @@ class PdfGenerator {
           // Summary section
           _buildSummarySection(
             items.length,
-            order.total,
+            includePrices ? order.total : 0,
             order.personCount,
             order.drinkerType,
             curr,
+            includePrices: includePrices,
           ),
           pw.SizedBox(height: 20),
 
@@ -199,7 +201,7 @@ class PdfGenerator {
           ...sortedLocations.expand(
             (location) => [
               _buildLocationHeader(location),
-              _buildSimpleItemsTable(groupedByLocation[location]!, curr),
+              _buildSimpleItemsTable(groupedByLocation[location]!, curr, includePrices: includePrices),
               pw.SizedBox(height: 16),
             ],
           ),
@@ -213,20 +215,25 @@ class PdfGenerator {
 
   static pw.Widget _buildSimpleItemsTable(
     List<_SimpleOrderItem> items,
-    Currency currency,
-  ) {
+    Currency currency, {
+    bool includePrices = true,
+  }) {
     // Sort items by name within each location
     final sortedItems = List<_SimpleOrderItem>.from(items)
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-      columnWidths: {
+      columnWidths: includePrices ? {
         0: const pw.FlexColumnWidth(3), // Name
         1: const pw.FlexColumnWidth(1.5), // Unit
         2: const pw.FlexColumnWidth(1), // Qty
         3: const pw.FlexColumnWidth(1.2), // Price
         4: const pw.FlexColumnWidth(1.2), // Total
+      } : {
+        0: const pw.FlexColumnWidth(4), // Name
+        1: const pw.FlexColumnWidth(2), // Unit  
+        2: const pw.FlexColumnWidth(1), // Qty
       },
       children: [
         // Header row
@@ -236,8 +243,10 @@ class PdfGenerator {
             _tableHeader('Artikel'),
             _tableHeader('Einheit'),
             _tableHeader('Menge'),
-            _tableHeader('Preis'),
-            _tableHeader('Summe'),
+            if (includePrices) ...[
+              _tableHeader('Preis'),
+              _tableHeader('Summe'),
+            ],
           ],
         ),
         // Data rows
@@ -250,15 +259,17 @@ class PdfGenerator {
                 orderItem.quantity.toString(),
                 align: pw.TextAlign.center,
               ),
-              _tableCell(
-                currency.format(orderItem.price),
-                align: pw.TextAlign.right,
-              ),
-              _tableCell(
-                currency.format(orderItem.total),
-                align: pw.TextAlign.right,
-                bold: true,
-              ),
+              if (includePrices) ...[
+                _tableCell(
+                  currency.format(orderItem.price),
+                  align: pw.TextAlign.right,
+                ),
+                _tableCell(
+                  currency.format(orderItem.total),
+                  align: pw.TextAlign.right,
+                  bold: true,
+                ),
+              ],
             ],
           ),
         ),
@@ -402,8 +413,9 @@ class PdfGenerator {
     double total,
     int personCount,
     String drinkerType,
-    Currency currency,
-  ) {
+    Currency currency, {
+    bool includePrices = true,
+  }) {
     final drinkerLabel = switch (drinkerType) {
       'light' => 'Wenig Trinker',
       'heavy' => 'Starke Trinker',
@@ -449,26 +461,27 @@ class PdfGenerator {
               ],
             ],
           ),
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              pw.Text(
-                'Gesamtsumme',
-                style: const pw.TextStyle(
-                  fontSize: 12,
-                  color: PdfColors.grey600,
+          if (includePrices)
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'Gesamtsumme',
+                  style: const pw.TextStyle(
+                    fontSize: 12,
+                    color: PdfColors.grey600,
+                  ),
                 ),
-              ),
-              pw.Text(
-                currency.format(total),
-                style: pw.TextStyle(
-                  fontSize: 20,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.green800,
+                pw.Text(
+                  currency.format(total),
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.green800,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

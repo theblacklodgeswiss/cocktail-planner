@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/admin_repository.dart';
+import '../../utils/currency.dart';
 
 /// Result type for the recipe edit dialog.
 typedef RecipeEditResult = ({String name, List<String> ingredients});
@@ -42,8 +43,9 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
   }
 
   Future<void> _loadMaterials() async {
-    final materials =
-        await adminRepository.getMaterialsWithIds(isFixedValue: false);
+    final materials = await adminRepository.getMaterialsWithIds(
+      isFixedValue: false,
+    );
     if (mounted) {
       setState(() {
         _availableMaterials = materials.map((m) => m.item.name).toList()
@@ -108,7 +110,7 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
         name: result,
         unit: '',
         price: 0,
-        currency: 'CHF',
+        currency: defaultCurrency.code,
         note: '',
         isFixedValue: false,
       );
@@ -116,8 +118,9 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
       if (success) {
         setState(() {
           _availableMaterials.add(result);
-          _availableMaterials
-              .sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          _availableMaterials.sort(
+            (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+          );
           _selectedIngredients.add(result);
         });
       }
@@ -155,13 +158,10 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
         ),
         FilledButton(
           onPressed: () {
-            Navigator.pop(
-              context,
-              (
-                name: _nameController.text,
-                ingredients: _selectedIngredients.toList(),
-              ),
-            );
+            Navigator.pop(context, (
+              name: _nameController.text,
+              ingredients: _selectedIngredients.toList(),
+            ));
           },
           child: const Text('Speichern'),
         ),
@@ -217,9 +217,7 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
       decoration: InputDecoration(
         hintText: 'Zutat suchen...',
         prefixIcon: const Icon(Icons.search),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         isDense: true,
       ),
       onChanged: (value) => setState(() => _searchQuery = value),

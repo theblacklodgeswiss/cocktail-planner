@@ -257,6 +257,62 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     }
   }
 
+  /// Download shopping list PDF directly without navigating to shopping list screen
+  Future<void> _downloadShoppingList() async {
+    if (!widget.order.hasShoppingList) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.no_shopping_list'.tr())),
+      );
+      return;
+    }
+
+    try {
+      await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('shopping.download_list'.tr())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fehler beim Erstellen der PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Download shopping list PDF without prices for employees
+  Future<void> _downloadShoppingListWithoutPrices() async {
+    if (!widget.order.hasShoppingList) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.no_shopping_list'.tr())),
+      );
+      return;
+    }
+
+    try {
+      await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('shopping.download_list_no_prices'.tr())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fehler beim Erstellen der PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   /// Generate Gemini material suggestions for the shopping list.
   /// 1. Load cocktail data and set up recipes in app state.
   /// 2. Show cocktail popularity dialog.
@@ -877,6 +933,21 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   ],
                   if (!widget.order.needsShoppingList) ...[
                     const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _downloadShoppingList,
+                      icon: const Icon(Icons.download),
+                      label: Text('shopping.download_list'.tr()),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _downloadShoppingListWithoutPrices(),
+                      icon: const Icon(Icons.download),
+                      label: Text('shopping.download_list_no_prices'.tr()),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     TextButton.icon(
                       onPressed: _editShoppingList,
                       icon: const Icon(Icons.edit),
@@ -921,6 +992,21 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     ),
                   ],
                   if (!widget.order.needsShoppingList) ...[
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: _downloadShoppingList,
+                      icon: const Icon(Icons.download),
+                      label: Text('shopping.download_list'.tr()),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _downloadShoppingListWithoutPrices(),
+                      icon: const Icon(Icons.download),
+                      label: Text('shopping.download_list_no_prices'.tr()),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.grey.shade700,
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: _editShoppingList,

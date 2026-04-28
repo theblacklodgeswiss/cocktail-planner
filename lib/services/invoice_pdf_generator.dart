@@ -534,12 +534,12 @@ class InvoicePdfGenerator {
       (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
     );
     final grandTotal = order.offerPositions.isNotEmpty
-      ? offerPositionsTotal - order.offerDiscount
-      : order.total +
-          shotsCost +
-          extraPositionsTotal +
-          extraHoursCost -
-          order.offerDiscount;
+        ? offerPositionsTotal - order.offerDiscount
+        : order.total +
+              shotsCost +
+              extraPositionsTotal +
+              extraHoursCost -
+              order.offerDiscount;
 
     pw.Widget headerCell(String text) => pw.Container(
       color: PdfColors.grey200,
@@ -624,30 +624,35 @@ class InvoicePdfGenerator {
             cell('1', align: pw.TextAlign.center),
             cell(curr.format(barServiceCost), align: pw.TextAlign.right),
             cell(curr.format(barServiceCost), align: pw.TextAlign.right),
-            cell((() {
-              final supervisorItems = order.items
-                  .where((item) => item['category'] == 'supervisor')
-                  .toList();
-              final supervisorSummary = supervisorItems
-                  .map(
-                    (item) =>
-                        "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
-                  )
-                  .join(', ');
-              final count = supervisorItems.fold<int>(
-                0,
-                (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
-              );
-              final finalCount = count > 0 ? count : 4;
-              final rolesText = supervisorSummary.isNotEmpty
-                  ? (isEn
-                        ? 'Incl. $supervisorSummary'
-                        : 'Inkl. $supervisorSummary')
-                  : (isEn ? '$finalCount Barkeepers' : '$finalCount Barkeeper');
-              return isEn
-                  ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
-                  : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
-            })()),
+            cell(
+              (() {
+                final supervisorItems = order.items
+                    .where((item) => item['category'] == 'supervisor')
+                    .toList();
+                final supervisorSummary = supervisorItems
+                    .map(
+                      (item) =>
+                          "${item['quantity']}x ${item['name'].replaceAll(' (5h)', '')}",
+                    )
+                    .join(', ');
+                final count = supervisorItems.fold<int>(
+                  0,
+                  (sum, item) =>
+                      sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+                );
+                final finalCount = count > 0 ? count : 4;
+                final rolesText = supervisorSummary.isNotEmpty
+                    ? (isEn
+                          ? 'Incl. $supervisorSummary'
+                          : 'Inkl. $supervisorSummary')
+                    : (isEn
+                          ? '$finalCount Barkeepers'
+                          : '$finalCount Barkeeper');
+                return isEn
+                    ? '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- served in 0.3L hard plastic cups'
+                    : '- $rolesText\n- Max. 5h $serviceLabel\n- Unlimitiert Cocktails (s. oben)\n- ausgeschenkt in 0.3L Hartplastikbechern';
+              })(),
+            ),
           ],
         ),
         if (order.shots.isNotEmpty && order.offerShotsCount > 0)
@@ -793,7 +798,11 @@ class InvoicePdfGenerator {
             children: [
               cell(dateStr),
               cell(
-                formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+                formatOrderAdditionalServiceLabel(
+                  service,
+                  isEnglish: isEn,
+                  currencyCode: order.currency,
+                ),
               ),
               cell('1', align: pw.TextAlign.center),
               cell(

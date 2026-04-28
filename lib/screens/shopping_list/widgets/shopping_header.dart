@@ -13,6 +13,7 @@ class ShoppingHeader extends StatelessWidget {
     required this.onExport,
     required this.totalCost,
     required this.currency,
+    this.onDownloadShoppingList,
   });
 
   final int currentPage;
@@ -21,6 +22,7 @@ class ShoppingHeader extends StatelessWidget {
   final VoidCallback onExport;
   final double totalCost;
   final Currency currency;
+  final VoidCallback? onDownloadShoppingList;
 
   bool get _isLastPage => currentPage == totalPages - 1;
 
@@ -128,6 +130,30 @@ class ShoppingHeader extends StatelessWidget {
             ),
           ),
           if (_isLastPage) ...[
+            // Shopping List Download Button (always visible when items selected)
+            if (hasSelectedItems && onDownloadShoppingList != null) ...[
+              if (isMobile)
+                IconButton.filled(
+                  onPressed: onDownloadShoppingList,
+                  icon: const Icon(Icons.download, size: 20),
+                  tooltip: 'shopping.download_list'.tr(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                  ),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: onDownloadShoppingList,
+                  icon: const Icon(Icons.download, size: 18),
+                  label: Text('shopping.download_list'.tr()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              const SizedBox(width: 8),
+            ],
+            // Save Order Button
             if (isMobile)
               // Mobile: Icon-only button
               IconButton.filled(

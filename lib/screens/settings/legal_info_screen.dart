@@ -197,7 +197,7 @@ class LegalInfoScreen extends StatelessWidget {
           title: '4. Preise und Zahlung',
           icon: Icons.payments_rounded,
           child: const _TextCard(
-            text: '• Alle Preise in Schweizer Franken (CHF).\n\n'
+            text: '• Alle Preise in der im Angebot bzw. Auftrag angegebenen Währung.\n\n'
                 '• Zahlung per Banküberweisung oder TWINT.\n\n'
                 '• Bei Zahlungsverzug: 5% p.a. Verzugszinsen.',
           ),

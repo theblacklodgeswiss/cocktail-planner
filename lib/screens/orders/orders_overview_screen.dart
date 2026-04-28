@@ -3,6 +3,7 @@ import 'package:cocktail_planer/data/order_repository.dart';
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
 import 'package:cocktail_planer/services/microsoft_graph_service.dart';
+import 'package:cocktail_planer/utils/currency.dart';
 import 'package:cocktail_planer/widgets/admin_protected_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -162,6 +163,44 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     });
 
     return filtered;
+  }
+
+  int? _getSortColumnIndex() {
+    switch (_sortOption) {
+      case OrderSortOption.status:
+        return 0;
+      case OrderSortOption.eventDate:
+        return 1;
+      case OrderSortOption.name:
+        return 2;
+      case OrderSortOption.guests:
+        return 3;
+      case OrderSortOption.createdAt:
+        return 4;
+    }
+  }
+
+  void _onSort(int columnIndex, bool ascending) {
+    setState(() {
+      _sortAscending = ascending;
+      switch (columnIndex) {
+        case 0:
+          _sortOption = OrderSortOption.status;
+          break;
+        case 1:
+          _sortOption = OrderSortOption.eventDate;
+          break;
+        case 2:
+          _sortOption = OrderSortOption.name;
+          break;
+        case 3:
+          _sortOption = OrderSortOption.guests;
+          break;
+        case 4:
+          _sortOption = OrderSortOption.createdAt;
+          break;
+      }
+    });
   }
 
   static const _excelFileName = 'Cocktail- & Barservice Anftragformular.xlsx';
@@ -458,6 +497,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                       showMonthSubtitle:
                           _searchQuery.isNotEmpty || _selectedMonth == null,
                       onOrderTap: (order) => showOrderDetails(context, order),
+                      sortColumn: _getSortColumnIndex(),
+                      sortAscending: _sortAscending,
+                      onSort: _onSort,
                     ),
                   ],
                 ),
@@ -593,6 +635,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
 
     const monthNames = [
+      'Alle',
       'Jan',
       'Feb',
       'Mär',
@@ -606,24 +649,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       'Nov',
       'Dez',
     ];
-
-    // Period dropdown items: all years + months only for the currently selected year
-    // This keeps the mobile dropdown much shorter.
-    final periodItems = <DropdownMenuItem<String>>[];
-    for (final year in years) {
-      periodItems.add(
-        DropdownMenuItem(value: '$year-0', child: Text('$year – Alle')),
-      );
-    }
-    for (int m = 1; m <= 12; m++) {
-      periodItems.add(
-        DropdownMenuItem(
-          value: '$_selectedYear-$m',
-          child: Text('$_selectedYear – ${monthNames[m - 1]}'),
-        ),
-      );
-    }
-    final periodValue = '$_selectedYear-${_selectedMonth ?? 0}';
 
     // Sort dropdown items
     const sortItems = [
@@ -655,26 +680,44 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
     return Row(
       children: [
-        // Zeitraum
+        // Jahr
         Expanded(
-          flex: 5,
-          child: DropdownButtonFormField<String>(
-            initialValue: periodValue,
+          flex: 2,
+          child: DropdownButtonFormField<int>(
+            initialValue: _selectedYear,
             decoration: inputDecoration.copyWith(
-              labelText: 'Zeitraum',
+              labelText: 'Jahr',
+              prefixIcon: const Icon(Icons.calendar_today, size: 18),
+            ),
+            isExpanded: true,
+            items: years.map((year) => DropdownMenuItem(
+              value: year,
+              child: Text('$year'),
+            )).toList(),
+            onChanged: (year) {
+              if (year != null) {
+                setState(() => _selectedYear = year);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        // Monat
+        Expanded(
+          flex: 2,
+          child: DropdownButtonFormField<int?>(
+            initialValue: _selectedMonth,
+            decoration: inputDecoration.copyWith(
+              labelText: 'Monat',
               prefixIcon: const Icon(Icons.calendar_month, size: 18),
             ),
             isExpanded: true,
-            items: periodItems,
-            onChanged: (val) {
-              if (val == null) return;
-              final parts = val.split('-');
-              final year = int.parse(parts[0]);
-              final month = int.parse(parts[1]);
-              setState(() {
-                _selectedYear = year;
-                _selectedMonth = month == 0 ? null : month;
-              });
+            items: List.generate(13, (index) => DropdownMenuItem(
+              value: index == 0 ? null : index,
+              child: Text(monthNames[index]),
+            )),
+            onChanged: (month) {
+              setState(() => _selectedMonth = month);
             },
           ),
         ),
@@ -853,7 +896,7 @@ class _SummaryCardsSection extends StatelessWidget {
       currencyCounts[order.currency] =
           (currencyCounts[order.currency] ?? 0) + 1;
     }
-    if (currencyCounts.isEmpty) return 'CHF';
+    if (currencyCounts.isEmpty) return defaultCurrency.code;
     return currencyCounts.entries
         .reduce((a, b) => a.value > b.value ? a : b)
         .key;

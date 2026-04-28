@@ -71,7 +71,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         _orderName = setup.orderName ?? '';
         _personCount = setup.personCount ?? 0;
         _drinkerType = setup.drinkerType ?? 'normal';
-        _currency = Currency.fromCode(setup.currency ?? 'CHF');
+        _currency = Currency.fromCode(setup.currency ?? defaultCurrency.code);
         _venueDistanceKm = setup.distanceKm ?? 0;
         _phone = setup.phoneNumber ?? '';
         _location = setup.address ?? '';
@@ -327,10 +327,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     // Calculate Hartplastikbecher quantities based on person count
     // Hartplastikbecher 0.3L: Minimum = personCount / 30 (rounded up)
     final becher03LQuantity = (_personCount / 30).ceil();
-    
+
     // Hartplastikbecher 0.2L: Only if cocktail & bar service, minimum = personCount * 2 / 40 (rounded up)
-    final becher02LQuantity = _serviceType == 'cocktail_barservice' 
-        ? ((_personCount * 2) / 40).ceil() 
+    final becher02LQuantity = _serviceType == 'cocktail_barservice'
+        ? ((_personCount * 2) / 40).ceil()
         : 0;
 
     // Default fixed items with their quantities
@@ -443,7 +443,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     // Use master data from initial setup dialog (no need for second dialog)
     final result = (
-      name: _orderName, 
+      name: _orderName,
       personCount: _personCount,
       drinkerType: _drinkerType,
       currency: _currency,
@@ -452,13 +452,55 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     await _saveAndGeneratePdf(selectedOrderItems, total, result);
   }
 
+  Future<void> _downloadShoppingList(
+    List<MaterialItem> allItems,
+    double total,
+    Map<String, int> aggregatedQuantities,
+    Set<String> aggregatedSelected,
+  ) async {
+    final selectedOrderItems = ShoppingListLogic.getSelectedOrderItems(
+      allItems,
+      aggregatedQuantities,
+      aggregatedSelected,
+    );
+
+    if (selectedOrderItems.isEmpty) {
+      _showError('shopping.no_selection'.tr());
+      return;
+    }
+
+    try {
+      // Generate and download the shopping list PDF directly
+      await PdfGenerator.generateAndDownload(
+        orderName: _orderName,
+        orderDate: _eventDate ?? DateTime.now(),
+        items: selectedOrderItems,
+        grandTotal: total,
+        currency: _currency.code,
+        personCount: _personCount,
+        drinkerType: _drinkerType,
+        serviceType: _serviceType,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('shopping.download_list'.tr())));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Fehler beim Erstellen der PDF: $e');
+      }
+    }
+  }
+
   Future<void> _saveAndGeneratePdf(
     List<OrderItem> selectedOrderItems,
     double total,
     ({String name, int personCount, String drinkerType, Currency currency})
     result,
   ) async {
-    final orderDate = DateTime.now();
+    final orderDate = _eventDate ?? DateTime.now();
     final cocktailNames = appState.selectedRecipes
         .where((r) => !r.isShot)
         .map((r) => r.name)
@@ -516,7 +558,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         cocktailPopularity: appState.cocktailPopularity,
         barDrinks: _barDrinks.isNotEmpty ? _barDrinks : null,
         alcoholPurchase: _alcoholPurchase.isNotEmpty ? _alcoholPurchase : null,
-        additionalServices: _additionalServices.isNotEmpty ? _additionalServices : null,
+        additionalServices: _additionalServices.isNotEmpty
+            ? _additionalServices
+            : null,
         remarks: _remarks.isNotEmpty ? _remarks : null,
       );
       if (saveSucceeded) {
@@ -641,7 +685,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               name: name,
               unit: unit,
               price: (savedItem['price'] as num?)?.toDouble() ?? 0,
-              currency: savedItem['currency'] as String? ?? 'CHF',
+              currency:
+                  savedItem['currency'] as String? ?? defaultCurrency.code,
               note: savedItem['note'] as String? ?? '',
               category: savedItem['category'] as String?,
             ),
@@ -659,7 +704,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     // Apply saved order items first (if editing)
     _applySavedOrderItems(data, cocktailNames);
-    
+
     // Apply Gemini material suggestions if available (once)
     // Use post-frame callback to avoid setState during build
     if (appState.hasMaterialSuggestions) {
@@ -667,17 +712,18 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         _applyMaterialSuggestions(data);
       });
     }
-    
+
     // Apply default fixed value quantities (once)
     _applyDefaultFixedValues(data);
 
     // Collect any ingredient items that have quantities set directly (base keys)
     // but are not yet in allIngredients — e.g. Gemini suggestions applied when
     // recipe ingredients could not be matched.
-    final existingIngredientKeys =
-        allIngredients.map(ShoppingListLogic.itemKey).toSet();
+    final existingIngredientKeys = allIngredients
+        .map(ShoppingListLogic.itemKey)
+        .toSet();
     final materialByItemKey = {
-      for (final m in data.materials) ShoppingListLogic.itemKey(m): m
+      for (final m in data.materials) ShoppingListLogic.itemKey(m): m,
     };
     final additionalIngredients = <MaterialItem>[];
     for (final entry in _quantities.entries) {
@@ -768,7 +814,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     // quantities AND no per-cocktail pages will be shown (complete fallback).
     final hasAdditionalIngredientsPage =
         additionalIngredients.isNotEmpty && cocktailNames.isEmpty;
-    final totalPages = cocktailNames.length +
+    final totalPages =
+        cocktailNames.length +
         (hasAdditionalIngredientsPage ? 1 : 0) +
         categoryPages.length +
         1;
@@ -790,6 +837,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               totalCost: total,
               currency: _currency,
               onExport: () => _export(
+                allItems,
+                total,
+                mergedQuantities,
+                aggregatedSelected,
+              ),
+              onDownloadShoppingList: () => _downloadShoppingList(
                 allItems,
                 total,
                 mergedQuantities,
@@ -993,10 +1046,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       decoration: BoxDecoration(
         color: primaryContainer,
         border: Border(
-          bottom: BorderSide(
-            color: primary.withValues(alpha: 0.3),
-            width: 1,
-          ),
+          bottom: BorderSide(color: primary.withValues(alpha: 0.3), width: 1),
         ),
       ),
       child: Material(
@@ -1011,11 +1061,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Icon(
-                  Icons.auto_awesome,
-                  color: primary,
-                  size: 20,
-                ),
+                Icon(Icons.auto_awesome, color: primary, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1024,7 +1070,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     children: [
                       Text(
                         'shopping.gemini_suggestions_applied'.tr(
-                          namedArgs: {'count': _geminiSuggestionsCount.toString()},
+                          namedArgs: {
+                            'count': _geminiSuggestionsCount.toString(),
+                          },
                         ),
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
@@ -1041,7 +1089,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                             color: onPrimaryContainer.withValues(alpha: 0.8),
                           ),
                           maxLines: _isBannerExpanded ? null : 2,
-                          overflow: _isBannerExpanded ? null : TextOverflow.ellipsis,
+                          overflow: _isBannerExpanded
+                              ? null
+                              : TextOverflow.ellipsis,
                         ),
                       ],
                     ],
@@ -1065,7 +1115,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   ),
                   style: TextButton.styleFrom(
                     foregroundColor: onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1075,7 +1128,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     setState(() => _showGeminiBanner = false);
                   },
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   tooltip: 'common.close'.tr(),
                 ),
               ],

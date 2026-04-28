@@ -527,8 +527,7 @@ class OfferPdfGenerator {
       if (offer.offerPositions.isNotEmpty)
         ...offer.offerPositions.map((pos) {
           final isTbd = pos.quantity == 0;
-          final posDate =
-              pos.date.isNotEmpty ? pos.date : dateStr;
+          final posDate = pos.date.isNotEmpty ? pos.date : dateStr;
           final qtyText = isTbd
               ? 'X'
               : (pos.quantity > 1 ? '${pos.quantity}' : '1');
@@ -763,7 +762,11 @@ class OfferPdfGenerator {
             children: [
               cell(dateStr),
               cell(
-                formatOrderAdditionalServiceLabel(service, isEnglish: isEn),
+                formatOrderAdditionalServiceLabel(
+                  service,
+                  isEnglish: isEn,
+                  currencyCode: offer.currency,
+                ),
               ),
               cell('1', align: pw.TextAlign.center),
               cell(

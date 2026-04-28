@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/material_item.dart';
+import '../../utils/currency.dart';
 
 /// Result from the material edit dialog.
 typedef MaterialEditResult = ({
@@ -26,7 +27,7 @@ Future<MaterialEditResult?> showMaterialEditDialog(
     text: item?.price.toString() ?? '0',
   );
   final currencyController = TextEditingController(
-    text: item?.currency ?? 'CHF',
+    text: item?.currency ?? defaultCurrency.code,
   );
   final noteController = TextEditingController(text: item?.note ?? '');
   bool activeValue = item?.active ?? true;
@@ -109,12 +110,15 @@ Future<MaterialEditResult?> showMaterialEditDialog(
                     value: null,
                     child: Text('Keine Kategorie'),
                   ),
-                  ...categories.map((cat) => DropdownMenuItem<String>(
-                        value: cat.value,
-                        child: Text(cat.label),
-                      )),
+                  ...categories.map(
+                    (cat) => DropdownMenuItem<String>(
+                      value: cat.value,
+                      child: Text(cat.label),
+                    ),
+                  ),
                 ],
-                onChanged: (value) => setDialogState(() => categoryValue = value),
+                onChanged: (value) =>
+                    setDialogState(() => categoryValue = value),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -151,19 +155,16 @@ Future<MaterialEditResult?> showMaterialEditDialog(
           FilledButton(
             onPressed: () {
               if (nameController.text.trim().isEmpty) return;
-              Navigator.pop(
-                ctx,
-                (
-                  name: nameController.text.trim(),
-                  unit: unitController.text.trim(),
-                  price: double.tryParse(priceController.text) ?? 0,
-                  currency: currencyController.text.trim(),
-                  note: noteController.text.trim(),
-                  active: activeValue,
-                  visible: visibleValue,
-                  category: categoryValue,
-                ),
-              );
+              Navigator.pop(ctx, (
+                name: nameController.text.trim(),
+                unit: unitController.text.trim(),
+                price: double.tryParse(priceController.text) ?? 0,
+                currency: currencyController.text.trim(),
+                note: noteController.text.trim(),
+                active: activeValue,
+                visible: visibleValue,
+                category: categoryValue,
+              ));
             },
             child: const Text('Speichern'),
           ),

@@ -14,6 +14,7 @@ import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
 import '../../services/gemini_service.dart';
+import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 
@@ -57,7 +58,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final TextEditingController _addressController = TextEditingController();
   int _personCount = 100;
   int _distanceKm = 10;
-  String _currency = 'CHF';
+  String _currency = defaultCurrency.code;
   String _drinkerType = 'normal';
   final List<Recipe> _selectedRecipes = [];
   final Map<String, double> _cocktailPopularity = {};
@@ -721,62 +722,62 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             padding: const EdgeInsets.all(24),
             child: _currentStep == _totalSteps - 1
                 ? _isAdminUser
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: _generateShoppingListWithGemini,
-                              icon: const Icon(Icons.auto_awesome),
-                              label: Text(
-                                'order_form.generate_with_gemini'.tr(),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _generateShoppingListWithGemini,
+                                icon: const Icon(Icons.auto_awesome),
+                                label: Text(
+                                  'order_form.generate_with_gemini'.tr(),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _nextStep,
-                              icon: const Icon(Icons.shopping_cart),
-                              label: Text('dashboard.generate_list'.tr()),
-                              iconAlignment: IconAlignment.end,
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      )
-                    : SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _nextStep,
-                          icon: const Icon(Icons.send_outlined),
-                          label: Text('order_form.submit_request'.tr()),
-                          iconAlignment: IconAlignment.end,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: _nextStep,
+                                icon: const Icon(Icons.shopping_cart),
+                                label: Text('dashboard.generate_list'.tr()),
+                                iconAlignment: IconAlignment.end,
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _nextStep,
+                            icon: const Icon(Icons.send_outlined),
+                            label: Text('order_form.submit_request'.tr()),
+                            iconAlignment: IconAlignment.end,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
-                        ),
-                      )
+                        )
                 : Row(
                     children: [
                       Expanded(
@@ -1694,11 +1695,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         ),
         const SizedBox(height: 12),
         SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'CHF', label: Text('CHF')),
-            ButtonSegment(value: 'EUR', label: Text('EUR')),
-            ButtonSegment(value: 'USD', label: Text('USD')),
-          ],
+          segments: Currency.values
+              .map(
+                (currency) => ButtonSegment<String>(
+                  value: currency.code,
+                  label: Text(currency.code),
+                ),
+              )
+              .toList(growable: false),
           selected: {_currency},
           onSelectionChanged: (values) {
             HapticFeedback.selectionClick();
@@ -2394,19 +2398,35 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             children: [
               _buildServiceCheckbox(
                 'booth_360',
-                'BlackLodge - 360 Booth (600 CHF)',
+                formatOrderAdditionalServiceLabel(
+                  'booth_360',
+                  isEnglish: context.locale.languageCode == 'en',
+                  currencyCode: _currency,
+                ),
               ),
               _buildServiceCheckbox(
                 'photobox_print',
-                'BlackLodge - PhotoBox inkl. 300 Druck (500 CHF)',
+                formatOrderAdditionalServiceLabel(
+                  'photobox_print',
+                  isEnglish: context.locale.languageCode == 'en',
+                  currencyCode: _currency,
+                ),
               ),
               _buildServiceCheckbox(
                 'photobox_qr',
-                'BlackLodge - PhotoBox Digital mit QR Code (300 CHF)',
+                formatOrderAdditionalServiceLabel(
+                  'photobox_qr',
+                  isEnglish: context.locale.languageCode == 'en',
+                  currencyCode: _currency,
+                ),
               ),
               _buildServiceCheckbox(
                 'bubble_waffles',
-                'BlackLodge - Bubble Waffles (250 CHF)',
+                formatOrderAdditionalServiceLabel(
+                  'bubble_waffles',
+                  isEnglish: context.locale.languageCode == 'en',
+                  currencyCode: _currency,
+                ),
               ),
               _buildServiceCheckbox(
                 'catering',
@@ -2423,11 +2443,19 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               ),
               _buildServiceCheckbox(
                 'security',
-                'Mudanca Security (min. 2 Securitys á 40 CHF/H)',
+                formatOrderAdditionalServiceLabel(
+                  'security',
+                  isEnglish: context.locale.languageCode == 'en',
+                  currencyCode: _currency,
+                ),
               ),
               _buildServiceCheckbox(
                 'entry_song',
-                'Entry Song mit Geige - Praveen (300 CHF)',
+                formatOrderAdditionalServiceLabel(
+                  'entry_song',
+                  isEnglish: context.locale.languageCode == 'en',
+                  currencyCode: _currency,
+                ),
               ),
               _buildServiceCheckbox('other_services', 'Sonstiges'),
             ],
@@ -2718,6 +2746,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final additionalServiceLabels = formatOrderAdditionalServiceLabels(
       _selectedAdditionalServices,
       isEnglish: isEnglish,
+      currencyCode: _currency,
     );
 
     return SingleChildScrollView(
@@ -2891,7 +2920,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(suggestion.errorMessage ?? 'orders.gemini_error'.tr()),
+              content: Text(
+                suggestion.errorMessage ?? 'orders.gemini_error'.tr(),
+              ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 6),
             ),
@@ -3019,7 +3050,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             label: Text(
               _currentStep < _totalSteps - 1
                   ? 'common.next'.tr()
-              : 'dashboard.generate_list'.tr(),
+                  : 'dashboard.generate_list'.tr(),
             ),
             iconAlignment: IconAlignment.end,
             style: FilledButton.styleFrom(

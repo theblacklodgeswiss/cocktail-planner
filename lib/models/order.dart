@@ -1,3 +1,5 @@
+import '../utils/currency.dart';
+
 /// Order status enum
 enum OrderStatus {
   quote('quote', 'Angebot'),
@@ -205,7 +207,7 @@ class SavedOrder {
       total: (data['total'] as num?)?.toDouble() ?? 0,
       personCount: (data['personCount'] as num?)?.toInt() ?? 0,
       drinkerType: data['drinkerType'] as String? ?? 'normal',
-      currency: data['currency'] as String? ?? 'CHF',
+      currency: data['currency'] as String? ?? defaultCurrency.code,
       status: OrderStatus.fromString(data['status'] as String?),
       createdBy: data['createdBy'] as String?,
       createdAt: parseDateTime(data['createdAt']),

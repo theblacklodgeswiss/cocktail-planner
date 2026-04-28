@@ -14,6 +14,9 @@ class OrdersTable extends StatelessWidget {
     required this.selectedYear,
     required this.onOrderTap,
     this.showMonthSubtitle = false,
+    this.sortColumn,
+    this.sortAscending = false,
+    this.onSort,
   });
 
   final List<SavedOrder> orders;
@@ -21,6 +24,9 @@ class OrdersTable extends StatelessWidget {
   final int selectedYear;
   final void Function(SavedOrder order) onOrderTap;
   final bool showMonthSubtitle;
+  final int? sortColumn;
+  final bool sortAscending;
+  final void Function(int column, bool ascending)? onSort;
 
   @override
   Widget build(BuildContext context) {
@@ -64,14 +70,38 @@ class OrdersTable extends StatelessWidget {
             colorScheme.primaryContainer.withValues(alpha: 0.4),
           ),
           showCheckboxColumn: false,
+          sortColumnIndex: sortColumn,
+          sortAscending: sortAscending,
           columns: [
-            DataColumn(label: Text('orders.status'.tr())),
-            DataColumn(label: Text('orders.date'.tr())),
-            const DataColumn(label: Text('Name')),
-            DataColumn(label: Text('orders.persons'.tr()), numeric: true),
-            DataColumn(label: Text('orders.articles'.tr()), numeric: true),
-            DataColumn(label: Text('orders.total'.tr()), numeric: true),
-            DataColumn(label: Text('orders.created_at'.tr())),
+            DataColumn(
+              label: Text('orders.status'.tr()),
+              onSort: onSort != null ? (columnIndex, ascending) => onSort!(0, ascending) : null,
+            ),
+            DataColumn(
+              label: Text('orders.date'.tr()),
+              onSort: onSort != null ? (columnIndex, ascending) => onSort!(1, ascending) : null,
+            ),
+            DataColumn(
+              label: const Text('Name'),
+              onSort: onSort != null ? (columnIndex, ascending) => onSort!(2, ascending) : null,
+            ),
+            DataColumn(
+              label: Text('orders.persons'.tr()),
+              numeric: true,
+              onSort: onSort != null ? (columnIndex, ascending) => onSort!(3, ascending) : null,
+            ),
+            DataColumn(
+              label: Text('orders.articles'.tr()),
+              numeric: true,
+            ),
+            DataColumn(
+              label: Text('orders.total'.tr()),
+              numeric: true,
+            ),
+            DataColumn(
+              label: Text('orders.created_at'.tr()),
+              onSort: onSort != null ? (columnIndex, ascending) => onSort!(4, ascending) : null,
+            ),
           ],
           rows: orders.map((order) => _buildDataRow(order)).toList(),
         ),
