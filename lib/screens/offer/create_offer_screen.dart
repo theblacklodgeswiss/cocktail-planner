@@ -1283,7 +1283,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           context: context,
           initialDate: _eventDate,
           firstDate: DateTime(2020),
-          lastDate: DateTime(2030),
+          lastDate: DateTime.now().add(const Duration(days: 1825)), // 5 Jahre voraus
         );
         if (picked != null) {
           setState(() => _eventDate = picked);

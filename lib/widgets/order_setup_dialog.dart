@@ -140,8 +140,8 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   final date = await showDatePicker(
                     context: context,
                     initialDate: _eventDate ?? DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                    firstDate: DateTime.now().subtract(const Duration(days: 7)),
+                    lastDate: DateTime.now().add(const Duration(days: 1825)), // 5 Jahre voraus
                   );
                   if (date != null) {
                     setState(() => _eventDate = date);

@@ -8,6 +8,8 @@
     "empty_subtitle": "Füge Cocktails hinzu um eine\nEinkaufsliste zu generieren",
     "add_cocktails": "Cocktails hinzufügen",
     "selected_count": "{} ausgewählt",
+    "incomplete_data": "Unvollständige Auftragsdaten erkannt. Bitte von vorne beginnen.",
+    "required_fields": "Bitte alle Pflichtfelder ausfüllen.",
     "cocktails_shots_count": "{cocktails} Cocktails • {shots} Shots",
     "edit_button": "Bearbeiten",
     "cocktails_section": "Cocktails",

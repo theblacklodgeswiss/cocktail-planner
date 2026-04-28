@@ -14,9 +14,6 @@ import 'order_detail_sheet.dart';
 import 'widgets/orders_table.dart';
 import 'widgets/summary_card.dart';
 
-/// Sorting options for orders.
-enum OrderSortOption { eventDate, createdAt, guests, name, status }
-
 /// Status filter for orders
 enum OrderStatusFilter { all, quotes, accepted, declined }
 
@@ -36,8 +33,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   bool _isSyncing = false;
   bool _firestoreReady = false;
   String _searchQuery = '';
-  OrderSortOption _sortOption = OrderSortOption.createdAt;
-  bool _sortAscending = false;
   OrderStatusFilter _statusFilter = OrderStatusFilter.all;
   List<SavedOrder> _latestOrders = [];
 
@@ -131,76 +126,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       }).toList();
     }
 
-    // Sort
-    filtered.sort((a, b) {
-      int comparison;
-      switch (_sortOption) {
-        case OrderSortOption.eventDate:
-          comparison = a.date.compareTo(b.date);
-          break;
-        case OrderSortOption.createdAt:
-          final aCreated = a.createdAt ?? a.date;
-          final bCreated = b.createdAt ?? b.date;
-          comparison = aCreated.compareTo(bCreated);
-          break;
-        case OrderSortOption.guests:
-          comparison = a.personCount.compareTo(b.personCount);
-          break;
-        case OrderSortOption.name:
-          comparison = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-          break;
-        case OrderSortOption.status:
-          // Sort order: accepted (0), quote (1), declined (2)
-          int statusOrder(OrderStatus s) => switch (s) {
-            OrderStatus.accepted => 0,
-            OrderStatus.quote => 1,
-            OrderStatus.declined => 2,
-          };
-          comparison = statusOrder(a.status).compareTo(statusOrder(b.status));
-          break;
-      }
-      return _sortAscending ? comparison : -comparison;
-    });
-
+    // Sortierung entfernt - Daten werden in natürlicher Reihenfolge angezeigt
     return filtered;
-  }
-
-  int? _getSortColumnIndex() {
-    switch (_sortOption) {
-      case OrderSortOption.status:
-        return 0;
-      case OrderSortOption.eventDate:
-        return 1;
-      case OrderSortOption.name:
-        return 2;
-      case OrderSortOption.guests:
-        return 3;
-      case OrderSortOption.createdAt:
-        return 4;
-    }
-  }
-
-  void _onSort(int columnIndex, bool ascending) {
-    setState(() {
-      _sortAscending = ascending;
-      switch (columnIndex) {
-        case 0:
-          _sortOption = OrderSortOption.status;
-          break;
-        case 1:
-          _sortOption = OrderSortOption.eventDate;
-          break;
-        case 2:
-          _sortOption = OrderSortOption.name;
-          break;
-        case 3:
-          _sortOption = OrderSortOption.guests;
-          break;
-        case 4:
-          _sortOption = OrderSortOption.createdAt;
-          break;
-      }
-    });
   }
 
   static const _excelFileName = 'Cocktail- & Barservice Anftragformular.xlsx';
@@ -497,9 +424,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                       showMonthSubtitle:
                           _searchQuery.isNotEmpty || _selectedMonth == null,
                       onOrderTap: (order) => showOrderDetails(context, order),
-                      sortColumn: _getSortColumnIndex(),
-                      sortAscending: _sortAscending,
-                      onSort: _onSort,
                     ),
                   ],
                 ),
@@ -627,7 +551,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
 
   Widget _buildFilterDropdowns(ColorScheme colorScheme) {
     final currentYear = DateTime.now().year;
-    const futureYears = 2;
+    const futureYears = 5; // 5 Jahre voraus für konsistente Langzeitplanung
     const pastYears = 4;
     final years = List.generate(
       futureYears + pastYears + 1,
@@ -650,14 +574,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       'Dez',
     ];
 
-    // Sort dropdown items
-    const sortItems = [
-      (OrderSortOption.createdAt, 'Erstellt am'),
-      (OrderSortOption.eventDate, 'Eventdatum'),
-      (OrderSortOption.guests, 'Gäste'),
-      (OrderSortOption.name, 'Name'),
-      (OrderSortOption.status, 'Status'),
-    ];
+    // Sort dropdown items entfernt - keine Sortierung mehr
 
     // Status filter items
     const statusItems = [
@@ -718,37 +635,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
             )),
             onChanged: (month) {
               setState(() => _selectedMonth = month);
-            },
-          ),
-        ),
-        const SizedBox(width: 10),
-        // Sortierung
-        Expanded(
-          flex: 4,
-          child: DropdownButtonFormField<OrderSortOption>(
-            initialValue: _sortOption,
-            decoration: inputDecoration.copyWith(
-              labelText: 'Sortierung',
-              prefixIcon: GestureDetector(
-                onTap: () => setState(() => _sortAscending = !_sortAscending),
-                child: Tooltip(
-                  message: _sortAscending ? 'Aufsteigend' : 'Absteigend',
-                  child: Icon(
-                    _sortAscending
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded,
-                    size: 18,
-                    color: colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
-            isExpanded: true,
-            items: sortItems
-                .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
-                .toList(),
-            onChanged: (val) {
-              if (val != null) setState(() => _sortOption = val);
             },
           ),
         ),

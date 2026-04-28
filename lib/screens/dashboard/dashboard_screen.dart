@@ -38,6 +38,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _initializeAndLoad();
   }
 
+  /// Validiert die OrderSetupData und setzt bei Problemen alles zurück
+  bool _validateOrderSetup() {
+    if (_orderSetup == null) return false;
+    
+    // Prüfe Pflichtfelder
+    if (_orderSetup!.orderName.trim().isEmpty ||
+        _orderSetup!.personCount <= 0 ||
+        _orderSetup!.currency.isEmpty ||
+        _orderSetup!.drinkerType.isEmpty ||
+        _orderSetup!.serviceType.isEmpty) {
+      // Bei unvollständigen Daten: alles zurücksetzen
+      setState(() => _orderSetup = null);
+      appState.setSelectedRecipes([]);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('dashboard.incomplete_data'.tr()),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _initializeAndLoad() async {
     if (!_initialized) {
       await authService.checkIsAdmin();
@@ -157,7 +184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _generateMaterialSuggestionsWithGemini(
     CocktailData cocktailData,
   ) async {
-    if (_orderSetup == null) return;
+    if (!_validateOrderSetup()) return;
     if (!geminiService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('orders.gemini_not_configured'.tr())),
@@ -395,10 +422,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   const SizedBox(height: 48),
                                   FilledButton.icon(
                                     onPressed: () async {
+                                      final messenger = ScaffoldMessenger.of(context);
+                                      
                                       final result = await context.push<OrderFormResult>(
                                         '/order-form?step=0',
                                       );
                                       if (result != null && mounted) {
+                                        // Validiere die empfangenen Daten
+                                        if (result.setupData.orderName.trim().isEmpty ||
+                                            result.setupData.personCount <= 0) {
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text('dashboard.required_fields'.tr()),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                          return;
+                                        }
+                                        
                                         setState(() => _orderSetup = result.setupData);
                                         appState.setSelectedRecipes(result.selectedRecipes);
                                         // Show cocktail popularity dialog after selection
@@ -447,7 +488,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 const SizedBox(width: 16),
                                 TextButton(
                                   onPressed: () {
-                                    if (_orderSetup != null) {
+                                    if (!_validateOrderSetup()) return;
+                                    if (appState.selectedRecipes.isNotEmpty) {
                                       context.push(
                                         '/shopping-list',
                                         extra: _orderSetup,
@@ -578,7 +620,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 12),
             TextButton(
               onPressed: () {
-                if (_orderSetup != null) {
+                if (_validateOrderSetup() && appState.selectedRecipes.isNotEmpty) {
                   context.push('/shopping-list', extra: _orderSetup);
                 }
               },
