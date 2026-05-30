@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/env_config.dart';
 import '../../data/order_repository.dart';
@@ -811,22 +815,26 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     setState(() => _isGenerating = true);
     try {
       final saved = await _saveOfferData();
+      if (!mounted) return;
       if (!saved) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('offer.save_failed'.tr())));
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('offer.save_failed'.tr())),
+        );
         return;
       }
       final offer = _buildOfferData();
       final pdfBytes = await OfferPdfGenerator.generatePdfBytes(offer);
-      if (mounted) {
-        await Printing.layoutPdf(
-          onLayout: (_) async => pdfBytes,
-          name:
-              'angebot_${offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}.pdf',
-        );
+      if (!mounted) return;
+
+      if (kIsWeb) {
+        // On iOS PWA, Printing.layoutPdf doesn't work — open as data URL instead
+        final base64 = base64Encode(pdfBytes);
+        final uri = Uri.parse('data:application/pdf;base64,$base64');
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        final name =
+            'angebot_${offer.orderName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}.pdf';
+        await Printing.layoutPdf(onLayout: (_) async => pdfBytes, name: name);
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
