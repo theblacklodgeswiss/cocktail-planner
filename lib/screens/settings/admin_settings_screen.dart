@@ -25,6 +25,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   bool _isImporting = false;
   bool _isEnrichingRecipes = false;
   String _enrichStatus = '';
+  bool _isGeneratingRecipe = false;
+  String _generateStatus = '';
+  final _recipeInputCtrl = TextEditingController();
   AppSettings _settings = const AppSettings();
 
   @override
@@ -37,6 +40,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   @override
   void dispose() {
     _distanceController.dispose();
+    _recipeInputCtrl.dispose();
     super.dispose();
   }
 
@@ -236,8 +240,101 @@ _isLoading = false;
         ),
         const SizedBox(height: 16),
         _buildRecipeEnrichCard(),
+        const SizedBox(height: 16),
+        _buildRecipeGenerateCard(),
       ],
     );
+  }
+
+  Widget _buildRecipeGenerateCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.add_circle_outline, color: Colors.blue),
+                const SizedBox(width: 8),
+                Text('Rezept mit AI erstellen', style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Gib einen Cocktailnamen oder eine Beschreibung ein — AI erstellt das Rezept mit Zutaten und Mengen.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _recipeInputCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'z.B. "Aperol Spritz" oder "fruchtiger Sommercocktail mit Maracuja"',
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _isGeneratingRecipe ? null : _generateRecipeWithAI(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _isGeneratingRecipe ? null : _generateRecipeWithAI,
+                  icon: _isGeneratingRecipe
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.auto_awesome, size: 18),
+                  label: Text(_isGeneratingRecipe ? '...' : 'Erstellen'),
+                ),
+              ],
+            ),
+            if (_generateStatus.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                _generateStatus,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _generateStatus.contains('Fehler') ? Colors.red : Colors.green.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _generateRecipeWithAI() async {
+    final input = _recipeInputCtrl.text.trim();
+    if (input.isEmpty) return;
+    setState(() { _isGeneratingRecipe = true; _generateStatus = 'AI generiert Rezept...'; });
+    try {
+      final materials = await adminRepository.getMaterialsWithIds(isFixedValue: false);
+      final ingredientNames = materials.map((m) => m.item.name).toList();
+
+      final result = await claudeService.generateRecipeFromDescription(input, ingredientNames);
+      if (result == null) {
+        setState(() => _generateStatus = 'Fehler: Keine Antwort von AI');
+        return;
+      }
+
+      setState(() => _generateStatus = 'Speichere "${result.name}"...');
+      final success = await adminRepository.addRecipe(name: result.name, ingredients: result.ingredients);
+      if (success && result.amounts.isNotEmpty) {
+        final recipes = await adminRepository.getRecipesWithIds();
+        final created = recipes.where((r) => r.item.name == result.name).firstOrNull;
+        if (created != null) {
+          await adminRepository.updateRecipeAmounts(docId: created.id, amounts: result.amounts);
+        }
+      }
+      _recipeInputCtrl.clear();
+      setState(() => _generateStatus = success ? '"${result.name}" mit ${result.ingredients.length} Zutaten hinzugefügt ✓' : 'Fehler beim Speichern');
+    } catch (e) {
+      setState(() => _generateStatus = 'Fehler: $e');
+    } finally {
+      setState(() => _isGeneratingRecipe = false);
+    }
   }
 
   Widget _buildRecipeEnrichCard() {

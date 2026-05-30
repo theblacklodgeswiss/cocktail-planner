@@ -193,6 +193,51 @@ class ClaudeService {
 
 
 
+  /// Generate a recipe (ingredients + amounts) from a name or description.
+  /// Returns null on failure.
+  Future<({String name, List<String> ingredients, Map<String, String> amounts})?> generateRecipeFromDescription(
+    String input,
+    List<String> availableIngredients,
+  ) async {
+    final ingredientList = availableIngredients.take(80).join(', ');
+
+    final prompt = '''
+Du bist ein erfahrener Barkeeper. Erstelle ein Cocktail-Rezept basierend auf dieser Eingabe: "$input"
+
+VERFÜGBARE ZUTATEN (bevorzuge diese):
+$ingredientList
+
+Antworte NUR mit JSON:
+{
+  "name": "Exakter Rezeptname",
+  "ingredients": ["Zutat1", "Zutat2"],
+  "amounts": {"Zutat1": "50ml", "Zutat2": "30ml"}
+}
+
+Regeln:
+- Verwende wenn möglich Zutaten aus der verfügbaren Liste (exakte Namen)
+- Falls eine Zutat fehlt, kannst du sie trotzdem hinzufügen
+- Mengen in ml für Flüssigkeiten, Stück/Scheiben für Früchte/Deko
+- Kein Markdown, nur reines JSON
+''';
+
+    try {
+      final response = await _sendMessage(prompt, maxTokens: 512, operationName: 'generateRecipe');
+      if (response == null) return null;
+
+      final cleaned = response.replaceAll('```json', '').replaceAll('```', '').trim();
+      final parsed = jsonDecode(cleaned) as Map<String, dynamic>;
+      final name = parsed['name'] as String;
+      final ingredients = (parsed['ingredients'] as List).cast<String>();
+      final amounts = (parsed['amounts'] as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, v.toString()));
+      return (name: name, ingredients: ingredients, amounts: amounts);
+    } catch (e) {
+      debugPrint('generateRecipe failed: $e');
+      return null;
+    }
+  }
+
   /// For each recipe, ask Claude for standard bartender amounts per ingredient.
   /// Processes in batches of 5 to avoid token limits.
   Future<Map<String, Map<String, String>>> enrichRecipeAmounts(
