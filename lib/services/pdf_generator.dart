@@ -81,34 +81,17 @@ class PdfGenerator {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        header: (context) => _buildHeader(
-          orderName,
-          orderDate,
-          personCount,
-          drinkerType,
-          serviceType,
-        ),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        header: (context) => _buildHeader(orderName, orderDate, personCount, drinkerType, serviceType),
         footer: (context) => _buildFooter(context),
         build: (context) => [
-          // Summary section
-          _buildSummarySection(
-            items.length,
-            grandTotal,
-            personCount,
-            drinkerType,
-            curr,
-          ),
-          pw.SizedBox(height: 20),
-
-          // Items grouped by location
-          ...sortedLocations.expand(
-            (location) => [
-              _buildLocationHeader(location),
-              _buildItemsTable(groupedByLocation[location]!, curr),
-              pw.SizedBox(height: 16),
-            ],
-          ),
+          _buildSummarySection(items.length, grandTotal, personCount, drinkerType, curr),
+          pw.SizedBox(height: 8),
+          ...sortedLocations.expand((location) => [
+            _buildLocationHeader(location),
+            _buildItemsTable(groupedByLocation[location]!, curr),
+            pw.SizedBox(height: 6),
+          ]),
         ],
       ),
     );
@@ -176,35 +159,17 @@ class PdfGenerator {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        header: (context) => _buildHeader(
-          order.name,
-          order.date,
-          order.personCount,
-          order.drinkerType,
-          order.serviceType,
-        ),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        header: (context) => _buildHeader(order.name, order.date, order.personCount, order.drinkerType, order.serviceType),
         footer: (context) => _buildFooter(context),
         build: (context) => [
-          // Summary section
-          _buildSummarySection(
-            items.length,
-            includePrices ? order.total : 0,
-            order.personCount,
-            order.drinkerType,
-            curr,
-            includePrices: includePrices,
-          ),
-          pw.SizedBox(height: 20),
-
-          // Items grouped by location
-          ...sortedLocations.expand(
-            (location) => [
-              _buildLocationHeader(location),
-              _buildSimpleItemsTable(groupedByLocation[location]!, curr, includePrices: includePrices),
-              pw.SizedBox(height: 16),
-            ],
-          ),
+          _buildSummarySection(items.length, includePrices ? order.total : 0, order.personCount, order.drinkerType, curr, includePrices: includePrices),
+          pw.SizedBox(height: 8),
+          ...sortedLocations.expand((location) => [
+            _buildLocationHeader(location),
+            _buildSimpleItemsTable(groupedByLocation[location]!, curr, includePrices: includePrices),
+            pw.SizedBox(height: 6),
+          ]),
         ],
       ),
     );
@@ -226,16 +191,19 @@ class PdfGenerator {
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       columnWidths: includePrices ? {
         0: const pw.FlexColumnWidth(3), // Name
-        1: const pw.FlexColumnWidth(1.5), // Unit
-        2: const pw.FlexColumnWidth(1), // Qty
-        3: const pw.FlexColumnWidth(1.2), // Price
-        4: const pw.FlexColumnWidth(1.2), // Total
+        1: const pw.FlexColumnWidth(1.2), // Unit
+        2: const pw.FlexColumnWidth(0.8), // Qty
+        3: const pw.FlexColumnWidth(1), // Price
+        4: const pw.FlexColumnWidth(1), // Total
+        5: const pw.FlexColumnWidth(1.2), // Vorh.
+        6: const pw.FlexColumnWidth(1.2), // Zu kaufen
+        7: const pw.FixedColumnWidth(24), // Checkbox
       } : {
         0: const pw.FlexColumnWidth(3.5), // Name
         1: const pw.FlexColumnWidth(1.5), // Unit
         2: const pw.FlexColumnWidth(1), // Qty
-        3: const pw.FlexColumnWidth(1.5), // Schon vorhanden
-        4: const pw.FlexColumnWidth(1.5), // Noch zu kaufen
+        3: const pw.FlexColumnWidth(1.5), // Vorh.
+        4: const pw.FlexColumnWidth(1.5), // Zu kaufen
         5: const pw.FixedColumnWidth(28), // Checkbox
       },
       children: [
@@ -249,11 +217,10 @@ class PdfGenerator {
             if (includePrices) ...[
               _tableHeader('Preis'),
               _tableHeader('Summe'),
-            ] else ...[
-              _tableHeader('Vorh.'),
-              _tableHeader('Zu kaufen'),
-              _tableHeader('✓'),
             ],
+            _tableHeader('Vorh.'),
+            _tableHeader('Zu kaufen'),
+            _tableHeader('✓'),
           ],
         ),
         // Data rows
@@ -262,25 +229,14 @@ class PdfGenerator {
             children: [
               _tableCell(orderItem.name),
               _tableCell(orderItem.unit),
-              _tableCell(
-                orderItem.quantity.toString(),
-                align: pw.TextAlign.center,
-              ),
+              _tableCell(orderItem.quantity.toString(), align: pw.TextAlign.center),
               if (includePrices) ...[
-                _tableCell(
-                  currency.format(orderItem.price),
-                  align: pw.TextAlign.right,
-                ),
-                _tableCell(
-                  currency.format(orderItem.total),
-                  align: pw.TextAlign.right,
-                  bold: true,
-                ),
-              ] else ...[
-                _tableCell(''),
-                _tableCell(''),
-                _checkboxCell(),
+                _tableCell(currency.format(orderItem.price), align: pw.TextAlign.right),
+                _tableCell(currency.format(orderItem.total), align: pw.TextAlign.right, bold: true),
               ],
+              _tableCell(''),
+              _tableCell(''),
+              _checkboxCell(),
             ],
           ),
         ),
@@ -294,17 +250,14 @@ class PdfGenerator {
             if (includePrices) ...[
               _tableCell(''),
               _tableCell(
-                currency.format(
-                  sortedItems.fold<double>(0, (sum, i) => sum + i.total),
-                ),
+                currency.format(sortedItems.fold<double>(0, (sum, i) => sum + i.total)),
                 align: pw.TextAlign.right,
                 bold: true,
               ),
-            ] else ...[
-              _tableCell(''),
-              _tableCell(''),
-              _tableCell(''),
             ],
+            _tableCell(''),
+            _tableCell(''),
+            _tableCell(''),
           ],
         ),
       ],
@@ -335,11 +288,9 @@ class PdfGenerator {
     };
 
     return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 20),
+      padding: const pw.EdgeInsets.only(bottom: 8),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          bottom: pw.BorderSide(color: PdfColors.grey300, width: 1),
-        ),
+        border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -348,52 +299,20 @@ class PdfGenerator {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                'Einkaufsliste',
-                style: pw.TextStyle(
-                  fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                orderName,
-                style: const pw.TextStyle(
-                  fontSize: 16,
-                  color: PdfColors.grey700,
-                ),
-              ),
-              if (personCount > 0) ...[
-                pw.SizedBox(height: 4),
+              pw.Text('Einkaufsliste', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Text(orderName, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              if (personCount > 0)
                 pw.Text(
                   '$personCount Personen • $drinkerLabel${serviceLabel.isNotEmpty ? ' • $serviceLabel' : ''}',
-                  style: const pw.TextStyle(
-                    fontSize: 12,
-                    color: PdfColors.grey600,
-                  ),
+                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                 ),
-              ],
             ],
           ),
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text(
-                'BlackLodge',
-                style: pw.TextStyle(
-                  fontSize: 14,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.green800,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                _formatDateFull(date),
-                style: const pw.TextStyle(
-                  fontSize: 12,
-                  color: PdfColors.grey600,
-                ),
-              ),
+              pw.Text('BlackLodge', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
+              pw.Text(_formatDateFull(date), style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
             ],
           ),
         ],
@@ -440,64 +359,22 @@ class PdfGenerator {
     };
 
     return pw.Container(
-      padding: const pw.EdgeInsets.all(16),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.green50,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: pw.BoxDecoration(color: PdfColors.green50, borderRadius: pw.BorderRadius.circular(4)),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                'Zusammenfassung',
-                style: pw.TextStyle(
-                  fontSize: 14,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                '$itemCount Artikel ausgewählt',
-                style: const pw.TextStyle(
-                  fontSize: 12,
-                  color: PdfColors.grey700,
-                ),
-              ),
-              if (personCount > 0) ...[
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  '$personCount Personen • $drinkerLabel',
-                  style: const pw.TextStyle(
-                    fontSize: 12,
-                    color: PdfColors.grey700,
-                  ),
-                ),
-              ],
+              pw.Text('$itemCount Artikel${personCount > 0 ? ' • $personCount Personen • $drinkerLabel' : ''}',
+                  style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
             ],
           ),
           if (includePrices)
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pw.Text(
-                  'Gesamtsumme',
-                  style: const pw.TextStyle(
-                    fontSize: 12,
-                    color: PdfColors.grey600,
-                  ),
-                ),
-                pw.Text(
-                  currency.format(total),
-                  style: pw.TextStyle(
-                    fontSize: 20,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.green800,
-                  ),
-                ),
-              ],
+            pw.Text(
+              'Gesamt: ${currency.format(total)}',
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.green800),
             ),
         ],
       ),
@@ -506,27 +383,21 @@ class PdfGenerator {
 
   static pw.Widget _buildLocationHeader(String location) {
     return pw.Container(
-      margin: const pw.EdgeInsets.only(bottom: 8),
-      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const pw.EdgeInsets.only(bottom: 3),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: pw.BoxDecoration(
         color: PdfColors.grey200,
-        borderRadius: pw.BorderRadius.circular(4),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
       child: pw.Row(
         children: [
           pw.Container(
-            width: 8,
-            height: 8,
-            decoration: const pw.BoxDecoration(
-              color: PdfColors.green600,
-              shape: pw.BoxShape.circle,
-            ),
+            width: 6,
+            height: 6,
+            decoration: const pw.BoxDecoration(color: PdfColors.green600, shape: pw.BoxShape.circle),
           ),
-          pw.SizedBox(width: 8),
-          pw.Text(
-            location,
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-          ),
+          pw.SizedBox(width: 6),
+          pw.Text(location, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
         ],
       ),
     );
@@ -603,13 +474,13 @@ class PdfGenerator {
 
   static pw.Widget _checkboxCell() {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: pw.Container(
-        width: 14,
-        height: 14,
+        width: 10,
+        height: 10,
         decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey600, width: 1),
-          borderRadius: pw.BorderRadius.circular(2),
+          border: pw.Border.all(color: PdfColors.grey600, width: 0.8),
+          borderRadius: pw.BorderRadius.circular(1.5),
         ),
       ),
     );
@@ -617,10 +488,10 @@ class PdfGenerator {
 
   static pw.Widget _tableHeader(String text) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       child: pw.Text(
         text,
-        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
       ),
     );
   }
@@ -631,11 +502,11 @@ class PdfGenerator {
     bool bold = false,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: pw.Text(
         text,
         style: pw.TextStyle(
-          fontSize: 10,
+          fontSize: 7.5,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         ),
         textAlign: align,

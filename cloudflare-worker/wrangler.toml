@@ -1,0 +1,13 @@
+name = "cocktail-planer-claude-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+account_id = "838dc19f176d9093ce16c90daf8b3783"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true

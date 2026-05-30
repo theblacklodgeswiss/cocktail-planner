@@ -92,7 +92,7 @@ jobs:
         run: flutter test
 
       - name: Build web
-        run: flutter build web --release --pwa-strategy=offline-first --dart-define=ANTHROPIC_API_KEY=${{ secrets.DEV_ANTHROPIC_API_KEY }} --dart-define=FLAVOR=dev
+        run: flutter build web --release --pwa-strategy=offline-first --dart-define=CLAUDE_PROXY_URL=https://cocktail-planer-claude-proxy.the-blacklodge.workers.dev --dart-define=FLAVOR=dev
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

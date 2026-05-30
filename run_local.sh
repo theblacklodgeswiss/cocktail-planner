@@ -5,4 +5,4 @@ set +a
 
 flutter run -d chrome \
   --dart-define=FLAVOR=dev \
-  --dart-define=ANTHROPIC_API_KEY=${anthropic_api_key}
+  --dart-define=CLAUDE_PROXY_URL=https://cocktail-planer-claude-proxy.the-blacklodge.workers.dev

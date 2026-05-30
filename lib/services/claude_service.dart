@@ -92,26 +92,27 @@ class ClaudeService {
   // Set via --dart-define=CLAUDE_PROXY_URL=https://...
   // Falls back to Firebase Cloud Function URL per flavor.
   static const String _proxyUrl = String.fromEnvironment('CLAUDE_PROXY_URL', defaultValue: '');
-  static const String _flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+  // Cloudflare Worker proxy — always available, API key lives server-side
+  static const String _cloudflareProxy = 'https://cocktail-planer-claude-proxy.the-blacklodge.workers.dev';
+
   static String get _apiBase {
     if (_proxyUrl.isNotEmpty) return _proxyUrl;
-    // Firebase Cloud Function (requires Blaze plan)
-    const devProject = 'cocktail-planer-dev';
-    const prodProject = 'cocktail-planner-bl';
-    final project = _flavor == 'prod' ? prodProject : devProject;
-    return 'https://us-central1-$project.cloudfunctions.net/claudeProxy';
+    return _cloudflareProxy;
   }
 
-  static bool get hasEnvKey => _envApiKey.isNotEmpty;
+  static bool get hasEnvKey => true; // proxy is always configured
 
   String? _apiKey;
 
-  bool get isConfigured => _apiKey != null && _apiKey!.isNotEmpty;
+  // Always configured — requests go through the Cloudflare proxy
+  bool get isConfigured => true;
 
   void _initFromEnvironment() {
     if (_envApiKey.isNotEmpty) {
       setApiKey(_envApiKey);
       debugPrint('Claude API key loaded from environment');
+    } else if (_proxyUrl.isNotEmpty) {
+      debugPrint('Claude using proxy: $_proxyUrl');
     }
   }
 
@@ -140,14 +141,14 @@ class ClaudeService {
         : [{'type': 'text', 'text': prompt}];
 
     int attempt = 0;
-    Duration delay = const Duration(seconds: 2);
+    Duration delay = const Duration(seconds: 1);
 
     while (attempt < maxRetries) {
       try {
         final response = await http.post(
           Uri.parse(_apiBase),
           headers: {
-            'x-api-key': _apiKey!,
+            if (_apiKey != null && _apiKey!.isNotEmpty) 'x-api-key': _apiKey!,
             'anthropic-version': '2023-06-01',
             'content-type': 'application/json',
           },
@@ -191,60 +192,57 @@ class ClaudeService {
   }
 
   Future<List<Map<String, dynamic>>> _getTrainingData() async {
-    final trainingData = <Map<String, dynamic>>[];
+    final results = await Future.wait([
+      _fetchOrderTrainingData(),
+      _fetchHistoricalTrainingData(),
+    ]);
+    return [...results[0], ...results[1]];
+  }
 
+  Future<List<Map<String, dynamic>>> _fetchOrderTrainingData() async {
     try {
-      final ordersStream = orderRepository.watchOrders();
-      final orders = await ordersStream.first;
-
-      for (final order in orders) {
-        if (order.items.isEmpty || order.total <= 0) continue;
-        trainingData.add({
-          'source': 'firestore_order',
-          'guests': order.personCount,
-          'guestRange': order.guestCountRange,
-          'cocktails': order.cocktails,
-          'shots': order.shots,
-          'requestedCocktails': order.requestedCocktails,
-          'drinkerType': order.drinkerType,
-          'eventType': order.eventType,
-          'items': order.items
-              .map((item) => {
-                    'name': item['name'],
-                    'unit': item['unit'],
-                    'quantity': item['quantity'],
-                    'total': item['total'],
-                  })
-              .toList(),
-          'total': order.total,
-          'distanceKm': order.distanceKm,
-        });
-      }
+      final orders = await orderRepository.watchOrders().first;
+      final relevant = orders.where((o) => o.items.isNotEmpty && o.total > 0).toList();
+      // Keep all for now — caller will filter to most relevant
+      final limited = relevant;
+      return limited.map((order) => {
+        'source': 'firestore_order',
+        'guests': order.personCount,
+        'guestRange': order.guestCountRange,
+        'cocktails': order.cocktails,
+        'cocktailCount': order.cocktails.length,
+        'drinkerType': order.drinkerType,
+        'items': order.items.map((item) => {
+          'name': item['name'],
+          'unit': item['unit'],
+          'quantity': item['quantity'],
+        }).toList(),
+      }).toList();
     } catch (e) {
       debugPrint('Failed to get order training data: $e');
+      return [];
     }
+  }
 
+  Future<List<Map<String, dynamic>>> _fetchHistoricalTrainingData() async {
     try {
-      final historicalDocs = await FirebaseFirestore.instance
+      final docs = await FirebaseFirestore.instance
           .collection('historical_shopping_lists')
+          .limit(10)
           .get();
-      for (final doc in historicalDocs.docs) {
+      return docs.docs.map((doc) {
         final data = doc.data();
-        trainingData.add({
+        return {
           'source': 'historical_import',
           'guests': data['guestCount'],
-          'eventName': data['eventName'],
           'cocktails': data['cocktails'],
           'items': data['items'],
-          'total': data['totalPrice'],
-          'eventDate': data['eventDate'],
-        });
-      }
+        };
+      }).toList();
     } catch (e) {
       debugPrint('Failed to get historical training data: $e');
+      return [];
     }
-
-    return trainingData;
   }
 
   Future<AiMaterialSuggestion> generateMaterialSuggestions({
@@ -265,7 +263,32 @@ class ClaudeService {
     }
 
     try {
-      final trainingData = await _getTrainingData();
+      final rawOrders = await _fetchOrderTrainingData();
+      final materialNames = availableMaterials.map((m) => (m['name'] as String).toLowerCase()).toSet();
+
+      // Filter items to only ingredients (no service items)
+      final withIngredients = rawOrders.map((order) {
+        final filteredItems = (order['items'] as List).where((item) {
+          final name = (item['name'] as String).toLowerCase();
+          return materialNames.any((m) => name.contains(m) || m.contains(name));
+        }).toList();
+        return {...order, 'items': filteredItems};
+      }).where((o) => (o['items'] as List).isNotEmpty).toList();
+
+      // Pick 5 most relevant: prefer same cocktails, then similar guest count
+      final currentCocktailSet = requestedCocktails.map((c) => c.toLowerCase()).toSet();
+      withIngredients.sort((a, b) {
+        final aCocktails = (a['cocktails'] as List).map((c) => c.toString().toLowerCase()).toSet();
+        final bCocktails = (b['cocktails'] as List).map((c) => c.toString().toLowerCase()).toSet();
+        final aOverlap = aCocktails.intersection(currentCocktailSet).length;
+        final bOverlap = bCocktails.intersection(currentCocktailSet).length;
+        if (aOverlap != bOverlap) return bOverlap.compareTo(aOverlap);
+        final aDiff = ((a['guests'] as int) - guestCount).abs();
+        final bDiff = ((b['guests'] as int) - guestCount).abs();
+        return aDiff.compareTo(bDiff);
+      });
+      final orderTraining = withIngredients.take(5).toList();
+
       final prompt = _buildMaterialPrompt(
         guestCount: guestCount,
         guestRange: guestRange,
@@ -274,26 +297,27 @@ class ClaudeService {
         drinkerType: drinkerType,
         availableMaterials: availableMaterials,
         recipeIngredients: recipeIngredients,
-        trainingData: trainingData,
         cocktailPopularity: cocktailPopularity ?? {},
+        orderTraining: orderTraining,
       );
 
-      final responseText = await _sendMessage(prompt, operationName: 'material suggestions');
+      debugPrint('=== CLAUDE PROMPT ===\n$prompt\n=== END PROMPT ===');
+      final responseText = await _sendMessage(prompt, maxTokens: 4096, operationName: 'material suggestions');
 
       if (responseText == null || responseText.isEmpty) {
         return AiMaterialSuggestion.error(
           message: 'Keine Antwort von Claude erhalten.',
           type: AiErrorType.networkError,
-          trainingDataCount: trainingData.length,
+          trainingDataCount: 0,
         );
       }
 
-      final result = _parseMaterialResponse(responseText, trainingData.length);
+      final result = _parseMaterialResponse(responseText, 0);
       if (result == null) {
         return AiMaterialSuggestion.error(
           message: 'Antwort von Claude konnte nicht verarbeitet werden.',
           type: AiErrorType.invalidResponse,
-          trainingDataCount: trainingData.length,
+          trainingDataCount: 0,
         );
       }
       return result;
@@ -331,14 +355,18 @@ class ClaudeService {
     required String drinkerType,
     required List<Map<String, dynamic>> availableMaterials,
     required List<Map<String, dynamic>> recipeIngredients,
-    required List<Map<String, dynamic>> trainingData,
     required Map<String, double> cocktailPopularity,
+    required List<Map<String, dynamic>> orderTraining,
   }) {
-    final materialsJson = jsonEncode(availableMaterials);
-    final ingredientsJson = jsonEncode(recipeIngredients);
-    final trainingDataJson = trainingData.isNotEmpty
-        ? jsonEncode(trainingData)
-        : 'Keine vorherigen Bestellungen verfügbar';
+    // Strip unused fields to keep prompt small and fast
+    final materialsJson = jsonEncode(availableMaterials.map((m) => {
+      'name': m['name'],
+      'unit': m['unit'],
+    }).toList());
+    final ingredientsJson = jsonEncode(recipeIngredients.map((r) => {
+      'cocktail': r['cocktail'],
+      'ingredients': r['ingredients'],
+    }).toList());
 
     final popularityInfo = cocktailPopularity.isNotEmpty
         ? cocktailPopularity.entries
@@ -367,10 +395,7 @@ $ingredientsJson
 VERFÜGBARE MATERIALIEN (verwende NUR diese Namen und Einheiten exakt):
 $materialsJson
 
-HISTORISCHE DATEN VON FRÜHEREN EVENTS (orientiere dich an diesen echten Bestellmengen!):
-$trainingDataJson
-
-KRITISCHE BERECHNUNGSREGELN:
+BERECHNUNGSREGELN:
 ⚠️ WICHTIG: Nicht alle Gäste trinken Cocktails! Erfahrungsgemäss bestellen nur ca. 20-30% der Gäste einen Cocktail.
 
 1. TOTAL DRINKS BERECHNUNG (NICHT pro Person!):
@@ -381,21 +406,24 @@ KRITISCHE BERECHNUNGSREGELN:
    Beispiel: 500 Gäste "normal" = 500-600 Drinks TOTAL (nicht 2500!)
 
 2. Verteile die Drinks gleichmässig auf die gewünschten Cocktails
-3. Berechne Mengen basierend auf unseren Rezepturen:
-   - Pro Cocktail: ca. 2cl Spirituosen, 2cl Likör/Sirup, 6-12cl Filler/Saft
-4. Runde Mengen auf die nächsthöhere verfügbare Packungsgrösse
+3. Berechne Mengen basierend auf den REZEPT-ZUTATEN (Primärquelle!)
+4. Runde Mengen auf sinnvolle Packungsmengen auf
 5. Berücksichtige Reserve (+15% Puffer)
 6. Ignoriere Fixkosten wie Fahrtkosten, Personalkosten etc.
 
-FALLS historische Daten verfügbar sind, orientiere dich STARK an deren Mengen pro Gast!
+${orderTraining.isNotEmpty ? '''
+ECHTE FRÜHERE AUFTRÄGE (nur Zutaten, gefiltert):
+${jsonEncode(orderTraining)}
 
-WICHTIG: Antworte NUR mit validem JSON im folgenden Format:
+⚠️ WICHTIG beim Skalieren: Jeder Auftrag enthält "cocktails" und "cocktailCount". Wenn z.B. ein Auftrag 2 Mojito-Varianten hatte, aber der aktuelle Auftrag nur 1 hat, halbiere die Minze/Zucker-Mengen entsprechend. Skaliere Zutaten immer relativ zur Anzahl der Cocktails die sie benötigen, NICHT nur zur Gästezahl.
+''' : ''}
+WICHTIG: Antworte NUR mit validem JSON. "reason" maximal 60 Zeichen!
 {
   "cocktails": ["Cocktailname1", "Cocktailname2"],
   "materials": [
-    {"name": "Materialname", "unit": "Einheit", "quantity": 10, "reason": "Kurze Begründung"}
+    {"name": "Materialname", "unit": "Einheit", "quantity": 10, "reason": "Max 60 Zeichen"}
   ],
-  "explanation": "Zusammenfassung der Berechnung"
+  "explanation": "Kurze Zusammenfassung"
 }
 
 REGELN FÜR DAS "cocktails" FELD (PFLICHTFELD!):
@@ -403,7 +431,17 @@ REGELN FÜR DAS "cocktails" FELD (PFLICHTFELD!):
 - Cocktailnamen MÜSSEN EXAKT aus den REZEPT-ZUTATEN stammen
 - Niemals ein leeres Array zurückgeben wenn Cocktails berechnet wurden!
 
-Die Namen und Einheiten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE MATERIALIEN stammen!
+PFLICHTARTIKEL (immer hinzufügen, exakt diese Namen und Einheiten):
+- {"name": "Strohhalme", "unit": "500er Packung", "quantity": <Gästeanzahl × 1.5 ÷ 500, aufgerundet>, "reason": "Strohhalme: $guestCount Gäste × 1.5"}
+- Becher: Berechne erwartete Drinks total. Etwa 60% in 0.3L Becher, 40% in 0.2L Becher. Verwende: {"name": "Hartplastikbecher 0.3L", "unit": "30er Packung"} und {"name": "Hartplastikbecher 0.2L", "unit": "40er Packung"}
+- Falls Mojito oder Mango-Cocktail dabei: {"name": "Marshmallow", "unit": "Packung", "quantity": 1}
+- {"name": "Servietten", "unit": "250er Packung", "quantity": <Gästeanzahl ÷ 250, aufgerundet>}
+- {"name": "Schwarze Handschuhe", "unit": "100er Packung", "quantity": 1}
+- {"name": "Küchenpapier", "unit": "4er Packung", "quantity": 1}
+
+Diese Pflichtartikel kommen ZUSÄTZLICH zu den Cocktailzutaten aus VERFÜGBARE MATERIALIEN. Für Pflichtartikel darfst du auch Namen verwenden die nicht in VERFÜGBARE MATERIALIEN stehen.
+
+Die Cocktailzutaten in "materials" MÜSSEN exakt aus der Liste VERFÜGBARE MATERIALIEN stammen!
 ''';
   }
 

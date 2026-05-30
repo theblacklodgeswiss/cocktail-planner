@@ -1,16 +1,17 @@
 // Deploy at: https://dash.cloudflare.com/workers
 // Set secret: wrangler secret put ANTHROPIC_API_KEY
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, x-api-key, anthropic-version, anthropic-dangerous-direct-browser-access',
+  'Access-Control-Max-Age': '86400',
+};
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        },
-      });
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
     if (request.method !== 'POST') {
@@ -34,7 +35,7 @@ export default {
       status: response.status,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        ...CORS_HEADERS,
       },
     });
   },

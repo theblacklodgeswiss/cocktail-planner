@@ -19,25 +19,21 @@ class AdminSettingsScreen extends StatefulWidget {
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   late TextEditingController _distanceController;
-  late TextEditingController _claudeKeyController;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isImporting = false;
   AppSettings _settings = const AppSettings();
-  bool _showClaudeKey = false;
 
   @override
   void initState() {
     super.initState();
     _distanceController = TextEditingController();
-    _claudeKeyController = TextEditingController();
     _loadSettings();
   }
 
   @override
   void dispose() {
     _distanceController.dispose();
-    _claudeKeyController.dispose();
     super.dispose();
   }
 
@@ -49,8 +45,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() {
       _settings = settings;
       _distanceController.text = settings.longDistanceThresholdKm.toString();
-      _claudeKeyController.text = settings.anthropicApiKey ?? '';
-      _isLoading = false;
+_isLoading = false;
     });
   }
 
@@ -66,10 +61,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final claudeKey = _claudeKeyController.text.trim();
       final newSettings = _settings.copyWith(
         longDistanceThresholdKm: newThreshold,
-        anthropicApiKey: claudeKey.isNotEmpty ? claudeKey : null,
       );
       await settingsRepository.save(newSettings);
       if (!mounted) return;
@@ -209,64 +202,31 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
-                if (claudeService.isConfigured) ...[
-                  _buildHistoricalImportSection(),
-                  const SizedBox(height: 16),
-                ],
-                // Show env key status
-                if (ClaudeService.hasEnvKey) ...[  
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.verified, color: Colors.green, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'settings.claude_from_env'.tr(),
-                            style: TextStyle(
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified, color: Colors.green, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'settings.claude_from_env'.tr(),
+                          style: TextStyle(
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'settings.claude_override_hint'.tr(),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                  ),
-                ] else ...[  
-                  TextField(
-                    controller: _claudeKeyController,
-                    decoration: InputDecoration(
-                      labelText: 'settings.claude_api_key'.tr(),
-                      hintText: 'AIza...',
-                      prefixIcon: const Icon(Icons.key),
-                      suffixIcon: IconButton(
-                        icon: Icon(_showClaudeKey ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _showClaudeKey = !_showClaudeKey),
                       ),
-                    ),
-                    obscureText: !_showClaudeKey,
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'settings.claude_hint'.tr(),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                  ),
-                ],
+                ),
+                const SizedBox(height: 16),
+                _buildHistoricalImportSection(),
               ],
             ),
           ),

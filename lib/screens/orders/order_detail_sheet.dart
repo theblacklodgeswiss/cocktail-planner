@@ -487,6 +487,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     if (!mounted) return;
 
     // Step 3: show loading + generate
+    final secondsNotifier = ValueNotifier<int>(0);
+    final timer = Stream.periodic(const Duration(seconds: 1), (i) => i + 1);
+    final timerSub = timer.listen((s) => secondsNotifier.value = s);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -497,6 +501,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
             Text('orders.claude_generating'.tr()),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<int>(
+              valueListenable: secondsNotifier,
+              builder: (_, s, __) => Text(
+                '${s}s',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
           ],
         ),
       ),
@@ -528,7 +540,18 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         cocktailPopularity: appState.cocktailPopularity,
       );
 
+      timerSub.cancel();
+      secondsNotifier.dispose();
       if (mounted) Navigator.pop(context); // close loading
+
+      if (suggestion == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('orders.claude_error'.tr()), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
 
       if (suggestion.hasError) {
         if (mounted) {
@@ -572,6 +595,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         );
       }
     } catch (e) {
+      timerSub.cancel();
+      secondsNotifier.dispose();
       if (mounted) Navigator.pop(context); // close loading
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -924,40 +949,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                       label: Text('orders.invoice'.tr()),
                     ),
                   ],
-                  if (!widget.order.needsShoppingList) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _downloadShoppingList,
-                      icon: const Icon(Icons.download),
-                      label: Text('shopping.download_list'.tr()),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _downloadShoppingListWithoutPrices(),
-                      icon: const Icon(Icons.download),
-                      label: Text('shopping.download_list_no_prices'.tr()),
-                                    ),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _editShoppingList,
-                      icon: const Icon(Icons.edit),
-                      label: Text('orders.edit_shopping_list'.tr()),
-                    ),
-                  ],
                   const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: _generateWithGemini,
-                    icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                    label: Text(
-                      'orders.regenerate_with_claude'.tr(),
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white70,
-                    ),
-                  ),
+                  _buildShoppingListSection(vertical: true),
                 ],
               ),
             );
@@ -981,45 +974,109 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                       label: Text('orders.invoice'.tr()),
                     ),
                   ],
-                  if (!widget.order.needsShoppingList) ...[
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: _downloadShoppingList,
-                      icon: const Icon(Icons.download),
-                      label: Text('shopping.download_list'.tr()),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _downloadShoppingListWithoutPrices(),
-                      icon: const Icon(Icons.download),
-                      label: Text('shopping.download_list_no_prices'.tr()),
-                                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: _editShoppingList,
-                      icon: const Icon(Icons.edit),
-                      label: Text('orders.edit_shopping_list'.tr()),
-                    ),
-                  ],
                   const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: _generateWithGemini,
-                    icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                    label: Text(
-                      'orders.regenerate_with_claude'.tr(),
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white70,
-                    ),
-                  ),
+                  _buildShoppingListSection(vertical: false),
                 ],
               ),
             );
           }
         },
+      ),
+    );
+  }
+
+  Widget _buildShoppingListSection({required bool vertical}) {
+    final hasList = !widget.order.needsShoppingList;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.white12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.shopping_cart_outlined, size: 14, color: Colors.white54),
+              SizedBox(width: 6),
+              Text('Einkaufsliste', style: TextStyle(fontSize: 12, color: Colors.white54, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (vertical) ...[
+            if (hasList)
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _downloadShoppingList,
+                      icon: const Icon(Icons.download, size: 15),
+                      label: const Text('PDF', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _downloadShoppingListWithoutPrices,
+                      icon: const Icon(Icons.download_outlined, size: 15),
+                      label: const Text('Ohne Preise', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _editShoppingList,
+                      icon: const Icon(Icons.edit, size: 15),
+                      label: const Text('Bearbeiten', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ),
+            if (hasList) const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _generateWithGemini,
+                icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                label: Text('orders.regenerate_with_claude'.tr(), style: const TextStyle(color: Colors.white)),
+                style: FilledButton.styleFrom(backgroundColor: Colors.deepPurple),
+              ),
+            ),
+          ] else ...[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasList) ...[
+                  OutlinedButton.icon(
+                    onPressed: _downloadShoppingList,
+                    icon: const Icon(Icons.download, size: 15),
+                    label: const Text('PDF', style: TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                  OutlinedButton.icon(
+                    onPressed: _downloadShoppingListWithoutPrices,
+                    icon: const Icon(Icons.download_outlined, size: 15),
+                    label: const Text('Ohne Preise', style: TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                  OutlinedButton.icon(
+                    onPressed: _editShoppingList,
+                    icon: const Icon(Icons.edit, size: 15),
+                    label: const Text('Bearbeiten', style: TextStyle(fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                FilledButton.icon(
+                  onPressed: _generateWithGemini,
+                  icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                  label: Text('orders.regenerate_with_claude'.tr(), style: const TextStyle(color: Colors.white)),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.deepPurple),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
