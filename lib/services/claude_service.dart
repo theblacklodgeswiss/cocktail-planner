@@ -86,8 +86,21 @@ class ClaudeService {
   }
 
   static const String _envApiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
-  static const String _apiBase = 'https://api.anthropic.com/v1/messages';
   static const String _model = 'claude-sonnet-4-6';
+
+  // Proxy URL to avoid CORS in the browser.
+  // Set via --dart-define=CLAUDE_PROXY_URL=https://...
+  // Falls back to Firebase Cloud Function URL per flavor.
+  static const String _proxyUrl = String.fromEnvironment('CLAUDE_PROXY_URL', defaultValue: '');
+  static const String _flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+  static String get _apiBase {
+    if (_proxyUrl.isNotEmpty) return _proxyUrl;
+    // Firebase Cloud Function (requires Blaze plan)
+    const devProject = 'cocktail-planer-dev';
+    const prodProject = 'cocktail-planner-bl';
+    final project = _flavor == 'prod' ? prodProject : devProject;
+    return 'https://us-central1-$project.cloudfunctions.net/claudeProxy';
+  }
 
   static bool get hasEnvKey => _envApiKey.isNotEmpty;
 
