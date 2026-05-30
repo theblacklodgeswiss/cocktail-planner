@@ -24,11 +24,14 @@ class CocktailRepository {
     if (_cached != null) return _cached!;
 
     try {
-      final materialsSnapshot =
-          await firestoreService.materialsCollection.get();
-      final recipesSnapshot = await firestoreService.recipesCollection.get();
-      final fixedValuesSnapshot =
-          await firestoreService.fixedValuesCollection.get();
+      final results = await Future.wait([
+        firestoreService.materialsCollection.get(),
+        firestoreService.recipesCollection.get(),
+        firestoreService.fixedValuesCollection.get(),
+      ]);
+      final materialsSnapshot = results[0];
+      final recipesSnapshot = results[1];
+      final fixedValuesSnapshot = results[2];
 
       final materials = materialsSnapshot.docs
           .map((doc) => MaterialItem.fromJson(doc.data()))
