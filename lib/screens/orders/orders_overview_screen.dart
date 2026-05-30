@@ -273,6 +273,10 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('orders.title'.tr()),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
         actions: [
           IconButton(
             icon: _searchQuery.isNotEmpty
