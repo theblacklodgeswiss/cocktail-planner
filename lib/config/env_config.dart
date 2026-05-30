@@ -26,6 +26,15 @@ class EnvConfig {
   /// Check if Gemini API is configured
   static bool get hasGeminiKey => geminiApiKey.isNotEmpty;
 
+  /// Anthropic API key for Claude features
+  static const String anthropicApiKey = String.fromEnvironment(
+    'ANTHROPIC_API_KEY',
+    defaultValue: '',
+  );
+
+  /// Check if Anthropic API is configured
+  static bool get hasAnthropicKey => anthropicApiKey.isNotEmpty;
+
   /// Check if OneDrive uploads should be enabled (only in production)
   static bool get isOneDriveEnabled => isProd;
 }
