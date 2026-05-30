@@ -13,7 +13,7 @@ import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
-import '../../services/gemini_service.dart';
+import '../../services/claude_service.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
@@ -72,6 +72,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   @override
   void initState() {
     super.initState();
+    _nameController.addListener(() => setState(() {}));
+    _phoneController.addListener(() => setState(() {}));
+    _addressController.addListener(() => setState(() {}));
     _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
     _loadCocktailData();
     authService.checkIsAdmin().then((_) {
@@ -114,33 +117,22 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               final clean = name.contains('(')
                   ? name.substring(0, name.indexOf('(')).trim()
                   : name;
-              final recipe = data.recipes.firstWhere(
-                (r) => r.name.toLowerCase() == clean.toLowerCase(),
-                orElse: () => Recipe(
-                  id: clean.toLowerCase().replaceAll(
-                    RegExp(r'[^a-z0-9]+'),
-                    '_',
-                  ),
-                  name: clean,
-                  ingredients: [],
-                  type: 'cocktail',
-                ),
+              final recipe = data.recipes.cast<Recipe?>().firstWhere(
+                (r) => r!.name.toLowerCase() == clean.toLowerCase(),
+                orElse: () => null,
               );
-              if (!_selectedRecipes.any((r) => r.name == recipe.name)) {
+              if (recipe != null &&
+                  !_selectedRecipes.any((r) => r.name == recipe.name)) {
                 _selectedRecipes.add(recipe);
               }
             }
             for (final name in order.shots) {
-              final recipe = data.recipes.firstWhere(
-                (r) => r.name == name,
-                orElse: () => Recipe(
-                  id: name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_'),
-                  name: name,
-                  ingredients: [],
-                  type: 'shot',
-                ),
+              final recipe = data.recipes.cast<Recipe?>().firstWhere(
+                (r) => r!.name == name,
+                orElse: () => null,
               );
-              if (!_selectedRecipes.any((r) => r.name == recipe.name)) {
+              if (recipe != null &&
+                  !_selectedRecipes.any((r) => r.name == recipe.name)) {
                 _selectedRecipes.add(recipe);
               }
             }
@@ -420,6 +412,19 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         );
       },
     );
+  }
+
+  bool get _canProceed {
+    if (_currentStep == 1) {
+      return _nameController.text.trim().isNotEmpty &&
+          _phoneController.text.trim().isNotEmpty;
+    }
+    if (_currentStep == 2) {
+      return _eventDate != null &&
+          _eventTime != null &&
+          _addressController.text.trim().isNotEmpty;
+    }
+    return true;
   }
 
   void _nextStep() {
@@ -731,7 +736,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                                 onPressed: _generateShoppingListWithGemini,
                                 icon: const Icon(Icons.auto_awesome),
                                 label: Text(
-                                  'order_form.generate_with_gemini'.tr(),
+                                  'order_form.generate_with_claude'.tr(),
                                 ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
@@ -799,7 +804,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: FilledButton(
-                          onPressed: _nextStep,
+                          onPressed: _canProceed ? _nextStep : null,
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -1272,7 +1277,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           TextField(
             controller: _phoneController,
             decoration: InputDecoration(
-              labelText: 'order_setup.phone_label'.tr(),
+              labelText: '${'order_setup.phone_label'.tr()} *',
               hintText: 'order_setup.phone_hint'.tr(),
               prefixIcon: const Icon(Icons.phone_outlined),
               border: OutlineInputBorder(
@@ -2835,7 +2840,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             OutlinedButton.icon(
               onPressed: _generateShoppingListWithGemini,
               icon: const Icon(Icons.auto_awesome),
-              label: Text('order_form.generate_with_gemini'.tr()),
+              label: Text('order_form.generate_with_claude'.tr()),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
@@ -2855,9 +2860,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Future<void> _generateShoppingListWithGemini() async {
-    if (!geminiService.isConfigured) {
+    if (!claudeService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.gemini_not_configured'.tr())),
+        SnackBar(content: Text('orders.claude_not_configured'.tr())),
       );
       return;
     }
@@ -2880,7 +2885,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
-            Text('orders.gemini_generating'.tr()),
+            Text('orders.claude_generating'.tr()),
           ],
         ),
       ),
@@ -2903,7 +2908,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
           .toList();
 
-      final suggestion = await geminiService.generateMaterialSuggestions(
+      final suggestion = await claudeService.generateMaterialSuggestions(
         guestCount: _personCount,
         guestRange: '',
         requestedCocktails: _selectedRecipes.map((r) => r.name).toList(),
@@ -2921,7 +2926,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                suggestion.errorMessage ?? 'orders.gemini_error'.tr(),
+                suggestion.errorMessage ?? 'orders.claude_error'.tr(),
               ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 6),
@@ -2988,7 +2993,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('orders.gemini_error'.tr()),
+            content: Text('orders.claude_error'.tr()),
             backgroundColor: Colors.red,
           ),
         );
@@ -3041,7 +3046,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           else
             const SizedBox.shrink(),
           FilledButton.icon(
-            onPressed: _nextStep,
+            onPressed: _canProceed ? _nextStep : null,
             icon: Icon(
               _currentStep < _totalSteps - 1
                   ? Icons.arrow_forward

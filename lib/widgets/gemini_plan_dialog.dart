@@ -2,7 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/order.dart';
-import '../services/gemini_service.dart';
+import '../services/claude_service.dart';
 import '../widgets/order_setup_dialog.dart';
 
 class GeminiPlanDialog extends StatefulWidget {
@@ -66,7 +66,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
         location = widget.setup!.address;
       }
 
-      final plan = await geminiService.generateEventPlan(
+      final plan = await claudeService.generateEventPlan(
         eventName: eventName,
         guestCount: guestCount,
         cocktails: widget.cocktails,
@@ -79,7 +79,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
 
       if (plan == null) {
         setState(() {
-          _error = 'orders.gemini_error'.tr();
+          _error = 'orders.claude_error'.tr();
           _loading = false;
         });
       } else {
@@ -90,7 +90,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
       }
     } catch (e) {
       setState(() {
-        _error = 'orders.gemini_error'.tr();
+        _error = 'orders.claude_error'.tr();
         _loading = false;
       });
     }
@@ -115,7 +115,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'orders.generate_with_gemini'.tr(),
+                    'orders.generate_with_claude'.tr(),
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -137,7 +137,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
                         children: [
                           const CircularProgressIndicator(),
                           const SizedBox(height: 16),
-                          Text('orders.gemini_generating'.tr()),
+                          Text('orders.claude_generating'.tr()),
                         ],
                       ),
                     )

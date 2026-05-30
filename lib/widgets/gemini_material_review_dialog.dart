@@ -1,6 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import '../../services/gemini_service.dart';
+import '../../services/claude_service.dart';
 import '../../state/app_state.dart';
 
 /// Dialog to review and confirm Gemini material suggestions before applying them
@@ -13,7 +13,7 @@ class GeminiMaterialReviewDialog extends StatefulWidget {
     required this.onConfirm,
   });
 
-  final GeminiMaterialSuggestion suggestion;
+  final AiMaterialSuggestion suggestion;
   final int personCount;
   final List<String> cocktailNames;
   final void Function(List<MaterialSuggestion>, String explanation) onConfirm;
@@ -48,7 +48,7 @@ class _GeminiMaterialReviewDialogState
         children: [
           Icon(Icons.auto_awesome, color: Colors.deepPurple),
           const SizedBox(width: 8),
-          Expanded(child: Text('orders.gemini_material_suggestions'.tr())),
+          Expanded(child: Text('orders.claude_material_suggestions'.tr())),
         ],
       ),
       content: SizedBox(
@@ -88,7 +88,7 @@ class _GeminiMaterialReviewDialogState
               // Reasoning
               if (widget.suggestion.explanation.isNotEmpty) ...[
                 Text(
-                  'orders.gemini_reasoning'.tr(),
+                  'orders.claude_reasoning'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),

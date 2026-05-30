@@ -5,7 +5,7 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../data/cocktail_repository.dart';
-import '../../../services/gemini_service.dart';
+import '../../../services/claude_service.dart';
 
 /// Dialog to generate and share a WhatsApp offer message with optional PDF attachment.
 ///
@@ -97,8 +97,8 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
       }
 
       String? middlePart;
-      if (geminiService.isConfigured) {
-        middlePart = await geminiService.generateOfferShareMessage(
+      if (claudeService.isConfigured) {
+        middlePart = await claudeService.generateOfferShareMessage(
           originalCocktails: widget.selectedCocktails,
           selectedCocktails: _currentCocktails,
           allAvailableCocktails: _allCocktails,

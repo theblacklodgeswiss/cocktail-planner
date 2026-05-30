@@ -34,9 +34,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   bool _suggestionsApplied = false;
   bool _defaultsApplied = false;
   bool _savedItemsApplied = false;
-  int _geminiSuggestionsCount = 0;
-  String _geminiExplanation = '';
-  bool _showGeminiBanner = false;
+  int _aiSuggestionsCount = 0;
+  String _aiExplanation = '';
+  bool _showAiBanner = false;
   bool _isBannerExpanded = false;
 
   late PageController _pageController;
@@ -214,9 +214,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     // Store count and explanation for banner
     if (appliedCount > 0) {
       setState(() {
-        _geminiSuggestionsCount = appliedCount;
-        _geminiExplanation = appState.materialSuggestionExplanation ?? '';
-        _showGeminiBanner = true;
+        _aiSuggestionsCount = appliedCount;
+        _aiExplanation = appState.materialSuggestionExplanation ?? '';
+        _showAiBanner = true;
       });
     }
 
@@ -533,13 +533,13 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         )
         .toList();
 
-    var saveSucceeded = false;
+    String? savedOrderId;
 
     // Check if linking to existing order (from form submission)
     final linkedOrderId = appState.linkedOrderId;
     if (linkedOrderId != null) {
       // Update existing order with shopping list data
-      saveSucceeded = await orderRepository.updateOrderShoppingList(
+      final updateSucceeded = await orderRepository.updateOrderShoppingList(
         orderId: linkedOrderId,
         items: itemsData,
         total: total,
@@ -563,12 +563,13 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             : null,
         remarks: _remarks.isNotEmpty ? _remarks : null,
       );
-      if (saveSucceeded) {
+      if (updateSucceeded) {
+        savedOrderId = linkedOrderId;
         appState.clearLinkedOrder();
       }
     } else {
       // Create new order
-      final orderId = await orderRepository.saveOrder(
+      savedOrderId = await orderRepository.saveOrder(
         name: result.name,
         date: orderDate,
         items: itemsData,
@@ -590,22 +591,26 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         additionalServices: _additionalServices,
         remarks: _remarks,
       );
-      saveSucceeded = orderId != null;
     }
 
     if (!mounted) return;
-    if (!saveSucceeded) {
+    if (savedOrderId == null) {
       _showError('shopping.save_failed'.tr());
       return;
     }
 
+    final savedOrder = await orderRepository.getOrderById(savedOrderId);
+    if (!mounted) return;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('shopping.order_saved'.tr())));
-    // Navigate back to dashboard first
+
+    final router = GoRouter.of(context);
     Navigator.of(context).popUntil((route) => route.isFirst);
-    // Then navigate to orders overview
-    context.push('/orders');
+    if (savedOrder != null) {
+      router.push('/create-offer', extra: savedOrder);
+    }
   }
 
   void _showError(String message) {
@@ -849,7 +854,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 aggregatedSelected,
               ),
             ),
-            if (_showGeminiBanner) _buildGeminiBanner(),
+            if (_showAiBanner) _buildAiBanner(),
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -1035,7 +1040,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     );
   }
 
-  Widget _buildGeminiBanner() {
+  Widget _buildAiBanner() {
     final theme = Theme.of(context);
     final primaryContainer = theme.colorScheme.primaryContainer;
     final onPrimaryContainer = theme.colorScheme.onPrimaryContainer;
@@ -1069,9 +1074,9 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'shopping.gemini_suggestions_applied'.tr(
+                        'shopping.claude_suggestions_applied'.tr(
                           namedArgs: {
-                            'count': _geminiSuggestionsCount.toString(),
+                            'count': _aiSuggestionsCount.toString(),
                           },
                         ),
                         style: TextStyle(
@@ -1080,10 +1085,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           fontSize: 13,
                         ),
                       ),
-                      if (_geminiExplanation.isNotEmpty) ...[
+                      if (_aiExplanation.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          _geminiExplanation,
+                          _aiExplanation,
                           style: TextStyle(
                             fontSize: 12,
                             color: onPrimaryContainer.withValues(alpha: 0.8),
@@ -1100,7 +1105,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
-                      _showGeminiBanner = false;
+                      _showAiBanner = false;
                       _quantities.clear();
                       _selectedItems.clear();
                       for (final controller in _controllers.values) {
@@ -1125,7 +1130,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                   icon: const Icon(Icons.close, size: 18),
                   color: onPrimaryContainer,
                   onPressed: () {
-                    setState(() => _showGeminiBanner = false);
+                    setState(() => _showAiBanner = false);
                   },
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(

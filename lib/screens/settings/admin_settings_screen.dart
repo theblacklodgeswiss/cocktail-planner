@@ -2,12 +2,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/settings_repository.dart';
 import '../../models/app_settings.dart';
 import '../../services/auth_service.dart';
-import '../../services/gemini_service.dart';
+import '../../services/claude_service.dart';
 import '../../services/microsoft_graph_service.dart';
 
 /// Admin settings screen for configuring app-wide settings.
@@ -20,37 +19,37 @@ class AdminSettingsScreen extends StatefulWidget {
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   late TextEditingController _distanceController;
-  late TextEditingController _geminiKeyController;
+  late TextEditingController _claudeKeyController;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isImporting = false;
   AppSettings _settings = const AppSettings();
-  bool _showGeminiKey = false;
+  bool _showClaudeKey = false;
 
   @override
   void initState() {
     super.initState();
     _distanceController = TextEditingController();
-    _geminiKeyController = TextEditingController();
+    _claudeKeyController = TextEditingController();
     _loadSettings();
   }
 
   @override
   void dispose() {
     _distanceController.dispose();
-    _geminiKeyController.dispose();
+    _claudeKeyController.dispose();
     super.dispose();
   }
 
   Future<void> _loadSettings() async {
     final settings = await settingsRepository.load();
-    // Also reload Gemini usage from Firestore
-    await GeminiService().reloadUsage();
+    
+    
     if (!mounted) return;
     setState(() {
       _settings = settings;
       _distanceController.text = settings.longDistanceThresholdKm.toString();
-      _geminiKeyController.text = settings.geminiApiKey ?? '';
+      _claudeKeyController.text = settings.anthropicApiKey ?? '';
       _isLoading = false;
     });
   }
@@ -67,10 +66,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final geminiKey = _geminiKeyController.text.trim();
+      final claudeKey = _claudeKeyController.text.trim();
       final newSettings = _settings.copyWith(
         longDistanceThresholdKm: newThreshold,
-        geminiApiKey: geminiKey.isNotEmpty ? geminiKey : null,
+        anthropicApiKey: claudeKey.isNotEmpty ? claudeKey : null,
       );
       await settingsRepository.save(newSettings);
       if (!mounted) return;
@@ -167,7 +166,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        // Gemini AI Settings
+        // Claude AI Settings
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -179,11 +178,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                     const Icon(Icons.auto_awesome, color: Colors.purple),
                     const SizedBox(width: 8),
                     Text(
-                      'settings.gemini_section'.tr(),
+                      'settings.claude_section'.tr(),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const Spacer(),
-                    if (geminiService.isConfigured)
+                    if (claudeService.isConfigured)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
@@ -196,7 +195,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                             const Icon(Icons.check, color: Colors.white, size: 14),
                             const SizedBox(width: 4),
                             Text(
-                              'settings.gemini_active'.tr(),
+                              'settings.claude_active'.tr(),
                               style: const TextStyle(color: Colors.white, fontSize: 12),
                             ),
                           ],
@@ -206,19 +205,16 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'settings.gemini_description'.tr(),
+                  'settings.claude_description'.tr(),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
-                // Usage statistics
-                if (geminiService.isConfigured) ...[
-                  _buildGeminiUsageSection(),
-                  const SizedBox(height: 16),
+                if (claudeService.isConfigured) ...[
                   _buildHistoricalImportSection(),
                   const SizedBox(height: 16),
                 ],
                 // Show env key status
-                if (GeminiService.hasEnvKey) ...[  
+                if (ClaudeService.hasEnvKey) ...[  
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -232,7 +228,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'settings.gemini_from_env'.tr(),
+                            'settings.claude_from_env'.tr(),
                             style: TextStyle(
                               color: Colors.green.shade700,
                               fontWeight: FontWeight.w500,
@@ -244,28 +240,28 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'settings.gemini_override_hint'.tr(),
+                    'settings.claude_override_hint'.tr(),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.outline,
                         ),
                   ),
                 ] else ...[  
                   TextField(
-                    controller: _geminiKeyController,
+                    controller: _claudeKeyController,
                     decoration: InputDecoration(
-                      labelText: 'settings.gemini_api_key'.tr(),
+                      labelText: 'settings.claude_api_key'.tr(),
                       hintText: 'AIza...',
                       prefixIcon: const Icon(Icons.key),
                       suffixIcon: IconButton(
-                        icon: Icon(_showGeminiKey ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _showGeminiKey = !_showGeminiKey),
+                        icon: Icon(_showClaudeKey ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _showClaudeKey = !_showClaudeKey),
                       ),
                     ),
-                    obscureText: !_showGeminiKey,
+                    obscureText: !_showClaudeKey,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'settings.gemini_hint'.tr(),
+                    'settings.claude_hint'.tr(),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.outline,
                         ),
@@ -279,154 +275,6 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     );
   }
 
-  Widget _buildGeminiUsageSection() {
-    final geminiService = GeminiService();
-    
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.bar_chart,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'settings.gemini_usage'.tr(),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Today's usage stats
-          _buildUsageStat(
-            'Anfragen',
-            '${geminiService.requestsToday} / ${GeminiService.dailyRequestLimit}',
-            geminiService.requestUsagePercentage,
-          ),
-          const SizedBox(height: 8),
-          _buildUsageStat(
-            'Tokens',
-            '${_formatNumber(geminiService.totalTokensToday)} / ${_formatNumber(GeminiService.dailyTokenLimit)}',
-            geminiService.tokenUsagePercentage,
-          ),
-          const SizedBox(height: 8),
-          // Token breakdown
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '↓ ${_formatNumber(geminiService.inputTokensToday)} input',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                ),
-              ),
-              Text(
-                '↑ ${_formatNumber(geminiService.outputTokensToday)} output',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Reset time info
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.schedule,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Reset in ${GeminiService.resetTimeFormatted} (Mitternacht PT)',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'settings.gemini_usage_hint'.tr(),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-          ),
-          const SizedBox(height: 8),
-          // Link to Google AI Studio
-          OutlinedButton.icon(
-            onPressed: _openAiStudio,
-            icon: const Icon(Icons.open_in_new, size: 18),
-            label: Text('settings.gemini_open_studio'.tr()),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildUsageStat(String label, String value, double percentage) {
-    final color = percentage > 0.9 
-        ? Colors.red 
-        : percentage > 0.7 
-            ? Colors.orange 
-            : Theme.of(context).colorScheme.primary;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            Text(value, style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            )),
-          ],
-        ),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: percentage,
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-        ),
-      ],
-    );
-  }
-  
-  String _formatNumber(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}K';
-    }
-    return number.toString();
-  }
-  
-  void _openAiStudio() {
-    // Open Google AI Studio in browser
-    // ignore: deprecated_member_use
-    launchUrl(Uri.parse('https://aistudio.google.com/apikey'));
-  }
   
   Widget _buildHistoricalImportSection() {
     return Container(
@@ -456,7 +304,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Kombiniert Auftrag (Metadaten: Name, Datum, Gäste, Cocktails) und Einkaufsliste (Zutaten) aus OneDrive/Aufträge. Gemini AI extrahiert die Daten.',
+            'Kombiniert Auftrag (Metadaten: Name, Datum, Gäste, Cocktails) und Einkaufsliste (Zutaten) aus OneDrive/Aufträge. Claude AI extrahiert die Daten.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
@@ -490,7 +338,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isImporting = true);
     
     try {
-      final count = await GeminiService().importHistoricalShoppingLists(
+      final count = await ClaudeService().importHistoricalShoppingLists(
         findEventPairs: microsoftGraphService.findEventFilePairs,
         downloadFile: microsoftGraphService.downloadFromOneDrive,
       );

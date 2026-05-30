@@ -17,15 +17,6 @@ class EnvConfig {
   /// Check if running in production environment
   static bool get isProd => flavor == 'prod';
 
-  /// Gemini AI API key for AI features
-  static const String geminiApiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-    defaultValue: '',
-  );
-
-  /// Check if Gemini API is configured
-  static bool get hasGeminiKey => geminiApiKey.isNotEmpty;
-
   /// Anthropic API key for Claude features
   static const String anthropicApiKey = String.fromEnvironment(
     'ANTHROPIC_API_KEY',

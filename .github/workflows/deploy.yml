@@ -94,7 +94,7 @@ jobs:
         run: flutter test
 
       - name: Build web
-        run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=ANTHROPIC_API_KEY=${{ secrets.PROD_ANTHROPIC_API_KEY }} --dart-define=FLAVOR=prod
+        run: flutter build web --release --pwa-strategy=offline-first --dart-define=ANTHROPIC_API_KEY=${{ secrets.PROD_ANTHROPIC_API_KEY }} --dart-define=FLAVOR=prod
 
       - name: Deploy Firestore Rules
         uses: w9jds/firebase-action@master

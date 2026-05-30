@@ -6,7 +6,7 @@ import '../../data/cocktail_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
-import '../../services/gemini_service.dart';
+import '../../services/claude_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/recipe_selection_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
@@ -110,10 +110,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     // Use Gemini AI for fuzzy matching of unmatched names
-    if (unmatchedNames.isNotEmpty && geminiService.isConfigured) {
+    if (unmatchedNames.isNotEmpty && claudeService.isConfigured) {
       try {
         final availableNames = allRecipes.map((r) => r.name).toList();
-        final aiMatches = await geminiService.matchCocktailNames(
+        final aiMatches = await claudeService.matchCocktailNames(
           requestedNames: unmatchedNames,
           availableRecipeNames: availableNames,
         );
@@ -185,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     CocktailData cocktailData,
   ) async {
     if (!_validateOrderSetup()) return;
-    if (!geminiService.isConfigured) {
+    if (!claudeService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('orders.gemini_not_configured'.tr())),
       );
@@ -229,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .toList();
 
       // Generate material suggestions
-      final suggestion = await geminiService.generateMaterialSuggestions(
+      final suggestion = await claudeService.generateMaterialSuggestions(
         guestCount: _orderSetup!.personCount,
         guestRange: '',  // Not available from OrderSetupData
         requestedCocktails: selectedCocktails.map((r) => r.name).toList(),

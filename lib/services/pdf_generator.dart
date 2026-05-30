@@ -231,9 +231,12 @@ class PdfGenerator {
         3: const pw.FlexColumnWidth(1.2), // Price
         4: const pw.FlexColumnWidth(1.2), // Total
       } : {
-        0: const pw.FlexColumnWidth(4), // Name
-        1: const pw.FlexColumnWidth(2), // Unit  
+        0: const pw.FlexColumnWidth(3.5), // Name
+        1: const pw.FlexColumnWidth(1.5), // Unit
         2: const pw.FlexColumnWidth(1), // Qty
+        3: const pw.FlexColumnWidth(1.5), // Schon vorhanden
+        4: const pw.FlexColumnWidth(1.5), // Noch zu kaufen
+        5: const pw.FixedColumnWidth(28), // Checkbox
       },
       children: [
         // Header row
@@ -246,6 +249,10 @@ class PdfGenerator {
             if (includePrices) ...[
               _tableHeader('Preis'),
               _tableHeader('Summe'),
+            ] else ...[
+              _tableHeader('Vorh.'),
+              _tableHeader('Zu kaufen'),
+              _tableHeader('✓'),
             ],
           ],
         ),
@@ -269,6 +276,10 @@ class PdfGenerator {
                   align: pw.TextAlign.right,
                   bold: true,
                 ),
+              ] else ...[
+                _tableCell(''),
+                _tableCell(''),
+                _checkboxCell(),
               ],
             ],
           ),
@@ -280,14 +291,20 @@ class PdfGenerator {
             _tableCell('Zwischensumme', bold: true),
             _tableCell(''),
             _tableCell(''),
-            _tableCell(''),
-            _tableCell(
-              currency.format(
-                sortedItems.fold<double>(0, (sum, i) => sum + i.total),
+            if (includePrices) ...[
+              _tableCell(''),
+              _tableCell(
+                currency.format(
+                  sortedItems.fold<double>(0, (sum, i) => sum + i.total),
+                ),
+                align: pw.TextAlign.right,
+                bold: true,
               ),
-              align: pw.TextAlign.right,
-              bold: true,
-            ),
+            ] else ...[
+              _tableCell(''),
+              _tableCell(''),
+              _tableCell(''),
+            ],
           ],
         ),
       ],
@@ -581,6 +598,20 @@ class PdfGenerator {
           ],
         ),
       ],
+    );
+  }
+
+  static pw.Widget _checkboxCell() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Container(
+        width: 14,
+        height: 14,
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey600, width: 1),
+          borderRadius: pw.BorderRadius.circular(2),
+        ),
+      ),
     );
   }
 

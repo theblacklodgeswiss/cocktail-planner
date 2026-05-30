@@ -13,19 +13,12 @@ class AppSettings {
     this.companyEmail = 'the.blacklodge@outlook.com',
     this.bankIban = 'CH86 0020 8208 1176 8440 B',
     this.twintNumber = '+41 79 778 48 61',
-    this.geminiApiKey,
+    this.anthropicApiKey,
   });
 
-  /// Distance threshold in km for long distance pricing.
   final int longDistanceThresholdKm;
-
-  /// Microsoft Azure App Client ID for Graph API.
   final String? microsoftClientId;
-
-  /// Microsoft Azure Tenant ID (default: 'common' for any account).
   final String microsoftTenantId;
-
-  // Company info fields
   final String companyName;
   final String companyOwner;
   final String companyStreet;
@@ -35,10 +28,9 @@ class AppSettings {
   final String bankIban;
   final String twintNumber;
 
-  /// Gemini API key for AI-powered shopping list generation.
-  final String? geminiApiKey;
+  /// Anthropic API key for Claude AI features (overrides dart-define).
+  final String? anthropicApiKey;
 
-  /// Returns the full company address as a list of lines (for PDF).
   List<String> get addressLines => [
         companyName,
         companyOwner,
@@ -61,7 +53,7 @@ class AppSettings {
       companyEmail: json['companyEmail'] as String? ?? 'the.blacklodge@outlook.com',
       bankIban: json['bankIban'] as String? ?? 'CH86 0020 8208 1176 8440 B',
       twintNumber: json['twintNumber'] as String? ?? '+41 79 778 48 61',
-      geminiApiKey: json['geminiApiKey'] as String?,
+      anthropicApiKey: json['anthropicApiKey'] as String?,
     );
   }
 
@@ -77,7 +69,7 @@ class AppSettings {
         'companyEmail': companyEmail,
         'bankIban': bankIban,
         'twintNumber': twintNumber,
-        if (geminiApiKey != null) 'geminiApiKey': geminiApiKey,
+        if (anthropicApiKey != null) 'anthropicApiKey': anthropicApiKey,
       };
 
   AppSettings copyWith({
@@ -92,7 +84,7 @@ class AppSettings {
     String? companyEmail,
     String? bankIban,
     String? twintNumber,
-    String? geminiApiKey,
+    String? anthropicApiKey,
   }) {
     return AppSettings(
       longDistanceThresholdKm: longDistanceThresholdKm ?? this.longDistanceThresholdKm,
@@ -106,7 +98,7 @@ class AppSettings {
       companyEmail: companyEmail ?? this.companyEmail,
       bankIban: bankIban ?? this.bankIban,
       twintNumber: twintNumber ?? this.twintNumber,
-      geminiApiKey: geminiApiKey ?? this.geminiApiKey,
+      anthropicApiKey: anthropicApiKey ?? this.anthropicApiKey,
     );
   }
 }

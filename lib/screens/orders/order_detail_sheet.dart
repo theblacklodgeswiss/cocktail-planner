@@ -11,7 +11,7 @@ import '../../models/employee.dart';
 import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../services/auth_service.dart';
-import '../../services/gemini_service.dart';
+import '../../services/claude_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
@@ -287,13 +287,6 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   /// Download shopping list PDF without prices for employees
   Future<void> _downloadShoppingListWithoutPrices() async {
-    if (!widget.order.hasShoppingList) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.no_shopping_list'.tr())),
-      );
-      return;
-    }
-
     try {
       await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: false);
       if (mounted) {
@@ -382,9 +375,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _generateWithGemini() async {
-    if (!geminiService.isConfigured) {
+    if (!claudeService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.gemini_not_configured'.tr())),
+        SnackBar(content: Text('orders.claude_not_configured'.tr())),
       );
       return;
     }
@@ -396,8 +389,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       final confirmedReset = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('orders.gemini_reset_confirm_title'.tr()),
-          content: Text('orders.gemini_reset_confirm_message'.tr()),
+          title: Text('orders.claude_reset_confirm_title'.tr()),
+          content: Text('orders.claude_reset_confirm_message'.tr()),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -405,7 +398,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text('orders.gemini_reset_confirm'.tr()),
+              child: Text('orders.claude_reset_confirm'.tr()),
             ),
           ],
         ),
@@ -503,7 +496,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
-            Text('orders.gemini_generating'.tr()),
+            Text('orders.claude_generating'.tr()),
           ],
         ),
       ),
@@ -524,7 +517,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
           .toList();
 
-      final suggestion = await geminiService.generateMaterialSuggestions(
+      final suggestion = await claudeService.generateMaterialSuggestions(
         guestCount: order.personCount,
         guestRange: order.guestCountRange,
         requestedCocktails: allRecipes.map((r) => r.name).toList(),
@@ -541,7 +534,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(suggestion.errorMessage ?? 'orders.gemini_error'.tr()),
+              content: Text(suggestion.errorMessage ?? 'orders.claude_error'.tr()),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 6),
             ),
@@ -583,7 +576,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('orders.gemini_error'.tr()),
+            content: Text('orders.claude_error'.tr()),
             backgroundColor: Colors.red,
           ),
         );
@@ -943,10 +936,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                       onPressed: () => _downloadShoppingListWithoutPrices(),
                       icon: const Icon(Icons.download),
                       label: Text('shopping.download_list_no_prices'.tr()),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.grey.shade700,
-                      ),
-                    ),
+                                    ),
                     const SizedBox(height: 8),
                     TextButton.icon(
                       onPressed: _editShoppingList,
@@ -959,7 +949,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     onPressed: _generateWithGemini,
                     icon: const Icon(Icons.auto_awesome, color: Colors.white),
                     label: Text(
-                      'orders.regenerate_with_gemini'.tr(),
+                      'orders.regenerate_with_claude'.tr(),
                       style: TextStyle(color: Colors.white),
                     ),
                     style: FilledButton.styleFrom(
@@ -1003,10 +993,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                       onPressed: () => _downloadShoppingListWithoutPrices(),
                       icon: const Icon(Icons.download),
                       label: Text('shopping.download_list_no_prices'.tr()),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.grey.shade700,
-                      ),
-                    ),
+                                    ),
                     const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: _editShoppingList,
@@ -1019,7 +1006,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     onPressed: _generateWithGemini,
                     icon: const Icon(Icons.auto_awesome, color: Colors.white),
                     label: Text(
-                      'orders.regenerate_with_gemini'.tr(),
+                      'orders.regenerate_with_claude'.tr(),
                       style: TextStyle(color: Colors.white),
                     ),
                     style: FilledButton.styleFrom(
@@ -1255,7 +1242,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     child: FilledButton.icon(
                       onPressed: () => _generateWithGemini(),
                       icon: const Icon(Icons.auto_awesome, color: Colors.white),
-                      label: Text('orders.generate_with_gemini'.tr(), style: const TextStyle(color: Colors.white)),
+                      label: Text('orders.generate_with_claude'.tr(), style: const TextStyle(color: Colors.white)),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.deepPurple,
                       ),
