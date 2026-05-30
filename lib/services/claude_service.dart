@@ -486,7 +486,8 @@ REGELN FÜR DAS "cocktails" FELD (PFLICHTFELD!):
 
 PFLICHTARTIKEL (immer hinzufügen, exakt diese Namen und Einheiten):
 - {"name": "Strohhalme", "unit": "500er Packung", "quantity": <Gästeanzahl × 1.5 ÷ 500, aufgerundet>, "reason": "Strohhalme: $guestCount Gäste × 1.5"}
-- Becher: Berechne erwartete Drinks total. Etwa 60% in 0.3L Becher, 40% in 0.2L Becher. Verwende: {"name": "Hartplastikbecher 0.3L", "unit": "30er Packung"} und {"name": "Hartplastikbecher 0.2L", "unit": "40er Packung"}
+- {"name": "Hartplastikbecher 0.3L", "unit": "30er Packung", "quantity": ${(guestCount * 1.5 / 30).ceil()}, "reason": "0.3L Becher: $guestCount Gäste × 1.5 ÷ 30"}
+- {"name": "Hartplastikbecher 0.2L", "unit": "40er Packung", "quantity": ${(guestCount * 1.0 / 40).ceil()}, "reason": "0.2L Becher: $guestCount Gäste × 1.0 ÷ 40"}
 - Falls Mojito oder Mango-Cocktail dabei: {"name": "Marshmallow", "unit": "Packung", "quantity": 1}
 - {"name": "Servietten", "unit": "250er Packung", "quantity": <Gästeanzahl ÷ 250, aufgerundet>}
 - {"name": "Schwarze Handschuhe", "unit": "100er Packung", "quantity": 1}
