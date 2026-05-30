@@ -48,33 +48,40 @@ class _RecipesTabState extends State<RecipesTab> {
       builder: (ctx) => RecipeEditDialog(
         initialName: recipe?.name ?? '',
         initialIngredients: recipe?.ingredients ?? [],
+        initialAmounts: recipe?.ingredientAmounts ?? {},
       ),
     );
 
     if (result != null && result.name.trim().isNotEmpty) {
       bool success;
-
       if (docId == null) {
         success = await adminRepository.addRecipe(
           name: result.name.trim(),
           ingredients: result.ingredients,
         );
+        // Save amounts separately after create
+        if (success && result.amounts.isNotEmpty) {
+          final recipes = await adminRepository.getRecipesWithIds();
+          final created = recipes.where((r) => r.item.name == result.name.trim()).firstOrNull;
+          if (created != null) {
+            await adminRepository.updateRecipeAmounts(docId: created.id, amounts: result.amounts);
+          }
+        }
       } else {
         success = await adminRepository.updateRecipe(
           docId: docId,
           name: result.name.trim(),
           ingredients: result.ingredients,
         );
+        if (success && result.amounts.isNotEmpty) {
+          await adminRepository.updateRecipeAmounts(docId: docId, amounts: result.amounts);
+        }
       }
 
       scaffoldMessenger.showSnackBar(
-        SnackBar(
-            content: Text(success ? 'Gespeichert!' : 'Fehler beim Speichern')),
+        SnackBar(content: Text(success ? 'Gespeichert!' : 'Fehler beim Speichern')),
       );
-
-      if (success) {
-        _loadItems();
-      }
+      if (success) _loadItems();
     }
   }
 
@@ -101,22 +108,16 @@ class _RecipesTabState extends State<RecipesTab> {
 
     if (confirm == true) {
       final success = await adminRepository.deleteRecipe(docId: docId);
-
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text(success ? 'Gelöscht!' : 'Fehler beim Löschen')),
       );
-
-      if (success) {
-        _loadItems();
-      }
+      if (success) _loadItems();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Column(
       children: [
@@ -135,9 +136,7 @@ class _RecipesTabState extends State<RecipesTab> {
         decoration: InputDecoration(
           hintText: 'Suchen...',
           prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
         ),
         onChanged: (value) => setState(() => _searchQuery = value),
@@ -151,10 +150,7 @@ class _RecipesTabState extends State<RecipesTab> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            '${_filteredItems.length} Rezepte',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text('${_filteredItems.length} Rezepte', style: Theme.of(context).textTheme.bodySmall),
           FilledButton.tonalIcon(
             onPressed: () => _showEditDialog(),
             icon: const Icon(Icons.add),
@@ -166,33 +162,25 @@ class _RecipesTabState extends State<RecipesTab> {
   }
 
   Widget _buildList() {
-    if (_filteredItems.isEmpty) {
-      return const Center(child: Text('Keine Rezepte gefunden'));
-    }
+    if (_filteredItems.isEmpty) return const Center(child: Text('Keine Rezepte gefunden'));
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: _filteredItems.length,
       itemBuilder: (context, index) {
         final record = _filteredItems[index];
-        final recipe = record.item;
         return _RecipeCard(
-          recipe: recipe,
-          onEdit: () => _showEditDialog(docId: record.id, recipe: recipe),
-          onDelete: () => _deleteItem(record.id, recipe.name),
+          recipe: record.item,
+          onEdit: () => _showEditDialog(docId: record.id, recipe: record.item),
+          onDelete: () => _deleteItem(record.id, record.item.name),
         );
       },
     );
   }
 }
 
-/// Card widget for displaying a recipe item.
 class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({
-    required this.recipe,
-    required this.onEdit,
-    required this.onDelete,
-  });
+  const _RecipeCard({required this.recipe, required this.onEdit, required this.onDelete});
 
   final Recipe recipe;
   final VoidCallback onEdit;
@@ -200,31 +188,104 @@ class _RecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isShot = recipe.name.toLowerCase().contains('shot');
+    final hasAmounts = recipe.ingredientAmounts.isNotEmpty;
+
     return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor:
-              isShot ? Colors.orange.withValues(alpha: 0.2) : Colors.green.withValues(alpha: 0.2),
-          child: Icon(
-            isShot ? Icons.wine_bar : Icons.local_bar,
-            color: isShot ? Colors.orange : Colors.green,
-          ),
-        ),
-        title: Text(recipe.name),
-        subtitle: Text(
-          '${recipe.ingredients.length} Zutaten: ${recipe.ingredients.take(3).join(", ")}${recipe.ingredients.length > 3 ? "..." : ""}',
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: onEdit,
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: isShot
+                  ? Colors.orange.withValues(alpha: 0.2)
+                  : Colors.green.withValues(alpha: 0.2),
+              child: Icon(
+                isShot ? Icons.wine_bar : Icons.local_bar,
+                size: 18,
+                color: isShot ? Colors.orange : Colors.green,
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: onDelete,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(recipe.name, style: theme.textTheme.titleSmall),
+                      ),
+                      if (hasAmounts)
+                        Tooltip(
+                          message: 'Mengen vorhanden',
+                          child: Icon(Icons.science, size: 14, color: Colors.green.shade400),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // Ingredient list with amounts
+                  ...recipe.ingredients.map((ing) {
+                    final amount = recipe.ingredientAmounts[ing];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              ing,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (amount != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                amount,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          else
+                            Text(
+                              '—',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            Column(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 18),
+                  onPressed: onEdit,
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                  onPressed: onDelete,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
           ],
         ),
