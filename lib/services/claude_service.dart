@@ -194,41 +194,47 @@ class ClaudeService {
 
 
   /// For each recipe, ask Claude for standard bartender amounts per ingredient.
-  /// Returns map of recipe name → {ingredient → amount string (e.g. "50ml")}.
+  /// Processes in batches of 5 to avoid token limits.
   Future<Map<String, Map<String, String>>> enrichRecipeAmounts(
     List<({String id, dynamic item})> recipes,
   ) async {
-    final recipeList = recipes.map((r) {
+    const batchSize = 5;
+    final result = <String, Map<String, String>>{};
+    for (var i = 0; i < recipes.length; i += batchSize) {
+      final batch = recipes.skip(i).take(batchSize).toList();
+      final batchResult = await _enrichBatch(batch);
+      result.addAll(batchResult);
+    }
+    return result;
+  }
+
+  Future<Map<String, Map<String, String>>> _enrichBatch(
+    List<({String id, dynamic item})> batch,
+  ) async {
+    final recipeList = batch.map((r) {
       final recipe = r.item;
       return '- ${recipe.name}: ${(recipe.ingredients as List).join(', ')}';
     }).join('\n');
 
     final prompt = '''
-Du bist ein erfahrener Barkeeper. Gib für jedes der folgenden Cocktail-Rezepte die Standard-Bartender-Mengen pro Drink zurück.
+Du bist ein erfahrener Barkeeper. Gib für jedes Cocktail-Rezept die Standard-Mengen pro Drink zurück.
 
 REZEPTE:
 $recipeList
 
-Antworte NUR mit einem JSON-Objekt. Format:
-{
-  "Rezeptname": {
-    "Zutat1": "50ml",
-    "Zutat2": "30ml"
-  }
-}
+Antworte NUR mit JSON. Format:
+{"Rezeptname":{"Zutat1":"50ml","Zutat2":"30ml"}}
 
 Regeln:
-- Mengen in ml (für Flüssigkeiten) oder Stück/Scheiben/Prisen für Deko/Früchte
-- Bleib bei realistischen Standard-Cocktail-Rezepten
-- Falls du ein Rezept nicht kennst, schätze anhand der Zutaten
-- Gib KEIN Markdown, nur reines JSON
+- Mengen in ml für Flüssigkeiten, Stück/Scheiben für Früchte/Deko
+- Kein Markdown, nur reines JSON
 ''';
 
     try {
       final response = await _sendMessage(
         prompt,
-        maxTokens: 2048,
-        operationName: 'enrichRecipeAmounts',
+        maxTokens: 1024,
+        operationName: 'enrichBatch',
       );
       if (response == null) return {};
 
@@ -243,7 +249,7 @@ Regeln:
                 .map((k, v) => MapEntry(k, v.toString())),
           ));
     } catch (e) {
-      debugPrint('enrichRecipeAmounts failed: $e');
+      debugPrint('_enrichBatch failed: $e');
       return {};
     }
   }
