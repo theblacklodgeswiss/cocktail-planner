@@ -14,6 +14,9 @@ import '../../services/user_preferences_service.dart';
 @JS('window.location.reload')
 external void _jsReload();
 
+@JS('eval')
+external void _jsEval(String code);
+
 /// Settings screen for app configuration.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -302,9 +305,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _reloadPage() {
     if (kIsWeb) {
-      // Use JavaScript to reload
       _jsReload();
     }
+  }
+
+  Future<void> _refreshPwa() async {
+    if (!kIsWeb) return;
+    // Unregister all service workers, then hard-reload to fetch latest version
+    _jsEval('''
+      (async () => {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) { await reg.unregister(); }
+        }
+        window.location.reload(true);
+      })();
+    ''');
   }
 
   Future<void> _loginMicrosoft() async {
@@ -393,6 +409,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',
                 ),
+              ),
+            ),
+          if (kIsWeb)
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('App aktualisieren'),
+              subtitle: const Text('Service Worker löschen und neu laden'),
+              trailing: OutlinedButton.icon(
+                onPressed: _refreshPwa,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Aktualisieren'),
               ),
             ),
         ],
