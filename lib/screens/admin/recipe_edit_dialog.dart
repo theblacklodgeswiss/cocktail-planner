@@ -65,7 +65,6 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
           .where((m) => m.toLowerCase().contains(query))
           .toList();
     }
-    // Sort: selected items at top, then alphabetical
     materials.sort((a, b) {
       final aSelected = _selectedIngredients.contains(a);
       final bSelected = _selectedIngredients.contains(b);
@@ -130,23 +129,27 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
   @override
   Widget build(BuildContext context) {
     final isNewRecipe = widget.initialName.isEmpty;
+    final screenHeight = MediaQuery.sizeOf(context).height;
 
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       title: Text(isNewRecipe ? 'Neues Rezept' : 'Rezept bearbeiten'),
       content: SizedBox(
         width: 400,
-        height: 500,
+        height: screenHeight * 0.72,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 8),
             _buildNameField(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             if (_selectedIngredients.isNotEmpty) _buildSelectedChips(),
             _buildSearchField(),
-            const SizedBox(height: 8),
             _buildAddNewButton(),
-            const Divider(),
+            const Divider(height: 8),
             Expanded(child: _buildIngredientsList()),
           ],
         ),
@@ -175,7 +178,7 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
       decoration: const InputDecoration(
         labelText: 'Name *',
         hintText: 'z.B. Mojito - Classic',
-        border: OutlineInputBorder(),
+        isDense: true,
       ),
     );
   }
@@ -186,19 +189,21 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
       children: [
         Text(
           'Ausgewählt (${_selectedIngredients.length}):',
-          style: Theme.of(context).textTheme.labelMedium,
+          style: Theme.of(context).textTheme.labelSmall,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 120),
+          constraints: const BoxConstraints(maxHeight: 72),
           child: SingleChildScrollView(
             child: Wrap(
-              spacing: 8,
-              runSpacing: 4,
+              spacing: 4,
+              runSpacing: 2,
               children: _selectedIngredients.map((ingredient) {
                 return Chip(
-                  label: Text(ingredient),
-                  deleteIcon: const Icon(Icons.close, size: 18),
+                  label: Text(ingredient, style: const TextStyle(fontSize: 12)),
+                  deleteIcon: const Icon(Icons.close, size: 14),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   onDeleted: () {
                     setState(() => _selectedIngredients.remove(ingredient));
                   },
@@ -207,7 +212,7 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 6),
       ],
     );
   }
@@ -216,9 +221,10 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
     return TextField(
       decoration: InputDecoration(
         hintText: 'Zutat suchen...',
-        prefixIcon: const Icon(Icons.search),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        prefixIcon: const Icon(Icons.search, size: 18),
         isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       ),
       onChanged: (value) => setState(() => _searchQuery = value),
     );
@@ -227,8 +233,12 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
   Widget _buildAddNewButton() {
     return TextButton.icon(
       onPressed: _addNewIngredient,
-      icon: const Icon(Icons.add),
-      label: const Text('Neue Zutat erstellen'),
+      icon: const Icon(Icons.add, size: 16),
+      label: const Text('Neue Zutat erstellen', style: TextStyle(fontSize: 13)),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
     );
   }
 
@@ -245,9 +255,11 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
         final material = _filteredMaterials[index];
         final isSelected = _selectedIngredients.contains(material);
         return CheckboxListTile(
-          title: Text(material),
+          title: Text(material, style: const TextStyle(fontSize: 13)),
           value: isSelected,
           dense: true,
+          visualDensity: VisualDensity.compact,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
           onChanged: (value) {
             setState(() {
               if (value == true) {
