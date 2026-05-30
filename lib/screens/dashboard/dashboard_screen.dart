@@ -225,7 +225,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Get recipe ingredients
       final selectedCocktails = appState.selectedRecipes;
       final recipeIngredients = selectedCocktails
-          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
+          .map((r) => {
+                'cocktail': r.name,
+                'ingredients': r.ingredients,
+                if (r.ingredientAmounts.isNotEmpty) 'amounts': r.ingredientAmounts,
+              })
           .toList();
 
       // Generate material suggestions

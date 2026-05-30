@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/admin_repository.dart';
 import '../../data/settings_repository.dart';
 import '../../models/app_settings.dart';
 import '../../services/auth_service.dart';
@@ -22,6 +23,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isImporting = false;
+  bool _isEnrichingRecipes = false;
+  String _enrichStatus = '';
   AppSettings _settings = const AppSettings();
 
   @override
@@ -231,11 +234,113 @@ _isLoading = false;
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        _buildRecipeEnrichCard(),
       ],
     );
   }
 
+  Widget _buildRecipeEnrichCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.menu_book, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(
+                  'Rezept-Mengen',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'AI ergänzt automatisch die Mengen pro Zutat für alle Rezepte (z.B. "50ml Vodka pro Drink"). Wird nur für Rezepte ohne Mengenangaben ausgeführt.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            if (_enrichStatus.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  _enrichStatus,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: _enrichStatus.contains('Fehler')
+                        ? Colors.red
+                        : Colors.green.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            FilledButton.icon(
+              onPressed: _isEnrichingRecipes ? null : _enrichRecipeAmounts,
+              icon: _isEnrichingRecipes
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.auto_awesome, size: 18),
+              label: Text(_isEnrichingRecipes ? 'Läuft...' : 'Mengen mit AI ergänzen'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   
+  Future<void> _enrichRecipeAmounts() async {
+    setState(() {
+      _isEnrichingRecipes = true;
+      _enrichStatus = 'Rezepte laden...';
+    });
+    try {
+      final recipes = await adminRepository.getRecipesWithIds();
+      final toEnrich = recipes.where((r) => !r.item.hasAmounts).toList();
+
+      if (toEnrich.isEmpty) {
+        setState(() => _enrichStatus = 'Alle Rezepte haben bereits Mengen ✓');
+        return;
+      }
+
+      setState(() => _enrichStatus = '${toEnrich.length} Rezepte an AI senden...');
+
+      final result = await claudeService.enrichRecipeAmounts(
+        toEnrich.map((r) => (id: r.id, item: r.item)).toList(),
+      );
+
+      if (result.isEmpty) {
+        setState(() => _enrichStatus = 'Fehler: Keine Antwort von AI');
+        return;
+      }
+
+      int saved = 0;
+      for (final recipe in toEnrich) {
+        final amounts = result[recipe.item.name];
+        if (amounts != null && amounts.isNotEmpty) {
+          await adminRepository.updateRecipeAmounts(
+            docId: recipe.id,
+            amounts: amounts,
+          );
+          saved++;
+          setState(() => _enrichStatus = '$saved/${toEnrich.length} gespeichert...');
+        }
+      }
+
+      setState(() => _enrichStatus = '$saved Rezepte erfolgreich ergänzt ✓');
+    } catch (e) {
+      setState(() => _enrichStatus = 'Fehler: $e');
+    } finally {
+      setState(() => _isEnrichingRecipes = false);
+    }
+  }
+
   Widget _buildHistoricalImportSection() {
     return Container(
       padding: const EdgeInsets.all(12),

@@ -217,6 +217,25 @@ class AdminRepository {
     }
   }
 
+  /// Save AI-generated ingredient amounts to a recipe.
+  Future<bool> updateRecipeAmounts({
+    required String docId,
+    required Map<String, String> amounts,
+  }) async {
+    if (!firestoreService.isAvailable) return false;
+    try {
+      await firestoreService.recipesCollection.doc(docId).update({
+        'ingredientAmounts': amounts,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      _clearCache();
+      return true;
+    } catch (e) {
+      debugPrint('Failed to update recipe amounts: $e');
+      return false;
+    }
+  }
+
   /// Delete a recipe.
   Future<bool> deleteRecipe({required String docId}) async {
     if (!firestoreService.isAvailable) return false;

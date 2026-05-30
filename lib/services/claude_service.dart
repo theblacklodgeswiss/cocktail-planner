@@ -191,12 +191,61 @@ class ClaudeService {
     return null;
   }
 
-  Future<List<Map<String, dynamic>>> _getTrainingData() async {
-    final results = await Future.wait([
-      _fetchOrderTrainingData(),
-      _fetchHistoricalTrainingData(),
-    ]);
-    return [...results[0], ...results[1]];
+
+
+  /// For each recipe, ask Claude for standard bartender amounts per ingredient.
+  /// Returns map of recipe name → {ingredient → amount string (e.g. "50ml")}.
+  Future<Map<String, Map<String, String>>> enrichRecipeAmounts(
+    List<({String id, dynamic item})> recipes,
+  ) async {
+    final recipeList = recipes.map((r) {
+      final recipe = r.item;
+      return '- ${recipe.name}: ${(recipe.ingredients as List).join(', ')}';
+    }).join('\n');
+
+    final prompt = '''
+Du bist ein erfahrener Barkeeper. Gib für jedes der folgenden Cocktail-Rezepte die Standard-Bartender-Mengen pro Drink zurück.
+
+REZEPTE:
+$recipeList
+
+Antworte NUR mit einem JSON-Objekt. Format:
+{
+  "Rezeptname": {
+    "Zutat1": "50ml",
+    "Zutat2": "30ml"
+  }
+}
+
+Regeln:
+- Mengen in ml (für Flüssigkeiten) oder Stück/Scheiben/Prisen für Deko/Früchte
+- Bleib bei realistischen Standard-Cocktail-Rezepten
+- Falls du ein Rezept nicht kennst, schätze anhand der Zutaten
+- Gib KEIN Markdown, nur reines JSON
+''';
+
+    try {
+      final response = await _sendMessage(
+        prompt,
+        maxTokens: 2048,
+        operationName: 'enrichRecipeAmounts',
+      );
+      if (response == null) return {};
+
+      final cleaned = response
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+      final parsed = jsonDecode(cleaned) as Map<String, dynamic>;
+      return parsed.map((recipeName, amounts) => MapEntry(
+            recipeName,
+            (amounts as Map<String, dynamic>)
+                .map((k, v) => MapEntry(k, v.toString())),
+          ));
+    } catch (e) {
+      debugPrint('enrichRecipeAmounts failed: $e');
+      return {};
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchOrderTrainingData() async {
@@ -225,26 +274,7 @@ class ClaudeService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchHistoricalTrainingData() async {
-    try {
-      final docs = await FirebaseFirestore.instance
-          .collection('historical_shopping_lists')
-          .limit(10)
-          .get();
-      return docs.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'source': 'historical_import',
-          'guests': data['guestCount'],
-          'cocktails': data['cocktails'],
-          'items': data['items'],
-        };
-      }).toList();
-    } catch (e) {
-      debugPrint('Failed to get historical training data: $e');
-      return [];
-    }
-  }
+
 
   Future<AiMaterialSuggestion> generateMaterialSuggestions({
     required int guestCount,
@@ -371,6 +401,7 @@ class ClaudeService {
     final ingredientsJson = jsonEncode(recipeIngredients.map((r) => {
       'cocktail': r['cocktail'],
       'ingredients': r['ingredients'],
+      if ((r['amounts'] as Map?)?.isNotEmpty == true) 'amounts': r['amounts'],
     }).toList());
 
     final popularityInfo = cocktailPopularity.isNotEmpty
@@ -394,8 +425,11 @@ EVENT-DETAILS:
 COCKTAIL-POPULARITÄT (wie wahrscheinlich wird jeder Cocktail getrunken):
 $popularityInfo
 
-REZEPT-ZUTATEN (welche Zutaten für welchen Cocktail):
+REZEPT-ZUTATEN (welche Zutaten für welchen Cocktail, inkl. Mengen pro Drink falls bekannt):
 $ingredientsJson
+
+WICHTIG: Falls "amounts" im Rezept vorhanden sind, nutze diese Mengenangaben pro Drink für die Berechnung!
+Beispiel: amounts: {"Cranberry Saft": "50ml"} → 117 Drinks × 50ml ÷ 1000ml pro Flasche = 6 Flaschen
 
 VERFÜGBARE MATERIALIEN (verwende NUR diese Namen und Einheiten exakt):
 $materialsJson

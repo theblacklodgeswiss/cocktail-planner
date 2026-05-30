@@ -526,7 +526,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           .toList();
 
       final recipeIngredients = allRecipes
-          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
+          .map((r) => {
+                'cocktail': r.name,
+                'ingredients': r.ingredients,
+                if (r.ingredientAmounts.isNotEmpty) 'amounts': r.ingredientAmounts,
+              })
           .toList();
 
       final suggestion = await claudeService.generateMaterialSuggestions(
