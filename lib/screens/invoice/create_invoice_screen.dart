@@ -9,6 +9,7 @@ import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/offer.dart';
 import '../../models/order.dart';
+import '../../services/auth_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../utils/currency.dart';
@@ -61,7 +62,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   late String _serviceType;
 
   // Controllers
-  final _editorNameCtrl = TextEditingController(text: 'Mario Kantharoobarajah');
+  late final _editorNameCtrl = TextEditingController(
+    text: authService.displayName ?? 'Mario Kantharoobarajah',
+  );
   final _eventTimeCtrl = TextEditingController();
   final _clientNameCtrl = TextEditingController();
   final _clientContactCtrl = TextEditingController();
@@ -718,7 +721,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                             )
                             .toList(),
                       )
-                    : Column(children: fields),
+                    : Column(
+                        children: [
+                          fields[0],
+                          const SizedBox(height: 8),
+                          fields[1],
+                        ],
+                      ),
                 const SizedBox(height: 8),
                 _field(
                   controller: _locationCtrl,

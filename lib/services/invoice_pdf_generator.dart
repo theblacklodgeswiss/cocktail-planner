@@ -308,6 +308,13 @@ class InvoicePdfGenerator {
                 '${isEn ? 'Contact' : 'Kontakt'}: ${order.offerClientContact}',
                 style: const pw.TextStyle(fontSize: 9),
               ),
+              if (order.location.isNotEmpty) ...[
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  '${isEn ? 'Address' : 'Adresse'}: ${order.location}',
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ],
             ],
           ),
         ),
@@ -421,22 +428,52 @@ class InvoicePdfGenerator {
           ),
           pw.SizedBox(height: 3),
         ],
-        pw.RichText(
-          text: pw.TextSpan(
-            children: [
-              pw.TextSpan(
-                text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
-                style: pw.TextStyle(
-                  fontSize: 9,
-                  fontWeight: pw.FontWeight.bold,
+        pw.Row(
+          children: [
+            pw.Expanded(
+              flex: 2,
+              child: pw.RichText(
+                text: pw.TextSpan(
+                  children: [
+                    pw.TextSpan(
+                      text: isEn ? 'Guest count: ' : 'Gästeanzahl: ',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.TextSpan(
+                      text: '${order.personCount} ${isEn ? 'Guests' : 'Gäste'}',
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
                 ),
               ),
-              pw.TextSpan(
-                text: '${order.personCount} ${isEn ? 'Guests' : 'Personen'}',
-                style: const pw.TextStyle(fontSize: 9),
+            ),
+            if (order.eventTime.isNotEmpty) ...[
+              pw.Expanded(
+                flex: 1,
+                child: pw.RichText(
+                  textAlign: pw.TextAlign.right,
+                  text: pw.TextSpan(
+                    children: [
+                      pw.TextSpan(
+                        text: isEn ? 'Time: ' : 'Uhrzeit: ',
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.TextSpan(
+                        text: '${order.eventTime} ${isEn ? '' : 'Uhr'}',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
-          ),
+          ],
         ),
         if (order.cocktails.isNotEmpty) ...[
           pw.SizedBox(height: 3),

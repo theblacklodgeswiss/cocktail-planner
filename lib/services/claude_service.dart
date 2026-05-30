@@ -206,6 +206,7 @@ class ClaudeService {
       // Keep all for now — caller will filter to most relevant
       final limited = relevant;
       return limited.map((order) => {
+        'id': order.id,
         'source': 'firestore_order',
         'guests': order.personCount,
         'guestRange': order.guestCountRange,
@@ -254,6 +255,7 @@ class ClaudeService {
     required List<Map<String, dynamic>> availableMaterials,
     required List<Map<String, dynamic>> recipeIngredients,
     Map<String, double>? cocktailPopularity,
+    String? excludeOrderId,
   }) async {
     if (!isConfigured) {
       return AiMaterialSuggestion.error(
@@ -263,7 +265,10 @@ class ClaudeService {
     }
 
     try {
-      final rawOrders = await _fetchOrderTrainingData();
+      final allOrders = await _fetchOrderTrainingData();
+      final rawOrders = excludeOrderId != null
+          ? allOrders.where((o) => o['id'] != excludeOrderId).toList()
+          : allOrders;
       final materialNames = availableMaterials.map((m) => (m['name'] as String).toLowerCase()).toSet();
 
       // Filter items to only ingredients (no service items)
@@ -395,17 +400,25 @@ $ingredientsJson
 VERFÜGBARE MATERIALIEN (verwende NUR diese Namen und Einheiten exakt):
 $materialsJson
 
+WICHTIGE EINHEITEN-ERKLÄRUNG:
+- "Limetten (54 Stk.)" mit Einheit "Stk" = 1 Kiste mit ~54 Limetten. Berechne: Anzahl Drinks die Limetten brauchen × 0.5 Limetten pro Drink ÷ 54. NICHT 1 Kiste pro Cocktail-Sorte! Faustregel: Bei unter 400 Gästen reicht erfahrungsgemäss 1 Kiste Limetten.
+- "6x1.5L" = 1 Paket = 9L total
+- "12x1L" = 1 Paket = 12L total
+- "24er Pack" = 1 Paket mit 24 Einheiten
+
+BERECHNUNGSPRINZIP FÜR GETEILTE ZUTATEN:
+Wenn eine Zutat (z.B. Limetten, Rum) in mehreren Cocktails vorkommt, berechne die Gesamtmenge basierend auf den TOTAL DRINKS aller Cocktails die diese Zutat brauchen — NICHT Menge × Anzahl Cocktailsorten!
+
 BERECHNUNGSREGELN:
 ⚠️ WICHTIG: Nicht alle Gäste trinken Cocktails! Erfahrungsgemäss bestellen nur ca. 20-30% der Gäste einen Cocktail.
 
-1. TOTAL DRINKS BERECHNUNG (NICHT pro Person!):
-   - light-Event: ca. 0.8-1.0 Drinks pro Gast total
-   - normal-Event: ca. 1.0-1.2 Drinks pro Gast total
-   - heavy-Event: ca. 1.3-1.5 Drinks pro Gast total
+1. TOTAL DRINKS BERECHNUNG:
+   - normal-Event: $guestCount Gäste × 1.1 = ${(guestCount * 1.1).round()} Drinks TOTAL über ALLE Cocktails
+   - Diese ${(guestCount * 1.1).round()} Drinks verteilen sich auf ${requestedCocktails.length} Cocktails = ~${(guestCount * 1.1 / requestedCocktails.length).round()} Drinks PRO Cocktail
 
-   Beispiel: 500 Gäste "normal" = 500-600 Drinks TOTAL (nicht 2500!)
+2. Für Zutaten die in X Cocktails vorkommen: X × ${(guestCount * 1.1 / requestedCocktails.length).round()} Drinks = Basis für Mengenkalkulation
+   Beispiel Limetten (54 Stk.): Anzahl Cocktails mit Limetten × ${(guestCount * 1.1 / requestedCocktails.length).round()} Drinks × 0.5 Limetten pro Drink ÷ 54 = Kisten
 
-2. Verteile die Drinks gleichmässig auf die gewünschten Cocktails
 3. Berechne Mengen basierend auf den REZEPT-ZUTATEN (Primärquelle!)
 4. Runde Mengen auf sinnvolle Packungsmengen auf
 5. Berücksichtige Reserve (+15% Puffer)

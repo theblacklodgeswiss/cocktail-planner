@@ -538,20 +538,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         availableMaterials: materials,
         recipeIngredients: recipeIngredients,
         cocktailPopularity: appState.cocktailPopularity,
+        excludeOrderId: widget.order.id,
       );
 
       timerSub.cancel();
       secondsNotifier.dispose();
       if (mounted) Navigator.pop(context); // close loading
-
-      if (suggestion == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('orders.claude_error'.tr()), backgroundColor: Colors.red),
-          );
-        }
-        return;
-      }
 
       if (suggestion.hasError) {
         if (mounted) {

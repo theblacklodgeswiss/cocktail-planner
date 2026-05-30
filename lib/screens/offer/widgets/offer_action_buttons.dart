@@ -1,7 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
-/// Action buttons for the offer form (save, preview, generate PDF, print, share).
+/// Action buttons for the offer form (save, generate PDF, print, share).
 class OfferActionButtons extends StatelessWidget {
   const OfferActionButtons({
     super.key,
@@ -15,7 +15,7 @@ class OfferActionButtons extends StatelessWidget {
 
   final bool isGenerating;
   final VoidCallback? onSaveOnly;
-  final VoidCallback? onPreview;
+  final VoidCallback? onPreview; // kept for API compatibility, unused
   final VoidCallback? onGeneratePdf;
   final VoidCallback? onPrint;
   final VoidCallback? onShare;
@@ -24,20 +24,12 @@ class OfferActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Secondary (left-side) buttons
     final saveBtn = OutlinedButton.icon(
       onPressed: isGenerating ? null : onSaveOnly,
       icon: const Icon(Icons.save_outlined, size: 18),
       label: Text('offer.save_only'.tr()),
     );
 
-    final previewBtn = OutlinedButton.icon(
-      onPressed: isGenerating ? null : onPreview,
-      icon: const Icon(Icons.visibility, size: 18),
-      label: Text('offer.preview'.tr()),
-    );
-
-    // Primary (right-side) button
     final pdfBtn = FilledButton.icon(
       onPressed: isGenerating ? null : onGeneratePdf,
       icon: isGenerating
@@ -73,17 +65,10 @@ class OfferActionButtons extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 520) {
-          // ── Desktop / Tablet ──────────────────────────────────────────────
-          // Secondary left | gap | Primary right
           return Row(
             children: [
-              // Left: secondary actions
               saveBtn,
-              const SizedBox(width: 8),
-              previewBtn,
-              // Push primary actions to the right
               const Spacer(),
-              // Right: primary actions
               pdfBtn,
               const SizedBox(width: 8),
               printBtn,
@@ -92,17 +77,10 @@ class OfferActionButtons extends StatelessWidget {
             ],
           );
         } else {
-          // ── Mobile: two rows ──────────────────────────────────────────────
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(child: saveBtn),
-                  const SizedBox(width: 8),
-                  Expanded(child: previewBtn),
-                ],
-              ),
+              saveBtn,
               const SizedBox(height: 8),
               Row(
                 children: [

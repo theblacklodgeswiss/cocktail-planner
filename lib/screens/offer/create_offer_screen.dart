@@ -10,6 +10,7 @@ import '../../data/employee_repository.dart';
 import '../../models/offer.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
+import '../../services/auth_service.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
 import '../../utils/currency.dart';
@@ -66,7 +67,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   late String _serviceType;
 
   // Controllers
-  late final _editorNameCtrl = TextEditingController(text: 'Inthusan Gunasiri');
+  late final _editorNameCtrl = TextEditingController(
+    text: authService.displayName ?? 'Inthusan Gunasiri',
+  );
   final _eventTimeCtrl = TextEditingController();
   final _clientNameCtrl = TextEditingController();
   final _clientContactCtrl = TextEditingController();
