@@ -1851,7 +1851,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: priceCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            signed: true,
+                            decimal: true,
+                          ),
                           decoration: InputDecoration(
                             labelText:
                                 '${'offer.position_price'.tr()} (${_currency.code})',

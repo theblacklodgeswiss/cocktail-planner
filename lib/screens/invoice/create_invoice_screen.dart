@@ -1557,7 +1557,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: priceCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            signed: true,
+                            decimal: true,
+                          ),
                           decoration: InputDecoration(
                             labelText:
                                 '${'invoice.position_price'.tr()} (${widget.order.currency})',
