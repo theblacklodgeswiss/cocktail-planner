@@ -80,6 +80,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final TextEditingController _addressController = TextEditingController();
   int _personCount = 100;
   int _distanceKm = 10;
+  // Guests start with a "pending" lookup so `_buildDistanceDisplay()` shows
+  // a "calculating..." state instead of the fabricated default `_distanceKm`
+  // value above. Cleared to false as soon as a lookup attempt for the
+  // current address resolves (success or definitive failure - see the
+  // debounced listener in `initState`). Employees/admins never see that
+  // display, but this starts false for them anyway so the flag's meaning
+  // stays simple and role-independent.
+  bool _distanceLookupPending = !authService.isEmployeeOrHigher;
   String _currency = defaultCurrency.code;
   String _drinkerType = 'normal';
   final List<Recipe> _selectedRecipes = [];
@@ -120,9 +128,23 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           distanceCalculator
               .distanceKmFromAddress(_addressController.text)
               .then((result) {
-            if (result != null && mounted) {
-              setState(() => _distanceKm = result);
-            }
+            // Re-check mounted/role state HERE, right before applying the
+            // result - not just when the Timer was scheduled above. The
+            // role check at scheduling time can be stale: e.g. a staff
+            // member editing an existing order has their address prefilled
+            // (firing this listener) before the async role check resolves,
+            // so this Timer can be scheduled as a "guest" lookup and only
+            // fire well after the session is known to be employee-or-higher
+            // and the correct prefilled `_distanceKm` is already showing.
+            // Discard a superseded/now-invalid result instead of clobbering
+            // it. Only one Timer is ever pending at a time (a new address
+            // change cancels the previous one above), so this guard alone
+            // is sufficient without extra request-id tracking.
+            if (!mounted || authService.isEmployeeOrHigher) return;
+            setState(() {
+              if (result != null) _distanceKm = result;
+              _distanceLookupPending = false;
+            });
           });
         });
       }
@@ -1833,9 +1855,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            _distanceKm > 0
-                ? '$_distanceKm km'
-                : 'order_setup.distance_calculating'.tr(),
+            _distanceLookupPending
+                ? 'order_setup.distance_calculating'.tr()
+                : '$_distanceKm km',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
               color: Theme.of(context).colorScheme.onSecondaryContainer,
