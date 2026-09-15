@@ -59,6 +59,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   List<String> _additionalServices = [];
   String _remarks = '';
 
+  /// Guards the "Angebot speichern" button against a double-tap and drives
+  /// its loading spinner while the multiple sequential Firestore calls in
+  /// `_saveAndGeneratePdf` are in flight.
+  bool _isSavingOrder = false;
+
   @override
   void initState() {
     super.initState();
@@ -430,6 +435,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     Map<String, int> aggregatedQuantities,
     Set<String> aggregatedSelected,
   ) async {
+    if (_isSavingOrder) return;
     final selectedOrderItems = ShoppingListLogic.getSelectedOrderItems(
       allItems,
       aggregatedQuantities,
@@ -449,7 +455,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       currency: _currency,
     );
 
-    await _saveAndGeneratePdf(selectedOrderItems, total, result);
+    setState(() => _isSavingOrder = true);
+    try {
+      await _saveAndGeneratePdf(selectedOrderItems, total, result);
+    } finally {
+      if (mounted) setState(() => _isSavingOrder = false);
+    }
   }
 
   Future<void> _downloadShoppingList(
@@ -841,6 +852,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               hasSelectedItems: selectedItems.isNotEmpty,
               totalCost: total,
               currency: _currency,
+              isSaving: _isSavingOrder,
               onExport: () => _export(
                 allItems,
                 total,

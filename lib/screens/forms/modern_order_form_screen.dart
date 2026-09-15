@@ -67,6 +67,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   int _currentStep = 0;
   final int _totalSteps = 9;
 
+  /// Guards the final-step submit button against a double-tap and drives
+  /// its loading spinner while the (async) submit work - a Firestore write
+  /// - is in flight. Intermediate "Weiter" taps go through the same
+  /// `_nextStep`/button but only do a synchronous `setState`, so they are
+  /// unaffected by this flag.
+  bool _isSubmitting = false;
+
   Future<CocktailData>? _dataFuture;
 
   /// Resolved prefill order (from widget.prefill or appState.pendingFormOrder).
@@ -604,7 +611,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         );
       }
     } else {
-      _submitForm();
+      unawaited(_submitForm());
     }
   }
 
@@ -626,7 +633,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     }
   }
 
-  void _submitForm() async {
+  Future<void> _submitForm() async {
+    if (_isSubmitting) return;
     // Validate required fields
     String? errorMessage;
 
@@ -651,6 +659,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       setState(() {}); // Update UI to show correct step
       return;
     }
+
+    setState(() => _isSubmitting = true);
 
     final setupData = OrderSetupData(
       orderName: _nameController.text.trim(),
@@ -690,23 +700,27 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     // everyone else gets the customer request flow.
     final isEmployeeOrHigher = authService.isEmployeeOrHigher;
 
-    if (!isEmployeeOrHigher) {
-      // Customer flow: Save as pending order and show thank you dialog
-      await _savePendingOrderAndShowThanks(setupData);
-    } else if (_prefillOrder != null) {
-      // Admin prefill flow: update existing form order with new data, then go to shopping list
-      await _updateFormOrderAndNavigate(setupData);
-    } else {
-      // Admin flow: Sync selected recipes + popularity to global state and navigate
-      appState.setSelectedRecipes(_selectedRecipes);
-      for (final entry in _cocktailPopularity.entries) {
-        appState.setCocktailPopularity(entry.key, entry.value);
-      }
-      if (widget.onSubmit != null) {
-        widget.onSubmit!(result);
+    try {
+      if (!isEmployeeOrHigher) {
+        // Customer flow: Save as pending order and show thank you dialog
+        await _savePendingOrderAndShowThanks(setupData);
+      } else if (_prefillOrder != null) {
+        // Admin prefill flow: update existing form order with new data, then go to shopping list
+        await _updateFormOrderAndNavigate(setupData);
       } else {
-        context.go('/shopping-list', extra: setupData);
+        // Admin flow: Sync selected recipes + popularity to global state and navigate
+        appState.setSelectedRecipes(_selectedRecipes);
+        for (final entry in _cocktailPopularity.entries) {
+          appState.setCocktailPopularity(entry.key, entry.value);
+        }
+        if (widget.onSubmit != null) {
+          widget.onSubmit!(result);
+        } else {
+          context.go('/shopping-list', extra: setupData);
+        }
       }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -929,8 +943,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton.icon(
-                                onPressed: _nextStep,
-                                icon: const Icon(Icons.shopping_cart),
+                                onPressed: _isSubmitting ? null : _nextStep,
+                                icon: _isSubmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.shopping_cart),
                                 label: Text('dashboard.generate_list'.tr()),
                                 iconAlignment: IconAlignment.end,
                                 style: FilledButton.styleFrom(
@@ -948,8 +970,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       : SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: _nextStep,
-                            icon: const Icon(Icons.send_outlined),
+                            onPressed: _isSubmitting ? null : _nextStep,
+                            icon: _isSubmitting
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.send_outlined),
                             label: Text('order_form.submit_request'.tr()),
                             iconAlignment: IconAlignment.end,
                             style: FilledButton.styleFrom(
@@ -3573,8 +3603,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         child: Align(
           alignment: Alignment.centerRight,
           child: FilledButton.icon(
-            onPressed: _nextStep,
-            icon: const Icon(Icons.send_outlined),
+            onPressed: _isSubmitting ? null : _nextStep,
+            icon: _isSubmitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send_outlined),
             label: Text('order_form.submit_request'.tr()),
             iconAlignment: IconAlignment.end,
             style: FilledButton.styleFrom(
@@ -3611,12 +3647,18 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           else
             const SizedBox.shrink(),
           FilledButton.icon(
-            onPressed: _canProceed ? _nextStep : null,
-            icon: Icon(
-              _currentStep < _totalSteps - 1
-                  ? Icons.arrow_forward
-                  : Icons.shopping_cart,
-            ),
+            onPressed: (_canProceed && !_isSubmitting) ? _nextStep : null,
+            icon: (_currentStep == _totalSteps - 1 && _isSubmitting)
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _currentStep < _totalSteps - 1
+                        ? Icons.arrow_forward
+                        : Icons.shopping_cart,
+                  ),
             label: Text(
               _currentStep < _totalSteps - 1
                   ? 'common.next'.tr()

@@ -14,6 +14,7 @@ class ShoppingHeader extends StatelessWidget {
     required this.totalCost,
     required this.currency,
     this.onDownloadShoppingList,
+    this.isSaving = false,
   });
 
   final int currentPage;
@@ -23,6 +24,10 @@ class ShoppingHeader extends StatelessWidget {
   final double totalCost;
   final Currency currency;
   final VoidCallback? onDownloadShoppingList;
+
+  /// Whether the "Angebot speichern" export is currently in flight - shows
+  /// a spinner and disables the save button while true.
+  final bool isSaving;
 
   bool get _isLastPage => currentPage == totalPages - 1;
 
@@ -132,14 +137,26 @@ class ShoppingHeader extends StatelessWidget {
           if (_isLastPage) ...[
             if (isMobile)
               IconButton.filled(
-                onPressed: hasSelectedItems ? onExport : null,
-                icon: const Icon(Icons.save_alt, size: 20),
+                onPressed: (hasSelectedItems && !isSaving) ? onExport : null,
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_alt, size: 20),
                 tooltip: 'common.save_offer'.tr(),
               )
             else
               FilledButton.icon(
-                onPressed: hasSelectedItems ? onExport : null,
-                icon: const Icon(Icons.save_alt, size: 18),
+                onPressed: (hasSelectedItems && !isSaving) ? onExport : null,
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_alt, size: 18),
                 label: Text('common.save_offer'.tr()),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
