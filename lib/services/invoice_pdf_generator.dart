@@ -114,10 +114,17 @@ class InvoicePdfGenerator {
               extraPositionsTotal +
               extraHoursCost -
               order.offerDiscount;
-    // Payment split: ~2/3 deposit, ~1/3 on-site (rounded UP to nearest 100)
-    final oneThird = grandTotal / 3;
-    final remainingAmount =
-        ((oneThird / 100).ceil()) * 100.0; // Round up to nearest 100
+    // Payment split: on-site payment always equals the sum of all wages
+    // (Löhne) — i.e. the total cost of the supervisor/barkeeper items from
+    // the shopping list (already computed there as price × quantity, see
+    // `oi.total` in shopping_list_screen.dart). The deposit is the remainder.
+    final wagesCost = order.items
+        .where((item) => item['category'] == 'supervisor')
+        .fold<double>(
+          0.0,
+          (sum, item) => sum + ((item['total'] as num?)?.toDouble() ?? 0),
+        );
+    final remainingAmount = wagesCost;
     final depositAmount = grandTotal - remainingAmount;
 
     final serviceLabel = switch (order.serviceType) {
