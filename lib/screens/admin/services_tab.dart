@@ -10,10 +10,10 @@ import '../../services/cloudinary_uploader.dart';
 /// services and their variants), with responsive design mirroring
 /// `employees_tab.dart`.
 ///
-/// Image handling: the "oder Bild-URL einfügen" text field sets `imageUrl`
-/// directly, or an admin can upload an image from their device via
+/// Image handling: an admin uploads an image from their device via
 /// Cloudinary's unsigned-upload API (`CloudinaryUploader`) - no Firebase
-/// Storage needed, no secret key in this app.
+/// Storage needed, no secret key in this app. There is deliberately no
+/// manual URL-paste field anymore; upload is the only path.
 class ServicesTab extends StatefulWidget {
   const ServicesTab({super.key});
 
@@ -393,32 +393,42 @@ class _ServicesTabState extends State<ServicesTab> {
               v?.trim().isEmpty ?? true ? 'offer.field_required'.tr() : null,
         ),
         const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: _isUploadingImage
-                ? null
-                : () => _pickAndUploadImage(imageUrlController, setFormState),
-            icon: _isUploadingImage
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.upload),
-            label: Text('admin.service_image_upload'.tr()),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: imageUrlController,
-          decoration: InputDecoration(
-            labelText: 'admin.service_image_url'.tr(),
-            hintText: 'admin.service_image_url_hint'.tr(),
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.image),
-          ),
-          keyboardType: TextInputType.url,
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _isUploadingImage
+                  ? null
+                  : () => _pickAndUploadImage(imageUrlController, setFormState),
+              icon: _isUploadingImage
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload),
+              label: Text('admin.service_image_upload'.tr()),
+            ),
+            const SizedBox(width: 12),
+            if (imageUrlController.text.trim().isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  imageUrlController.text.trim(),
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.broken_image_outlined),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'admin.service_image_remove'.tr(),
+                onPressed: () =>
+                    setFormState(() => imageUrlController.clear()),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 24),
         Align(
