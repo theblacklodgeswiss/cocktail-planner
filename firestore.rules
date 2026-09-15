@@ -4,9 +4,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Super Admin email - can only manage users, not data
     function isSuperAdmin() {
-      return request.auth != null && request.auth.token.email == 'the.blacklodge@outlook.com';
+      return hasEmail() && authEmail() == 'the.blacklodge@outlook.com'.lower();
     }
-    
+
     function authEmail() {
       return request.auth.token.email.lower();
     }
@@ -50,11 +50,11 @@ service cloud.firestore {
 
     function isOrderOwner() {
       return request.auth != null && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.createdBy == request.auth.uid ||
+        resource.data.get('userId', '') == request.auth.uid ||
+        resource.data.get('createdBy', '') == request.auth.uid ||
         (request.auth.token.email != null && (
-          resource.data.createdBy == request.auth.token.email ||
-          resource.data.userEmail == request.auth.token.email
+          resource.data.get('createdBy', '') == request.auth.token.email ||
+          resource.data.get('userEmail', '') == request.auth.token.email
         ))
       );
     }
