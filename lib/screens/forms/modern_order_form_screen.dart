@@ -200,7 +200,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     }
   }
 
-  bool get _isAdminUser => authService.isAdmin;
+  bool get _isAdminUser => authService.isEmployeeOrHigher;
 
   @override
   void didChangeDependencies() {
