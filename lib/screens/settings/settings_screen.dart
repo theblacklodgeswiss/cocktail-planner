@@ -476,6 +476,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/settings/employees'),
             ),
+            ListTile(
+              leading: const Icon(Icons.room_service),
+              title: Text('admin.tab_services'.tr()),
+              subtitle: Text('admin.services_subtitle'.tr()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/settings/services'),
+            ),
           ],
         ],
       ),

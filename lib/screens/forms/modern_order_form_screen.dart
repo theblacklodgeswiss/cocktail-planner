@@ -7,8 +7,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/url_utils.dart';
+import '../../data/additional_service_repository.dart';
 import '../../data/cocktail_repository.dart';
 import '../../data/order_repository.dart';
+import '../../models/additional_service.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/order.dart';
 import '../../models/recipe.dart';
@@ -88,7 +90,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
   final Set<String> _selectedBarDrinks = {};
   final Set<String> _selectedAlcoholItems = {};
-  final Set<String> _selectedAdditionalServices = {};
+  // Catalog services the customer picked a variant for: serviceId -> variantId.
+  final Map<String, String> _selectedAdditionalServices = {};
+  // "Sonstiges" ("Other") stays a plain flag, not a catalog service - see
+  // the design spec section 5.
+  bool _otherServicesSelected = false;
+  // Legacy bare-string service IDs (e.g. 'booth_360') carried over from an
+  // order created before the catalog existed - preserved untouched on
+  // prefill/save, but not editable through the new tile grid.
+  final Set<String> _legacyAdditionalServiceIds = {};
+  List<AdditionalService> _serviceCatalog = [];
+  StreamSubscription<List<AdditionalService>>? _serviceCatalogSubscription;
   final TextEditingController _remarksController = TextEditingController();
   Timer? _distanceLookupDebounce;
 
@@ -117,6 +129,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     });
     _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
     _loadCocktailData();
+    _serviceCatalogSubscription =
+        additionalServiceRepository.watchServices().listen((services) {
+      if (mounted) setState(() => _serviceCatalog = services);
+    });
     authService.checkIsAdmin().then((_) {
       if (mounted) {
         setState(() {});
@@ -217,9 +233,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _selectedAlcoholItems
       ..clear()
       ..addAll(order.alcoholPurchase);
-    _selectedAdditionalServices
-      ..clear()
-      ..addAll(order.additionalServices);
+    _applyAdditionalServicesPrefill(order.additionalServices);
     _cocktailPopularity
       ..clear()
       ..addAll(order.cocktailPopularity);
@@ -244,6 +258,46 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     }
   }
 
+  /// Parses a prefilled order's `additionalServices` values into this
+  /// screen's split selection state: composite `"serviceId:variantId"`
+  /// strings go into [_selectedAdditionalServices], the `'other_services'`
+  /// flag into [_otherServicesSelected], and anything else (a legacy bare
+  /// service ID from before the catalog existed) into
+  /// [_legacyAdditionalServiceIds] so it round-trips unchanged on save even
+  /// though the new tile grid can't display or edit it.
+  void _applyAdditionalServicesPrefill(List<String> values) {
+    _selectedAdditionalServices.clear();
+    _legacyAdditionalServiceIds.clear();
+    _otherServicesSelected = false;
+    for (final value in values) {
+      if (value == 'other_services') {
+        _otherServicesSelected = true;
+        continue;
+      }
+      final separatorIndex = value.indexOf(':');
+      if (separatorIndex > 0) {
+        final serviceId = value.substring(0, separatorIndex);
+        final variantId = value.substring(separatorIndex + 1);
+        if (serviceId.isNotEmpty && variantId.isNotEmpty) {
+          _selectedAdditionalServices[serviceId] = variantId;
+          continue;
+        }
+      }
+      _legacyAdditionalServiceIds.add(value);
+    }
+  }
+
+  /// Flattens the split selection state back into the `List<String>` shape
+  /// the `additionalServices` order field has always had - composite
+  /// `"serviceId:variantId"` strings for catalog picks, preserved legacy
+  /// bare IDs, and `'other_services'` when that flag is set.
+  List<String> get _additionalServicesList => [
+        for (final entry in _selectedAdditionalServices.entries)
+          '${entry.key}:${entry.value}',
+        ..._legacyAdditionalServiceIds,
+        if (_otherServicesSelected) 'other_services',
+      ];
+
   bool get _isAdminUser => authService.isEmployeeOrHigher;
 
   @override
@@ -266,6 +320,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   @override
   void dispose() {
     _distanceLookupDebounce?.cancel();
+    _serviceCatalogSubscription?.cancel();
     _pageController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
@@ -560,9 +615,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       alcoholPurchase: _selectedAlcoholItems.isEmpty
           ? null
           : _selectedAlcoholItems.toList(),
-      additionalServices: _selectedAdditionalServices.isEmpty
+      additionalServices: _additionalServicesList.isEmpty
           ? null
-          : _selectedAdditionalServices.toList(),
+          : _additionalServicesList,
       remarks: _remarksController.text.trim().isEmpty
           ? null
           : _remarksController.text.trim(),
@@ -1121,7 +1176,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ? 'Keine Cocktails'
             : '${_selectedRecipes.length} konfiguriert';
       case 7:
-        final count7 = _selectedAdditionalServices.length;
+        final count7 = _additionalServicesList.length;
         return count7 == 0 ? 'Keine' : '$count7 ausgewählt';
       case 8:
         return 'Alles prüfen & abschließen';
@@ -2584,72 +2639,66 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ),
           ),
           const SizedBox(height: 32),
+          if (_serviceCatalog.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'order_setup.additional_services_empty'.tr(),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: _serviceCatalog.length,
+              itemBuilder: (context, index) =>
+                  _buildServiceTile(_serviceCatalog[index]),
+            ),
+          if (_legacyAdditionalServiceIds.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _legacyAdditionalServiceIds
+                  .map(
+                    (value) => Chip(
+                      label: Text(
+                        formatOrderAdditionalServiceLabel(
+                          value,
+                          isEnglish: context.locale.languageCode == 'en',
+                          currencyCode: _currency,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildServiceCheckbox(
-                'booth_360',
-                formatOrderAdditionalServiceLabel(
-                  'booth_360',
-                  isEnglish: context.locale.languageCode == 'en',
-                  currencyCode: _currency,
+              FilterChip(
+                selected: _otherServicesSelected,
+                label: Text(
+                  context.locale.languageCode == 'en' ? 'Other' : 'Sonstiges',
                 ),
+                showCheckmark: true,
+                onSelected: (selected) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _otherServicesSelected = selected);
+                },
               ),
-              _buildServiceCheckbox(
-                'photobox_print',
-                formatOrderAdditionalServiceLabel(
-                  'photobox_print',
-                  isEnglish: context.locale.languageCode == 'en',
-                  currencyCode: _currency,
-                ),
-              ),
-              _buildServiceCheckbox(
-                'photobox_qr',
-                formatOrderAdditionalServiceLabel(
-                  'photobox_qr',
-                  isEnglish: context.locale.languageCode == 'en',
-                  currencyCode: _currency,
-                ),
-              ),
-              _buildServiceCheckbox(
-                'bubble_waffles',
-                formatOrderAdditionalServiceLabel(
-                  'bubble_waffles',
-                  isEnglish: context.locale.languageCode == 'en',
-                  currencyCode: _currency,
-                ),
-              ),
-              _buildServiceCheckbox(
-                'catering',
-                'BlackLodge - Catering (Preis auf Anfrage)',
-              ),
-              _buildServiceCheckbox(
-                'choreographer',
-                'Nirosi Singh - Choreographer (Preis auf Anfrage)',
-              ),
-              _buildServiceCheckbox('dj', 'Extern - DJs (Preis auf Anfrage)'),
-              _buildServiceCheckbox(
-                'led_screen',
-                'Extern - LED Screen (Preis auf Anfrage)',
-              ),
-              _buildServiceCheckbox(
-                'security',
-                formatOrderAdditionalServiceLabel(
-                  'security',
-                  isEnglish: context.locale.languageCode == 'en',
-                  currencyCode: _currency,
-                ),
-              ),
-              _buildServiceCheckbox(
-                'entry_song',
-                formatOrderAdditionalServiceLabel(
-                  'entry_song',
-                  isEnglish: context.locale.languageCode == 'en',
-                  currencyCode: _currency,
-                ),
-              ),
-              _buildServiceCheckbox('other_services', 'Sonstiges'),
             ],
           ),
           const SizedBox(height: 32),
@@ -2686,23 +2735,191 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
-  Widget _buildServiceCheckbox(String value, String label) {
-    final isSelected = _selectedAdditionalServices.contains(value);
-    return FilterChip(
-      selected: isSelected,
-      label: Text(label),
-      onSelected: (selected) {
-        HapticFeedback.selectionClick();
-        setState(() {
-          if (selected) {
-            _selectedAdditionalServices.add(value);
-          } else {
-            _selectedAdditionalServices.remove(value);
-          }
-        });
-      },
-      showCheckmark: true,
+  /// One tile per catalog [AdditionalService]: shows its image (or a
+  /// placeholder icon), name, and - once the customer has picked a variant
+  /// for it - a check badge plus the chosen variant's name/price. Tapping
+  /// opens [_showServiceVariantPicker].
+  Widget _buildServiceTile(AdditionalService service) {
+    final selectedVariantId = _selectedAdditionalServices[service.id];
+    final selectedVariant = selectedVariantId != null
+        ? service.variantById(selectedVariantId)
+        : null;
+    final isSelected = selectedVariant != null;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _showServiceVariantPicker(service),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
+            width: isSelected ? 2 : 1,
+          ),
+          color: isSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.2)
+              : null,
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: service.imageUrl != null &&
+                              service.imageUrl!.isNotEmpty
+                          ? Image.network(
+                              service.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildServiceTilePlaceholder(colorScheme),
+                            )
+                          : _buildServiceTilePlaceholder(colorScheme),
+                    ),
+                  ),
+                  if (isSelected)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Icon(
+                        Icons.check_circle,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              service.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            if (selectedVariant != null)
+              Text(
+                _formatVariantSummary(selectedVariant),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.primary,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
+  }
+
+  Widget _buildServiceTilePlaceholder(ColorScheme colorScheme) {
+    return Container(
+      color: colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.room_service,
+        size: 40,
+        color: colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  String _formatVariantSummary(ServiceVariant variant) {
+    final isEnglish = context.locale.languageCode == 'en';
+    final priceLabel = variant.price != null
+        ? '${variant.price!.toStringAsFixed(0)} $_currency'
+        : (isEnglish ? 'price on request' : 'Preis auf Anfrage');
+    return '${variant.name} ($priceLabel)';
+  }
+
+  /// Opens a single-select bottom sheet listing [service]'s variants; the
+  /// customer picks at most one. Confirming updates
+  /// [_selectedAdditionalServices] and closes the sheet.
+  Future<void> _showServiceVariantPicker(AdditionalService service) async {
+    if (service.variants.isEmpty) return;
+    var selectedVariantId = _selectedAdditionalServices[service.id];
+    final isEnglish = context.locale.languageCode == 'en';
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  service.name,
+                  style: Theme.of(ctx).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                for (final variant in service.variants)
+                  ListTile(
+                    leading: Icon(
+                      selectedVariantId == variant.id
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: selectedVariantId == variant.id
+                          ? Theme.of(ctx).colorScheme.primary
+                          : null,
+                    ),
+                    title: Text(variant.name),
+                    subtitle: Text(
+                      variant.price != null
+                          ? '${variant.price!.toStringAsFixed(0)} $_currency'
+                          : (isEnglish
+                              ? 'Price on request'
+                              : 'Preis auf Anfrage'),
+                    ),
+                    onTap: () =>
+                        setSheetState(() => selectedVariantId = variant.id),
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (_selectedAdditionalServices.containsKey(service.id))
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() => selectedVariantId = null);
+                        },
+                        child: Text(
+                          isEnglish ? 'Clear' : 'Entfernen',
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text('common.ok'.tr()),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (selectedVariantId == null) {
+        _selectedAdditionalServices.remove(service.id);
+      } else {
+        _selectedAdditionalServices[service.id] = selectedVariantId!;
+      }
+    });
   }
 
   Widget _buildCocktailPopularityStep() {
@@ -2935,11 +3152,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       _selectedAlcoholItems,
       isEnglish: isEnglish,
     );
-    final additionalServiceLabels = formatOrderAdditionalServiceLabels(
-      _selectedAdditionalServices,
-      isEnglish: isEnglish,
-      currencyCode: _currency,
-    );
+    final additionalServiceLabels = _additionalServicesList
+        .map(
+          (value) => resolveAdditionalServiceLabel(
+            value,
+            catalog: _serviceCatalog,
+            isEnglish: isEnglish,
+            currencyCode: _currency,
+          ),
+        )
+        .toList(growable: false);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -3163,9 +3385,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 alcoholPurchase: _selectedAlcoholItems.isEmpty
                     ? null
                     : _selectedAlcoholItems.toList(),
-                additionalServices: _selectedAdditionalServices.isEmpty
+                additionalServices: _additionalServicesList.isEmpty
                     ? null
-                    : _selectedAdditionalServices.toList(),
+                    : _additionalServicesList,
                 remarks: _remarksController.text.trim().isEmpty
                     ? null
                     : _remarksController.text.trim(),

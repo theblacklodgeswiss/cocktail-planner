@@ -18,6 +18,7 @@ import '../screens/orders/pending_orders_screen.dart';
 import '../screens/settings/admin_settings_screen.dart';
 import '../screens/settings/employees_screen.dart';
 import '../screens/settings/legal_info_screen.dart';
+import '../screens/settings/services_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/settings/user_management_screen.dart';
 import '../screens/shopping_list/shopping_list_screen.dart';
@@ -131,6 +132,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/settings/employees',
       builder: (context, state) => const EmployeesScreen(),
+    ),
+    GoRoute(
+      path: '/settings/services',
+      builder: (context, state) => const ServicesScreen(),
     ),
     GoRoute(
       path: '/orders',

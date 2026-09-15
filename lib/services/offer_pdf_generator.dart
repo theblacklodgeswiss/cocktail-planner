@@ -3,7 +3,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../data/additional_service_repository.dart';
 import '../data/settings_repository.dart';
+import '../models/additional_service.dart';
 import '../models/app_settings.dart';
 import '../models/offer.dart';
 import '../utils/currency.dart';
@@ -40,6 +42,11 @@ class OfferPdfGenerator {
   static Future<pw.Document> _buildPdfDocument(OfferData offer) async {
     // Load settings
     final settings = settingsRepository.current;
+
+    // One-shot catalog snapshot, to resolve any new-style composite
+    // "serviceId:variantId" entries in offer.additionalServices - see
+    // resolveAdditionalServiceLabel. Legacy bare-ID entries are unaffected.
+    final catalog = await additionalServiceRepository.watchServices().first;
 
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
@@ -82,7 +89,7 @@ class OfferPdfGenerator {
           pw.SizedBox(height: 14),
           _buildGuestAndServices(offer, isEn),
           pw.SizedBox(height: 18),
-          _buildPositionsTable(offer, curr, isEn),
+          _buildPositionsTable(offer, curr, isEn, catalog),
           pw.SizedBox(height: 18),
           _buildAdditionalInfo(offer, isEn),
         ],
@@ -465,6 +472,7 @@ class OfferPdfGenerator {
     OfferData offer,
     Currency curr,
     bool isEn,
+    List<AdditionalService> catalog,
   ) {
     final dateStr =
         '${offer.eventDate.day.toString().padLeft(2, '0')}.${offer.eventDate.month.toString().padLeft(2, '0')}.${offer.eventDate.year}';
@@ -762,8 +770,9 @@ class OfferPdfGenerator {
             children: [
               cell(dateStr),
               cell(
-                formatOrderAdditionalServiceLabel(
+                resolveAdditionalServiceLabel(
                   service,
+                  catalog: catalog,
                   isEnglish: isEn,
                   currencyCode: offer.currency,
                 ),

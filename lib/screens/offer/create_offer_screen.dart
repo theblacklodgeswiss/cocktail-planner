@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:easy_localization/easy_localization.dart';
@@ -11,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/env_config.dart';
 import '../../data/order_repository.dart';
 import '../../data/employee_repository.dart';
+import '../../data/additional_service_repository.dart';
+import '../../models/additional_service.dart';
 import '../../models/offer.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
@@ -104,10 +107,25 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   bool _showValidationErrors = false;
   bool _savedSuccessfully = false;
 
+  // Additional-services catalog, for resolving new-style composite
+  // "serviceId:variantId" entries in `order.additionalServices` to a label
+  // and price - see `resolveAdditionalServiceLabel`. Loaded asynchronously,
+  // so the very first `_ensureRequestDerivedOfferPositions()` call in
+  // `initState` may still see an empty catalog (falls back to the legacy
+  // static label map, same as before this feature existed); a later manual
+  // "regenerate positions" picks up the catalog once it has loaded.
+  List<AdditionalService> _catalog = [];
+  StreamSubscription<List<AdditionalService>>? _catalogSubscription;
+
   @override
   void initState() {
     super.initState();
     _initializeControllers();
+    _catalogSubscription = additionalServiceRepository.watchServices().listen(
+      (services) {
+        if (mounted) setState(() => _catalog = services);
+      },
+    );
   }
 
   void _initializeControllers() {
@@ -207,6 +225,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   @override
   void dispose() {
+    _catalogSubscription?.cancel();
     _editorNameCtrl.dispose();
     _eventTimeCtrl.dispose();
     _clientNameCtrl.dispose();
@@ -1763,13 +1782,24 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       rows.add(
         ExtraPosition(
           date: dateStr,
-          name: formatOrderAdditionalServiceLabel(
+          name: resolveAdditionalServiceLabel(
             service,
+            catalog: _catalog,
             isEnglish: isEn,
             currencyCode: _currency.code,
           ),
           quantity: 1,
-          price: 0,
+          // Seed from the resolved variant's price when available (a
+          // composite "serviceId:variantId" entry resolving against a
+          // populated catalog) so staff still get a default they can
+          // override, same pattern as the Shots position; legacy bare-ID
+          // entries have no variant to read a price from and keep
+          // defaulting to 0, exactly as before.
+          price: resolveAdditionalServicePrice(
+                service,
+                catalog: _catalog,
+              ) ??
+              0,
           remark: widget.order.remarks,
         ),
       );

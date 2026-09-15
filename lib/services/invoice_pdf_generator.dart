@@ -3,7 +3,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../data/additional_service_repository.dart';
 import '../data/settings_repository.dart';
+import '../models/additional_service.dart';
 import '../models/app_settings.dart';
 import '../models/offer.dart';
 import '../models/order.dart';
@@ -63,6 +65,11 @@ class InvoicePdfGenerator {
     }
     // Load settings
     final settings = settingsRepository.current;
+
+    // One-shot catalog snapshot, to resolve any new-style composite
+    // "serviceId:variantId" entries in order.additionalServices - see
+    // resolveAdditionalServiceLabel. Legacy bare-ID entries are unaffected.
+    final catalog = await additionalServiceRepository.watchServices().first;
 
     // Load Unicode-compatible fonts
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
@@ -159,6 +166,7 @@ class InvoicePdfGenerator {
             barServiceCost,
             travelTotal,
             serviceLabel,
+            catalog,
           ),
           pw.SizedBox(height: 14),
           _buildAdditionalInfo(
@@ -554,6 +562,7 @@ class InvoicePdfGenerator {
     double barServiceCost,
     double travelTotal,
     String serviceLabel,
+    List<AdditionalService> catalog,
   ) {
     final dateStr =
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
@@ -835,8 +844,9 @@ class InvoicePdfGenerator {
             children: [
               cell(dateStr),
               cell(
-                formatOrderAdditionalServiceLabel(
+                resolveAdditionalServiceLabel(
                   service,
+                  catalog: catalog,
                   isEnglish: isEn,
                   currencyCode: order.currency,
                 ),

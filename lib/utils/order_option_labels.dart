@@ -1,3 +1,4 @@
+import '../models/additional_service.dart';
 import 'currency.dart';
 
 String _resolveOrderOptionLabel(
@@ -147,6 +148,67 @@ List<String> formatOrderAdditionalServiceLabels(
         ),
       )
       .toList(growable: false);
+}
+
+/// Resolves an `order.additionalServices` entry's display label,
+/// backward-compatibly.
+///
+/// New-style entries are composite `"serviceId:variantId"` strings produced
+/// by the customer-facing tile grid (see
+/// `modern_order_form_screen.dart`): if [value] contains `':'`, this looks
+/// up the service and variant in [catalog] and returns
+/// `"${service.name} - ${variant.name} (...)"`, mirroring the visual format
+/// of the legacy static map.
+///
+/// Legacy flat IDs (`'booth_360'`, `'dj'`, ...) - and any composite ID whose
+/// service/variant was since deleted from the catalog - fall back to the
+/// existing [formatOrderAdditionalServiceLabel], unchanged, so every value
+/// already stored on an order keeps resolving exactly as it does today.
+String resolveAdditionalServiceLabel(
+  String value, {
+  required List<AdditionalService> catalog,
+  bool isEnglish = false,
+  String? currencyCode,
+}) {
+  final separatorIndex = value.indexOf(':');
+  if (separatorIndex > 0) {
+    final serviceId = value.substring(0, separatorIndex);
+    final variantId = value.substring(separatorIndex + 1);
+    for (final service in catalog) {
+      if (service.id != serviceId) continue;
+      final variant = service.variantById(variantId);
+      if (variant == null) break;
+      final priceLabel = variant.price != null
+          ? '${variant.price!.toStringAsFixed(0)} ${currencyCode ?? defaultCurrency.code}'
+          : (isEnglish ? 'price on request' : 'Preis auf Anfrage');
+      return '${service.name} - ${variant.name} ($priceLabel)';
+    }
+  }
+  return formatOrderAdditionalServiceLabel(
+    value,
+    isEnglish: isEnglish,
+    currencyCode: currencyCode,
+  );
+}
+
+/// Resolves the price to seed on an auto-generated offer position for an
+/// `order.additionalServices` entry: the matching catalog variant's price
+/// when [value] is a resolvable composite `"serviceId:variantId"` string,
+/// otherwise `null` (legacy bare IDs and unresolved/"Preis auf Anfrage"
+/// variants have no price to seed - callers keep defaulting to `0`).
+double? resolveAdditionalServicePrice(
+  String value, {
+  required List<AdditionalService> catalog,
+}) {
+  final separatorIndex = value.indexOf(':');
+  if (separatorIndex <= 0) return null;
+  final serviceId = value.substring(0, separatorIndex);
+  final variantId = value.substring(separatorIndex + 1);
+  for (final service in catalog) {
+    if (service.id != serviceId) continue;
+    return service.variantById(variantId)?.price;
+  }
+  return null;
 }
 
 bool isUsageBasedAlcoholOption(String value) {

@@ -76,7 +76,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
-    
+
+    // Additional services catalog - readable by anyone (including
+    // anonymous customers filling out the order form), writable only by
+    // admins who can manage the catalog.
+    match /additionalServices/{document=**} {
+      allow read: if true;
+      allow write: if canManageUsers();
+    }
+
     // Orders collection - owner or employee-or-higher can read/write; create
     // requires the caller to be the resource's own userId.
     match /orders/{orderId} {
