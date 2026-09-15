@@ -12,6 +12,7 @@ import '../screens/forms/order_success_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
+import '../screens/share/shared_document_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
 import '../screens/orders/orders_year_overview_screen.dart';
 import '../screens/orders/pending_orders_screen.dart';
@@ -41,9 +42,10 @@ final GoRouter appRouter = GoRouter(
     final user = FirebaseAuth.instance.currentUser;
     final isLoggedIn = user != null;
     final isLoginRoute = state.matchedLocation == '/login';
+    final isPublicShareRoute = state.matchedLocation.startsWith('/s/');
 
-    // Not logged in and not on login page -> redirect to login
-    if (!isLoggedIn && !isLoginRoute) {
+    // Not logged in and not on login page or a public share link -> redirect to login
+    if (!isLoggedIn && !isLoginRoute && !isPublicShareRoute) {
       return '/login';
     }
 
@@ -59,6 +61,11 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/s/:code',
+      builder: (context, state) =>
+          SharedDocumentScreen(code: state.pathParameters['code']!),
     ),
     GoRoute(
       path: '/',
