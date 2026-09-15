@@ -589,6 +589,7 @@
     "preferences_subtitle": "Passe das Angebot an deine Bedürfnisse an",
     "person_count_label": "Anzahl Personen *",
     "distance_label": "Entfernung (km)",
+    "distance_calculating": "wird berechnet…",
     "currency_label": "Währung:",
     "drinker_type_label": "Trinkverhalten:",
     "drinker_light": "Wenig",

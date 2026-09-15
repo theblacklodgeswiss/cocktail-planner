@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +14,7 @@ import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../../services/auth_service.dart';
+import '../../services/distance_calculator.dart';
 import '../../state/app_state.dart';
 import '../../services/claude_service.dart';
 import '../../utils/currency.dart';
@@ -87,13 +90,31 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final Set<String> _selectedAlcoholItems = {};
   final Set<String> _selectedAdditionalServices = {};
   final TextEditingController _remarksController = TextEditingController();
+  Timer? _distanceLookupDebounce;
 
   @override
   void initState() {
     super.initState();
     _nameController.addListener(() => setState(() {}));
     _phoneController.addListener(() => setState(() {}));
-    _addressController.addListener(() => setState(() {}));
+    _addressController.addListener(() {
+      setState(() {});
+      // Guests get their distance computed automatically from the address
+      // they type; an employee's manually-set value must never be silently
+      // overwritten by a background lookup.
+      if (!authService.isEmployeeOrHigher) {
+        _distanceLookupDebounce?.cancel();
+        _distanceLookupDebounce = Timer(const Duration(milliseconds: 800), () {
+          distanceCalculator
+              .distanceKmFromAddress(_addressController.text)
+              .then((result) {
+            if (result != null && mounted) {
+              setState(() => _distanceKm = result);
+            }
+          });
+        });
+      }
+    });
     _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
     _loadCocktailData();
     authService.checkIsAdmin().then((_) {
@@ -244,6 +265,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   @override
   void dispose() {
+    _distanceLookupDebounce?.cancel();
     _pageController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
@@ -1615,7 +1637,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ],
           _buildPersonCountSlider(),
           const SizedBox(height: 32),
-          _buildDistanceSlider(),
+          authService.isEmployeeOrHigher
+              ? _buildDistanceSlider()
+              : _buildDistanceDisplay(),
           const SizedBox(height: 32),
           _buildCurrencySelector(),
           const SizedBox(height: 32),
@@ -1728,6 +1752,40 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             Text('0 km', style: Theme.of(context).textTheme.bodySmall),
             Text('1000 km', style: Theme.of(context).textTheme.bodySmall),
           ],
+        ),
+      ],
+    );
+  }
+
+  /// Read-only distance row shown to guest customers in place of the
+  /// staff-only slider. The value is computed automatically from the
+  /// address they entered earlier in the form (see the debounced listener
+  /// on `_addressController` in `initState`).
+  Widget _buildDistanceDisplay() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'order_setup.distance_label'.tr(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            _distanceKm > 0
+                ? '$_distanceKm km'
+                : 'order_setup.distance_calculating'.tr(),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
+          ),
         ),
       ],
     );
