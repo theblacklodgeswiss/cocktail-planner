@@ -123,7 +123,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _initializeControllers();
     _catalogSubscription = additionalServiceRepository.watchServices().listen(
       (services) {
-        if (mounted) setState(() => _catalog = services);
+        if (!mounted) return;
+        setState(() {
+          _catalog = services;
+          _repairUnresolvedAdditionalServicePositions();
+        });
       },
     );
   }
@@ -1833,6 +1837,38 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       if (existing.add(key)) {
         _offerPositions.add(row);
       }
+    }
+  }
+
+  /// Fixes up any additional-services position that was seeded before the
+  /// catalog finished loading (see the `initState` comment on `_catalog`):
+  /// at that point `resolveAdditionalServiceLabel` couldn't find the
+  /// service and fell back to showing the raw, unresolved
+  /// "serviceId:variantId" string as the position's name with price 0 -
+  /// once the catalog arrives, re-resolve any position whose name is
+  /// STILL exactly that raw value (an admin who deliberately renamed a
+  /// position to something else is never touched by this).
+  void _repairUnresolvedAdditionalServicePositions() {
+    for (final rawService in widget.order.additionalServices) {
+      final index = _offerPositions.indexWhere((p) => p.name == rawService);
+      if (index == -1) continue;
+
+      final resolvedName = resolveAdditionalServiceLabel(
+        rawService,
+        catalog: _catalog,
+        isEnglish: _language == 'en',
+        currencyCode: _currency.code,
+      );
+      if (resolvedName == rawService) continue; // still unresolved
+
+      final resolvedPrice = resolveAdditionalServicePrice(
+        rawService,
+        catalog: _catalog,
+      );
+      _offerPositions[index] = _offerPositions[index].copyWith(
+        name: resolvedName,
+        price: resolvedPrice ?? _offerPositions[index].price,
+      );
     }
   }
 
