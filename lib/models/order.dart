@@ -34,6 +34,24 @@ enum OrderSource {
   }
 }
 
+/// A single flavor + quantity a customer selected when requesting shots.
+class ShotSelection {
+  const ShotSelection({required this.name, required this.quantity});
+
+  final String name;
+  final int quantity;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ShotSelection && other.name == name && other.quantity == quantity;
+
+  @override
+  int get hashCode => Object.hash(name, quantity);
+
+  @override
+  String toString() => 'ShotSelection(name: $name, quantity: $quantity)';
+}
+
 class SavedOrder {
   const SavedOrder({
     required this.id,
@@ -49,6 +67,7 @@ class SavedOrder {
     this.createdAt,
     this.cocktails = const [],
     this.shots = const [],
+    this.shotSelections = const [],
     this.bar = '',
     this.distanceKm = 0,
     this.thekeCost = 0,
@@ -108,6 +127,7 @@ class SavedOrder {
   final DateTime? createdAt;
   final List<String> cocktails;
   final List<String> shots;
+  final List<ShotSelection> shotSelections;
   final String bar;
   final int distanceKm;
   final double thekeCost;
@@ -185,6 +205,9 @@ class SavedOrder {
   String get effectiveEventTime =>
       offerEventTime.isNotEmpty ? offerEventTime : eventTime;
 
+  int get requestedShotsTotal =>
+      shotSelections.fold(0, (sum, s) => sum + s.quantity);
+
   factory SavedOrder.fromFirestore(String id, Map<String, dynamic> data) {
     // Helper to parse datetime from either Timestamp or String
     DateTime? parseDateTime(dynamic value) {
@@ -222,6 +245,16 @@ class SavedOrder {
       createdAt: parseDateTime(data['createdAt']),
       cocktails: (data['cocktails'] as List<dynamic>?)?.cast<String>() ?? [],
       shots: (data['shots'] as List<dynamic>?)?.cast<String>() ?? [],
+      shotSelections: (data['shotQuantities'] as List<dynamic>? ?? [])
+          .map((entry) {
+            if (entry is! Map) return null;
+            final name = entry['name'] as String? ?? '';
+            final quantity = (entry['quantity'] as num?)?.toInt() ?? 0;
+            if (name.trim().isEmpty || quantity <= 0) return null;
+            return ShotSelection(name: name, quantity: quantity);
+          })
+          .whereType<ShotSelection>()
+          .toList(),
       bar: data['bar'] as String? ?? '',
       distanceKm: (data['distanceKm'] as num?)?.toInt() ?? 0,
       thekeCost: (data['thekeCost'] as num?)?.toDouble() ?? 0,
