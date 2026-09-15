@@ -575,6 +575,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       'serviceType': setupData.serviceType,
       'cocktails': cocktailNames,
       'shots': shotNames,
+      'shotQuantities': _shotQuantities.entries
+          .map((e) => {'name': e.key, 'quantity': e.value})
+          .toList(),
       'eventTime': eventTimeStr,
       'offerEventTime': eventTimeStr,
       'offerClientName': setupData.orderName,
@@ -607,7 +610,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         personCount: setupData.personCount,
         drinkerType: setupData.drinkerType,
         status: 'quote',
-        cocktails: _selectedRecipes.map((r) => r.name).toList(),
+        cocktails: _selectedRecipes
+            .where((r) => !r.isShot)
+            .map((r) => r.name)
+            .toList(),
+        shots: _selectedRecipes
+            .where((r) => r.isShot)
+            .map((r) => r.name)
+            .toList(),
+        shotQuantities: _shotQuantities.entries
+            .map((e) => {'name': e.key, 'quantity': e.value})
+            .toList(),
         bar: setupData.serviceType,
         distanceKm: setupData.distanceKm ?? 0,
         phone: setupData.phoneNumber ?? '',
