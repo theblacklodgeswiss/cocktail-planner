@@ -782,7 +782,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         shotQuantities: _shotQuantities.entries
             .map((e) => {'name': e.key, 'quantity': e.value})
             .toList(),
-        bar: setupData.serviceType,
+        serviceType: setupData.serviceType,
         distanceKm: setupData.distanceKm ?? 0,
         phone: setupData.phoneNumber ?? '',
         location: setupData.address ?? '',
