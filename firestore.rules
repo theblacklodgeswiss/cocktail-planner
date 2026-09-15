@@ -7,11 +7,30 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'the.blacklodge@outlook.com';
     }
     
+    function authEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function hasEmail() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
     // Check if user is admin via allowedUsers collection
     function isAdminFromCollection() {
-      return request.auth != null && 
-             exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)) &&
-             get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)).data.isAdmin == true;
+      return hasEmail() &&
+             exists(/databases/$(database)/documents/allowedUsers/$(authEmail())) &&
+             get(/databases/$(database)/documents/allowedUsers/$(authEmail())).data.isAdmin == true;
+    }
+
+    // Check if user is on the employees roster via the employeeAccess mirror
+    function isRosteredEmployee() {
+      return hasEmail() &&
+             exists(/databases/$(database)/documents/employeeAccess/$(authEmail()));
+    }
+
+    // Admin, super admin, or a rostered employee: full order access
+    function hasFullOrderAccess() {
+      return isSuperAdmin() || isAdminFromCollection() || isRosteredEmployee();
     }
     
     // Full data admin (NOT including super admin)
@@ -96,7 +115,16 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if canManageUsers();
     }
-    
+
+    // employeeAccess mirror - existence grants order access. Write is
+    // admin-only so the tier cannot be self-granted; read is limited to the
+    // owner's own doc plus admins, so it is not a staff directory readable
+    // by every customer.
+    match /employeeAccess/{email} {
+      allow read: if canManageUsers() || (hasEmail() && email == authEmail());
+      allow write: if canManageUsers();
+    }
+
     // Microsoft Forms collection - authenticated users can read/write
     match /microsoftForms/{document=**} {
       allow read: if isAuthenticated();
