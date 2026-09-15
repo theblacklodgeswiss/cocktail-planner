@@ -409,6 +409,45 @@ class OrderRepository {
         });
   }
 
+  /// Watch orders owned by [userId], sorted by createdAt descending. Unlike
+  /// [watchOrders], this does not filter out pending orders (total == 0) -
+  /// a customer's own request IS the total == 0 case - and does not filter
+  /// by year.
+  Stream<List<SavedOrder>> watchOrdersForOwner(String userId) {
+    if (!firestoreService.isAvailable) {
+      return Stream.value([]);
+    }
+
+    return firestoreService.ordersCollection
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+            .toList())
+        .handleError((e) {
+      debugPrint('Failed to watch orders for owner: $e');
+      return <SavedOrder>[];
+    });
+  }
+
+  /// One-shot fetch variant of [watchOrdersForOwner].
+  Future<List<SavedOrder>> getOrdersForOwner(String userId) async {
+    if (!await _ensureFirestoreAvailable()) return [];
+    try {
+      final snapshot = await firestoreService.ordersCollection
+          .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      return snapshot.docs
+          .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
+          .toList();
+    } catch (e) {
+      debugPrint('Failed to get orders for owner: ${_formatError(e)}');
+      return [];
+    }
+  }
+
   /// Watch pending orders (total == 0 and not dismissed) across all years.
   Stream<List<SavedOrder>> watchPendingOrders() {
     if (!firestoreService.isAvailable) {

@@ -77,6 +77,8 @@ class SavedOrder {
     this.hasShoppingList = false,
     this.formSubmissionId = '',
     this.formCreatedAt,
+    this.userId,
+    this.userEmail,
     this.phone = '',
     this.location = '',
     this.eventTime = '',
@@ -138,6 +140,8 @@ class SavedOrder {
   final bool hasShoppingList;
   final String formSubmissionId;
   final DateTime? formCreatedAt;
+  final String? userId;
+  final String? userEmail;
   final String phone;
   final String location;
   final String eventTime;
@@ -264,6 +268,8 @@ class SavedOrder {
           ((data['total'] as num?)?.toDouble() ?? 0) > 0,
       formSubmissionId: data['formSubmissionId'] as String? ?? '',
       formCreatedAt: parseDateTime(data['formCreatedAt']),
+      userId: data['userId'] as String?,
+      userEmail: data['userEmail'] as String?,
       phone: data['phone'] as String? ?? '',
       location: data['location'] as String? ?? '',
       eventTime: data['eventTime'] as String? ?? '',

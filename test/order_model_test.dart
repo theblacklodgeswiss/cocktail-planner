@@ -226,6 +226,38 @@ void main() {
     });
   });
 
+  group('SavedOrder ownership fields', () {
+    test('fromFirestore reads userId and userEmail when present', () {
+      final order = SavedOrder.fromFirestore('order1', {
+        'name': 'Test',
+        'date': '2026-06-01T00:00:00.000',
+        'items': [],
+        'total': 0,
+        'currency': 'CHF',
+        'status': 'quote',
+        'userId': 'uid-123',
+        'userEmail': 'someone@example.com',
+      });
+
+      expect(order.userId, 'uid-123');
+      expect(order.userEmail, 'someone@example.com');
+    });
+
+    test('fromFirestore leaves userId/userEmail null when absent', () {
+      final order = SavedOrder.fromFirestore('order2', {
+        'name': 'Test',
+        'date': '2026-06-01T00:00:00.000',
+        'items': [],
+        'total': 0,
+        'currency': 'CHF',
+        'status': 'quote',
+      });
+
+      expect(order.userId, isNull);
+      expect(order.userEmail, isNull);
+    });
+  });
+
   group('Order Filtering Logic', () {
     late List<SavedOrder> testOrders;
 
