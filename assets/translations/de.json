@@ -149,6 +149,8 @@
     "service_image_upload": "Bild hochladen",
     "service_image_upload_failed": "Bild-Upload fehlgeschlagen. Bitte versuche es erneut.",
     "service_image_remove": "Bild entfernen",
+    "service_import_legacy": "Alte Zusatzleistungen importieren",
+    "service_legacy_imported": "{} Zusatzleistung(en) importiert",
     "service_variants": "Varianten",
     "add_variant": "Variante hinzufügen",
     "variant_name": "Name",

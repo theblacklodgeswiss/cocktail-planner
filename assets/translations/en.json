@@ -143,6 +143,8 @@
     "service_image_upload": "Upload image",
     "service_image_upload_failed": "Image upload failed. Please try again.",
     "service_image_remove": "Remove image",
+    "service_import_legacy": "Import legacy services",
+    "service_legacy_imported": "{} service(s) imported",
     "service_variants": "Variants",
     "add_variant": "Add Variant",
     "variant_name": "Name",

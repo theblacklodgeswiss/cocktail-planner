@@ -57,6 +57,63 @@ class _ServicesTabState extends State<ServicesTab> {
   bool _isAdding = false;
   bool _isReordering = false;
   bool _isUploadingImage = false;
+  bool _isImportingLegacy = false;
+
+  /// The 10 services that used to be hardcoded flat button IDs (see
+  /// `lib/utils/order_option_labels.dart`'s `_additionalServiceLabelsDe`),
+  /// grouped into services with variants where the legacy list had more
+  /// than one price point for the same real-world offering (PhotoBox).
+  /// `other_services` ("Sonstiges") is deliberately excluded - it stays a
+  /// plain flag on the order form, not a catalog entry (see the design
+  /// spec's section 5).
+  static final List<(String, List<(String, double?)>)> _legacyServices = [
+    ('BlackLodge - 360 Booth', [('Standard', 600.0)]),
+    (
+      'BlackLodge - PhotoBox',
+      [('inkl. 300 Druck', 500.0), ('Digital mit QR-Code', 300.0)],
+    ),
+    ('BlackLodge - Bubble Waffles', [('Standard', 250.0)]),
+    ('BlackLodge - Catering', [('Standard', null)]),
+    ('Nirosi Singh - Choreographer', [('Standard', null)]),
+    ('Extern - DJs', [('Standard', null)]),
+    ('Extern - LED Screen', [('Standard', null)]),
+    ('Mudanca Security', [('min. 2 Securitys á 40 CHF/h', null)]),
+    ('Entry Song mit Geige - Praveen', [('Standard', 300.0)]),
+  ];
+
+  /// One-off migration: adds any of `_legacyServices` not already present
+  /// in the catalog (matched by name, so it's safe to run more than once).
+  Future<void> _importLegacyServices() async {
+    setState(() => _isImportingLegacy = true);
+    final existingNames = _localServices.map((s) => s.name).toSet();
+    var importedCount = 0;
+    for (final (name, variantSpecs) in _legacyServices) {
+      if (existingNames.contains(name)) continue;
+      final success = await additionalServiceRepository.addService(
+        name: name,
+        variants: variantSpecs
+            .map(
+              (spec) => ServiceVariant(
+                id: UniqueKey().toString(),
+                name: spec.$1,
+                price: spec.$2,
+              ),
+            )
+            .toList(),
+      );
+      if (success) importedCount++;
+    }
+    setState(() => _isImportingLegacy = false);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'admin.service_legacy_imported'.tr(args: ['$importedCount']),
+        ),
+      ),
+    );
+  }
   List<_VariantDraft> _addVariantDrafts = [];
   List<AdditionalService> _localServices = [];
 
@@ -512,6 +569,22 @@ class _ServicesTabState extends State<ServicesTab> {
               Text(
                 'admin.add_service'.tr(),
                 style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed:
+                      _isImportingLegacy ? null : _importLegacyServices,
+                  icon: _isImportingLegacy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.download),
+                  label: Text('admin.service_import_legacy'.tr()),
+                ),
               ),
               const SizedBox(height: 16),
               _buildServiceForm(
