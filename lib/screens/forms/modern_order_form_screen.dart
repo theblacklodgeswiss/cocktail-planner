@@ -582,6 +582,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           _eventTime != null &&
           _addressController.text.trim().isNotEmpty;
     }
+    if (_currentStep == 3) {
+      return _selectedEventType != null;
+    }
     return true;
   }
 
