@@ -1707,17 +1707,25 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     final rows = <ExtraPosition>[];
 
     if (widget.order.shots.isNotEmpty) {
+      final perFlavorRemark = widget.order.shotSelections.isNotEmpty
+          ? widget.order.shotSelections
+              .map((s) => '${s.name} ${s.quantity}')
+              .join(', ')
+          : widget.order.shots.join(', ');
+
       rows.add(
         ExtraPosition(
           date: dateStr,
           name: isEn ? 'Shots' : 'Shots',
-          quantity: widget.order.offerShotsCount,
+          quantity: widget.order.offerShotsCount > 0
+              ? widget.order.offerShotsCount
+              : widget.order.requestedShotsTotal,
           price: widget.order.offerShotsPricePerPiece > 0
               ? widget.order.offerShotsPricePerPiece
               : 1.50,
           remark: widget.order.offerShotsRemark.isNotEmpty
               ? widget.order.offerShotsRemark
-              : widget.order.shots.join(', '),
+              : perFlavorRemark,
         ),
       );
     }
