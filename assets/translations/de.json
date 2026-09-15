@@ -41,7 +41,19 @@
     "stats_revenue": "Gesamtumsatz",
     "stats_accepted_suffix": "angenommene",
     "stats_persons": "Personen",
-    "stats_avg_per_order": "Ø pro Bestellung"
+    "stats_avg_per_order": "Ø pro Bestellung",
+    "my_requests_title": "Meine Anfragen",
+    "no_requests_yet": "Noch keine Anfragen gestellt",
+    "show_all_requests": "Alle anzeigen",
+    "sign_in_to_see_requests": "Melde dich an, um deine Anfragen zu sehen",
+    "request_date": "Datum",
+    "request_time": "Uhrzeit",
+    "request_location": "Ort",
+    "request_guests": "Gäste",
+    "request_service_type": "Service",
+    "request_cocktails": "Cocktails",
+    "request_shots": "Shots",
+    "request_remarks": "Bemerkungen"
   },
   "dialog": {
     "title": "Cocktails auswählen",

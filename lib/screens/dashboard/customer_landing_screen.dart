@@ -1,7 +1,13 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../data/order_repository.dart';
+import '../../models/order.dart';
+import '../../services/auth_service.dart';
 import 'user_menu_sheet.dart';
+import 'widgets/my_request_detail_sheet.dart';
+import 'widgets/my_requests_list.dart';
 
 /// Home screen shown to all users.
 /// The person-icon menu shows more options for admins (orders, inventory).
@@ -72,6 +78,47 @@ class CustomerLandingScreen extends StatelessWidget {
                   textStyle: const TextStyle(fontSize: 18),
                 ),
               ),
+              if (authService.isSignedIn) ...[
+                const SizedBox(height: 24),
+                Text(
+                  'dashboard.my_requests_title'.tr(),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                StreamBuilder<List<SavedOrder>>(
+                  stream: orderRepository
+                      .watchOrdersForOwner(authService.currentUser!.uid),
+                  builder: (context, snapshot) {
+                    final requests = (snapshot.data ?? []).take(3).toList();
+                    final hasMore = (snapshot.data ?? []).length > 3;
+                    return Column(
+                      children: [
+                        MyRequestsList(
+                          requests: requests,
+                          onTap: (request) =>
+                              showMyRequestDetails(context, request),
+                        ),
+                        if (hasMore)
+                          TextButton(
+                            onPressed: () => context.push('/my-requests'),
+                            child: Text('dashboard.show_all_requests'.tr()),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ] else ...[
+                const SizedBox(height: 24),
+                Text(
+                  'dashboard.sign_in_to_see_requests'.tr(),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
               const SizedBox(height: 24),
               Card(
                 child: Padding(
