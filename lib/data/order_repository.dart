@@ -163,7 +163,6 @@ class OrderRepository {
         'hasShoppingList': true,
         'shoppingListCreatedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        ..._ownerMetadata(),
       };
 
       // Only update optional fields if provided
@@ -247,7 +246,6 @@ class OrderRepository {
         'distanceKm': distanceKm,
         'offerTravelCostPerKm': travelCostPerKm,
         'offerBarCost': barCost,
-        ..._ownerMetadata(),
       };
 
       if (serviceType != null) {
@@ -292,7 +290,6 @@ class OrderRepository {
         'distanceKm': distanceKm,
         'thekeCost': thekeCost,
         'updatedAt': FieldValue.serverTimestamp(),
-        ..._ownerMetadata(),
       };
 
       if (cocktails != null) updateData['cocktails'] = cocktails;
@@ -319,7 +316,6 @@ class OrderRepository {
     try {
       final updateData = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
-        ..._ownerMetadata(),
       };
 
       if (cocktails != null) updateData['cocktails'] = cocktails;
