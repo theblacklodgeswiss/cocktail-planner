@@ -49,3 +49,6 @@ lib/firebase_options_prod.dart
 .env
 functions/node_modules/
 functions/node_modules/
+
+# Subagent-driven-development scratch workspace
+.superpowers/
