@@ -428,4 +428,86 @@ void main() {
       expect(acceptedCount, 1); // c2 (accepted, 2026)
     });
   });
+
+  group('SavedOrder.toJson round-trip', () {
+    test('fromFirestore(id, order.toJson()) reproduces every field', () {
+      final original = SavedOrder(
+        id: 'ignored',
+        name: 'Test Event',
+        date: DateTime(2026, 10, 31),
+        items: [
+          {'name': 'Vodka', 'category': 'purchase', 'price': 20, 'quantity': 2, 'total': 40},
+        ],
+        total: 500.0,
+        personCount: 100,
+        drinkerType: 'normal',
+        currency: 'CHF',
+        status: OrderStatus.accepted,
+        cocktails: const ['Mojito'],
+        shots: const ['Tequila'],
+        shotSelections: const [ShotSelection(name: 'Tequila', quantity: 3)],
+        bar: 'Whiskey',
+        distanceKm: 260,
+        thekeCost: 100.0,
+        offerClientName: 'Jane Doe',
+        offerClientContact: '+41 79 000 00 00',
+        offerEventTime: '18:00',
+        offerEventTypes: const ['wedding'],
+        offerDiscount: 50.0,
+        offerLanguage: 'de',
+        offerExtraPositions: [
+          {'name': 'Extrastunden', 'price': 50.0, 'quantity': 1, 'remark': '', 'date': ''},
+        ],
+        offerPositions: [
+          {'name': 'Barservice', 'price': 1000.0, 'quantity': 1, 'remark': 'Inkl. 3x Barkeeper', 'date': '21.08.2026'},
+        ],
+        offerShotsCount: 3,
+        offerShotsPricePerPiece: 1.5,
+        offerExtraHours: 1,
+        offerExtraHourRate: 50.0,
+        assignedEmployees: const ['Mario'],
+        location: 'Dortmund',
+        eventTime: '18:00',
+        serviceType: 'cocktail_barservice',
+        barDrinks: const ['Bier'],
+        alcoholPurchase: const ['Wodka'],
+        additionalServices: const ['photobooth'],
+        remarks: 'Welcomedrinks',
+      );
+
+      final rebuilt = SavedOrder.fromFirestore('new-id', original.toJson());
+
+      expect(rebuilt.name, original.name);
+      expect(rebuilt.date, original.date);
+      expect(rebuilt.items, original.items);
+      expect(rebuilt.total, original.total);
+      expect(rebuilt.personCount, original.personCount);
+      expect(rebuilt.currency, original.currency);
+      expect(rebuilt.status, original.status);
+      expect(rebuilt.cocktails, original.cocktails);
+      expect(rebuilt.shots, original.shots);
+      expect(rebuilt.shotSelections.map((s) => (s.name, s.quantity)),
+          original.shotSelections.map((s) => (s.name, s.quantity)));
+      expect(rebuilt.bar, original.bar);
+      expect(rebuilt.distanceKm, original.distanceKm);
+      expect(rebuilt.thekeCost, original.thekeCost);
+      expect(rebuilt.offerClientName, original.offerClientName);
+      expect(rebuilt.offerEventTime, original.offerEventTime);
+      expect(rebuilt.offerEventTypes, original.offerEventTypes);
+      expect(rebuilt.offerDiscount, original.offerDiscount);
+      expect(rebuilt.offerExtraPositions, original.offerExtraPositions);
+      expect(rebuilt.offerPositions, original.offerPositions);
+      expect(rebuilt.offerShotsCount, original.offerShotsCount);
+      expect(rebuilt.offerShotsPricePerPiece, original.offerShotsPricePerPiece);
+      expect(rebuilt.offerExtraHours, original.offerExtraHours);
+      expect(rebuilt.offerExtraHourRate, original.offerExtraHourRate);
+      expect(rebuilt.assignedEmployees, original.assignedEmployees);
+      expect(rebuilt.location, original.location);
+      expect(rebuilt.serviceType, original.serviceType);
+      expect(rebuilt.barDrinks, original.barDrinks);
+      expect(rebuilt.alcoholPurchase, original.alcoholPurchase);
+      expect(rebuilt.additionalServices, original.additionalServices);
+      expect(rebuilt.remarks, original.remarks);
+    });
+  });
 }

@@ -326,4 +326,70 @@ class SavedOrder {
       remarks: data['remarks'] as String? ?? '',
     );
   }
+
+  /// Serializes back to the same shape [fromFirestore] reads. `id` is
+  /// intentionally excluded (fromFirestore takes it as a separate
+  /// parameter) — used by [ShareLinkRepository] to snapshot an order for
+  /// a public share link; callers that need a PII-free snapshot must strip
+  /// `userId`, `userEmail`, `createdBy` and `phone` from the result
+  /// themselves (see ShareLinkRepository.createInvoiceShareLink).
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'date': date.toIso8601String(),
+    'items': items,
+    'total': total,
+    'personCount': personCount,
+    'drinkerType': drinkerType,
+    'currency': currency,
+    'status': status.value,
+    'createdBy': createdBy,
+    'createdAt': createdAt?.toIso8601String(),
+    'cocktails': cocktails,
+    'shots': shots,
+    'shotQuantities': shotSelections
+        .map((s) => {'name': s.name, 'quantity': s.quantity})
+        .toList(),
+    'bar': bar,
+    'distanceKm': distanceKm,
+    'thekeCost': thekeCost,
+    'offerTravelCostPerKm': offerTravelCostPerKm,
+    'offerBarCost': offerBarCost,
+    'offerClientName': offerClientName,
+    'offerClientContact': offerClientContact,
+    'offerEventTime': offerEventTime,
+    'offerEventTypes': offerEventTypes,
+    'offerDiscount': offerDiscount,
+    'offerDiscountRemark': offerDiscountRemark,
+    'offerLanguage': offerLanguage,
+    'offerFirstPositionText': offerFirstPositionText,
+    'offerFirstPositionRemark': offerFirstPositionRemark,
+    'offerExtraPositions': offerExtraPositions,
+    'offerPositions': offerPositions,
+    'offerShotsCount': offerShotsCount,
+    'offerShotsPricePerPiece': offerShotsPricePerPiece,
+    'offerShotsRemark': offerShotsRemark,
+    'offerExtraHours': offerExtraHours,
+    'offerExtraHourRate': offerExtraHourRate,
+    'assignedEmployees': assignedEmployees,
+    'source': source.value,
+    'hasShoppingList': hasShoppingList,
+    'formSubmissionId': formSubmissionId,
+    'formCreatedAt': formCreatedAt?.toIso8601String(),
+    'userId': userId,
+    'userEmail': userEmail,
+    'phone': phone,
+    'location': location,
+    'eventTime': eventTime,
+    'guestCountRange': guestCountRange,
+    'mobileBar': mobileBar,
+    'eventType': eventType,
+    'serviceType': serviceType,
+    'requestedCocktails': requestedCocktails,
+    'isPendingDismissed': isPendingDismissed,
+    'cocktailPopularity': cocktailPopularity,
+    'barDrinks': barDrinks,
+    'alcoholPurchase': alcoholPurchase,
+    'additionalServices': additionalServices,
+    'remarks': remarks,
+  };
 }
