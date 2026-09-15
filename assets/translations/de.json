@@ -324,7 +324,7 @@
     "share_whatsapp_unavailable": "WhatsApp konnte nicht geöffnet werden.",
     "share_regenerate": "Neu generieren",
     "share_pdf": "PDF teilen & Nachricht kopieren",
-    "share_pdf_tip": "Tipp: \"PDF teilen\" kopiert die Nachricht in die Zwischenablage und öffnet den Teilen-Dialog. PDF auswählen → WhatsApp öffnet sich → Nachricht einfügen.",
+    "share_pdf_tip": "Tipp: \"PDF teilen\" erstellt einen 14 Tage gültigen Link zum Angebot, kopiert die Nachricht mit dem Link in die Zwischenablage und öffnet WhatsApp.",
     "share_pdf_hint": "Nachricht wurde kopiert! Füge sie in WhatsApp ein.",
     "share_pdf_error": "PDF konnte nicht geteilt werden.",
     "share_cocktail_selection": "Cocktails anpassen (optional)",

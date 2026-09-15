@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/env_config.dart';
 import '../../data/order_repository.dart';
+import '../../data/share_link_repository.dart';
 import '../../data/employee_repository.dart';
 import '../../data/additional_service_repository.dart';
 import '../../models/additional_service.dart';
@@ -883,13 +884,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
     // Build a snapshot of the offer data at the time the dialog opens
     final offerSnapshot = _buildOfferData();
-    final safeNameLower = offerSnapshot.orderName.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9]'),
-      '_',
-    );
-    final dateTag =
-        '${offerSnapshot.eventDate.year}${offerSnapshot.eventDate.month.toString().padLeft(2, '0')}${offerSnapshot.eventDate.day.toString().padLeft(2, '0')}';
-    final pdfFilename = 'angebot_${safeNameLower}_$dateTag.pdf';
 
     if (!mounted) return;
     await showDialog<void>(
@@ -898,9 +892,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         clientName: _clientNameCtrl.text.trim(),
         editorName: _editorNameCtrl.text.trim(),
         selectedCocktails: cocktails,
-        generatePdfBytes: () =>
-            OfferPdfGenerator.generatePdfBytes(offerSnapshot),
-        pdfFilename: pdfFilename,
+        createShareLink: () => shareLinkRepository.createOfferShareLink(
+          offerSnapshot,
+          orderId: widget.order.id,
+        ),
       ),
     );
   }
