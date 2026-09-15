@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
+import '../models/app_role.dart';
+import '../models/employee.dart';
 
 /// Super Admin email - always has admin privileges (hardcoded fallback)
 const String superAdminEmail = 'the.blacklodge@outlook.com';
@@ -11,16 +16,20 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal() {
     _firebaseAuth.authStateChanges().listen((user) {
-      _cachedIsAdmin = null; // Clear cache on user change
+      _cachedRole = null; // Clear cache on user change
+      _cachedEmployeeRole = null;
       if (user != null && !user.isAnonymous) {
-        checkIsAdmin();
+        checkRole();
       }
     });
   }
 
   FirebaseAuth? _auth;
   GoogleSignIn? _googleSignIn;
-  bool? _cachedIsAdmin;
+  AppRole? _cachedRole;
+  EmployeeRole? _cachedEmployeeRole;
+  final StreamController<AppRole> _roleChangesController =
+      StreamController<AppRole>.broadcast();
 
   FirebaseAuth get _firebaseAuth {
     _auth ??= FirebaseAuth.instance;
@@ -65,22 +74,31 @@ class AuthService {
     return user?.isAnonymous ?? true;
   }
 
+  /// Current resolved role (sync - uses cache; defaults to customer until
+  /// [checkRole] has completed at least once for this session).
+  AppRole get role => _cachedRole ?? AppRole.customer;
+
+  /// True once [checkRole] has resolved for the current auth state. Use this
+  /// to distinguish "definitely a customer" from "still checking" in UI
+  /// gates - see [role_protected_screen.dart].
+  bool get roleResolved => _cachedRole != null;
+
+  /// True if [role] is employee, admin, or super admin.
+  bool get isEmployeeOrHigher => role.atLeast(AppRole.employee);
+
+  /// Emits every time [checkRole] resolves a (possibly unchanged) role.
+  Stream<AppRole> get roleChanges => _roleChangesController.stream;
+
+  /// The employee roster role backing an employee-tier grant, for display
+  /// only (e.g. "Angemeldet als Supervisor"). Never used for gating - gating
+  /// always goes through [role] / [isEmployeeOrHigher].
+  EmployeeRole? get employeeRole => _cachedEmployeeRole;
+
   /// Check if current user is admin (sync - uses cache)
-  bool get isAdmin {
-    final userEmail = email;
-    if (userEmail == null) return false;
-    // Super admin is always an admin
-    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) return true;
-    return _cachedIsAdmin ?? false;
-  }
+  bool get isAdmin => role.atLeast(AppRole.admin);
 
   /// Check if current user can manage users (admin or super admin)
-  bool get canManageUsers {
-    final userEmail = email;
-    if (userEmail == null) return false;
-    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) return true;
-    return _cachedIsAdmin ?? false;
-  }
+  bool get canManageUsers => role.atLeast(AppRole.admin);
 
   /// Check if current user is super admin
   bool get isSuperAdmin {
@@ -89,39 +107,69 @@ class AuthService {
     return userEmail.toLowerCase() == superAdminEmail.toLowerCase();
   }
 
-  /// Check admin status from Firestore (async - call on login)
-  Future<bool> checkIsAdmin() async {
+  /// Resolve the current user's [AppRole] from Firestore (async - call on
+  /// login). Reads `allowedUsers/{email}` first; if that does not resolve to
+  /// admin, reads `employeeAccess/{email}` - a single document get by known
+  /// path, not a query.
+  Future<AppRole> checkRole() async {
     final userEmail = email;
     if (userEmail == null) {
-      _cachedIsAdmin = false;
-      return false;
+      _cachedRole = AppRole.customer;
+      _cachedEmployeeRole = null;
+      _roleChangesController.add(_cachedRole!);
+      return _cachedRole!;
     }
 
-    // Super admin is always an admin
-    if (userEmail.toLowerCase() == superAdminEmail.toLowerCase()) {
-      _cachedIsAdmin = true;
-      return true;
-    }
+    final normalizedEmail = userEmail.toLowerCase();
+    final isSuperAdminEmail = normalizedEmail == superAdminEmail.toLowerCase();
 
-    // Check Firestore allowedUsers collection
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('allowedUsers')
-          .doc(userEmail.toLowerCase())
-          .get();
+    bool allowedUserIsAdmin = false;
+    bool hasEmployeeAccessDoc = false;
+    EmployeeRole? employeeRoleFromMirror;
 
-      if (doc.exists) {
-        final data = doc.data();
-        _cachedIsAdmin = data?['isAdmin'] == true;
-      } else {
-        _cachedIsAdmin = false;
+    if (!isSuperAdminEmail) {
+      try {
+        final allowedDoc = await FirebaseFirestore.instance
+            .collection('allowedUsers')
+            .doc(normalizedEmail)
+            .get();
+        allowedUserIsAdmin = allowedDoc.data()?['isAdmin'] == true;
+      } catch (e) {
+        debugPrint('Failed to check admin status: $e');
       }
-    } catch (e) {
-      debugPrint('Failed to check admin status: $e');
-      _cachedIsAdmin = false;
+
+      if (!allowedUserIsAdmin) {
+        try {
+          final mirrorDoc = await FirebaseFirestore.instance
+              .collection('employeeAccess')
+              .doc(normalizedEmail)
+              .get();
+          hasEmployeeAccessDoc = mirrorDoc.exists;
+          if (hasEmployeeAccessDoc) {
+            employeeRoleFromMirror =
+                EmployeeRole.fromFirestore(mirrorDoc.data()?['role'] as String?);
+          }
+        } catch (e) {
+          debugPrint('Failed to check employee access: $e');
+        }
+      }
     }
 
-    return _cachedIsAdmin ?? false;
+    _cachedRole = resolveAppRole(
+      isSuperAdminEmail: isSuperAdminEmail,
+      allowedUserIsAdmin: allowedUserIsAdmin,
+      hasEmployeeAccessDoc: hasEmployeeAccessDoc,
+    );
+    _cachedEmployeeRole = employeeRoleFromMirror;
+    _roleChangesController.add(_cachedRole!);
+    return _cachedRole!;
+  }
+
+  /// Kept for source compatibility with existing call sites; delegates to
+  /// [checkRole].
+  Future<bool> checkIsAdmin() async {
+    final resolved = await checkRole();
+    return resolved.atLeast(AppRole.admin);
   }
 
   /// User display name
