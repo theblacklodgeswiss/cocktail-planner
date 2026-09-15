@@ -32,6 +32,9 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get settingsCollection =>
       firestore.collection('settings');
 
+  CollectionReference<Map<String, dynamic>> get shareLinksCollection =>
+      firestore.collection('shareLinks');
+
   /// Initialize Firestore connection.
   Future<bool> initialize() async {
     try {

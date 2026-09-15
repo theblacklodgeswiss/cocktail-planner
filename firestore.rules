@@ -139,6 +139,17 @@ service cloud.firestore {
       allow write: if canManageUsers();
     }
 
+    // Share links - short-lived, publicly readable links to a frozen
+    // snapshot of an offer/invoice for external (signed-out) recipients.
+    // Read has no auth check by design: the recipient clicking a WhatsApp
+    // link has no Firebase session. The expiresAt check is the entire
+    // security boundary. Documents are write-once (no update/delete).
+    match /shareLinks/{code} {
+      allow read: if resource.data.expiresAt > request.time;
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
     // Microsoft Forms collection - authenticated users can read/write
     match /microsoftForms/{document=**} {
       allow read: if isAuthenticated();
