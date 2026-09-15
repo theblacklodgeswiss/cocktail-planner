@@ -1870,11 +1870,22 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'order_setup.distance_label'.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'order_setup.distance_label'.tr(),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              iconSize: 20,
+              onPressed: _showDistanceInfo,
+              tooltip: 'order_setup.distance_info'.tr(),
+            ),
+          ],
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2422,6 +2433,22 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       recipe.name,
       () => TextEditingController(
         text: '${_shotQuantities[recipe.name] ?? 1}',
+      ),
+    );
+  }
+
+  void _showDistanceInfo() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('order_setup.distance_info_title'.tr()),
+        content: Text('order_setup.distance_info_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('common.ok'.tr()),
+          ),
+        ],
       ),
     );
   }
