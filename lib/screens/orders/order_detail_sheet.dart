@@ -69,6 +69,31 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   late List<String> _assignedEmployees;
   late DateTime _currentDate;
 
+  /// Guards the "Mit Claude regenerieren/erstellen" buttons against a
+  /// double-tap and drives their loading spinner while a Firestore/Claude
+  /// round trip is in flight.
+  bool _isGeneratingList = false;
+
+  /// Guards the invoice-open button against a double-tap and drives its
+  /// loading spinner while the fresh order data is fetched from Firestore.
+  bool _isOpeningInvoice = false;
+
+  /// Guards the accept/decline/status-change buttons against a double-tap
+  /// and drives their loading spinner while the status update is in flight.
+  bool _isUpdatingStatus = false;
+
+  /// Guards the shopping-list "Bearbeiten" button against a double-tap and
+  /// drives its loading spinner while cocktail data is loaded.
+  bool _isEditingList = false;
+
+  /// Guards the shopping-list PDF download buttons against a double-tap and
+  /// drives their loading spinner while the PDF is generated.
+  bool _isDownloadingPdf = false;
+
+  /// Guards the "Einkaufsliste erstellen" button against a double-tap and
+  /// drives its loading spinner while cocktail data is loaded.
+  bool _isOpeningShoppingList = false;
+
   @override
   void initState() {
     super.initState();
@@ -93,6 +118,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _updateStatus(OrderStatus newStatus) async {
+    if (_isUpdatingStatus) return;
     // Block accepting if no shopping list / price has been calculated
     if (newStatus == OrderStatus.accepted && widget.order.total <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -127,11 +153,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       );
       if (confirmed != true) return;
     }
+    setState(() => _isUpdatingStatus = true);
     final success = await orderRepository.updateStatus(
       widget.order.id,
       newStatus.value,
     );
-    if (success && mounted) {
+    if (!mounted) return;
+    setState(() => _isUpdatingStatus = false);
+    if (success) {
       setState(() => _currentStatus = newStatus);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -161,6 +190,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   /// Navigate to shopping list to edit the existing order
   Future<void> _editShoppingList() async {
+    if (_isEditingList) return;
+    setState(() => _isEditingList = true);
     final order = widget.order;
 
     // Parse eventTime from string
@@ -250,6 +281,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     } catch (e) {
       debugPrint('Failed to load cocktail data: $e');
       if (mounted) {
+        setState(() => _isEditingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
         );
@@ -259,6 +291,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   /// Download shopping list PDF directly without navigating to shopping list screen
   Future<void> _downloadShoppingList() async {
+    if (_isDownloadingPdf) return;
     if (!widget.order.hasShoppingList) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('orders.no_shopping_list'.tr())),
@@ -266,6 +299,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       return;
     }
 
+    setState(() => _isDownloadingPdf = true);
     try {
       await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: true);
       if (mounted) {
@@ -282,11 +316,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isDownloadingPdf = false);
     }
   }
 
   /// Download shopping list PDF without prices for employees
   Future<void> _downloadShoppingListWithoutPrices() async {
+    if (_isDownloadingPdf) return;
+    setState(() => _isDownloadingPdf = true);
     try {
       await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: false);
       if (mounted) {
@@ -303,6 +341,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isDownloadingPdf = false);
     }
   }
 
@@ -312,6 +352,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   /// 3. Generate material suggestions via Gemini.
   /// 4. Show review dialog, then navigate to shopping list.
   Future<void> _openShoppingList() async {
+    if (_isOpeningShoppingList) return;
+    setState(() => _isOpeningShoppingList = true);
     final order = widget.order;
 
     // Load recipes to populate the popularity dialog
@@ -320,6 +362,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       cocktailData = await cocktailRepository.load();
     } catch (e) {
       if (mounted) {
+        setState(() => _isOpeningShoppingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
         );
@@ -349,8 +392,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       appState.setSelectedRecipes(allRecipes);
     }
 
-    // Show popularity dialog so user can set probabilities per cocktail
     if (!mounted) return;
+    setState(() => _isOpeningShoppingList = false);
+
+    // Show popularity dialog so user can set probabilities per cocktail
     if (allRecipes.isNotEmpty) {
       await showDialog(
         context: context,
@@ -375,12 +420,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _generateWithGemini() async {
+    if (_isGeneratingList) return;
     if (!claudeService.isConfigured) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('orders.claude_not_configured'.tr())),
       );
       return;
     }
+
+    setState(() => _isGeneratingList = true);
 
     final order = widget.order;
     var resetExistingShoppingList = false;
@@ -404,7 +452,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         ),
       );
 
-      if (confirmedReset != true) return;
+      if (confirmedReset != true) {
+        setState(() => _isGeneratingList = false);
+        return;
+      }
       resetExistingShoppingList = true;
     }
 
@@ -443,6 +494,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       cocktailData = await cocktailRepository.load();
     } catch (e) {
       if (mounted) {
+        setState(() => _isGeneratingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
         );
@@ -471,6 +523,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     if (allRecipes.isNotEmpty) {
       appState.setSelectedRecipes(allRecipes);
     }
+
+    if (mounted) setState(() => _isGeneratingList = false);
 
     // Step 2: cocktail popularity dialog
     if (!mounted) return;
@@ -636,9 +690,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _openInvoiceEditor() async {
+    if (_isOpeningInvoice) return;
+    setState(() => _isOpeningInvoice = true);
     final router = GoRouter.of(context);
     final order = await _loadLatestOrder();
     if (!mounted) return;
+    setState(() => _isOpeningInvoice = false);
     Navigator.of(context).pop();
     router.push('/create-invoice', extra: order);
   }
@@ -846,41 +903,80 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Future<void> _deleteOrder() async {
+    // Keep the confirm dialog open with a spinner on the delete button
+    // until the delete actually resolves, instead of popping immediately
+    // and performing the Firestore write invisibly behind a closed dialog.
+    bool saving = false;
+    String? error;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('orders.delete_confirm_title'.tr()),
-        content: Text(
-          'orders.delete_confirm_message'.tr(
-            namedArgs: {'name': widget.order.name},
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('orders.delete_confirm_title'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'orders.delete_confirm_message'.tr(
+                  namedArgs: {'name': widget.order.name},
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  error!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success =
+                          await orderRepository.deleteOrder(widget.order.id);
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'orders.delete_failed'.tr();
+                        });
+                      }
+                    },
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text('common.delete'.tr()),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('common.delete'.tr()),
-          ),
-        ],
       ),
     );
 
-    if (confirm == true) {
-      final success = await orderRepository.deleteOrder(widget.order.id);
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success ? 'orders.deleted'.tr() : 'orders.delete_failed'.tr(),
-            ),
-          ),
-        );
-      }
+    if (confirm == true && mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.deleted'.tr())),
+      );
     }
   }
 
@@ -955,8 +1051,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   if (_currentStatus == OrderStatus.accepted) ...[
                     const SizedBox(height: 8),
                     FilledButton.icon(
-                      onPressed: _generateInvoice,
-                      icon: const Icon(Icons.receipt_long),
+                      onPressed: _isOpeningInvoice ? null : _generateInvoice,
+                      icon: _isOpeningInvoice
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.receipt_long),
                       label: Text('orders.invoice'.tr()),
                     ),
                   ],
@@ -986,8 +1088,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   if (_currentStatus == OrderStatus.accepted) ...[
                     const SizedBox(width: 8),
                     FilledButton.icon(
-                      onPressed: _generateInvoice,
-                      icon: const Icon(Icons.receipt_long),
+                      onPressed: _isOpeningInvoice ? null : _generateInvoice,
+                      icon: _isOpeningInvoice
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.receipt_long),
                       label: Text('orders.invoice'.tr()),
                     ),
                   ],
@@ -1027,24 +1135,43 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _downloadShoppingList,
-                      icon: const Icon(Icons.download, size: 15),
+                      onPressed: _isDownloadingPdf ? null : _downloadShoppingList,
+                      icon: _isDownloadingPdf
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download, size: 15),
                       label: const Text('PDF', style: TextStyle(fontSize: 12)),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _downloadShoppingListWithoutPrices,
-                      icon: const Icon(Icons.download_outlined, size: 15),
+                      onPressed:
+                          _isDownloadingPdf ? null : _downloadShoppingListWithoutPrices,
+                      icon: _isDownloadingPdf
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_outlined, size: 15),
                       label: const Text('Ohne Preise', style: TextStyle(fontSize: 12)),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _editShoppingList,
-                      icon: const Icon(Icons.edit, size: 15),
+                      onPressed: _isEditingList ? null : _editShoppingList,
+                      icon: _isEditingList
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.edit, size: 15),
                       label: const Text('Bearbeiten', style: TextStyle(fontSize: 12)),
                     ),
                   ),
@@ -1054,8 +1181,17 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _generateWithGemini,
-                icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                onPressed: _isGeneratingList ? null : _generateWithGemini,
+                icon: _isGeneratingList
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
                 label: Text('orders.regenerate_with_claude'.tr(), style: const TextStyle(color: Colors.white)),
                 style: FilledButton.styleFrom(backgroundColor: Colors.deepPurple),
               ),
@@ -1066,27 +1202,55 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               children: [
                 if (hasList) ...[
                   OutlinedButton.icon(
-                    onPressed: _downloadShoppingList,
-                    icon: const Icon(Icons.download, size: 15),
+                    onPressed: _isDownloadingPdf ? null : _downloadShoppingList,
+                    icon: _isDownloadingPdf
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download, size: 15),
                     label: const Text('PDF', style: TextStyle(fontSize: 12)),
                   ),
                   const SizedBox(width: 4),
                   OutlinedButton.icon(
-                    onPressed: _downloadShoppingListWithoutPrices,
-                    icon: const Icon(Icons.download_outlined, size: 15),
+                    onPressed:
+                        _isDownloadingPdf ? null : _downloadShoppingListWithoutPrices,
+                    icon: _isDownloadingPdf
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined, size: 15),
                     label: const Text('Ohne Preise', style: TextStyle(fontSize: 12)),
                   ),
                   const SizedBox(width: 4),
                   OutlinedButton.icon(
-                    onPressed: _editShoppingList,
-                    icon: const Icon(Icons.edit, size: 15),
+                    onPressed: _isEditingList ? null : _editShoppingList,
+                    icon: _isEditingList
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.edit, size: 15),
                     label: const Text('Bearbeiten', style: TextStyle(fontSize: 12)),
                   ),
                   const SizedBox(width: 4),
                 ],
                 FilledButton.icon(
-                  onPressed: _generateWithGemini,
-                  icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                  onPressed: _isGeneratingList ? null : _generateWithGemini,
+                  icon: _isGeneratingList
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
                   label: Text('orders.regenerate_with_claude'.tr(), style: const TextStyle(color: Colors.white)),
                   style: FilledButton.styleFrom(backgroundColor: Colors.deepPurple),
                 ),
@@ -1167,10 +1331,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           FilledButton.icon(
-                            onPressed: widget.order.total > 0
+                            onPressed: (widget.order.total > 0 && !_isUpdatingStatus)
                                 ? () => _tryUpdateStatus(OrderStatus.accepted)
                                 : null,
-                            icon: const Icon(Icons.check),
+                            icon: _isUpdatingStatus
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.check),
                             label: Text('orders.accept'.tr()),
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.green,
@@ -1195,8 +1368,16 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   if (_currentStatus != OrderStatus.declined)
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _updateStatus(OrderStatus.declined),
-                        icon: const Icon(Icons.close),
+                        onPressed: _isUpdatingStatus
+                            ? null
+                            : () => _updateStatus(OrderStatus.declined),
+                        icon: _isUpdatingStatus
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.close),
                         label: Text('orders.decline'.tr()),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red,
@@ -1207,8 +1388,16 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _updateStatus(OrderStatus.quote),
-                        icon: const Icon(Icons.undo),
+                        onPressed: _isUpdatingStatus
+                            ? null
+                            : () => _updateStatus(OrderStatus.quote),
+                        icon: _isUpdatingStatus
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.undo),
                         label: Text('orders.status_quote'.tr()),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.orange,
@@ -1312,8 +1501,17 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _openShoppingList,
-                      icon: const Icon(Icons.shopping_cart),
+                      onPressed: _isOpeningShoppingList ? null : _openShoppingList,
+                      icon: _isOpeningShoppingList
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.shopping_cart),
                       label: Text('orders.create_shopping_list'.tr()),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.orange,
@@ -1323,8 +1521,17 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => _generateWithGemini(),
-                      icon: const Icon(Icons.auto_awesome, color: Colors.white),
+                      onPressed: _isGeneratingList ? null : () => _generateWithGemini(),
+                      icon: _isGeneratingList
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.auto_awesome, color: Colors.white),
                       label: Text('orders.generate_with_claude'.tr(), style: const TextStyle(color: Colors.white)),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.deepPurple,
