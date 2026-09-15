@@ -514,6 +514,11 @@
     "apply_suggestions": "Apply",
     "apply_to_shopping_list": "Add to shopping list"
   },
+  "share": {
+    "loading": "Loading document...",
+    "expired_title": "Link no longer valid",
+    "expired_body": "This link has expired or is invalid. Please request a new link."
+  },
   "settings": {
     "title": "Settings",
     "appearance_section": "Appearance",

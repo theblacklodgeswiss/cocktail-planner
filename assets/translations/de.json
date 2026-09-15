@@ -522,6 +522,11 @@
     "apply_suggestions": "Übernehmen",
     "apply_to_shopping_list": "Zur Einkaufsliste hinzufügen"
   },
+  "share": {
+    "loading": "Dokument wird geladen...",
+    "expired_title": "Link nicht mehr gültig",
+    "expired_body": "Dieser Link ist abgelaufen oder ungültig. Bitte fordere einen neuen Link an."
+  },
   "settings": {
     "title": "Einstellungen",
     "appearance_section": "Darstellung",
