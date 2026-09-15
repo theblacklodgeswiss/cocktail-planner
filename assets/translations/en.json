@@ -387,6 +387,7 @@
   },
   "orders": {
     "title": "Orders Overview",
+    "creator": "Created by",
     "total_revenue": "Total Revenue",
     "order_count": "Orders",
     "search_results": "Search Results",

@@ -393,6 +393,7 @@
   },
   "orders": {
     "title": "Bestellungsübersicht",
+    "creator": "Bearbeiter",
     "total_revenue": "Gesamtumsatz",
     "order_count": "Bestellungen",
     "search_results": "Suchergebnisse",

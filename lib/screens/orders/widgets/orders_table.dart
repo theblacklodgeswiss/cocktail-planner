@@ -180,6 +180,30 @@ class OrdersTable extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Bearbeiter (creator) — shown first, per request; never
+              // filterable, purely informational.
+              if (order.createdBy != null && order.createdBy!.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: 14,
+                      color: colorScheme.outline,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        '${'orders.creator'.tr()}: ${order.createdBy}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.outline,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+              ],
               // Status badge + date row
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
