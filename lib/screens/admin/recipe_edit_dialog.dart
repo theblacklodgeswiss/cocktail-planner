@@ -12,11 +12,18 @@ class RecipeEditDialog extends StatefulWidget {
     required this.initialName,
     required this.initialIngredients,
     this.initialAmounts = const {},
+    required this.onSave,
   });
 
   final String initialName;
   final List<String> initialIngredients;
   final Map<String, String> initialAmounts;
+
+  /// Performs the actual (Firestore) write and returns whether it
+  /// succeeded. The dialog stays open with a spinner on the Save button
+  /// while this is awaited, and only closes after it resolves
+  /// successfully; on failure it stays open and shows an inline error.
+  final Future<bool> Function(RecipeEditResult result) onSave;
 
   @override
   State<RecipeEditDialog> createState() => _RecipeEditDialogState();
@@ -29,6 +36,8 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
   List<String> _availableMaterials = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  bool _saving = false;
+  String? _saveError;
 
   @override
   void initState() {
@@ -161,23 +170,52 @@ class _RecipeEditDialogState extends State<RecipeEditDialog> {
             _buildAddNewButton(),
             const Divider(height: 8),
             Expanded(child: _buildIngredientsList()),
+            if (_saveError != null) ...[
+              const SizedBox(height: 8),
+              Text(_saveError!, style: const TextStyle(color: Colors.red)),
+            ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Abbrechen'),
+        ),
         FilledButton(
-          onPressed: () {
-            Navigator.pop(context, (
-              name: _nameController.text,
-              ingredients: _selectedIngredients.toList(),
-              amounts: _currentAmounts,
-            ));
-          },
-          child: const Text('Speichern'),
+          onPressed: _saving ? null : _handleSave,
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Speichern'),
         ),
       ],
     );
+  }
+
+  Future<void> _handleSave() async {
+    final result = (
+      name: _nameController.text,
+      ingredients: _selectedIngredients.toList(),
+      amounts: _currentAmounts,
+    );
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    final success = await widget.onSave(result);
+    if (!mounted) return;
+    if (success) {
+      Navigator.pop(context, result);
+    } else {
+      setState(() {
+        _saving = false;
+        _saveError = 'Fehler beim Speichern';
+      });
+    }
   }
 
   Widget _buildNameField() {

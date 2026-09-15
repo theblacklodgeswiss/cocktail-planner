@@ -58,37 +58,65 @@ class _EmployeesTabState extends State<EmployeesTab> {
   }
 
   Future<void> _deleteEmployee(Employee employee) async {
+    bool saving = false;
+    String? error;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('admin.delete_employee_confirm_title'.tr()),
-        content: Text('admin.delete_employee_confirm_message'
-            .tr(namedArgs: {'name': employee.name})),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr()),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('admin.delete_employee_confirm_title'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('admin.delete_employee_confirm_message'
+                  .tr(namedArgs: {'name': employee.name})),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.delete'.tr()),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+              child: Text('common.cancel'.tr()),
+            ),
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success =
+                          await employeeRepository.deleteEmployee(employee);
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'common.error'.tr();
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('common.delete'.tr()),
+            ),
+          ],
+        ),
       ),
     );
 
-    if (confirm != true) return;
-
-    final success = await employeeRepository.deleteEmployee(employee);
-    if (!mounted) return;
-
-    if (success) {
+    if (confirm == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('admin.employee_deleted'.tr())),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.error'.tr())),
       );
     }
   }
@@ -98,6 +126,8 @@ class _EmployeesTabState extends State<EmployeesTab> {
     final emailController = TextEditingController(text: employee.email ?? '');
     var selectedRole = employee.role;
     final formKey = GlobalKey<FormState>();
+    var saving = false;
+    String? error;
 
     final result = await showDialog<bool>(
       context: context,
@@ -155,36 +185,55 @@ class _EmployeesTabState extends State<EmployeesTab> {
                       }
                     },
                   ),
+                  if (error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  ],
                 ],
               ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
               child: Text('common.cancel'.tr()),
             ),
             TextButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.pop(ctx, true);
-                }
-              },
-              child: Text('common.save'.tr()),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final emailText = emailController.text.trim();
+                      final success = await employeeRepository.updateEmployee(
+                        previous: employee,
+                        name: nameController.text.trim(),
+                        email: emailText.isEmpty ? null : emailText,
+                        role: selectedRole,
+                      );
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'common.error'.tr();
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('common.save'.tr()),
             ),
           ],
         ),
       ),
-    );
-
-    if (result != true) return;
-
-    final emailText = emailController.text.trim();
-    final success = await employeeRepository.updateEmployee(
-      previous: employee,
-      name: nameController.text.trim(),
-      email: emailText.isEmpty ? null : emailText,
-      role: selectedRole,
     );
 
     nameController.dispose();
@@ -192,13 +241,9 @@ class _EmployeesTabState extends State<EmployeesTab> {
 
     if (!mounted) return;
 
-    if (success) {
+    if (result == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('admin.employee_updated'.tr())),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.error'.tr())),
       );
     }
   }

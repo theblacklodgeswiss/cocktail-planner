@@ -215,28 +215,65 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _confirmRemoveUser(String email) async {
+    bool saving = false;
+    String? error;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: Text('admin_panel.remove_user_title'.tr()),
-        content: Text(
-          'admin_panel.remove_user_message'.tr(namedArgs: {'email': email}),
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDialogState) => AlertDialog(
+          title: Text('admin_panel.remove_user_title'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'admin_panel.remove_user_message'
+                    .tr(namedArgs: {'email': email}),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(c, false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success =
+                          await authService.removeAllowedUser(email);
+                      if (success) {
+                        if (c.mounted) Navigator.pop(c, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'common.error'.tr();
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('admin_panel.remove'.tr()),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: Text('admin_panel.remove'.tr()),
-          ),
-        ],
       ),
     );
 
     if (confirm == true) {
-      await authService.removeAllowedUser(email);
       await _loadUsers();
     }
   }
@@ -245,6 +282,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final emailController = TextEditingController();
     final nameController = TextEditingController();
     bool isAdmin = false;
+    bool saving = false;
+    String? error;
 
     final result = await showDialog<bool>(
       context: context,
@@ -284,41 +323,58 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
               ),
+              if (error != null) ...[
+                const SizedBox(height: 16),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
               child: Text('common.cancel'.tr()),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('common.add'.tr()),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (emailController.text.trim().isEmpty) return;
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success = await authService.addAllowedUser(
+                        emailController.text.trim(),
+                        name: nameController.text.trim(),
+                        isAdmin: isAdmin,
+                      );
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'common.add_error'.tr();
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('common.add'.tr()),
             ),
           ],
         ),
       ),
     );
 
-    if (result == true && emailController.text.trim().isNotEmpty) {
-      final success = await authService.addAllowedUser(
-        emailController.text.trim(),
-        name: nameController.text.trim(),
-        isAdmin: isAdmin,
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('common.user_added'.tr())),
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success ? 'common.user_added'.tr() : 'common.add_error'.tr(),
-            ),
-          ),
-        );
-        if (success) {
-          await _loadUsers();
-        }
-      }
+      await _loadUsers();
     }
   }
 }

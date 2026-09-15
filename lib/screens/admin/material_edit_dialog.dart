@@ -16,10 +16,18 @@ typedef MaterialEditResult = ({
 });
 
 /// Shows a dialog for editing or creating a material item.
-/// Returns the result if saved, or null if cancelled.
+///
+/// [onSave] performs the actual (Firestore) write and should return whether
+/// it succeeded. The dialog stays open with a spinner on the Save button
+/// while [onSave] is awaited, and only closes after it resolves
+/// successfully; on failure it stays open and shows an inline error so the
+/// user can retry.
+///
+/// Returns the saved result if saved, or null if cancelled.
 Future<MaterialEditResult?> showMaterialEditDialog(
   BuildContext context, {
   MaterialItem? item,
+  required Future<bool> Function(MaterialEditResult result) onSave,
 }) async {
   final nameController = TextEditingController(text: item?.name ?? '');
   final unitController = TextEditingController(text: item?.unit ?? '');
@@ -35,6 +43,8 @@ Future<MaterialEditResult?> showMaterialEditDialog(
   String? categoryValue = item?.category;
 
   final isNew = item == null;
+  var saving = false;
+  String? error;
 
   const categories = [
     (value: 'supervisor', label: 'Supervisor/Barkeeper'),
@@ -144,29 +154,54 @@ Future<MaterialEditResult?> showMaterialEditDialog(
                 onChanged: (v) => setDialogState(() => visibleValue = v),
                 contentPadding: EdgeInsets.zero,
               ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
             ],
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: saving ? null : () => Navigator.pop(ctx),
             child: const Text('Abbrechen'),
           ),
           FilledButton(
-            onPressed: () {
-              if (nameController.text.trim().isEmpty) return;
-              Navigator.pop(ctx, (
-                name: nameController.text.trim(),
-                unit: unitController.text.trim(),
-                price: double.tryParse(priceController.text) ?? 0,
-                currency: currencyController.text.trim(),
-                note: noteController.text.trim(),
-                active: activeValue,
-                visible: visibleValue,
-                category: categoryValue,
-              ));
-            },
-            child: const Text('Speichern'),
+            onPressed: saving
+                ? null
+                : () async {
+                    if (nameController.text.trim().isEmpty) return;
+                    final result = (
+                      name: nameController.text.trim(),
+                      unit: unitController.text.trim(),
+                      price: double.tryParse(priceController.text) ?? 0,
+                      currency: currencyController.text.trim(),
+                      note: noteController.text.trim(),
+                      active: activeValue,
+                      visible: visibleValue,
+                      category: categoryValue,
+                    );
+                    setDialogState(() {
+                      saving = true;
+                      error = null;
+                    });
+                    final success = await onSave(result);
+                    if (success) {
+                      if (ctx.mounted) Navigator.pop(ctx, result);
+                    } else {
+                      setDialogState(() {
+                        saving = false;
+                        error = 'Fehler beim Speichern';
+                      });
+                    }
+                  },
+            child: saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Speichern'),
           ),
         ],
       ),

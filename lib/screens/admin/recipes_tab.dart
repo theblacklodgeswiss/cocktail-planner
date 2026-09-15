@@ -49,69 +49,119 @@ class _RecipesTabState extends State<RecipesTab> {
         initialName: recipe?.name ?? '',
         initialIngredients: recipe?.ingredients ?? [],
         initialAmounts: recipe?.ingredientAmounts ?? {},
+        onSave: (result) async {
+          if (result.name.trim().isEmpty) return false;
+          bool success;
+          if (docId == null) {
+            success = await adminRepository.addRecipe(
+              name: result.name.trim(),
+              ingredients: result.ingredients,
+            );
+            // Save amounts separately after create
+            if (success && result.amounts.isNotEmpty) {
+              final recipes = await adminRepository.getRecipesWithIds();
+              final created = recipes
+                  .where((r) => r.item.name == result.name.trim())
+                  .firstOrNull;
+              if (created != null) {
+                success = await adminRepository.updateRecipeAmounts(
+                  docId: created.id,
+                  amounts: result.amounts,
+                );
+              }
+            }
+          } else {
+            success = await adminRepository.updateRecipe(
+              docId: docId,
+              name: result.name.trim(),
+              ingredients: result.ingredients,
+            );
+            if (success && result.amounts.isNotEmpty) {
+              success = await adminRepository.updateRecipeAmounts(
+                docId: docId,
+                amounts: result.amounts,
+              );
+            }
+          }
+          return success;
+        },
       ),
     );
 
     if (result != null && result.name.trim().isNotEmpty) {
-      bool success;
-      if (docId == null) {
-        success = await adminRepository.addRecipe(
-          name: result.name.trim(),
-          ingredients: result.ingredients,
-        );
-        // Save amounts separately after create
-        if (success && result.amounts.isNotEmpty) {
-          final recipes = await adminRepository.getRecipesWithIds();
-          final created = recipes.where((r) => r.item.name == result.name.trim()).firstOrNull;
-          if (created != null) {
-            await adminRepository.updateRecipeAmounts(docId: created.id, amounts: result.amounts);
-          }
-        }
-      } else {
-        success = await adminRepository.updateRecipe(
-          docId: docId,
-          name: result.name.trim(),
-          ingredients: result.ingredients,
-        );
-        if (success && result.amounts.isNotEmpty) {
-          await adminRepository.updateRecipeAmounts(docId: docId, amounts: result.amounts);
-        }
-      }
-
       scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text(success ? 'Gespeichert!' : 'Fehler beim Speichern')),
+        const SnackBar(content: Text('Gespeichert!')),
       );
-      if (success) _loadItems();
+      _loadItems();
     }
   }
 
   Future<void> _deleteItem(String docId, String name) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+    bool saving = false;
+    String? error;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rezept löschen?'),
-        content: Text('"$name" wird unwiderruflich gelöscht.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Abbrechen'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Rezept löschen?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('"$name" wird unwiderruflich gelöscht.'),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Löschen'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success =
+                          await adminRepository.deleteRecipe(docId: docId);
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'Fehler beim Löschen';
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Löschen'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirm == true) {
-      final success = await adminRepository.deleteRecipe(docId: docId);
       scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text(success ? 'Gelöscht!' : 'Fehler beim Löschen')),
+        const SnackBar(content: Text('Gelöscht!')),
       );
-      if (success) _loadItems();
+      _loadItems();
     }
   }
 

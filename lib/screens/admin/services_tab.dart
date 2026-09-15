@@ -215,42 +215,70 @@ class _ServicesTabState extends State<ServicesTab> {
   }
 
   Future<void> _deleteService(AdditionalService service) async {
+    bool saving = false;
+    String? error;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('admin.delete_service_confirm_title'.tr()),
-        content: Text(
-          'admin.delete_service_confirm_message'.tr(
-            namedArgs: {'name': service.name},
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('admin.delete_service_confirm_title'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'admin.delete_service_confirm_message'.tr(
+                  namedArgs: {'name': service.name},
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+              child: Text('common.cancel'.tr()),
+            ),
+            TextButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success =
+                          await additionalServiceRepository.deleteService(
+                        service.id,
+                      );
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'common.error'.tr();
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('common.delete'.tr()),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('common.delete'.tr()),
-          ),
-        ],
       ),
     );
 
-    if (confirm != true) return;
-
-    final success = await additionalServiceRepository.deleteService(
-      service.id,
-    );
-    if (!mounted) return;
-
-    if (success) {
+    if (confirm == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('admin.service_deleted'.tr())),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.error'.tr())),
       );
     }
   }
@@ -266,6 +294,8 @@ class _ServicesTabState extends State<ServicesTab> {
         )
         .toList();
     final formKey = GlobalKey<FormState>();
+    var saving = false;
+    String? error;
 
     final result = await showDialog<bool>(
       context: context,
@@ -275,57 +305,76 @@ class _ServicesTabState extends State<ServicesTab> {
           content: Form(
             key: formKey,
             child: SingleChildScrollView(
-              child: _buildServiceForm(
-                nameController: nameController,
-                imageUrlController: imageUrlController,
-                drafts: drafts,
-                onAddVariant: () =>
-                    setDialogState(() => drafts.add(_VariantDraft())),
-                onRemoveVariant: (draft) => setDialogState(() {
-                  drafts.remove(draft);
-                  draft.dispose();
-                }),
-                setFormState: setDialogState,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildServiceForm(
+                    nameController: nameController,
+                    imageUrlController: imageUrlController,
+                    drafts: drafts,
+                    onAddVariant: () =>
+                        setDialogState(() => drafts.add(_VariantDraft())),
+                    onRemoveVariant: (draft) => setDialogState(() {
+                      drafts.remove(draft);
+                      draft.dispose();
+                    }),
+                    setFormState: setDialogState,
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                ],
               ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
               child: Text('common.cancel'.tr()),
             ),
             TextButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.pop(ctx, true);
-                }
-              },
-              child: Text('common.save'.tr()),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final imageUrl = imageUrlController.text.trim();
+                      final variants = drafts
+                          .map((d) => d.toVariant())
+                          .where((v) => v.name.isNotEmpty)
+                          .toList();
+                      final success =
+                          await additionalServiceRepository.updateService(
+                        id: service.id,
+                        name: nameController.text.trim(),
+                        imageUrl: imageUrl.isEmpty ? null : imageUrl,
+                        variants: variants,
+                      );
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'common.error'.tr();
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text('common.save'.tr()),
             ),
           ],
         ),
       ),
-    );
-
-    if (result != true) {
-      for (final draft in drafts) {
-        draft.dispose();
-      }
-      nameController.dispose();
-      imageUrlController.dispose();
-      return;
-    }
-
-    final imageUrl = imageUrlController.text.trim();
-    final variants = drafts
-        .map((d) => d.toVariant())
-        .where((v) => v.name.isNotEmpty)
-        .toList();
-    final success = await additionalServiceRepository.updateService(
-      id: service.id,
-      name: nameController.text.trim(),
-      imageUrl: imageUrl.isEmpty ? null : imageUrl,
-      variants: variants,
     );
 
     for (final draft in drafts) {
@@ -336,13 +385,9 @@ class _ServicesTabState extends State<ServicesTab> {
 
     if (!mounted) return;
 
-    if (success) {
+    if (result == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('admin.service_updated'.tr())),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.error'.tr())),
       );
     }
   }

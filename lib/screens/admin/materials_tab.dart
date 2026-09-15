@@ -88,24 +88,24 @@ class _MaterialsTabState extends State<MaterialsTab> {
 
   Future<void> _showEditDialog({String? docId, MaterialItem? item}) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final result = await showMaterialEditDialog(context, item: item);
-
-    if (result != null) {
-      bool success;
-      if (docId == null) {
-        success = await adminRepository.addMaterial(
-          name: result.name,
-          unit: result.unit,
-          price: result.price,
-          currency: result.currency,
-          note: result.note,
-          isFixedValue: widget.isFixedValue,
-          active: result.active,
-          visible: result.visible,
-          category: result.category,
-        );
-      } else {
-        success = await adminRepository.updateMaterial(
+    final result = await showMaterialEditDialog(
+      context,
+      item: item,
+      onSave: (result) {
+        if (docId == null) {
+          return adminRepository.addMaterial(
+            name: result.name,
+            unit: result.unit,
+            price: result.price,
+            currency: result.currency,
+            note: result.note,
+            isFixedValue: widget.isFixedValue,
+            active: result.active,
+            visible: result.visible,
+            category: result.category,
+          );
+        }
+        return adminRepository.updateMaterial(
           docId: docId,
           name: result.name,
           unit: result.unit,
@@ -117,53 +117,85 @@ class _MaterialsTabState extends State<MaterialsTab> {
           visible: result.visible,
           category: result.category,
         );
-      }
+      },
+    );
 
+    if (result != null) {
       scaffoldMessenger.showSnackBar(
-        SnackBar(
-            content: Text(success ? 'Gespeichert!' : 'Fehler beim Speichern')),
+        const SnackBar(content: Text('Gespeichert!')),
       );
-
-      if (success) {
-        _loadItems();
-      }
+      _loadItems();
     }
   }
 
   Future<void> _deleteItem(String docId, String name) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+    bool saving = false;
+    String? error;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Artikel löschen?'),
-        content: Text('"$name" wird unwiderruflich gelöscht.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Abbrechen'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Artikel löschen?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('"$name" wird unwiderruflich gelöscht.'),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Löschen'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      final success = await adminRepository.deleteMaterial(
+                        docId: docId,
+                        isFixedValue: widget.isFixedValue,
+                      );
+                      if (success) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        setDialogState(() {
+                          saving = false;
+                          error = 'Fehler beim Löschen';
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Löschen'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirm == true) {
-      final success = await adminRepository.deleteMaterial(
-        docId: docId,
-        isFixedValue: widget.isFixedValue,
-      );
-
       scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text(success ? 'Gelöscht!' : 'Fehler beim Löschen')),
+        const SnackBar(content: Text('Gelöscht!')),
       );
-
-      if (success) {
-        _loadItems();
-      }
+      _loadItems();
     }
   }
 
