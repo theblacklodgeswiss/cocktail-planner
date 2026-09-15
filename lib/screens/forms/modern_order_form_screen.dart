@@ -124,9 +124,19 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       // overwritten by a background lookup.
       if (!authService.isEmployeeOrHigher) {
         _distanceLookupDebounce?.cancel();
+        setState(() => _distanceLookupPending = true);
         _distanceLookupDebounce = Timer(const Duration(milliseconds: 800), () {
+          // Capture the address this lookup is for at the moment it starts.
+          // Cancelling `_distanceLookupDebounce` above only prevents a *new*
+          // Timer body from starting - it does nothing to stop an
+          // already-in-flight Future from a previous Timer that already
+          // fired. If the guest edits the address again before that older
+          // network call returns, its (now stale) result must not overwrite
+          // whatever the newer lookup found, even if the older call happens
+          // to resolve later (e.g. a slower round trip).
+          final requestedAddress = _addressController.text.trim();
           distanceCalculator
-              .distanceKmFromAddress(_addressController.text)
+              .distanceKmFromAddress(requestedAddress)
               .then((result) {
             // Re-check mounted/role state HERE, right before applying the
             // result - not just when the Timer was scheduled above. The
@@ -136,11 +146,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             // so this Timer can be scheduled as a "guest" lookup and only
             // fire well after the session is known to be employee-or-higher
             // and the correct prefilled `_distanceKm` is already showing.
-            // Discard a superseded/now-invalid result instead of clobbering
-            // it. Only one Timer is ever pending at a time (a new address
-            // change cancels the previous one above), so this guard alone
-            // is sufficient without extra request-id tracking.
-            if (!mounted || authService.isEmployeeOrHigher) return;
+            // Also discard the result if the address has since changed
+            // (see `requestedAddress` above) - it no longer corresponds to
+            // what's in the field. Only one Timer is ever pending at a time
+            // (a new address change cancels the previous one above), so
+            // these guards are sufficient without extra request-id tracking.
+            if (!mounted ||
+                authService.isEmployeeOrHigher ||
+                _addressController.text.trim() != requestedAddress) {
+              return;
+            }
             setState(() {
               if (result != null) _distanceKm = result;
               _distanceLookupPending = false;
