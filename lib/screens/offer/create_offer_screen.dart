@@ -171,10 +171,18 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         : widget.order.offerEventTime;
     _language = widget.order.offerLanguage;
 
-    // Load event types
+    // Load event types - prefer the admin's own saved selection; if none
+    // was ever set, fall back to the occasion the customer picked on the
+    // request form, so staff don't have to re-ask what's already known.
     for (final typeStr in widget.order.offerEventTypes) {
       final type = EventType.values.where((e) => e.name == typeStr).firstOrNull;
       if (type != null) _eventTypes.add(type);
+    }
+    if (_eventTypes.isEmpty && widget.order.eventType.isNotEmpty) {
+      final customerType = EventType.values
+          .where((e) => e.name == widget.order.eventType)
+          .firstOrNull;
+      if (customerType != null) _eventTypes.add(customerType);
     }
 
     // Load assigned employees from order

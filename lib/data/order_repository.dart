@@ -65,6 +65,7 @@ class OrderRepository {
     List<String> alcoholPurchase = const [],
     List<String> additionalServices = const [],
     String remarks = '',
+    String eventType = '',
   }) async {
     if (!await _ensureFirestoreAvailable()) {
       debugPrint('❌ Firebase not available, order not saved to cloud');
@@ -91,6 +92,7 @@ class OrderRepository {
         'location': location,
         'eventTime': eventTime,
         'serviceType': serviceType,
+        'eventType': eventType,
         'cocktailPopularity': cocktailPopularity,
         'barDrinks': barDrinks,
         'alcoholPurchase': alcoholPurchase,

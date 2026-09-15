@@ -12,6 +12,7 @@ import '../../data/cocktail_repository.dart';
 import '../../data/order_repository.dart';
 import '../../models/additional_service.dart';
 import '../../models/cocktail_data.dart';
+import '../../models/offer.dart' show EventType;
 import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
@@ -90,6 +91,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   bool _distanceLookupPending = !authService.isEmployeeOrHigher;
   String _currency = defaultCurrency.code;
   String _drinkerType = 'normal';
+  EventType? _selectedEventType;
   final List<Recipe> _selectedRecipes = [];
   final Map<String, double> _cocktailPopularity = {};
   final Map<String, int> _shotQuantities = {};
@@ -277,6 +279,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _drinkerType = order.drinkerType.isNotEmpty
         ? order.drinkerType
         : _drinkerType;
+    _selectedEventType = order.eventType.isNotEmpty
+        ? EventType.values.where((e) => e.name == order.eventType).firstOrNull
+        : _selectedEventType;
     _selectedBarDrinks
       ..clear()
       ..addAll(order.barDrinks);
@@ -732,6 +737,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           .toList(),
       'eventTime': eventTimeStr,
       'offerEventTime': eventTimeStr,
+      'eventType': _selectedEventType?.name ?? '',
       'offerClientName': setupData.orderName,
       'offerClientContact': setupData.phoneNumber ?? '',
     });
@@ -785,6 +791,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         additionalServices: setupData.additionalServices ?? [],
         remarks: setupData.remarks ?? '',
         cocktailPopularity: _cocktailPopularity,
+        eventType: _selectedEventType?.name ?? '',
       );
 
       if (orderId == null) {
@@ -1749,6 +1756,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           _buildCurrencySelector(),
           const SizedBox(height: 32),
           _buildDrinkerTypeSelector(),
+          const SizedBox(height: 32),
+          _buildEventTypeSelector(),
           if (MediaQuery.of(context).size.width >= 600) ...[
             const SizedBox(height: 32),
             _buildDesktopActionButtons(),
@@ -1940,6 +1949,73 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEventTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'offer.event_type'.tr(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildEventTypeChip(
+              EventType.birthday,
+              Icons.cake_outlined,
+              'offer.event_birthday'.tr(),
+            ),
+            _buildEventTypeChip(
+              EventType.wedding,
+              Icons.favorite_border,
+              'offer.event_wedding'.tr(),
+            ),
+            _buildEventTypeChip(
+              EventType.company,
+              Icons.business_center_outlined,
+              'offer.event_company'.tr(),
+            ),
+            _buildEventTypeChip(
+              EventType.babyshower,
+              Icons.child_friendly_outlined,
+              'offer.event_babyshower'.tr(),
+            ),
+            _buildEventTypeChip(
+              EventType.other,
+              Icons.celebration_outlined,
+              'offer.event_other'.tr(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEventTypeChip(EventType type, IconData icon, String label) {
+    final isSelected = _selectedEventType == type;
+    return FilterChip(
+      selected: isSelected,
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(label)],
+      ),
+      onSelected: (_) {
+        HapticFeedback.selectionClick();
+        setState(() {
+          // Single-select: tapping the already-selected chip deselects it,
+          // tapping another one replaces the selection - an event has one
+          // occasion, unlike the admin offer screen's multi-select.
+          _selectedEventType = isSelected ? null : type;
+        });
+      },
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
   }
 
