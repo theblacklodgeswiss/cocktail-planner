@@ -443,8 +443,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  /// Two-state filter (Angebot offen / Angenommen) plus the "Weitere
-  /// anzeigen" button that opens the full year-by-year archive.
+  /// Two-state filter (Angebot offen / Angenommen) plus a compact icon
+  /// button that opens the full year-by-year archive.
   Widget _buildFilterRow(ColorScheme colorScheme) {
     return Row(
       children: [
@@ -454,25 +454,31 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               ButtonSegment(
                 value: OrderStatusFilter.quotes,
                 label: Text('orders.filter_open_quotes'.tr()),
-                icon: const Icon(Icons.hourglass_empty, size: 16),
               ),
               ButtonSegment(
                 value: OrderStatusFilter.accepted,
                 label: Text('orders.filter_accepted'.tr()),
-                icon: const Icon(Icons.check_circle, size: 16),
               ),
             ],
             selected: {_statusFilter},
             onSelectionChanged: (selection) {
               setState(() => _statusFilter = selection.first);
             },
+            style: SegmentedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+              textStyle: const TextStyle(fontSize: 13),
+            ),
           ),
         ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
+        const SizedBox(width: 8),
+        IconButton(
           onPressed: () => context.push('/orders/years'),
-          icon: const Icon(Icons.calendar_month, size: 18),
-          label: Text('orders.show_more'.tr()),
+          icon: const Icon(Icons.calendar_month),
+          tooltip: 'orders.show_more'.tr(),
+          style: IconButton.styleFrom(
+            side: BorderSide(color: colorScheme.outline),
+          ),
         ),
       ],
     );
