@@ -18,6 +18,7 @@ class _EmployeesTabState extends State<EmployeesTab> {
   final _formKey = GlobalKey<FormState>();
   bool _isAdding = false;
   bool _isReordering = false;
+  bool _isRebuildingAccess = false;
   List<Employee> _localEmployees = [];
   EmployeeRole _selectedRole = EmployeeRole.staff;
 
@@ -202,6 +203,18 @@ class _EmployeesTabState extends State<EmployeesTab> {
     }
   }
 
+  Future<void> _rebuildEmployeeAccess() async {
+    setState(() => _isRebuildingAccess = true);
+    final count = await employeeRepository.rebuildEmployeeAccessIndex();
+    setState(() => _isRebuildingAccess = false);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('admin.employee_access_rebuilt'.tr(args: ['$count'])),
+      ),
+    );
+  }
+
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     if (oldIndex < newIndex) {
       newIndex -= 1;
@@ -366,6 +379,18 @@ class _EmployeesTabState extends State<EmployeesTab> {
                     : const Icon(Icons.add),
                 label: Text('common.add'.tr()),
               ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _isRebuildingAccess ? null : _rebuildEmployeeAccess,
+                icon: _isRebuildingAccess
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                label: Text('admin.rebuild_employee_access'.tr()),
+              ),
             ],
           ),
         ),
@@ -408,7 +433,20 @@ class _EmployeesTabState extends State<EmployeesTab> {
               child: const Icon(Icons.drag_handle),
             ),
             title: Text(employee.name),
-            subtitle: Text(_getRoleName(employee.role)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_getRoleName(employee.role)),
+                if (employee.email == null || employee.email!.trim().isEmpty)
+                  Text(
+                    'admin.employee_no_app_access'.tr(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                  ),
+              ],
+            ),
             onTap: () => _editEmployee(employee),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
