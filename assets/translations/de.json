@@ -148,6 +148,8 @@
     "service_name": "Name",
     "service_image_url": "oder Bild-URL einfügen",
     "service_image_url_hint": "https://...",
+    "service_image_upload": "Bild hochladen",
+    "service_image_upload_failed": "Bild-Upload fehlgeschlagen. Bitte versuche es erneut.",
     "service_variants": "Varianten",
     "add_variant": "Variante hinzufügen",
     "variant_name": "Name",

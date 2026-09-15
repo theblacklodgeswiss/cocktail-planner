@@ -1,17 +1,19 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/additional_service_repository.dart';
 import '../../models/additional_service.dart';
+import '../../services/cloudinary_uploader.dart';
 
 /// Tab for managing the additional-services catalog (add/edit/delete
 /// services and their variants), with responsive design mirroring
 /// `employees_tab.dart`.
 ///
-/// Image handling is URL-only for now - the "oder Bild-URL einfügen" text
-/// field sets `imageUrl` directly. An upload button (firebase_storage +
-/// image_picker) is a deferred follow-up, not implemented here; see the
-/// design spec's section 3/5.
+/// Image handling: the "oder Bild-URL einfügen" text field sets `imageUrl`
+/// directly, or an admin can upload an image from their device via
+/// Cloudinary's unsigned-upload API (`CloudinaryUploader`) - no Firebase
+/// Storage needed, no secret key in this app.
 class ServicesTab extends StatefulWidget {
   const ServicesTab({super.key});
 
@@ -54,6 +56,7 @@ class _ServicesTabState extends State<ServicesTab> {
   final _formKey = GlobalKey<FormState>();
   bool _isAdding = false;
   bool _isReordering = false;
+  bool _isUploadingImage = false;
   List<_VariantDraft> _addVariantDrafts = [];
   List<AdditionalService> _localServices = [];
 
@@ -65,6 +68,37 @@ class _ServicesTabState extends State<ServicesTab> {
       draft.dispose();
     }
     super.dispose();
+  }
+
+  /// Picks an image from the admin's device and uploads it to Cloudinary,
+  /// setting [controller]'s text to the resulting URL on success.
+  ///
+  /// [setFormState] must rebuild whichever widget subtree is showing the
+  /// upload button: the outer `setState` for the inline add-form, or the
+  /// edit dialog's own `setDialogState` (a `StatefulBuilder` opened via
+  /// `showDialog` is a separate subtree from this State, so this State's
+  /// own `setState` would not repaint the dialog's spinner/disabled state).
+  Future<void> _pickAndUploadImage(
+    TextEditingController controller,
+    void Function(void Function()) setFormState,
+  ) async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    setFormState(() => _isUploadingImage = true);
+    final bytes = await picked.readAsBytes();
+    final url = await cloudinaryUploader.uploadImage(bytes, picked.name);
+    setFormState(() => _isUploadingImage = false);
+
+    if (!mounted) return;
+
+    if (url != null) {
+      controller.text = url;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('admin.service_image_upload_failed'.tr())),
+      );
+    }
   }
 
   Future<void> _addService() async {
@@ -186,6 +220,7 @@ class _ServicesTabState extends State<ServicesTab> {
                   drafts.remove(draft);
                   draft.dispose();
                 }),
+                setFormState: setDialogState,
               ),
             ),
           ),
@@ -341,6 +376,7 @@ class _ServicesTabState extends State<ServicesTab> {
     required List<_VariantDraft> drafts,
     required VoidCallback onAddVariant,
     required void Function(_VariantDraft draft) onRemoveVariant,
+    required void Function(void Function()) setFormState,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -357,6 +393,23 @@ class _ServicesTabState extends State<ServicesTab> {
               v?.trim().isEmpty ?? true ? 'offer.field_required'.tr() : null,
         ),
         const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _isUploadingImage
+                ? null
+                : () => _pickAndUploadImage(imageUrlController, setFormState),
+            icon: _isUploadingImage
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.upload),
+            label: Text('admin.service_image_upload'.tr()),
+          ),
+        ),
+        const SizedBox(height: 8),
         TextFormField(
           controller: imageUrlController,
           decoration: InputDecoration(
@@ -457,6 +510,7 @@ class _ServicesTabState extends State<ServicesTab> {
                 drafts: _addVariantDrafts,
                 onAddVariant: _addVariantDraftRow,
                 onRemoveVariant: _removeVariantDraftRow,
+                setFormState: setState,
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(

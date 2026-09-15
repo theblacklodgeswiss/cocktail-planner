@@ -142,6 +142,8 @@
     "service_name": "Name",
     "service_image_url": "or paste an image URL",
     "service_image_url_hint": "https://...",
+    "service_image_upload": "Upload image",
+    "service_image_upload_failed": "Image upload failed. Please try again.",
     "service_variants": "Variants",
     "add_variant": "Add Variant",
     "variant_name": "Name",
