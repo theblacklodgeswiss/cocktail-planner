@@ -81,6 +81,14 @@ class _ServicesTabState extends State<ServicesTab> {
     ('Entry Song mit Geige - Praveen', [('Standard', 300.0)]),
   ];
 
+  /// True once every legacy service name already exists in the catalog -
+  /// used to hide the import button once it has done its job, rather than
+  /// a one-time flag, so it stays hidden even after a reload and reappears
+  /// correctly if a legacy-named service is ever deleted again.
+  bool get _allLegacyServicesImported => _legacyServices.every(
+        (entry) => _localServices.any((s) => s.name == entry.$1),
+      );
+
   /// One-off migration: adds any of `_legacyServices` not already present
   /// in the catalog (matched by name, so it's safe to run more than once).
   Future<void> _importLegacyServices() async {
@@ -570,22 +578,24 @@ class _ServicesTabState extends State<ServicesTab> {
                 'admin.add_service'.tr(),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed:
-                      _isImportingLegacy ? null : _importLegacyServices,
-                  icon: _isImportingLegacy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.download),
-                  label: Text('admin.service_import_legacy'.tr()),
+              if (!_allLegacyServicesImported) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed:
+                        _isImportingLegacy ? null : _importLegacyServices,
+                    icon: _isImportingLegacy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download),
+                    label: Text('admin.service_import_legacy'.tr()),
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 16),
               _buildServiceForm(
                 nameController: _nameController,
