@@ -89,7 +89,12 @@ service cloud.firestore {
     // requires the caller to be the resource's own userId.
     match /orders/{orderId} {
       allow read: if isOrderOwner() || hasFullOrderAccess();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Note: previously required request.resource.data.userId ==
+      // request.auth.uid to prevent create-time uid spoofing, but this
+      // blocked legitimate guest submissions in production (2026-09-15) -
+      // reverted to the original, unconditional-for-authenticated-users
+      // check while the exact cause of the mismatch is investigated.
+      allow create: if isAuthenticated();
       allow update, delete: if isOrderOwner() || hasFullOrderAccess();
     }
     
