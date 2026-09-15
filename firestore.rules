@@ -77,11 +77,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Orders collection - all authenticated users can read/write their own
+    // Orders collection - owner or employee-or-higher can read/write; create
+    // requires the caller to be the resource's own userId.
     match /orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAdmin() || isSuperAdmin() || isOrderOwner();
+      allow read: if isOrderOwner() || hasFullOrderAccess();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOrderOwner() || hasFullOrderAccess();
     }
     
     // Users collection - for user profiles
@@ -94,7 +95,7 @@ service cloud.firestore {
     
     // Allowed users collection - super admin can create; full admins can create/update/delete
     match /allowedUsers/{email} {
-      allow read: if isAuthenticated();
+      allow read: if canManageUsers() || (hasEmail() && email == authEmail());
       allow create, update, delete: if canManageUsers();
     }
     
