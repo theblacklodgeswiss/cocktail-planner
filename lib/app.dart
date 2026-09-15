@@ -94,6 +94,19 @@ class _CocktailPlanerAppState extends State<CocktailPlanerApp> {
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,
+      // Red "DEV" corner ribbon on every screen for non-prod builds, so
+      // the dev deployment is visually unmistakable from production at a
+      // glance - separate from debugShowCheckedModeBanner above, which is
+      // Flutter's own debug-mode banner and stays off regardless of flavor.
+      builder: (context, child) {
+        if (flavor == 'prod' || child == null) return child ?? const SizedBox.shrink();
+        return Banner(
+          message: 'DEV',
+          location: BannerLocation.topEnd,
+          color: Colors.red.shade700,
+          child: child,
+        );
+      },
     );
   }
 }
