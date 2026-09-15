@@ -187,6 +187,91 @@ class OfferData {
   /// Free-form remarks/notes for additional services
   final String remarks;
 
+  Map<String, dynamic> toJson() => {
+    'orderName': orderName,
+    'serviceType': serviceType,
+    'servicePositionText': servicePositionText,
+    'servicePositionRemark': servicePositionRemark,
+    'eventDate': eventDate.toIso8601String(),
+    'eventTime': eventTime,
+    'currency': currency,
+    'guestCount': guestCount,
+    'editorName': editorName,
+    'clientName': clientName,
+    'clientContact': clientContact,
+    'eventLocation': eventLocation,
+    'eventTypes': eventTypes.map((e) => e.name).toList(),
+    'cocktails': cocktails,
+    'shots': shots,
+    'barDescription': barDescription,
+    'orderTotal': orderTotal,
+    'distanceKm': distanceKm,
+    'travelCostPerKm': travelCostPerKm,
+    'barCost': barCost,
+    'discount': discount,
+    'discountRemark': discountRemark,
+    'additionalInfo': additionalInfo,
+    'language': language,
+    'extraPositions': extraPositions.map((p) => p.toJson()).toList(),
+    'assignedEmployees': assignedEmployees,
+    'supervisorItems': supervisorItems,
+    'barDrinks': barDrinks,
+    'alcoholPurchase': alcoholPurchase,
+    'additionalServices': additionalServices,
+    'remarks': remarks,
+    'offerPositions': offerPositions.map((p) => p.toJson()).toList(),
+  };
+
+  factory OfferData.fromJson(Map<String, dynamic> json) {
+    return OfferData(
+      orderName: json['orderName'] as String? ?? '',
+      serviceType: json['serviceType'] as String? ?? 'cocktail_barservice',
+      servicePositionText: json['servicePositionText'] as String? ?? '',
+      servicePositionRemark: json['servicePositionRemark'] as String? ?? '',
+      eventDate: DateTime.parse(json['eventDate'] as String),
+      eventTime: json['eventTime'] as String? ?? '',
+      currency: json['currency'] as String? ?? 'CHF',
+      guestCount: (json['guestCount'] as num?)?.toInt() ?? 0,
+      editorName: json['editorName'] as String? ?? '',
+      clientName: json['clientName'] as String? ?? '',
+      clientContact: json['clientContact'] as String? ?? '',
+      eventLocation: json['eventLocation'] as String? ?? '',
+      eventTypes: (json['eventTypes'] as List<dynamic>? ?? [])
+          .map((s) => EventType.values.where((e) => e.name == s).firstOrNull)
+          .whereType<EventType>()
+          .toSet(),
+      cocktails: (json['cocktails'] as List<dynamic>?)?.cast<String>() ?? [],
+      shots: (json['shots'] as List<dynamic>?)?.cast<String>() ?? [],
+      barDescription: json['barDescription'] as String? ?? '',
+      orderTotal: (json['orderTotal'] as num?)?.toDouble() ?? 0,
+      distanceKm: (json['distanceKm'] as num?)?.toInt() ?? 0,
+      travelCostPerKm: (json['travelCostPerKm'] as num?)?.toDouble() ?? 0.70,
+      barCost: (json['barCost'] as num?)?.toDouble() ?? 0,
+      discount: (json['discount'] as num?)?.toDouble() ?? 0,
+      discountRemark: json['discountRemark'] as String? ?? '',
+      additionalInfo: json['additionalInfo'] as String? ?? '',
+      language: json['language'] as String? ?? 'de',
+      extraPositions: (json['extraPositions'] as List<dynamic>? ?? [])
+          .map((e) => ExtraPosition.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      assignedEmployees:
+          (json['assignedEmployees'] as List<dynamic>?)?.cast<String>() ?? [],
+      supervisorItems:
+          (json['supervisorItems'] as List<dynamic>? ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList(),
+      barDrinks: (json['barDrinks'] as List<dynamic>?)?.cast<String>() ?? [],
+      alcoholPurchase:
+          (json['alcoholPurchase'] as List<dynamic>?)?.cast<String>() ?? [],
+      additionalServices:
+          (json['additionalServices'] as List<dynamic>?)?.cast<String>() ?? [],
+      remarks: json['remarks'] as String? ?? '',
+      offerPositions: (json['offerPositions'] as List<dynamic>? ?? [])
+          .map((e) => ExtraPosition.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+    );
+  }
+
   /// All offer positions (when set, these are rendered directly in the PDF table
   /// instead of auto-computing bar service / travel rows).
   final List<ExtraPosition> offerPositions;
