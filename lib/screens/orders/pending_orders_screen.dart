@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../../data/order_repository.dart';
 import '../../models/order.dart';
-import '../../widgets/admin_protected_screen.dart';
 import 'order_detail_sheet.dart';
+
+import 'package:cocktail_planer/models/app_role.dart';
+import 'package:cocktail_planer/widgets/role_protected_screen.dart';
 
 /// Sort options for pending orders.
 enum PendingSortOption { eventDate, createdAt, guests, name }
@@ -70,7 +72,8 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AdminProtectedScreen(
+    return RoleProtectedScreen(
+      minimumRole: AppRole.employee,
       child: _buildContent(context),
     );
   }

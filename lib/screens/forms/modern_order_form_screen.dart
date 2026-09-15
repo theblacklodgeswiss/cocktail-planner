@@ -525,10 +525,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       selectedRecipes: _selectedRecipes,
     );
 
-    // Check if user is admin
-    final isAdmin = authService.isAdmin;
+    // Employees and admins get the staff flow (pricing, shopping list);
+    // everyone else gets the customer request flow.
+    final isEmployeeOrHigher = authService.isEmployeeOrHigher;
 
-    if (!isAdmin) {
+    if (!isEmployeeOrHigher) {
       // Customer flow: Save as pending order and show thank you dialog
       await _savePendingOrderAndShowThanks(setupData);
     } else if (_prefillOrder != null) {

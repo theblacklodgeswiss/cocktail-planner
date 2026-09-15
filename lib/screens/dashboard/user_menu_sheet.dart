@@ -30,7 +30,7 @@ class _UserMenuSheet extends StatelessWidget {
           _buildUserHeader(context, user),
           const Divider(),
           if (authService.isAdmin) _buildAdminTile(context),
-          if (authService.isAdmin || authService.isSuperAdmin)
+          if (authService.isEmployeeOrHigher)
             _buildOrdersTile(context),
           _buildSettingsTile(context),
           if (user.isAnonymous) _buildLinkGoogleTile(context),

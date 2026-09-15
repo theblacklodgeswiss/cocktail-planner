@@ -45,7 +45,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     // Non-admin users see the customer landing screen
-    if (!authService.isAdmin) {
+    if (!authService.isEmployeeOrHigher) {
       return const CustomerLandingScreen();
     }
 
@@ -439,7 +439,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildQuickActions() {
-    final bool isAdmin = authService.isAdmin;
+    final bool isAdmin = authService.isEmployeeOrHigher;
 
     return Column(
       children: [
