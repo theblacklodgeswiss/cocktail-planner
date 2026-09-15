@@ -1,6 +1,8 @@
 import 'package:cocktail_planer/data/firestore_service.dart';
 import 'package:cocktail_planer/data/order_repository.dart';
+import 'package:cocktail_planer/models/app_role.dart';
 import 'package:cocktail_planer/models/order.dart';
+import 'package:cocktail_planer/widgets/role_protected_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
@@ -32,6 +34,13 @@ class _OrdersYearOverviewScreenState extends State<OrdersYearOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return RoleProtectedScreen(
+      minimumRole: AppRole.employee,
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(

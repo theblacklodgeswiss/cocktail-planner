@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cocktail_planer/models/cocktail_data.dart';
 import 'package:cocktail_planer/models/material_item.dart';
+import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/models/recipe.dart';
 import 'package:cocktail_planer/screens/dashboard/dashboard_screen.dart';
+import 'package:cocktail_planer/screens/forms/modern_order_form_screen.dart';
 import 'package:cocktail_planer/screens/shopping_list/shopping_list_screen.dart';
 import 'package:cocktail_planer/state/app_state.dart';
 import 'package:cocktail_planer/widgets/recipe_selection_dialog.dart';
@@ -379,5 +381,64 @@ void main() {
     // Confirmed by probing: pumping ModernOrderFormScreen throws
     // "No Firebase App '[DEFAULT]' has been created" before the cocktail-selection
     // step is ever reachable. Unskip once that DI exists.
+  });
+
+  group('Shot quantity prefill (regression for staff-prefill quantity wipe)', () {
+    // Full widget-level coverage of ModernOrderFormScreen's prefill path is
+    // blocked by the same DI limitation documented above (global
+    // cocktailRepository/FirestoreService singletons). The prefill quantity
+    // lookup was extracted into the pure, directly-testable
+    // `resolveShotPrefillQuantity` function specifically so this regression
+    // is still covered without needing widget pumping.
+    test(
+      'uses the customer-requested quantity from shotSelections, not the default of 1',
+      () {
+        final order = SavedOrder.fromFirestore('o1', {
+          'name': 'Test',
+          'date': '2026-06-01T00:00:00.000',
+          'items': [],
+          'total': 0,
+          'currency': 'CHF',
+          'status': 'quote',
+          'shots': ['Tequila'],
+          'shotQuantities': [
+            {'name': 'Tequila', 'quantity': 15},
+          ],
+        });
+
+        expect(order.shots, ['Tequila']);
+        expect(
+          order.shotSelections,
+          [const ShotSelection(name: 'Tequila', quantity: 15)],
+        );
+
+        final seededQuantity = resolveShotPrefillQuantity(
+          order.shotSelections,
+          'Tequila',
+        );
+
+        expect(seededQuantity, 15);
+        expect(seededQuantity, isNot(1));
+      },
+    );
+
+    test('defaults to 1 for legacy orders with no per-flavor data', () {
+      final order = SavedOrder.fromFirestore('o2', {
+        'name': 'Test',
+        'date': '2026-06-01T00:00:00.000',
+        'items': [],
+        'total': 0,
+        'currency': 'CHF',
+        'status': 'quote',
+        'shots': ['Tequila'],
+        // No shotQuantities at all - legacy order.
+      });
+
+      expect(order.shotSelections, isEmpty);
+      expect(
+        resolveShotPrefillQuantity(order.shotSelections, 'Tequila'),
+        1,
+      );
+    });
   });
 }

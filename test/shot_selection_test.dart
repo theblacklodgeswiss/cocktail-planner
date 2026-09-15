@@ -62,5 +62,56 @@ void main() {
       expect(order.shotSelections, [const ShotSelection(name: 'Tequila', quantity: 10)]);
       expect(order.requestedShotsTotal, 10);
     });
+
+    test(
+      'requestedShotsTotal is available as the default when offerShotsCount is not yet set',
+      () {
+        final order = SavedOrder.fromFirestore('o4', {
+          'name': 'Test',
+          'date': '2026-06-01T00:00:00.000',
+          'items': [],
+          'total': 0,
+          'currency': 'CHF',
+          'status': 'quote',
+          'shotQuantities': [
+            {'name': 'Aarewasser', 'quantity': 20},
+            {'name': 'Tequila', 'quantity': 10},
+          ],
+        });
+
+        // No admin override yet: offerShotsCount defaults to 0, and the
+        // customer's requested total is available to seed the offer's Shots
+        // position from.
+        expect(order.offerShotsCount, 0);
+        expect(order.requestedShotsTotal, 30);
+      },
+    );
+
+    test(
+      'offerShotsCount is independent of requestedShotsTotal once an admin override is set',
+      () {
+        final order = SavedOrder.fromFirestore('o5', {
+          'name': 'Test',
+          'date': '2026-06-01T00:00:00.000',
+          'items': [],
+          'total': 0,
+          'currency': 'CHF',
+          'status': 'quote',
+          'shotQuantities': [
+            {'name': 'Aarewasser', 'quantity': 20},
+            {'name': 'Tequila', 'quantity': 10},
+          ],
+          'offerShotsCount': 100,
+        });
+
+        // Both fields coexist correctly: the admin's override does not
+        // mutate or clamp the customer's originally requested total, so UI
+        // code reading both can implement "admin override takes precedence
+        // over requestedShotsTotal" without either field corrupting the
+        // other.
+        expect(order.offerShotsCount, 100);
+        expect(order.requestedShotsTotal, 30);
+      },
+    );
   });
 }

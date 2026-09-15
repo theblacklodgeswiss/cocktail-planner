@@ -206,8 +206,8 @@ class _EmployeesTabState extends State<EmployeesTab> {
   Future<void> _rebuildEmployeeAccess() async {
     setState(() => _isRebuildingAccess = true);
     final count = await employeeRepository.rebuildEmployeeAccessIndex();
-    setState(() => _isRebuildingAccess = false);
     if (!mounted) return;
+    setState(() => _isRebuildingAccess = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('admin.employee_access_rebuilt'.tr(args: ['$count'])),

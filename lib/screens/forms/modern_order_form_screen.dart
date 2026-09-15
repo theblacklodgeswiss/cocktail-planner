@@ -18,6 +18,23 @@ import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 
+/// Resolves the per-flavor quantity to seed for a shot during prefill: uses
+/// the matching entry's quantity from [shotSelections] if the customer
+/// requested a specific quantity for [recipeName], otherwise defaults to 1
+/// (matching the default applied when a shot is freshly selected by staff).
+/// Extracted as a pure, directly-testable function - see
+/// test/click_interactions_test.dart for the regression test covering the
+/// bug where this quantity was silently dropped on prefill.
+int resolveShotPrefillQuantity(
+  List<ShotSelection> shotSelections,
+  String recipeName,
+) {
+  final matchingSelection = shotSelections
+      .cast<ShotSelection?>()
+      .firstWhere((s) => s!.name == recipeName, orElse: () => null);
+  return matchingSelection?.quantity ?? 1;
+}
+
 /// Result from the modern order form containing both setup data and selected recipes
 class OrderFormResult {
   final OrderSetupData setupData;
@@ -135,6 +152,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               if (recipe != null &&
                   !_selectedRecipes.any((r) => r.name == recipe.name)) {
                 _selectedRecipes.add(recipe);
+                _shotQuantities[recipe.name] = resolveShotPrefillQuantity(
+                  order.shotSelections,
+                  recipe.name,
+                );
               }
             }
           });

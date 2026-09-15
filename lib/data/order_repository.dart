@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/utils/currency.dart';
@@ -427,10 +429,14 @@ class OrderRepository {
         .map((snapshot) => snapshot.docs
             .map((doc) => SavedOrder.fromFirestore(doc.id, doc.data()))
             .toList())
-        .handleError((e) {
-      debugPrint('Failed to watch orders for owner: $e');
-      return <SavedOrder>[];
-    });
+        .transform(
+          StreamTransformer<List<SavedOrder>, List<SavedOrder>>.fromHandlers(
+            handleError: (error, stackTrace, sink) {
+              debugPrint('Failed to watch orders for owner: $error');
+              sink.add(<SavedOrder>[]);
+            },
+          ),
+        );
   }
 
   /// One-shot fetch variant of [watchOrdersForOwner].

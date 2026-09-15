@@ -16,10 +16,18 @@ class AuthService {
   factory AuthService() => _instance;
   AuthService._internal() {
     _firebaseAuth.authStateChanges().listen((user) {
-      _cachedRole = null; // Clear cache on user change
-      _cachedEmployeeRole = null;
       if (user != null && !user.isAnonymous) {
+        _cachedRole = null; // Clear cache, force a fresh resolve
+        _cachedEmployeeRole = null;
         checkRole();
+      } else {
+        // No user, or an anonymous one: always a customer, and can never
+        // become admin/employee, so resolve immediately instead of leaving
+        // _cachedRole null forever (which would hang roleResolved/
+        // RoleProtectedScreen for guests).
+        _cachedRole = AppRole.customer;
+        _cachedEmployeeRole = null;
+        _roleChangesController.add(_cachedRole!);
       }
     });
   }
