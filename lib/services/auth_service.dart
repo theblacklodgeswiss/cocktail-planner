@@ -28,6 +28,9 @@ class AuthService {
   GoogleSignIn? _googleSignIn;
   AppRole? _cachedRole;
   EmployeeRole? _cachedEmployeeRole;
+  // Intentionally never closed: AuthService is an app-lifetime singleton, so
+  // there is no point in the app's life where this controller should stop
+  // accepting listeners/emissions.
   final StreamController<AppRole> _roleChangesController =
       StreamController<AppRole>.broadcast();
 
@@ -94,11 +97,14 @@ class AuthService {
   /// always goes through [role] / [isEmployeeOrHigher].
   EmployeeRole? get employeeRole => _cachedEmployeeRole;
 
-  /// Check if current user is admin (sync - uses cache)
-  bool get isAdmin => role.atLeast(AppRole.admin);
+  /// Check if current user is admin (sync - uses cache). Super admin has a
+  /// synchronous fast path via [isSuperAdmin] so this is never false for the
+  /// super-admin account during the async gap before [checkRole] resolves.
+  bool get isAdmin => isSuperAdmin || role.atLeast(AppRole.admin);
 
-  /// Check if current user can manage users (admin or super admin)
-  bool get canManageUsers => role.atLeast(AppRole.admin);
+  /// Check if current user can manage users (admin or super admin). See
+  /// [isAdmin] for why [isSuperAdmin] is checked synchronously first.
+  bool get canManageUsers => isSuperAdmin || role.atLeast(AppRole.admin);
 
   /// Check if current user is super admin
   bool get isSuperAdmin {
