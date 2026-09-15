@@ -618,10 +618,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     return freshOrder ?? widget.order;
   }
 
+  /// Guards the offer-open buttons below against a double-tap and drives
+  /// their loading spinner - without this, `_openOfferEditor` awaits a
+  /// fresh Firestore read with no visual feedback at all, which on a slow
+  /// connection looks like the button simply isn't responding.
+  bool _isOpeningOffer = false;
+
   Future<void> _openOfferEditor() async {
+    if (_isOpeningOffer) return;
+    setState(() => _isOpeningOffer = true);
     final router = GoRouter.of(context);
     final order = await _loadLatestOrder();
     if (!mounted) return;
+    setState(() => _isOpeningOffer = false);
     Navigator.of(context).pop();
     router.push('/create-offer', extra: order);
   }
@@ -933,8 +942,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   FilledButton.icon(
-                    onPressed: _openOfferEditor,
-                    icon: const Icon(Icons.description_outlined),
+                    onPressed: _isOpeningOffer ? null : _openOfferEditor,
+                    icon: _isOpeningOffer
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
                   if (_currentStatus == OrderStatus.accepted) ...[
@@ -958,8 +973,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               child: Row(
                 children: [
                   FilledButton.icon(
-                    onPressed: _openOfferEditor,
-                    icon: const Icon(Icons.description_outlined),
+                    onPressed: _isOpeningOffer ? null : _openOfferEditor,
+                    icon: _isOpeningOffer
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
                   if (_currentStatus == OrderStatus.accepted) ...[
@@ -1117,8 +1138,17 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _openOfferEditor,
-                  icon: const Icon(Icons.edit_document),
+                  onPressed: _isOpeningOffer ? null : _openOfferEditor,
+                  icon: _isOpeningOffer
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.edit_document),
                   label: Text('orders.complete_offer'.tr()),
                   style: FilledButton.styleFrom(backgroundColor: Colors.orange),
                 ),
