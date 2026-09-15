@@ -13,8 +13,6 @@ class MyRequestsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userId = authService.currentUser?.uid;
-
     return Scaffold(
       appBar: AppBar(
         title: Text('dashboard.my_requests_title'.tr()),
@@ -23,10 +21,10 @@ class MyRequestsScreen extends StatelessWidget {
           onPressed: () => context.go('/'),
         ),
       ),
-      body: userId == null
+      body: !authService.isSignedIn
           ? Center(child: Text('dashboard.sign_in_to_see_requests'.tr()))
           : StreamBuilder<List<SavedOrder>>(
-              stream: orderRepository.watchOrdersForOwner(userId),
+              stream: orderRepository.watchOrdersForOwner(authService.currentUser!.uid),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
