@@ -1706,6 +1706,22 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
     final rows = <ExtraPosition>[];
 
+    if (widget.order.shots.isNotEmpty) {
+      rows.add(
+        ExtraPosition(
+          date: dateStr,
+          name: isEn ? 'Shots' : 'Shots',
+          quantity: widget.order.offerShotsCount,
+          price: widget.order.offerShotsPricePerPiece > 0
+              ? widget.order.offerShotsPricePerPiece
+              : 1.50,
+          remark: widget.order.offerShotsRemark.isNotEmpty
+              ? widget.order.offerShotsRemark
+              : widget.order.shots.join(', '),
+        ),
+      );
+    }
+
     if (widget.order.barDrinks.isNotEmpty) {
       rows.add(
         ExtraPosition(

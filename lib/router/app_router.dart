@@ -12,6 +12,7 @@ import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
+import '../screens/orders/orders_year_overview_screen.dart';
 import '../screens/orders/pending_orders_screen.dart';
 import '../screens/settings/admin_settings_screen.dart';
 import '../screens/settings/employees_screen.dart';
@@ -133,6 +134,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/orders/pending',
       builder: (context, state) => const PendingOrdersScreen(),
+    ),
+    GoRoute(
+      path: '/orders/years',
+      builder: (context, state) => const OrdersYearOverviewScreen(),
     ),
     GoRoute(
       path: '/create-offer',

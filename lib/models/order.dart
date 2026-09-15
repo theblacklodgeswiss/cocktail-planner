@@ -176,6 +176,11 @@ class SavedOrder {
 
   bool get needsShoppingList => isFromForm && !hasShoppingList;
 
+  /// The event start time to display, preferring the value edited in the
+  /// offer/invoice screens over the original value from order creation.
+  String get effectiveEventTime =>
+      offerEventTime.isNotEmpty ? offerEventTime : eventTime;
+
   factory SavedOrder.fromFirestore(String id, Map<String, dynamic> data) {
     // Helper to parse datetime from either Timestamp or String
     DateTime? parseDateTime(dynamic value) {

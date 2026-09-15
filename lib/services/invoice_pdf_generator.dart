@@ -450,7 +450,7 @@ class InvoicePdfGenerator {
                 ),
               ),
             ),
-            if (order.eventTime.isNotEmpty) ...[
+            if (order.effectiveEventTime.isNotEmpty) ...[
               pw.Expanded(
                 flex: 1,
                 child: pw.RichText(
@@ -465,7 +465,7 @@ class InvoicePdfGenerator {
                         ),
                       ),
                       pw.TextSpan(
-                        text: '${order.eventTime} ${isEn ? '' : 'Uhr'}',
+                        text: '${order.effectiveEventTime} ${isEn ? '' : 'Uhr'}',
                         style: const pw.TextStyle(fontSize: 9),
                       ),
                     ],

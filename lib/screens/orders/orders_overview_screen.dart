@@ -27,13 +27,15 @@ class OrdersOverviewScreen extends StatefulWidget {
   State<OrdersOverviewScreen> createState() => _OrdersOverviewScreenState();
 }
 
+/// Number of latest orders shown on the main overview before the user has
+/// to open the full year-by-year archive.
+const _latestOrdersLimit = 10;
+
 class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
-  int _selectedYear = DateTime.now().year;
-  int? _selectedMonth; // null = all months
   bool _isSyncing = false;
   bool _firestoreReady = false;
   String _searchQuery = '';
-  OrderStatusFilter _statusFilter = OrderStatusFilter.all;
+  OrderStatusFilter _statusFilter = OrderStatusFilter.quotes;
   List<SavedOrder> _latestOrders = [];
 
   @override
@@ -52,9 +54,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
         case 'offer':
         case 'quote':
           _statusFilter = OrderStatusFilter.quotes;
-          break;
-        case 'declined':
-          _statusFilter = OrderStatusFilter.declined;
           break;
       }
     }
@@ -82,42 +81,20 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     if (!_firestoreReady && !firestoreService.isAvailable) {
       return const Stream.empty();
     }
-    // If searching, get all orders regardless of year
-    if (_searchQuery.isNotEmpty) {
-      return orderRepository.watchOrders(); // No year filter
-    }
-    // Otherwise, filter by selected year
-    return orderRepository.watchOrders(year: _selectedYear);
+    // No year filter - always fetch all orders, sorted by createdAt desc.
+    return orderRepository.watchOrders();
   }
 
+  /// Applies the status filter (and search) and, when not searching, caps
+  /// the result to the most recently created [_latestOrdersLimit] orders.
+  /// [orders] is expected to already be sorted by createdAt descending.
   List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) {
     var filtered = orders;
 
-    // Filter by month (if selected and not searching globally)
-    if (_selectedMonth != null && _searchQuery.isEmpty) {
-      filtered = filtered.where((o) => o.date.month == _selectedMonth).toList();
-    }
-
-    // Filter by status
-    if (_statusFilter != OrderStatusFilter.all) {
-      filtered = filtered.where((o) {
-        switch (_statusFilter) {
-          case OrderStatusFilter.quotes:
-            return o.status == OrderStatus.quote;
-          case OrderStatusFilter.accepted:
-            return o.status == OrderStatus.accepted;
-          case OrderStatusFilter.declined:
-            return o.status == OrderStatus.declined;
-          default:
-            return true;
-        }
-      }).toList();
-    }
-
-    // Filter by search query
+    // Filter by search query (searches across all orders, ignores status)
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
-      filtered = filtered.where((o) {
+      return filtered.where((o) {
         final nameMatch = o.name.toLowerCase().contains(query);
         final guestMatch =
             o.personCount.toString().contains(query) ||
@@ -126,8 +103,19 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       }).toList();
     }
 
-    // Sortierung entfernt - Daten werden in natürlicher Reihenfolge angezeigt
-    return filtered;
+    // Filter by status (only quotes / accepted are selectable here)
+    filtered = filtered.where((o) {
+      switch (_statusFilter) {
+        case OrderStatusFilter.quotes:
+          return o.status == OrderStatus.quote;
+        case OrderStatusFilter.accepted:
+          return o.status == OrderStatus.accepted;
+        default:
+          return true;
+      }
+    }).toList();
+
+    return filtered.take(_latestOrdersLimit).toList();
   }
 
   static const _excelFileName = 'Cocktail- & Barservice Anftragformular.xlsx';
@@ -403,9 +391,9 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                   children: [
                     _buildPendingOrdersBanner(),
                     const SizedBox(height: 20),
-                    _SummaryCardsSection(orders: orders),
+                    _SummaryCardsSection(orders: allOrders),
                     const SizedBox(height: 20),
-                    _buildFilterDropdowns(colorScheme),
+                    _buildFilterRow(colorScheme),
                     if (_searchQuery.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Row(
@@ -424,9 +412,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                     OrdersTable(
                       orders: orders,
                       colorScheme: colorScheme,
-                      selectedYear: _selectedYear,
-                      showMonthSubtitle:
-                          _searchQuery.isNotEmpty || _selectedMonth == null,
+                      selectedYear: DateTime.now().year,
+                      showMonthSubtitle: true,
                       onOrderTap: (order) => showOrderDetails(context, order),
                     ),
                   ],
@@ -439,111 +426,10 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  /// Compact status dropdown menu (kept for potential reuse)
-  // ignore: unused_element
-  Widget _buildStatusDropdown(ColorScheme colorScheme) {
-    // Map status to icon and color
-    IconData getIcon(OrderStatusFilter status) {
-      switch (status) {
-        case OrderStatusFilter.all:
-          return Icons.filter_list;
-        case OrderStatusFilter.quotes:
-          return Icons.description;
-        case OrderStatusFilter.accepted:
-          return Icons.check_circle;
-        case OrderStatusFilter.declined:
-          return Icons.cancel;
-      }
-    }
-
-    Color? getColor(OrderStatusFilter status) {
-      switch (status) {
-        case OrderStatusFilter.quotes:
-          return Colors.orange;
-        case OrderStatusFilter.accepted:
-          return Colors.green;
-        case OrderStatusFilter.declined:
-          return Colors.red;
-        default:
-          return null;
-      }
-    }
-
-    String getLabel(OrderStatusFilter status) {
-      switch (status) {
-        case OrderStatusFilter.all:
-          return 'Alle';
-        case OrderStatusFilter.quotes:
-          return 'Angebote';
-        case OrderStatusFilter.accepted:
-          return 'Angenommen';
-        case OrderStatusFilter.declined:
-          return 'Abgelehnt';
-      }
-    }
-
-    final currentColor = getColor(_statusFilter);
-
-    return MenuAnchor(
-      builder: (context, controller, child) {
-        return OutlinedButton.icon(
-          onPressed: () {
-            if (controller.isOpen) {
-              controller.close();
-            } else {
-              controller.open();
-            }
-          },
-          icon: Icon(getIcon(_statusFilter), size: 18, color: currentColor),
-          label: Text(
-            getLabel(_statusFilter),
-            style: TextStyle(color: currentColor),
-          ),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            visualDensity: VisualDensity.compact,
-          ),
-        );
-      },
-      menuChildren: OrderStatusFilter.values.map((status) {
-        final icon = getIcon(status);
-        final color = getColor(status);
-        final label = getLabel(status);
-        final isSelected = _statusFilter == status;
-
-        return MenuItemButton(
-          leadingIcon: Icon(icon, size: 18, color: color),
-          trailingIcon: isSelected ? const Icon(Icons.check, size: 18) : null,
-          onPressed: () => setState(() => _statusFilter = status),
-          child: Text(label),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildListHeader(List<SavedOrder> orders) {
-    String title;
-    if (_searchQuery.isNotEmpty) {
-      title = '${orders.length} ${'orders.search_results'.tr()}';
-    } else if (_selectedMonth != null) {
-      const monthNames = [
-        'Januar',
-        'Februar',
-        'März',
-        'April',
-        'Mai',
-        'Juni',
-        'Juli',
-        'August',
-        'September',
-        'Oktober',
-        'November',
-        'Dezember',
-      ];
-      title = '${monthNames[_selectedMonth! - 1]} $_selectedYear';
-    } else {
-      title = '${'orders.order_count'.tr()} $_selectedYear';
-    }
+    final title = _searchQuery.isNotEmpty
+        ? '${orders.length} ${'orders.search_results'.tr()}'
+        : '${'orders.order_count'.tr()} · ${orders.length}';
 
     return Text(
       title,
@@ -553,113 +439,36 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     );
   }
 
-  Widget _buildFilterDropdowns(ColorScheme colorScheme) {
-    final currentYear = DateTime.now().year;
-    const futureYears = 5; // 5 Jahre voraus für konsistente Langzeitplanung
-    const pastYears = 4;
-    final years = List.generate(
-      futureYears + pastYears + 1,
-      (i) => currentYear + futureYears - i,
-    );
-
-    const monthNames = [
-      'Alle',
-      'Jan',
-      'Feb',
-      'Mär',
-      'Apr',
-      'Mai',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Dez',
-    ];
-
-    // Sort dropdown items entfernt - keine Sortierung mehr
-
-    // Status filter items
-    const statusItems = [
-      (OrderStatusFilter.all, 'Alle'),
-      (OrderStatusFilter.quotes, 'Angebote'),
-      (OrderStatusFilter.accepted, 'Angenommen'),
-      (OrderStatusFilter.declined, 'Abgelehnt'),
-    ];
-
-    final inputDecoration = InputDecoration(
-      filled: true,
-      fillColor: colorScheme.surfaceContainerHigh,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      isDense: true,
-    );
-
+  /// Two-state filter (Angebot offen / Angenommen) plus the "Weitere
+  /// anzeigen" button that opens the full year-by-year archive.
+  Widget _buildFilterRow(ColorScheme colorScheme) {
     return Row(
       children: [
-        // Jahr
         Expanded(
-          flex: 2,
-          child: DropdownButtonFormField<int>(
-            initialValue: _selectedYear,
-            decoration: inputDecoration.copyWith(
-              labelText: 'Jahr',
-              prefixIcon: const Icon(Icons.calendar_today, size: 18),
-            ),
-            isExpanded: true,
-            items: years.map((year) => DropdownMenuItem(
-              value: year,
-              child: Text('$year'),
-            )).toList(),
-            onChanged: (year) {
-              if (year != null) {
-                setState(() => _selectedYear = year);
-              }
+          child: SegmentedButton<OrderStatusFilter>(
+            segments: [
+              ButtonSegment(
+                value: OrderStatusFilter.quotes,
+                label: Text('orders.filter_open_quotes'.tr()),
+                icon: const Icon(Icons.hourglass_empty, size: 16),
+              ),
+              ButtonSegment(
+                value: OrderStatusFilter.accepted,
+                label: Text('orders.filter_accepted'.tr()),
+                icon: const Icon(Icons.check_circle, size: 16),
+              ),
+            ],
+            selected: {_statusFilter},
+            onSelectionChanged: (selection) {
+              setState(() => _statusFilter = selection.first);
             },
           ),
         ),
         const SizedBox(width: 10),
-        // Monat
-        Expanded(
-          flex: 2,
-          child: DropdownButtonFormField<int?>(
-            initialValue: _selectedMonth,
-            decoration: inputDecoration.copyWith(
-              labelText: 'Monat',
-              prefixIcon: const Icon(Icons.calendar_month, size: 18),
-            ),
-            isExpanded: true,
-            items: List.generate(13, (index) => DropdownMenuItem(
-              value: index == 0 ? null : index,
-              child: Text(monthNames[index]),
-            )),
-            onChanged: (month) {
-              setState(() => _selectedMonth = month);
-            },
-          ),
-        ),
-        const SizedBox(width: 10),
-        // Status
-        Expanded(
-          flex: 4,
-          child: DropdownButtonFormField<OrderStatusFilter>(
-            initialValue: _statusFilter,
-            decoration: inputDecoration.copyWith(
-              labelText: 'Status',
-              prefixIcon: const Icon(Icons.flag_outlined, size: 18),
-            ),
-            isExpanded: true,
-            items: statusItems
-                .map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
-                .toList(),
-            onChanged: (val) {
-              if (val != null) setState(() => _statusFilter = val);
-            },
-          ),
+        OutlinedButton.icon(
+          onPressed: () => context.push('/orders/years'),
+          icon: const Icon(Icons.calendar_month, size: 18),
+          label: Text('orders.show_more'.tr()),
         ),
       ],
     );
