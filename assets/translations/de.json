@@ -371,6 +371,7 @@
     "saved": "Auftragsbestätigung gespeichert!",
     "save_failed": "Auftragsbestätigung konnte nicht gespeichert werden.",
     "pdf_created": "Auftragsbestätigung PDF erstellt!",
+    "share_link_copied": "Link in Zwischenablage kopiert (14 Tage gültig)",
     "field_required": "Pflichtfeld",
     "extra_positions": "Extra Positionen",
     "add_position": "Position hinzufügen",

@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../../config/env_config.dart';
 import '../../data/employee_repository.dart';
 import '../../data/order_repository.dart';
+import '../../data/share_link_repository.dart';
 import '../../models/employee.dart';
 import '../../models/offer.dart';
 import '../../models/order.dart';
@@ -545,13 +546,18 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         );
       }
 
-      // Share/download the PDF
-      await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+      // Create a 14-day share link instead of attaching raw PDF bytes
+      // (which produced an unusable blob: URL for the recipient on web).
+      final code = await shareLinkRepository.createInvoiceShareLink(
+        updatedOrder,
+      );
+      final shareUrl = '${Uri.base.origin}/s/$code';
+      await Clipboard.setData(ClipboardData(text: shareUrl));
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('invoice.pdf_created'.tr())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('invoice.share_link_copied'.tr())),
+        );
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
