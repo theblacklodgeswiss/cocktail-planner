@@ -62,6 +62,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   String _drinkerType = 'normal';
   final List<Recipe> _selectedRecipes = [];
   final Map<String, double> _cocktailPopularity = {};
+  final Map<String, int> _shotQuantities = {};
   String _searchQuery = '';
   String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
   final Set<String> _selectedBarDrinks = {};
@@ -1176,6 +1177,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             _serviceType = value;
             if (value == 'mocktail_service') {
               _selectedRecipes.removeWhere((recipe) => recipe.isShot);
+              _shotQuantities.clear();
               _cocktailPopularity.removeWhere(
                 (name, _) =>
                     !_selectedRecipes.any((recipe) => recipe.name == name),
@@ -2189,6 +2191,62 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
+  void _toggleRecipeSelection(Recipe recipe) {
+    setState(() {
+      final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
+      if (isSelected) {
+        _selectedRecipes.removeWhere((r) => r.id == recipe.id);
+        if (recipe.isShot) _shotQuantities.remove(recipe.name);
+      } else {
+        _selectedRecipes.add(recipe);
+        if (recipe.isShot) _shotQuantities[recipe.name] = 1;
+      }
+    });
+  }
+
+  void _setShotQuantity(Recipe recipe, int quantity) {
+    setState(() {
+      if (quantity <= 0) {
+        _selectedRecipes.removeWhere((r) => r.id == recipe.id);
+        _shotQuantities.remove(recipe.name);
+      } else {
+        _shotQuantities[recipe.name] = quantity;
+      }
+    });
+  }
+
+  Widget _buildShotQuantityStepper(Recipe recipe) {
+    final quantity = _shotQuantities[recipe.name] ?? 1;
+    return Semantics(
+      label: '${recipe.name}: $quantity',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline),
+            iconSize: 20,
+            onPressed: () => _setShotQuantity(recipe, quantity - 1),
+            tooltip: 'order_setup.shot_quantity_decrease'.tr(),
+          ),
+          SizedBox(
+            width: 24,
+            child: Text(
+              '$quantity',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            iconSize: 20,
+            onPressed: () => _setShotQuantity(recipe, quantity + 1),
+            tooltip: 'order_setup.shot_quantity_increase'.tr(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCocktailCard(Recipe recipe) {
     final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
     final screenWidth = MediaQuery.of(context).size.width;
@@ -2211,13 +2269,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         child: InkWell(
           onTap: () {
             HapticFeedback.selectionClick();
-            setState(() {
-              if (isSelected) {
-                _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-              } else {
-                _selectedRecipes.add(recipe);
-              }
-            });
+            _toggleRecipeSelection(recipe);
           },
           borderRadius: BorderRadius.circular(16),
           child: Container(
@@ -2311,13 +2363,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       child: InkWell(
         onTap: () {
           HapticFeedback.selectionClick();
-          setState(() {
-            if (isSelected) {
-              _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-            } else {
-              _selectedRecipes.add(recipe);
-            }
-          });
+          _toggleRecipeSelection(recipe);
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
@@ -2364,6 +2410,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+              if (recipe.isShot && isSelected) ...[
+                _buildShotQuantityStepper(recipe),
+                const SizedBox(width: 12),
+              ],
               Icon(
                 isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                 color: isSelected

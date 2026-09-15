@@ -357,4 +357,27 @@ void main() {
     }
   });
   }, skip: 'Requires dependency injection for AuthService - currently a global singleton initialized at import time');
+
+  group('Shot quantity stepper', () {
+    testWidgets('selecting a shot defaults its quantity to 1, then increments',
+        (tester) async {
+      // Arrange: pump the order form to the cocktail-selection step and
+      // locate one Recipe with isShot == true, following the same pump/setup
+      // pattern as the nearest existing test in this group above.
+      // Act: tap the shot's card once to select it.
+      // Assert: a Text widget showing '1' appears within the same card.
+      // Act: tap the '+' IconButton once.
+      // Assert: the Text widget now shows '2'.
+      // Act: tap '-' twice.
+      // Assert: the shot is deselected (quantity Text and stepper icons gone)
+      // and the underlying recipe is removed from the selected set.
+    }, skip: true);
+    // Skip: requires dependency injection for CocktailRepository/FirestoreService -
+    // ModernOrderFormScreen calls the global cocktailRepository singleton directly
+    // (no loadData injection point like DashboardScreen has), which calls
+    // FirebaseFirestore.instance with no Firebase app initialized in widget tests.
+    // Confirmed by probing: pumping ModernOrderFormScreen throws
+    // "No Firebase App '[DEFAULT]' has been created" before the cocktail-selection
+    // step is ever reachable. Unskip once that DI exists.
+  });
 }
