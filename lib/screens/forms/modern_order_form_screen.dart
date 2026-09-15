@@ -80,6 +80,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final List<Recipe> _selectedRecipes = [];
   final Map<String, double> _cocktailPopularity = {};
   final Map<String, int> _shotQuantities = {};
+  final Map<String, TextEditingController> _shotQuantityControllers = {};
   String _searchQuery = '';
   String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
   final Set<String> _selectedBarDrinks = {};
@@ -248,6 +249,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _phoneController.dispose();
     _addressController.dispose();
     _remarksController.dispose();
+    for (final controller in _shotQuantityControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -1212,6 +1216,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             if (value == 'mocktail_service') {
               _selectedRecipes.removeWhere((recipe) => recipe.isShot);
               _shotQuantities.clear();
+              for (final controller in _shotQuantityControllers.values) {
+                controller.dispose();
+              }
+              _shotQuantityControllers.clear();
               _cocktailPopularity.removeWhere(
                 (name, _) =>
                     !_selectedRecipes.any((recipe) => recipe.name == name),
@@ -2230,7 +2238,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
       if (isSelected) {
         _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-        if (recipe.isShot) _shotQuantities.remove(recipe.name);
+        if (recipe.isShot) {
+          _shotQuantities.remove(recipe.name);
+          _shotQuantityControllers.remove(recipe.name)?.dispose();
+        }
       } else {
         _selectedRecipes.add(recipe);
         if (recipe.isShot) _shotQuantities[recipe.name] = 1;
@@ -2239,42 +2250,75 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   void _setShotQuantity(Recipe recipe, int quantity) {
-    setState(() {
-      if (quantity <= 0) {
-        _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-        _shotQuantities.remove(recipe.name);
-      } else {
-        _shotQuantities[recipe.name] = quantity;
-      }
-    });
+    final clamped = quantity < 1 ? 1 : quantity;
+    setState(() => _shotQuantities[recipe.name] = clamped);
+  }
+
+  TextEditingController _shotQuantityController(Recipe recipe) {
+    return _shotQuantityControllers.putIfAbsent(
+      recipe.name,
+      () => TextEditingController(
+        text: '${_shotQuantities[recipe.name] ?? 1}',
+      ),
+    );
+  }
+
+  void _showShotQuantityInfo() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('order_setup.shot_quantity_info_title'.tr()),
+        content: Text('order_setup.shot_quantity_info_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('common.ok'.tr()),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildShotQuantityStepper(Recipe recipe) {
-    final quantity = _shotQuantities[recipe.name] ?? 1;
+    final controller = _shotQuantityController(recipe);
     return Semantics(
-      label: '${recipe.name}: $quantity',
+      label: '${recipe.name}: ${_shotQuantities[recipe.name] ?? 1}',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.remove_circle_outline),
+            icon: const Icon(Icons.info_outline),
             iconSize: 20,
-            onPressed: () => _setShotQuantity(recipe, quantity - 1),
-            tooltip: 'order_setup.shot_quantity_decrease'.tr(),
+            onPressed: _showShotQuantityInfo,
+            tooltip: 'order_setup.shot_quantity_info'.tr(),
           ),
           SizedBox(
-            width: 24,
-            child: Text(
-              '$quantity',
+            width: 56,
+            child: TextField(
+              controller: controller,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 4,
+                ),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                final parsed = int.tryParse(value);
+                if (parsed != null && parsed >= 1) {
+                  _setShotQuantity(recipe, parsed);
+                }
+              },
+              onEditingComplete: () {
+                final resolved = _shotQuantities[recipe.name] ?? 1;
+                controller.text = '$resolved';
+                FocusScope.of(context).unfocus();
+              },
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            iconSize: 20,
-            onPressed: () => _setShotQuantity(recipe, quantity + 1),
-            tooltip: 'order_setup.shot_quantity_increase'.tr(),
           ),
         ],
       ),
