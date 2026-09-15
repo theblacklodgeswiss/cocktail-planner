@@ -111,6 +111,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   StreamSubscription<List<AdditionalService>>? _serviceCatalogSubscription;
   final TextEditingController _remarksController = TextEditingController();
   Timer? _distanceLookupDebounce;
+  // Trimmed address text as of the last time the debounce/lookup logic
+  // below actually ran. `TextEditingController.addListener` fires on ANY
+  // `TextEditingValue` change, including a cursor/selection move with no
+  // text change (e.g. tapping back into an already-filled field) - without
+  // this, that spurious notification would still cancel/reschedule the
+  // lookup and flash "calculating...", wasting a Nominatim request.
+  String _lastLookupAddress = '';
 
   @override
   void initState() {
@@ -123,6 +130,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       // they type; an employee's manually-set value must never be silently
       // overwritten by a background lookup.
       if (!authService.isEmployeeOrHigher) {
+        final trimmedAddress = _addressController.text.trim();
+        // Skip the debounce/pending-reset/reschedule entirely when the
+        // text hasn't actually changed (a cursor move, tapping back into
+        // the field, etc. still notifies listeners but isn't an edit).
+        if (trimmedAddress == _lastLookupAddress) return;
+        _lastLookupAddress = trimmedAddress;
         _distanceLookupDebounce?.cancel();
         setState(() => _distanceLookupPending = true);
         _distanceLookupDebounce = Timer(const Duration(milliseconds: 800), () {
