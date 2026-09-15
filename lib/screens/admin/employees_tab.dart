@@ -78,7 +78,7 @@ class _EmployeesTabState extends State<EmployeesTab> {
 
     if (confirm != true) return;
 
-    final success = await employeeRepository.deleteEmployee(employee.id);
+    final success = await employeeRepository.deleteEmployee(employee);
     if (!mounted) return;
 
     if (success) {
@@ -180,7 +180,7 @@ class _EmployeesTabState extends State<EmployeesTab> {
 
     final emailText = emailController.text.trim();
     final success = await employeeRepository.updateEmployee(
-      id: employee.id,
+      previous: employee,
       name: nameController.text.trim(),
       email: emailText.isEmpty ? null : emailText,
       role: selectedRole,

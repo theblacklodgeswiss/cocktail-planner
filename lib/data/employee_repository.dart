@@ -5,6 +5,16 @@ import 'package:flutter/foundation.dart';
 import '../models/employee.dart';
 import 'firestore_service.dart';
 
+/// Normalizes an email for use as an `employeeAccess` document ID: trims
+/// whitespace and lowercases. Returns null for null/empty/whitespace-only
+/// input, matching how `allowedUsers` doc IDs are already normalized in
+/// `auth_service.dart`.
+String? normalizeAccessEmail(String? email) {
+  if (email == null) return null;
+  final trimmed = email.trim();
+  return trimmed.isEmpty ? null : trimmed.toLowerCase();
+}
+
 /// Repository for employee CRUD operations.
 class EmployeeRepository {
   Stream<List<Employee>> watchEmployees() {
@@ -49,6 +59,7 @@ class EmployeeRepository {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
       final sortOrder = await _getNextSortOrder();
+      final normalizedEmail = normalizeAccessEmail(email);
       final data = <String, dynamic>{
         'name': name,
         'role': role.firestoreValue,
@@ -56,10 +67,27 @@ class EmployeeRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': currentUser?.email ?? currentUser?.uid ?? 'unknown',
       };
-      if (email != null && email.isNotEmpty) {
-        data['email'] = email;
+      if (normalizedEmail != null) {
+        data['email'] = normalizedEmail;
       }
-      await firestoreService.employeesCollection.add(data);
+
+      final batch = firestoreService.firestore.batch();
+      final employeeRef = firestoreService.employeesCollection.doc();
+      batch.set(employeeRef, data);
+      if (normalizedEmail != null) {
+        batch.set(
+          firestoreService.firestore
+              .collection('employeeAccess')
+              .doc(normalizedEmail),
+          {
+            'employeeId': employeeRef.id,
+            'role': role.firestoreValue,
+            'name': name,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+        );
+      }
+      await batch.commit();
       return true;
     } catch (e) {
       debugPrint('Failed to add employee: $e');
@@ -68,7 +96,7 @@ class EmployeeRepository {
   }
 
   Future<bool> updateEmployee({
-    required String id,
+    required Employee previous,
     required String name,
     String? email,
     EmployeeRole? role,
@@ -76,20 +104,46 @@ class EmployeeRepository {
     if (!firestoreService.isAvailable) return false;
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
+      final normalizedNewEmail = normalizeAccessEmail(email);
+      final normalizedOldEmail = normalizeAccessEmail(previous.email);
+      final resolvedRole = role ?? previous.role;
+
       final data = <String, dynamic>{
         'name': name,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': currentUser?.email ?? currentUser?.uid ?? 'unknown',
       };
-      if (email != null && email.isNotEmpty) {
-        data['email'] = email;
+      if (normalizedNewEmail != null) {
+        data['email'] = normalizedNewEmail;
       } else {
         data['email'] = FieldValue.delete();
       }
       if (role != null) {
         data['role'] = role.firestoreValue;
       }
-      await firestoreService.employeesCollection.doc(id).update(data);
+
+      final batch = firestoreService.firestore.batch();
+      batch.update(
+        firestoreService.employeesCollection.doc(previous.id),
+        data,
+      );
+
+      final accessCollection =
+          firestoreService.firestore.collection('employeeAccess');
+      if (normalizedOldEmail != null &&
+          normalizedOldEmail != normalizedNewEmail) {
+        batch.delete(accessCollection.doc(normalizedOldEmail));
+      }
+      if (normalizedNewEmail != null) {
+        batch.set(accessCollection.doc(normalizedNewEmail), {
+          'employeeId': previous.id,
+          'role': resolvedRole.firestoreValue,
+          'name': name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
       return true;
     } catch (e) {
       debugPrint('Failed to update employee: $e');
@@ -97,14 +151,72 @@ class EmployeeRepository {
     }
   }
 
-  Future<bool> deleteEmployee(String id) async {
+  Future<bool> deleteEmployee(Employee employee) async {
     if (!firestoreService.isAvailable) return false;
     try {
-      await firestoreService.employeesCollection.doc(id).delete();
+      final batch = firestoreService.firestore.batch();
+      batch.delete(firestoreService.employeesCollection.doc(employee.id));
+      final normalizedEmail = normalizeAccessEmail(employee.email);
+      if (normalizedEmail != null) {
+        batch.delete(
+          firestoreService.firestore
+              .collection('employeeAccess')
+              .doc(normalizedEmail),
+        );
+      }
+      await batch.commit();
       return true;
     } catch (e) {
       debugPrint('Failed to delete employee: $e');
       return false;
+    }
+  }
+
+  /// Rebuilds the `employeeAccess` mirror from the current `employees`
+  /// roster: writes one mirror doc per roster entry that has an email, and
+  /// deletes mirror docs with no matching roster entry. Idempotent - safe to
+  /// run repeatedly (initial rollout, or as a repair action from the
+  /// Employees screen).
+  Future<int> rebuildEmployeeAccessIndex() async {
+    if (!firestoreService.isAvailable) return 0;
+    try {
+      final employeesSnapshot = await firestoreService.employeesCollection.get();
+      final employees = employeesSnapshot.docs
+          .map((d) => Employee.fromFirestore(d.id, d.data()))
+          .toList();
+
+      final accessCollection =
+          firestoreService.firestore.collection('employeeAccess');
+      final existingMirrorDocs = await accessCollection.get();
+
+      final expectedEmails = <String>{};
+      final batch = firestoreService.firestore.batch();
+      var written = 0;
+
+      for (final employee in employees) {
+        final normalizedEmail = normalizeAccessEmail(employee.email);
+        if (normalizedEmail == null) continue;
+        expectedEmails.add(normalizedEmail);
+        batch.set(accessCollection.doc(normalizedEmail), {
+          'employeeId': employee.id,
+          'role': employee.role.firestoreValue,
+          'name': employee.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        written++;
+      }
+
+      for (final doc in existingMirrorDocs.docs) {
+        if (!expectedEmails.contains(doc.id)) {
+          batch.delete(doc.reference);
+        }
+      }
+
+      await batch.commit();
+      return written;
+    } catch (e) {
+      debugPrint('Failed to rebuild employeeAccess index: $e');
+      return 0;
     }
   }
 
