@@ -58,7 +58,30 @@ service cloud.firestore {
         ))
       );
     }
-    
+
+    // True only for a customer's accept/decline click on the public offer
+    // share page (no login at all) — the sole path an unauthenticated
+    // visitor may use to touch the orders collection. Every clause is
+    // required: only these 3 fields may change, only a quote may be
+    // resolved (no re-flipping an already-decided order), only to
+    // accepted/declined, and only when the caller supplies the code of a
+    // still-valid offer share link that actually points at this order.
+    function isShareLinkResponse(orderId) {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'statusUpdatedAt', 'customerResponseCode']) &&
+             resource.data.status == 'quote' &&
+             (request.resource.data.status == 'accepted' ||
+              request.resource.data.status == 'declined') &&
+             // Must be the real serverTimestamp() sentinel, not an
+             // arbitrary client-supplied value of any type.
+             request.resource.data.statusUpdatedAt == request.time &&
+             request.resource.data.customerResponseCode is string &&
+             exists(/databases/$(database)/documents/shareLinks/$(request.resource.data.customerResponseCode)) &&
+             get(/databases/$(database)/documents/shareLinks/$(request.resource.data.customerResponseCode)).data.orderId == orderId &&
+             get(/databases/$(database)/documents/shareLinks/$(request.resource.data.customerResponseCode)).data.type == 'offer' &&
+             get(/databases/$(database)/documents/shareLinks/$(request.resource.data.customerResponseCode)).data.expiresAt > request.time;
+    }
+
     // Materials collection
     match /materials/{document=**} {
       allow read: if true;
@@ -95,7 +118,8 @@ service cloud.firestore {
       // reverted to the original, unconditional-for-authenticated-users
       // check while the exact cause of the mismatch is investigated.
       allow create: if isAuthenticated();
-      allow update, delete: if isOrderOwner() || hasFullOrderAccess();
+      allow update: if isOrderOwner() || hasFullOrderAccess() || isShareLinkResponse(orderId);
+      allow delete: if isOrderOwner() || hasFullOrderAccess();
     }
     
     // Users collection - for user profiles
@@ -155,7 +179,24 @@ service cloud.firestore {
       // link that outlives the intended 14-day lifetime.
       allow create: if hasFullOrderAccess() &&
                        request.resource.data.expiresAt <= request.time + duration.value(15, 'd');
-      allow update, delete: if false;
+      // A customer may record their own accept/decline exactly once (so a
+      // reload of the link shows the outcome without re-reading the
+      // auth-gated orders collection) — nothing else about the link is
+      // ever mutable. The extra get() below is what makes this a
+      // consequence of the real order write rather than an independent,
+      // forgeable claim: the link can only be marked 'accepted' once the
+      // order it points at genuinely already is (same for 'declined').
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['response', 'respondedAt']) &&
+                       !('response' in resource.data) &&
+                       resource.data.type == 'offer' &&
+                       resource.data.expiresAt > request.time &&
+                       (request.resource.data.response == 'accepted' ||
+                        request.resource.data.response == 'declined') &&
+                       request.resource.data.respondedAt == request.time &&
+                       get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.status
+                         == request.resource.data.response;
+      allow delete: if false;
     }
 
     // Microsoft Forms collection - authenticated users can read/write

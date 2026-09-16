@@ -532,7 +532,12 @@
   "share": {
     "loading": "Dokument wird geladen...",
     "expired_title": "Link nicht mehr gültig",
-    "expired_body": "Dieser Link ist abgelaufen oder ungültig. Bitte fordere einen neuen Link an."
+    "expired_body": "Dieser Link ist abgelaufen oder ungültig. Bitte fordere einen neuen Link an.",
+    "accept": "Annehmen",
+    "decline": "Ablehnen",
+    "responded_accepted": "Du hast dieses Angebot angenommen. Wir melden uns in Kürze bei dir!",
+    "responded_declined": "Du hast dieses Angebot abgelehnt.",
+    "response_error": "Dieses Angebot wurde bereits bearbeitet."
   },
   "settings": {
     "title": "Einstellungen",

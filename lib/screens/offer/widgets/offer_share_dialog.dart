@@ -25,9 +25,10 @@ class OfferShareDialog extends StatefulWidget {
   final String editorName;
   final List<String> selectedCocktails;
 
-  /// Creates a 14-day share link for the current offer snapshot and
-  /// returns its short code (see ShareLinkRepository).
-  final Future<String> Function() createShareLink;
+  /// Creates a 14-day share link for the current offer snapshot (embedding
+  /// the given WhatsApp greeting message, shown on the public link page)
+  /// and returns its short code (see ShareLinkRepository).
+  final Future<String> Function(String message) createShareLink;
 
   @override
   State<OfferShareDialog> createState() => _OfferShareDialogState();
@@ -85,6 +86,9 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
       _loading = true;
       _error = null;
       _isDirty = false;
+      // A regenerated message invalidates any link already created with
+      // the previous text baked in.
+      _cachedShareCode = null;
     });
 
     try {
@@ -224,9 +228,10 @@ $editorFirst''';
   }
 
   /// Creates the 14-day share link on first use and reuses it for every
-  /// later call within this dialog session.
+  /// later call within this dialog session. The current message text is
+  /// embedded in the link so the public viewer can show it above the PDF.
   Future<String> _ensureShareCode() async {
-    return _cachedShareCode ??= await widget.createShareLink();
+    return _cachedShareCode ??= await widget.createShareLink(_messageCtrl.text);
   }
 
   /// Generates (or reuses) the share link and copies just the raw URL to
@@ -340,13 +345,13 @@ $editorFirst''';
             ),
             const Divider(height: 24),
 
-            // ── Copy link (always available, independent of the WhatsApp
-            // message below, which needs a moment to generate) ──────────
+            // ── Copy link (waits for the WhatsApp message to finish
+            // generating below, since the link embeds it) ────────────────
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _linkCopying ? null : _copyLinkOnly,
+                    onPressed: (_loading || _linkCopying) ? null : _copyLinkOnly,
                     icon: _linkCopying
                         ? const SizedBox(
                             width: 16,

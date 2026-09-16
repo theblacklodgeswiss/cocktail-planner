@@ -524,7 +524,12 @@
   "share": {
     "loading": "Loading document...",
     "expired_title": "Link no longer valid",
-    "expired_body": "This link has expired or is invalid. Please request a new link."
+    "expired_body": "This link has expired or is invalid. Please request a new link.",
+    "accept": "Accept",
+    "decline": "Decline",
+    "responded_accepted": "You accepted this offer. We'll be in touch shortly!",
+    "responded_declined": "You declined this offer.",
+    "response_error": "This offer has already been processed."
   },
   "settings": {
     "title": "Settings",
