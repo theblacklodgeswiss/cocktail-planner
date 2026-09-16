@@ -38,6 +38,12 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
   bool _loading = true;
   String? _error;
   bool _pdfSharing = false;
+  bool _linkCopying = false;
+
+  /// Cached so the "copy link" button and the WhatsApp-message button
+  /// reuse the same 14-day link within one dialog session, instead of
+  /// minting a fresh shareLinks document on every click.
+  String? _cachedShareCode;
 
   /// Mutable copy of selectedCocktails — updated by swap dropdowns.
   late List<String> _currentCocktails;
@@ -217,14 +223,60 @@ $editorFirst''';
     }
   }
 
-  /// Creates a 14-day share link, appends it to the message, copies the
-  /// full text to the clipboard, and opens WhatsApp with it — replacing
-  /// the previous raw-PDF-bytes share, which produced an unusable
-  /// `blob:` URL for the recipient on Flutter web.
+  /// Creates the 14-day share link on first use and reuses it for every
+  /// later call within this dialog session.
+  Future<String> _ensureShareCode() async {
+    return _cachedShareCode ??= await widget.createShareLink();
+  }
+
+  /// Generates (or reuses) the share link and copies just the raw URL to
+  /// the clipboard — for pasting anywhere, without the WhatsApp message.
+  Future<void> _copyLinkOnly() async {
+    setState(() => _linkCopying = true);
+    try {
+      final code = await _ensureShareCode();
+      final shareUrl = '${Uri.base.origin}/s/$code';
+      await Clipboard.setData(ClipboardData(text: shareUrl));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('offer.share_link_copied'.tr())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('offer.share_pdf_error'.tr())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _linkCopying = false);
+    }
+  }
+
+  void _showLinkInfo() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('offer.copy_link_info'.tr()),
+        content: Text('offer.copy_link_info_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('common.ok'.tr()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Creates (or reuses) the 14-day share link, appends it to the
+  /// message, copies the full text to the clipboard, and opens WhatsApp
+  /// with it — replacing the previous raw-PDF-bytes share, which produced
+  /// an unusable `blob:` URL for the recipient on Flutter web.
   Future<void> _sharePdf() async {
     setState(() => _pdfSharing = true);
     try {
-      final code = await widget.createShareLink();
+      final code = await _ensureShareCode();
       final shareUrl = '${Uri.base.origin}/s/$code';
       final fullMessage = '${_messageCtrl.text}\n\n$shareUrl';
 
@@ -287,6 +339,33 @@ $editorFirst''';
               ],
             ),
             const Divider(height: 24),
+
+            // ── Copy link (always available, independent of the WhatsApp
+            // message below, which needs a moment to generate) ──────────
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _linkCopying ? null : _copyLinkOnly,
+                    icon: _linkCopying
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.link, size: 18),
+                    label: Text('offer.copy_link'.tr()),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: _showLinkInfo,
+                  icon: const Icon(Icons.info_outline),
+                  tooltip: 'offer.copy_link_info'.tr(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
 
             // Content
             Flexible(

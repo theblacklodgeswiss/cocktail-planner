@@ -1,7 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
-/// Action buttons for the offer form (save, generate PDF, print, share).
+/// Action buttons for the offer form (save, generate PDF, generate share link).
 class OfferActionButtons extends StatelessWidget {
   const OfferActionButtons({
     super.key,
@@ -9,7 +9,6 @@ class OfferActionButtons extends StatelessWidget {
     required this.onSaveOnly,
     required this.onPreview,
     required this.onGeneratePdf,
-    required this.onPrint,
     this.onShare,
   });
 
@@ -17,13 +16,10 @@ class OfferActionButtons extends StatelessWidget {
   final VoidCallback? onSaveOnly;
   final VoidCallback? onPreview; // kept for API compatibility, unused
   final VoidCallback? onGeneratePdf;
-  final VoidCallback? onPrint;
   final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     final saveBtn = OutlinedButton.icon(
       onPressed: isGenerating ? null : onSaveOnly,
       icon: const Icon(Icons.save_outlined, size: 18),
@@ -48,18 +44,10 @@ class OfferActionButtons extends StatelessWidget {
       ),
     );
 
-    final printBtn = IconButton.outlined(
-      onPressed: isGenerating ? null : onPrint,
-      icon: const Icon(Icons.print, size: 20),
-      tooltip: 'offer.print'.tr(),
-      style: IconButton.styleFrom(side: BorderSide(color: colorScheme.outline)),
-    );
-
-    final shareBtn = IconButton.outlined(
+    final shareBtn = OutlinedButton.icon(
       onPressed: isGenerating ? null : onShare,
-      icon: const Icon(Icons.share, size: 20),
-      tooltip: 'offer.share'.tr(),
-      style: IconButton.styleFrom(side: BorderSide(color: colorScheme.outline)),
+      icon: const Icon(Icons.link, size: 18),
+      label: Text('offer.generate_link'.tr()),
     );
 
     return LayoutBuilder(
@@ -70,8 +58,6 @@ class OfferActionButtons extends StatelessWidget {
               saveBtn,
               const Spacer(),
               pdfBtn,
-              const SizedBox(width: 8),
-              printBtn,
               const SizedBox(width: 8),
               shareBtn,
             ],
@@ -86,9 +72,7 @@ class OfferActionButtons extends StatelessWidget {
                 children: [
                   Expanded(child: pdfBtn),
                   const SizedBox(width: 8),
-                  printBtn,
-                  const SizedBox(width: 8),
-                  shareBtn,
+                  Expanded(child: shareBtn),
                 ],
               ),
             ],
