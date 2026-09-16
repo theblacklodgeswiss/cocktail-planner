@@ -667,8 +667,16 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         widget.order.offerEventTypes.isNotEmpty;
   }
 
+  /// Fetches the latest version of this order before opening its offer/
+  /// invoice editor, so a change made elsewhere (e.g. by another staff
+  /// member) isn't silently overwritten. On a slow connection this single
+  /// Firestore read can occasionally take several seconds; capped at 4s so
+  /// a bad connection falls back to the already-loaded local copy instead
+  /// of leaving the user staring at a spinner for 10-15s.
   Future<SavedOrder> _loadLatestOrder() async {
-    final freshOrder = await orderRepository.getOrderById(widget.order.id);
+    final freshOrder = await orderRepository
+        .getOrderById(widget.order.id)
+        .timeout(const Duration(seconds: 4), onTimeout: () => null);
     return freshOrder ?? widget.order;
   }
 
