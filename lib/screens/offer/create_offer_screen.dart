@@ -18,6 +18,7 @@ import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/offer_pdf_generator.dart';
+import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import 'widgets/event_type_selector.dart';
@@ -816,6 +817,25 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         await microsoftGraphService.uploadToOneDrive(
           oneDrivePath: oneDrivePath,
           bytes: pdfBytes,
+        );
+
+        // Also upload the Einkaufsliste (shopping list) alongside the
+        // offer — this button only uploads, it never creates a calendar
+        // entry (that only happens separately, when staff accept the
+        // order in the orders screen).
+        final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(
+          widget.order,
+        );
+        final shoppingListFileName =
+            'Einkaufsliste_${safeName}_$dateTag.pdf';
+        final shoppingListPath = MicrosoftGraphService.buildOneDrivePath(
+          rootFolder: 'Angebote',
+          date: offer.eventDate,
+          fileName: shoppingListFileName,
+        );
+        await microsoftGraphService.uploadToOneDrive(
+          oneDrivePath: shoppingListPath,
+          bytes: shoppingListBytes,
         );
       }
 

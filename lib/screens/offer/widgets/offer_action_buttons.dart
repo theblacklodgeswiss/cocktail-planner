@@ -20,10 +20,13 @@ class OfferActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const compactPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+
     final saveBtn = OutlinedButton.icon(
       onPressed: isGenerating ? null : onSaveOnly,
-      icon: const Icon(Icons.save_outlined, size: 18),
-      label: Text('offer.save_only'.tr()),
+      icon: const Icon(Icons.save_outlined, size: 16),
+      label: Text('offer.save_only'.tr(), overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(padding: compactPadding),
     );
 
     final pdfBtn = FilledButton.icon(
@@ -37,48 +40,34 @@ class OfferActionButtons extends StatelessWidget {
                 color: Colors.white,
               ),
             )
-          : const Icon(Icons.picture_as_pdf, size: 18),
-      label: Text('offer.generate_pdf'.tr()),
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-      ),
+          : const Icon(Icons.picture_as_pdf, size: 16),
+      label: Text('offer.generate_pdf'.tr(), overflow: TextOverflow.ellipsis),
+      style: FilledButton.styleFrom(padding: compactPadding),
     );
 
     final shareBtn = OutlinedButton.icon(
       onPressed: isGenerating ? null : onShare,
-      icon: const Icon(Icons.link, size: 18),
+      icon: const Icon(Icons.link, size: 16),
       label: Text('offer.generate_link'.tr()),
+      style: OutlinedButton.styleFrom(padding: compactPadding),
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 520) {
-          return Row(
-            children: [
-              saveBtn,
-              const Spacer(),
-              pdfBtn,
-              const SizedBox(width: 8),
-              shareBtn,
-            ],
-          );
-        } else {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              saveBtn,
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: pdfBtn),
-                  const SizedBox(width: 8),
-                  Expanded(child: shareBtn),
-                ],
-              ),
-            ],
-          );
-        }
-      },
+    // Save + generate PDF side by side on top (compact), the share-link
+    // button spans the full width below it — the action the customer
+    // ultimately needs is the most prominent one.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: saveBtn),
+            const SizedBox(width: 8),
+            Expanded(child: pdfBtn),
+          ],
+        ),
+        const SizedBox(height: 8),
+        shareBtn,
+      ],
     );
   }
 }

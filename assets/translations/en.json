@@ -280,7 +280,7 @@
     "additional_info": "Additional Information",
     "preview": "Preview",
     "print": "Print",
-    "generate_pdf": "Save PDF",
+    "generate_pdf": "Save offer to OneDrive",
     "save_only": "Save only",
     "saved": "Offer saved!",
     "save_failed": "Could not save the offer.",
