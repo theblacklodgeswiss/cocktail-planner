@@ -317,6 +317,8 @@
     "share_generating": "Generating message...",
     "share_generate_error": "Error generating message.",
     "share_message_label": "WhatsApp Message",
+    "share_bullets_label": "Bullet points for the link page",
+    "share_bullets_hint": "One line = one bullet point. Shown at the top of the public offer page.",
     "share_copy": "Copy",
     "share_copied": "Message copied to clipboard!",
     "share_whatsapp": "WhatsApp",

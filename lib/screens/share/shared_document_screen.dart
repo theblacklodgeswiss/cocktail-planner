@@ -155,17 +155,34 @@ class _SharedDocumentScreenState extends State<SharedDocumentScreen> {
       );
     }
 
-    final message = result.message;
+    final bullets = result.bullets ?? const [];
     final isOffer = result.type == 'offer';
 
     return Column(
       children: [
-        if (message != null && message.trim().isNotEmpty)
+        if (bullets.isNotEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Text(message, style: const TextStyle(height: 1.4)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final bullet in bullets)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('•  '),
+                        Expanded(
+                          child: Text(bullet, style: const TextStyle(height: 1.4)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         Expanded(
           child: PdfPreview(

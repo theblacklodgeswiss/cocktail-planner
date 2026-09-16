@@ -868,10 +868,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         clientName: _clientNameCtrl.text.trim(),
         editorName: _editorNameCtrl.text.trim(),
         selectedCocktails: cocktails,
-        createShareLink: (message) => shareLinkRepository.createOfferShareLink(
+        createShareLink: (bullets) => shareLinkRepository.createOfferShareLink(
           offerSnapshot,
           orderId: widget.order.id,
-          message: message,
+          bullets: bullets,
         ),
       ),
     );

@@ -15,14 +15,14 @@ class ShareLinkResult {
         type = null,
         snapshot = null,
         orderId = null,
-        message = null,
+        bullets = null,
         response = null;
 
   const ShareLinkResult.found({
     required this.type,
     required this.snapshot,
     required this.orderId,
-    this.message,
+    this.bullets,
     this.response,
   }) : found = true;
 
@@ -34,9 +34,9 @@ class ShareLinkResult {
   /// submit an accept/decline write against `orders/{orderId}`.
   final String? orderId;
 
-  /// The WhatsApp greeting message, shown above the PDF on the public
-  /// offer viewer. Null for invoice links, which never carry one.
-  final String? message;
+  /// Bullet points shown above the PDF on the public offer viewer. Null
+  /// for invoice links, which never carry any.
+  final List<String>? bullets;
 
   /// 'accepted' | 'declined' | null. Set once the customer has already
   /// responded via this exact link — lets the viewer show the outcome on
@@ -98,18 +98,18 @@ class ShareLinkRepository {
   }
 
   /// Creates a share link for an offer. [orderId] lets the public viewer
-  /// submit an accept/decline response against that exact order. [message]
-  /// is the WhatsApp greeting text, shown above the PDF on the link page.
+  /// submit an accept/decline response against that exact order. [bullets]
+  /// are shown as a bullet list above the PDF on the link page.
   Future<String> createOfferShareLink(
     OfferData offer, {
     required String orderId,
-    required String message,
+    required List<String> bullets,
   }) async {
     final now = DateTime.now();
     return _writeWithRetry({
       'type': 'offer',
       'orderId': orderId,
-      'message': message,
+      'bullets': bullets,
       'snapshot': offer.toJson(),
       'createdAt': FieldValue.serverTimestamp(),
       'expiresAt': Timestamp.fromDate(now.add(_linkLifetime)),
@@ -144,7 +144,7 @@ class ShareLinkRepository {
         type: type,
         snapshot: snapshot,
         orderId: data['orderId'] as String?,
-        message: data['message'] as String?,
+        bullets: (data['bullets'] as List<dynamic>?)?.cast<String>(),
         response: data['response'] as String?,
       );
     } on FirebaseException catch (e) {

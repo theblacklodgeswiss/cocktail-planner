@@ -323,6 +323,8 @@
     "share_generating": "Nachricht wird generiert...",
     "share_generate_error": "Fehler beim Generieren der Nachricht.",
     "share_message_label": "WhatsApp-Nachricht",
+    "share_bullets_label": "Stichpunkte für die Link-Seite",
+    "share_bullets_hint": "Eine Zeile = ein Stichpunkt. Wird oben auf der öffentlichen Angebot-Seite angezeigt.",
     "share_copy": "Kopieren",
     "share_copied": "Nachricht in Zwischenablage kopiert!",
     "share_whatsapp": "WhatsApp",

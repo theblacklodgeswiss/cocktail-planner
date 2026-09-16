@@ -25,17 +25,27 @@ class OfferShareDialog extends StatefulWidget {
   final String editorName;
   final List<String> selectedCocktails;
 
-  /// Creates a 14-day share link for the current offer snapshot (embedding
-  /// the given WhatsApp greeting message, shown on the public link page)
-  /// and returns its short code (see ShareLinkRepository).
-  final Future<String> Function(String message) createShareLink;
+  /// Creates a 14-day share link for the current offer snapshot, embedding
+  /// the given bullet points (shown on the public link page above the
+  /// PDF), and returns its short code (see ShareLinkRepository).
+  final Future<String> Function(List<String> bullets) createShareLink;
 
   @override
   State<OfferShareDialog> createState() => _OfferShareDialogState();
 }
 
+/// Default bullet points shown on the public link page, editable per
+/// offer before sharing. One line per bullet.
+const _defaultShareBullets =
+    '5h unlimitiert Cocktails – mit und ohne Alkohol\n'
+    'Harten Alkohol schenken wir kostenlos aus – du lieferst nur Flaschen & Mischgetränke\n'
+    'Eine Bartheke bringen wir bei Bedarf kostenlos mit\n'
+    'Becher, Eiswürfel, Strohhalme & Getränke bringen wir ebenfalls mit\n'
+    'Bei Fragen melden wir uns gerne telefonisch';
+
 class _OfferShareDialogState extends State<OfferShareDialog> {
   late final TextEditingController _messageCtrl;
+  late final TextEditingController _bulletsCtrl;
   bool _loading = true;
   String? _error;
   bool _pdfSharing = false;
@@ -60,14 +70,27 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
     super.initState();
     _currentCocktails = List.from(widget.selectedCocktails);
     _messageCtrl = TextEditingController();
+    _bulletsCtrl = TextEditingController(text: _defaultShareBullets)
+      ..addListener(_invalidateCachedShareCode);
     _generate();
   }
 
   @override
   void dispose() {
     _messageCtrl.dispose();
+    _bulletsCtrl.dispose();
     super.dispose();
   }
+
+  void _invalidateCachedShareCode() {
+    _cachedShareCode = null;
+  }
+
+  List<String> get _bullets => _bulletsCtrl.text
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
 
   String get _clientFirstName {
     final name = widget.clientName.trim();
@@ -86,9 +109,6 @@ class _OfferShareDialogState extends State<OfferShareDialog> {
       _loading = true;
       _error = null;
       _isDirty = false;
-      // A regenerated message invalidates any link already created with
-      // the previous text baked in.
-      _cachedShareCode = null;
     });
 
     try {
@@ -228,10 +248,12 @@ $editorFirst''';
   }
 
   /// Creates the 14-day share link on first use and reuses it for every
-  /// later call within this dialog session. The current message text is
-  /// embedded in the link so the public viewer can show it above the PDF.
+  /// later call within this dialog session. The current bullet points are
+  /// embedded in the link so the public viewer can show them above the
+  /// PDF (independent of the WhatsApp message, which is never stored on
+  /// the link itself).
   Future<String> _ensureShareCode() async {
-    return _cachedShareCode ??= await widget.createShareLink(_messageCtrl.text);
+    return _cachedShareCode ??= await widget.createShareLink(_bullets);
   }
 
   /// Generates (or reuses) the share link and copies just the raw URL to
@@ -345,13 +367,13 @@ $editorFirst''';
             ),
             const Divider(height: 24),
 
-            // ── Copy link (waits for the WhatsApp message to finish
-            // generating below, since the link embeds it) ────────────────
+            // ── Copy link (embeds the bullet points below, independent
+            // of the WhatsApp message, which needs a moment to generate) ──
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: (_loading || _linkCopying) ? null : _copyLinkOnly,
+                    onPressed: _linkCopying ? null : _copyLinkOnly,
                     icon: _linkCopying
                         ? const SizedBox(
                             width: 16,
@@ -409,6 +431,32 @@ $editorFirst''';
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text(
+                            'offer.share_bullets_label'.tr(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'offer.share_bullets_hint'.tr(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _bulletsCtrl,
+                            maxLines: null,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            style: const TextStyle(fontSize: 14, height: 1.5),
+                          ),
+                          const SizedBox(height: 20),
                           _buildSwapSection(colorScheme),
                           // Regenerate button above the text field
                           Row(
