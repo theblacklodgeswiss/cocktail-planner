@@ -822,16 +822,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         );
       }
 
-      // Share/download the PDF
-      final safeNameLower = offer.orderName.toLowerCase().replaceAll(
-        RegExp(r'[^a-z0-9]'),
-        '_',
-      );
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: 'angebot_${safeNameLower}_$dateTag.pdf',
-      );
-
       if (mounted) {
         ScaffoldMessenger.of(
           context,
