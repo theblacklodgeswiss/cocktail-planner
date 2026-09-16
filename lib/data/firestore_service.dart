@@ -38,8 +38,8 @@ class FirestoreService {
   /// Initialize Firestore connection.
   Future<bool> initialize() async {
     try {
-      debugPrint('🔧 Testing Firestore connection with orders collection...');
-      final testDoc = await ordersCollection.limit(1).get();
+      debugPrint('🔧 Testing Firestore connection with materials collection...');
+      final testDoc = await materialsCollection.limit(1).get();
       debugPrint('✅ Firestore available - fetched ${testDoc.docs.length} test docs');
       _available = true;
       return true;

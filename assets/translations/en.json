@@ -366,6 +366,7 @@
     "save_failed": "Could not save the order confirmation.",
     "pdf_created": "Order confirmation PDF created!",
     "share_link_copied": "Link copied to clipboard (valid 14 days)",
+    "share_link_failed": "Error creating the link. Please try again.",
     "field_required": "Required field",
     "extra_positions": "Extra Positions",
     "add_position": "Add Position",

@@ -3,8 +3,8 @@ import 'package:cocktail_planer/data/share_link_repository.dart';
 import 'package:cocktail_planer/models/order.dart';
 
 void main() {
-  group('ShareLinkRepository PII stripping', () {
-    test('stripInvoicePii removes userId, userEmail, createdBy, phone', () {
+  group('ShareLinkRepository invoice snapshot allowlist', () {
+    test('invoiceSnapshotFields excludes PII and internal-only fields, keeps invoice fields', () {
       final order = SavedOrder(
         id: 'x',
         name: 'Test',
@@ -21,13 +21,14 @@ void main() {
         phone: '+41 79 000 00 00',
       );
 
-      final snapshot = ShareLinkRepository.stripInvoicePii(order.toJson());
+      final snapshot = ShareLinkRepository.invoiceSnapshotFields(order.toJson());
 
       expect(snapshot.containsKey('userId'), isFalse);
       expect(snapshot.containsKey('userEmail'), isFalse);
       expect(snapshot.containsKey('createdBy'), isFalse);
       expect(snapshot.containsKey('phone'), isFalse);
       expect(snapshot['name'], 'Test');
+      expect(snapshot['total'], 0);
     });
   });
 

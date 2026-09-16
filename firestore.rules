@@ -145,8 +145,16 @@ service cloud.firestore {
     // link has no Firebase session. The expiresAt check is the entire
     // security boundary. Documents are write-once (no update/delete).
     match /shareLinks/{code} {
-      allow read: if resource.data.expiresAt > request.time;
-      allow create: if isAuthenticated();
+      // get (by known code) stays time-gated; list is fully disabled so the
+      // collection can never be enumerated without already having a code.
+      allow get: if resource.data.expiresAt > request.time;
+      allow list: if false;
+      // Only staff (not anonymous guest sessions) may create share links —
+      // matches who can actually reach the offer/invoice share UI. Also
+      // bounds expiresAt so a compromised/malicious client can't mint a
+      // link that outlives the intended 14-day lifetime.
+      allow create: if hasFullOrderAccess() &&
+                       request.resource.data.expiresAt <= request.time + duration.value(15, 'd');
       allow update, delete: if false;
     }
 

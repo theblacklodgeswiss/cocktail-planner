@@ -559,6 +559,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           SnackBar(content: Text('invoice.share_link_copied'.tr())),
         );
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('invoice.share_link_failed'.tr())));
+      }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
     }

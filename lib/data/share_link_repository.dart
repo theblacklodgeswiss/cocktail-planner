@@ -25,15 +25,30 @@ class ShareLinkResult {
 class ShareLinkRepository {
   static const _linkLifetime = Duration(days: 14);
 
-  /// Fields that must never appear in a public share-link snapshot.
-  static const _invoicePiiKeys = {'userId', 'userEmail', 'createdBy', 'phone'};
+  /// The only SavedOrder.toJson() keys InvoicePdfGenerator actually reads —
+  /// an allowlist, not a denylist, so nothing internal-only (userId,
+  /// userEmail, createdBy, phone, formSubmissionId, cocktailPopularity,
+  /// etc.) can leak into the public shareLinks document even if a future
+  /// SavedOrder field is added without anyone remembering to re-audit this.
+  static const _invoiceSnapshotKeys = {
+    'additionalServices', 'alcoholPurchase', 'assignedEmployees', 'bar',
+    'barDrinks', 'cocktails', 'currency', 'date', 'distanceKm', 'eventTime',
+    'items', 'location', 'name', 'offerClientContact', 'offerClientName',
+    'offerDiscount', 'offerDiscountRemark', 'offerEventTime',
+    'offerEventTypes', 'offerExtraHourRate', 'offerExtraHours',
+    'offerExtraPositions', 'offerLanguage', 'offerPositions',
+    'offerShotsCount', 'offerShotsPricePerPiece', 'offerShotsRemark',
+    'personCount', 'remarks', 'serviceType', 'shots', 'thekeCost', 'total',
+  };
 
-  /// Strips PII-bearing keys from a [SavedOrder.toJson] map before it is
-  /// written to the public `shareLinks` collection.
-  static Map<String, dynamic> stripInvoicePii(Map<String, dynamic> json) {
+  /// Reduces a [SavedOrder.toJson] map to only the fields the invoice PDF
+  /// generator reads, before it is written to the public `shareLinks`
+  /// collection. `SavedOrder.fromFirestore` defaults every field it doesn't
+  /// find, so a partial map like this reconstructs safely.
+  static Map<String, dynamic> invoiceSnapshotFields(Map<String, dynamic> json) {
     return {
       for (final entry in json.entries)
-        if (!_invoicePiiKeys.contains(entry.key)) entry.key: entry.value,
+        if (_invoiceSnapshotKeys.contains(entry.key)) entry.key: entry.value,
     };
   }
 
@@ -41,10 +56,19 @@ class ShareLinkRepository {
     for (var attempt = 0; attempt < 3; attempt++) {
       final code = generateShortCode();
       final ref = firestoreService.shareLinksCollection.doc(code);
-      final existing = await ref.get();
-      if (existing.exists) continue; // negligible odds, but retry is cheap
-      await ref.set(data);
-      return code;
+      try {
+        await ref.set(data);
+        return code;
+      } on FirebaseException catch (e) {
+        // A collision (code already exists) is classified by Firestore as an
+        // "update" of an existing doc, which our rules deny — that denial IS
+        // the collision signal, at negligible odds with an 8-char code. Any
+        // other denial reason would also deny a fresh code, so don't retry
+        // past the attempt budget for those either; the loop's final
+        // attempt always rethrows.
+        if (e.code == 'permission-denied' && attempt < 2) continue;
+        rethrow;
+      }
     }
     throw StateError('Could not allocate a unique share link code after 3 attempts');
   }
@@ -68,7 +92,7 @@ class ShareLinkRepository {
     return _writeWithRetry({
       'type': 'invoice',
       'orderId': order.id,
-      'snapshot': stripInvoicePii(order.toJson()),
+      'snapshot': invoiceSnapshotFields(order.toJson()),
       'createdAt': FieldValue.serverTimestamp(),
       'expiresAt': Timestamp.fromDate(now.add(_linkLifetime)),
     });

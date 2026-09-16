@@ -372,6 +372,7 @@
     "save_failed": "Auftragsbestätigung konnte nicht gespeichert werden.",
     "pdf_created": "Auftragsbestätigung PDF erstellt!",
     "share_link_copied": "Link in Zwischenablage kopiert (14 Tage gültig)",
+    "share_link_failed": "Fehler beim Erstellen des Links. Bitte versuche es erneut.",
     "field_required": "Pflichtfeld",
     "extra_positions": "Extra Positionen",
     "add_position": "Position hinzufügen",
