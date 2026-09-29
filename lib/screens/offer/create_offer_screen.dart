@@ -21,6 +21,7 @@ import '../../services/offer_pdf_generator.dart';
 import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
+import '../../utils/signed_number_input.dart';
 import 'widgets/event_type_selector.dart';
 import 'widgets/offer_action_buttons.dart';
 import 'widgets/offer_price_preview.dart';
@@ -1931,12 +1932,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                               Icons.attach_money,
                               size: 18,
                             ),
+                            suffixIcon: SignToggleButton(controller: priceCtrl),
                           ),
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) {
                               return 'offer.field_required'.tr();
                             }
-                            if (double.tryParse(v.trim()) == null) {
+                            if (parseDecimal(v) == null) {
                               return 'offer.invalid_number'.tr();
                             }
                             return null;
@@ -1973,7 +1975,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                     date: dateCtrl.text.trim(),
                     name: nameCtrl.text.trim(),
                     quantity: int.tryParse(quantityCtrl.text.trim()) ?? 1,
-                    price: double.tryParse(priceCtrl.text.trim()) ?? 0,
+                    price: parseDecimal(priceCtrl.text) ?? 0,
                     remark: remarkCtrl.text.trim(),
                   ),
                 );
