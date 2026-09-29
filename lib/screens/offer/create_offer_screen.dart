@@ -21,6 +21,7 @@ import '../../services/offer_pdf_generator.dart';
 import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
+import '../../widgets/discount_editor.dart';
 import 'widgets/event_type_selector.dart';
 import 'widgets/offer_action_buttons.dart';
 import 'widgets/offer_price_preview.dart';
@@ -91,6 +92,11 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   late final TextEditingController _firstPositionTextCtrl;
   late final TextEditingController _firstPositionRemarkCtrl;
   late final TextEditingController _additionalInfoCtrl;
+
+  // Discount (Rabatt): percentage of the positions subtotal or fixed amount
+  bool _discountIsPercent = true;
+  final _discountValueCtrl = TextEditingController();
+  final _discountRemarkCtrl = TextEditingController();
 
   // Event types
   final Set<EventType> _eventTypes = {};
@@ -230,7 +236,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       );
     }
     _ensureRequestDerivedOfferPositions();
-    _migrateLegacyDiscountToPosition();
+    _initializeDiscount();
     _syncLegacyServicePositionControllers();
   }
 
@@ -253,6 +259,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _firstPositionTextCtrl.dispose();
     _firstPositionRemarkCtrl.dispose();
     _additionalInfoCtrl.dispose();
+    _discountValueCtrl.dispose();
+    _discountRemarkCtrl.dispose();
     super.dispose();
   }
 
@@ -339,18 +347,6 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     _firstPositionRemarkCtrl.text = _offerPositions.first.remark;
   }
 
-  String _discountPositionName() => _language == 'en' ? 'Discount' : 'Rabatt';
-
-  String _discountPositionRemark() {
-    final existing = widget.order.offerDiscountRemark.trim();
-    if (existing.isNotEmpty) {
-      return existing;
-    }
-    return _language == 'en'
-        ? 'Family/Friend discount'
-        : 'Familie/Freunde Rabatt';
-  }
-
   bool get _requiresCocktails => _serviceType != 'bar_service';
 
   bool get _hasEventTypeSelection => _eventTypes.isNotEmpty;
@@ -424,35 +420,49 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     );
   }
 
-  bool _isDiscountPosition(ExtraPosition position) {
-    final normalized = position.name.trim().toLowerCase();
-    return position.total < 0 &&
-        (normalized == 'rabatt' || normalized == 'discount');
-  }
-
-  void _migrateLegacyDiscountToPosition() {
-    if (widget.order.offerDiscount <= 0) {
+  /// Loads the saved discount. Offers saved before the dedicated discount
+  /// field existed kept it as a negative "Rabatt" position; that position is
+  /// lifted out of the list into the discount field so it isn't applied twice.
+  void _initializeDiscount() {
+    final order = widget.order;
+    _discountRemarkCtrl.text = order.offerDiscountRemark;
+    if (order.offerDiscountPercent > 0) {
+      _discountIsPercent = true;
+      _discountValueCtrl.text = formatDiscountPercent(
+        order.offerDiscountPercent,
+      );
+      return;
+    }
+    if (order.offerDiscount > 0) {
+      _discountIsPercent = false;
+      _discountValueCtrl.text = order.offerDiscount.toStringAsFixed(2);
       return;
     }
 
-    final hasDiscountPosition = _offerPositions.any(_isDiscountPosition);
-    if (hasDiscountPosition) {
-      return;
+    final legacyIndex = _offerPositions.indexWhere(isLegacyDiscountPosition);
+    if (legacyIndex == -1) return;
+    final legacy = _offerPositions.removeAt(legacyIndex);
+    _discountIsPercent = false;
+    _discountValueCtrl.text = (-legacy.total).toStringAsFixed(2);
+    if (_discountRemarkCtrl.text.trim().isEmpty) {
+      _discountRemarkCtrl.text = legacy.remark;
     }
-
-    final dateStr =
-        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
-
-    _offerPositions.add(
-      ExtraPosition(
-        date: dateStr,
-        name: _discountPositionName(),
-        price: -widget.order.offerDiscount,
-        quantity: 1,
-        remark: _discountPositionRemark(),
-      ),
-    );
   }
+
+  double get _positionsSubtotal =>
+      _offerPositions.fold<double>(0.0, (sum, p) => sum + p.total);
+
+  double get _discountInput =>
+      DiscountEditor.parseValue(_discountValueCtrl.text) ?? 0;
+
+  double get _discountPercent =>
+      _discountIsPercent ? _discountInput.clamp(0, 100).toDouble() : 0;
+
+  double get _discountAmount => resolveDiscountAmount(
+    subtotal: _positionsSubtotal,
+    percent: _discountPercent,
+    amount: _discountIsPercent ? 0 : _discountInput,
+  );
 
   void _syncPrimaryPositionDefaults({
     required String previousText,
@@ -672,8 +682,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       travelCostPerKm:
           double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70,
       barCost: double.tryParse(_barCostCtrl.text.trim()) ?? 0,
-      discount: 0,
-      discountRemark: '',
+      discount: _discountAmount,
+      discountRemark: _discountRemarkCtrl.text.trim(),
+      discountPercent: _discountAmount > 0 ? _discountPercent : 0,
       additionalInfo: _additionalInfoCtrl.text,
       language: _language,
       serviceType: _serviceType,
@@ -699,8 +710,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       clientContact: _clientContactCtrl.text.trim(),
       eventTime: _eventTimeCtrl.text.trim(),
       eventTypes: _eventTypes.map((e) => e.name).toList(),
-      discount: 0,
-      discountRemark: '',
+      discount: _discountAmount,
+      discountRemark: _discountRemarkCtrl.text.trim(),
+      discountPercent: _discountAmount > 0 ? _discountPercent : 0,
       language: _language,
       eventDate: _eventDate,
       extraPositions: _offerPositions.map((e) => e.toJson()).toList(),
@@ -975,6 +987,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                           const SizedBox(height: 20),
                           _buildOfferPositionsSection(curr),
                           const SizedBox(height: 20),
+                          DiscountEditor(
+                            currency: curr,
+                            subtotal: _positionsSubtotal,
+                            isPercent: _discountIsPercent,
+                            valueController: _discountValueCtrl,
+                            remarkController: _discountRemarkCtrl,
+                            onTypeChanged: (isPercent) => setState(() {
+                              _discountIsPercent = isPercent;
+                              _discountValueCtrl.clear();
+                            }),
+                            onChanged: () => setState(() {}),
+                          ),
+                          const SizedBox(height: 20),
                           OfferPricePreview(
                             currency: curr,
                             orderTotal:
@@ -989,11 +1014,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                                 0.70,
                             barCost:
                                 double.tryParse(_barCostCtrl.text.trim()) ?? 0,
-                            discount: 0,
-                            positionsTotal: _offerPositions.fold<double>(
-                              0.0,
-                              (sum, position) => sum + position.total,
-                            ),
+                            discount: _discountAmount,
+                            discountPercent: _discountPercent,
+                            positionsTotal: _positionsSubtotal,
                           ),
                           const SizedBox(height: 20),
                           _buildAdditionalInfoSection(),

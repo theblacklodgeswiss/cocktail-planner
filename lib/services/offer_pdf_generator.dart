@@ -796,17 +796,13 @@ class OfferPdfGenerator {
         pw.TableRow(
           children: [
             cell(''),
-            cell(isEn ? 'Discount' : 'Rabatt'),
+            cell(
+              discountLabel(isEnglish: isEn, percent: offer.discountPercent),
+            ),
             cell('', align: pw.TextAlign.center),
             cell('', align: pw.TextAlign.right),
             cell('-${curr.format(offer.discount)}', align: pw.TextAlign.right),
-            cell(
-              offer.discountRemark.isNotEmpty
-                  ? offer.discountRemark
-                  : (isEn
-                        ? 'Family/Friend discount'
-                        : 'Familie/Freunde Rabatt'),
-            ),
+            cell(offer.discountRemark),
           ],
         ),
       // Total row

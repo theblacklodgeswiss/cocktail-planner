@@ -454,6 +454,8 @@ void main() {
         offerEventTime: '18:00',
         offerEventTypes: const ['wedding'],
         offerDiscount: 50.0,
+        offerDiscountRemark: 'Stammkunde',
+        offerDiscountPercent: 5.0,
         offerLanguage: 'de',
         offerExtraPositions: [
           {'name': 'Extrastunden', 'price': 50.0, 'quantity': 1, 'remark': '', 'date': ''},
@@ -495,6 +497,8 @@ void main() {
       expect(rebuilt.offerEventTime, original.offerEventTime);
       expect(rebuilt.offerEventTypes, original.offerEventTypes);
       expect(rebuilt.offerDiscount, original.offerDiscount);
+      expect(rebuilt.offerDiscountRemark, original.offerDiscountRemark);
+      expect(rebuilt.offerDiscountPercent, original.offerDiscountPercent);
       expect(rebuilt.offerExtraPositions, original.offerExtraPositions);
       expect(rebuilt.offerPositions, original.offerPositions);
       expect(rebuilt.offerShotsCount, original.offerShotsCount);

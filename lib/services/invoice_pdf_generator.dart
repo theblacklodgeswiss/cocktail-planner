@@ -877,24 +877,22 @@ class InvoicePdfGenerator {
         pw.TableRow(
           children: [
             cell(dateStr),
-            cell(isEn ? 'Discount' : 'Rabatt'),
+            cell(
+              discountLabel(
+                isEnglish: isEn,
+                percent: order.offerDiscountPercent,
+              ),
+            ),
             cell('1', align: pw.TextAlign.center),
-            cell(curr.format(order.offerDiscount), align: pw.TextAlign.right),
             cell(
               '-${curr.format(order.offerDiscount)}',
               align: pw.TextAlign.right,
             ),
             cell(
-              order.offerDiscountRemark.isNotEmpty
-                  ? order.offerDiscountRemark
-                  : (order.offerDiscount >= order.total * 0.1
-                        ? (isEn
-                              ? 'Discount: 15% Friends'
-                              : 'Rabatt: 15% Friends')
-                        : (isEn
-                              ? 'Family/Friend discount'
-                              : 'Familie/Freunde Rabatt')),
+              '-${curr.format(order.offerDiscount)}',
+              align: pw.TextAlign.right,
             ),
+            cell(order.offerDiscountRemark),
           ],
         ),
       // Total row

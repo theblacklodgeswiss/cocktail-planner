@@ -80,6 +80,7 @@ class SavedOrder {
     this.offerEventTypes = const [],
     this.offerDiscount = 0,
     this.offerDiscountRemark = '',
+    this.offerDiscountPercent = 0,
     this.offerLanguage = 'de',
     this.offerFirstPositionText = '',
     this.offerFirstPositionRemark = '',
@@ -140,6 +141,10 @@ class SavedOrder {
   final List<String> offerEventTypes;
   final double offerDiscount;
   final String offerDiscountRemark;
+
+  /// Discount percentage (0 = [offerDiscount] is a fixed amount).
+  /// [offerDiscount] always holds the resolved amount.
+  final double offerDiscountPercent;
   final String offerLanguage;
   final String offerFirstPositionText;
   final String offerFirstPositionRemark;
@@ -269,6 +274,8 @@ class SavedOrder {
           (data['offerEventTypes'] as List<dynamic>?)?.cast<String>() ?? [],
       offerDiscount: (data['offerDiscount'] as num?)?.toDouble() ?? 0,
       offerDiscountRemark: data['offerDiscountRemark'] as String? ?? '',
+      offerDiscountPercent:
+          (data['offerDiscountPercent'] as num?)?.toDouble() ?? 0,
       offerLanguage: data['offerLanguage'] as String? ?? 'de',
       offerFirstPositionText: data['offerFirstPositionText'] as String? ?? '',
       offerFirstPositionRemark:
@@ -360,6 +367,7 @@ class SavedOrder {
     'offerEventTypes': offerEventTypes,
     'offerDiscount': offerDiscount,
     'offerDiscountRemark': offerDiscountRemark,
+    'offerDiscountPercent': offerDiscountPercent,
     'offerLanguage': offerLanguage,
     'offerFirstPositionText': offerFirstPositionText,
     'offerFirstPositionRemark': offerFirstPositionRemark,

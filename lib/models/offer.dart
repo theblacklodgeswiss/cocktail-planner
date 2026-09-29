@@ -57,6 +57,43 @@ class ExtraPosition {
   }
 }
 
+/// Resolves the discount amount to subtract from [subtotal].
+///
+/// A positive [percent] takes precedence over the fixed [amount]. The result
+/// is rounded to cents and clamped to `0..subtotal`, so a discount can never
+/// make a total negative.
+double resolveDiscountAmount({
+  required double subtotal,
+  double percent = 0,
+  double amount = 0,
+}) {
+  final raw = percent > 0 ? subtotal * percent / 100 : amount;
+  if (raw <= 0 || subtotal <= 0) return 0;
+  final rounded = (raw * 100).roundToDouble() / 100;
+  return rounded > subtotal ? subtotal : rounded;
+}
+
+/// Formats a discount percentage without trailing zeros (10 → "10", 7.5 → "7.5").
+String formatDiscountPercent(double percent) {
+  final fixed = percent.toStringAsFixed(2);
+  return fixed.replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+/// Discount label for PDFs and previews, e.g. "Rabatt (10%)".
+String discountLabel({required bool isEnglish, double percent = 0}) {
+  final base = isEnglish ? 'Discount' : 'Rabatt';
+  return percent > 0 ? '$base (${formatDiscountPercent(percent)}%)' : base;
+}
+
+/// Older offers stored their discount as a negative position named
+/// "Rabatt"/"Discount". Such positions are now lifted into the dedicated
+/// discount fields when an offer or invoice is opened.
+bool isLegacyDiscountPosition(ExtraPosition position) {
+  final normalized = position.name.trim().toLowerCase();
+  return position.total < 0 &&
+      (normalized == 'rabatt' || normalized == 'discount');
+}
+
 /// Data class holding all fields needed to generate an offer document (Angebot)
 class OfferData {
   const OfferData({
@@ -83,6 +120,7 @@ class OfferData {
     this.servicePositionText = '',
     this.servicePositionRemark = '',
     this.discountRemark = '',
+    this.discountPercent = 0,
     this.eventLocation = '',
     this.extraPositions = const [],
     this.assignedEmployees = const [],
@@ -160,6 +198,10 @@ class OfferData {
   /// Discount remark/description (e.g. "Familie/Freunde Rabatt")
   final String discountRemark;
 
+  /// Discount percentage when the discount was entered as a percentage
+  /// (0 = fixed amount). [discount] always holds the resolved amount.
+  final double discountPercent;
+
   /// Editable additional information block (Zusatzinformation)
   final String additionalInfo;
 
@@ -210,6 +252,7 @@ class OfferData {
     'barCost': barCost,
     'discount': discount,
     'discountRemark': discountRemark,
+    'discountPercent': discountPercent,
     'additionalInfo': additionalInfo,
     'language': language,
     'extraPositions': extraPositions.map((p) => p.toJson()).toList(),
@@ -249,6 +292,7 @@ class OfferData {
       barCost: (json['barCost'] as num?)?.toDouble() ?? 0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0,
       discountRemark: json['discountRemark'] as String? ?? '',
+      discountPercent: (json['discountPercent'] as num?)?.toDouble() ?? 0,
       additionalInfo: json['additionalInfo'] as String? ?? '',
       language: json['language'] as String? ?? 'de',
       extraPositions: (json['extraPositions'] as List<dynamic>? ?? [])

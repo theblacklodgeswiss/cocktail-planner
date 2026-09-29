@@ -367,7 +367,7 @@
     "shots_count": "Anzahl Shots",
     "shots_price_per_piece": "Preis pro Shot",
     "shots_remark": "Bemerkung (erscheint im PDF)",
-    "discount": "Rabatt (Familie/Freunde)",
+    "discount": "Rabatt",
     "price_preview": "Preisvorschau",
     "positions_sum": "Zwischensumme (Positionen)",
     "grand_total": "Gesamtbetrag",
@@ -665,5 +665,16 @@
     "hint": "50% = durchschnittliche Beliebtheit, 100% = sehr beliebt, 0% = selten bestellt",
     "cancel": "Abbrechen",
     "confirm": "Bestätigen"
+  },
+  "discount": {
+    "title": "Rabatt",
+    "type_percent": "Prozent (%)",
+    "type_amount": "Betrag ({})",
+    "value_percent": "Rabatt in %",
+    "value_amount": "Rabatt in {}",
+    "remark": "Bemerkung (erscheint im PDF)",
+    "remark_hint": "z.B. Familie/Freunde Rabatt",
+    "percent_too_high": "Maximal 100 %",
+    "resolved": "Rabatt: -{} → neue Summe: {}"
   }
 }
