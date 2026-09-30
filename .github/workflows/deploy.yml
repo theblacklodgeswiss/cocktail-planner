@@ -97,6 +97,8 @@ jobs:
         run: flutter build web --release --pwa-strategy=offline-first --dart-define=CLAUDE_PROXY_URL=https://cocktail-planer-claude-proxy.the-blacklodge.workers.dev --dart-define=FLAVOR=prod
 
       - name: Deploy Firestore Rules
+        # Don't block the hosting deploy if the service account lacks rules permissions
+        continue-on-error: true
         uses: w9jds/firebase-action@master
         with:
           args: deploy --only firestore:rules

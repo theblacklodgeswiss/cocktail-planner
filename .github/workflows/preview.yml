@@ -98,6 +98,8 @@ jobs:
         run: flutter build web --release --pwa-strategy=offline-first --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} --dart-define=FLAVOR=dev
 
       - name: Deploy Firestore Rules (Dev)
+        # Don't block the hosting deploy if the service account lacks rules permissions
+        continue-on-error: true
         uses: w9jds/firebase-action@master
         with:
           args: deploy --only firestore:rules
