@@ -14,6 +14,7 @@ import '../../services/auth_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../utils/currency.dart';
+import '../../utils/signed_number_input.dart';
 import '../../widgets/discount_editor.dart';
 import '../offer/widgets/event_type_selector.dart';
 import '../offer/widgets/section_header.dart';
@@ -1630,12 +1631,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                 '${'invoice.position_price'.tr()} (${widget.order.currency})',
                             prefixIcon:
                                 const Icon(Icons.attach_money, size: 18),
+                            suffixIcon: SignToggleButton(controller: priceCtrl),
                           ),
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) {
                               return 'invoice.field_required'.tr();
                             }
-                            if (double.tryParse(v.trim()) == null) {
+                            if (parseDecimal(v) == null) {
                               return 'invoice.invalid_number'.tr();
                             }
                             return null;
@@ -1672,7 +1674,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     date: dateCtrl.text.trim(),
                     name: nameCtrl.text.trim(),
                     quantity: int.tryParse(quantityCtrl.text.trim()) ?? 1,
-                    price: double.tryParse(priceCtrl.text.trim()) ?? 0,
+                    price: parseDecimal(priceCtrl.text) ?? 0,
                     remark: remarkCtrl.text.trim(),
                   ),
                 );
