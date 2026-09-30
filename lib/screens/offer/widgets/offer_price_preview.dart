@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+import '../../../models/offer.dart';
 import '../../../utils/currency.dart';
 
 /// Preview card showing the calculated price breakdown.
@@ -13,6 +14,7 @@ class OfferPricePreview extends StatelessWidget {
     required this.travelCostPerKm,
     required this.barCost,
     required this.discount,
+    this.discountPercent = 0,
     this.extraPositionsTotal = 0,
     this.positionsTotal,
   });
@@ -23,6 +25,7 @@ class OfferPricePreview extends StatelessWidget {
   final double travelCostPerKm;
   final double barCost;
   final double discount;
+  final double discountPercent;
   final double extraPositionsTotal;
   final double? positionsTotal;
 
@@ -82,7 +85,9 @@ class OfferPricePreview extends StatelessWidget {
             ],
             if (discount > 0)
               _PreviewRow(
-                label: 'offer.discount'.tr(),
+                label: discountPercent > 0
+                    ? '${'offer.discount'.tr()} (${formatDiscountPercent(discountPercent)}%)'
+                    : 'offer.discount'.tr(),
                 value: '-${currency.format(discount)}',
               ),
             const Divider(),

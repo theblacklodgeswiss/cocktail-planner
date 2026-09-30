@@ -361,7 +361,7 @@
     "shots_count": "Number of Shots",
     "shots_price_per_piece": "Price per Shot",
     "shots_remark": "Remark (shown in PDF)",
-    "discount": "Discount (Family/Friends)",
+    "discount": "Discount",
     "price_preview": "Price Preview",
     "positions_sum": "Subtotal (Positions)",
     "grand_total": "Grand Total",
@@ -657,5 +657,16 @@
     "hint": "50% = average popularity, 100% = very popular, 0% = rarely ordered",
     "cancel": "Cancel",
     "confirm": "Confirm"
+  },
+  "discount": {
+    "title": "Discount",
+    "type_percent": "Percent (%)",
+    "type_amount": "Amount ({})",
+    "value_percent": "Discount in %",
+    "value_amount": "Discount in {}",
+    "remark": "Remark (shown in the PDF)",
+    "remark_hint": "e.g. Family/Friends discount",
+    "percent_too_high": "Maximum 100 %",
+    "resolved": "Discount: -{} → new total: {}"
   }
 }

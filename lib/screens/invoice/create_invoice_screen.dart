@@ -15,6 +15,7 @@ import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../utils/currency.dart';
 import '../../utils/signed_number_input.dart';
+import '../../widgets/discount_editor.dart';
 import '../offer/widgets/event_type_selector.dart';
 import '../offer/widgets/section_header.dart';
 
@@ -84,7 +85,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   late final TextEditingController _shotsCountCtrl;
   final _shotsPricePerPieceCtrl = TextEditingController(text: '1.50');
   final _shotsRemarkCtrl = TextEditingController();
-  final _discountCtrl = TextEditingController();
+
+  // Discount (Rabatt): percentage of the positions subtotal or fixed amount
+  bool _discountIsPercent = true;
+  final _discountValueCtrl = TextEditingController();
+  final _discountRemarkCtrl = TextEditingController();
 
   // Extra hours (Extrastunden)
   late final TextEditingController _extraHoursCtrl;
@@ -170,9 +175,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     _clientContactCtrl.text = widget.order.offerClientContact;
     _locationCtrl.text = widget.order.location;
     _eventTimeCtrl.text = widget.order.offerEventTime;
-    _discountCtrl.text = widget.order.offerDiscount > 0
-        ? widget.order.offerDiscount.toStringAsFixed(2)
-        : '';
     _language = widget.order.offerLanguage;
 
     // Load event types
@@ -191,6 +193,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         _extraPositions.add(ExtraPosition.fromJson(posData));
       }
     }
+
+    _initializeDiscount();
 
     // Load extra hours
     _extraHoursCtrl = TextEditingController(
@@ -211,6 +215,35 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           ? widget.order.serviceType
           : 'cocktail_barservice',
     );
+  }
+
+  /// Loads the saved discount. Offers saved before the dedicated discount
+  /// field existed kept it as a negative "Rabatt" position; that position is
+  /// lifted out of the list into the discount field so it isn't applied twice.
+  void _initializeDiscount() {
+    final order = widget.order;
+    _discountRemarkCtrl.text = order.offerDiscountRemark;
+    if (order.offerDiscountPercent > 0) {
+      _discountIsPercent = true;
+      _discountValueCtrl.text = formatDiscountPercent(
+        order.offerDiscountPercent,
+      );
+      return;
+    }
+    if (order.offerDiscount > 0) {
+      _discountIsPercent = false;
+      _discountValueCtrl.text = order.offerDiscount.toStringAsFixed(2);
+      return;
+    }
+
+    final legacyIndex = _offerPositions.indexWhere(isLegacyDiscountPosition);
+    if (legacyIndex == -1) return;
+    final legacy = _offerPositions.removeAt(legacyIndex);
+    _discountIsPercent = false;
+    _discountValueCtrl.text = (-legacy.total).toStringAsFixed(2);
+    if (_discountRemarkCtrl.text.trim().isEmpty) {
+      _discountRemarkCtrl.text = legacy.remark;
+    }
   }
 
   String _normalizeServiceType(String serviceType) {
@@ -238,7 +271,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     _shotsCountCtrl.dispose();
     _shotsPricePerPieceCtrl.dispose();
     _shotsRemarkCtrl.dispose();
-    _discountCtrl.dispose();
+    _discountValueCtrl.dispose();
+    _discountRemarkCtrl.dispose();
     _extraHoursCtrl.dispose();
     _extraHourRateCtrl.dispose();
     super.dispose();
@@ -259,7 +293,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   double get _shotsPricePerPiece =>
       double.tryParse(_shotsPricePerPieceCtrl.text.trim()) ?? 1.50;
   double get _shotsCostTotal => _shotsCount * _shotsPricePerPiece;
-  double get _discount => double.tryParse(_discountCtrl.text.trim()) ?? 0;
   double get _extraPositionsTotal =>
       _extraPositions.fold(0.0, (sum, p) => sum + p.total);
 
@@ -283,10 +316,27 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   double get _offerPositionsSum =>
       _offerPositions.fold(0.0, (sum, p) => sum + p.total);
 
+  /// Subtotal the discount applies to
+  double get _subtotal => _usePositionsMode ? _offerPositionsSum : _positionsSum;
+
+  double get _discountInput =>
+      DiscountEditor.parseValue(_discountValueCtrl.text) ?? 0;
+
+  double get _discountPercent =>
+      _discountIsPercent ? _discountInput.clamp(0, 100).toDouble() : 0;
+
+  /// Resolved discount amount (percentage applied to the subtotal)
+  double get _discount => resolveDiscountAmount(
+    subtotal: _subtotal,
+    percent: _discountPercent,
+    amount: _discountIsPercent ? 0 : _discountInput,
+  );
+
+  /// Discount percentage persisted alongside the amount (0 = fixed amount)
+  double get _storedDiscountPercent => _discount > 0 ? _discountPercent : 0;
+
   /// Grand total after discount
-  double get _grandTotal => _usePositionsMode
-      ? (_offerPositionsSum - _discount)
-      : (_positionsSum - _discount);
+  double get _grandTotal => _subtotal - _discount;
 
   /// Validates that employees are assigned
   bool _validateEmployees() {
@@ -366,6 +416,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       offerEventTime: _eventTimeCtrl.text.trim(),
       offerEventTypes: _eventTypes.map((e) => e.name).toList(),
       offerDiscount: _discount,
+      offerDiscountRemark: _discountRemarkCtrl.text.trim(),
+      offerDiscountPercent: _storedDiscountPercent,
       offerLanguage: _language,
       offerExtraPositions: _usePositionsMode
           ? []
@@ -401,6 +453,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       eventTime: _eventTimeCtrl.text.trim(),
       eventTypes: _eventTypes.map((e) => e.name).toList(),
       discount: _discount,
+      discountRemark: _discountRemarkCtrl.text.trim(),
+      discountPercent: _storedDiscountPercent,
       language: _language,
       eventDate: _eventDate,
       extraPositions: _usePositionsMode
@@ -1099,19 +1153,17 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ],
 
         // Discount - separate card
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: 250,
-              child: _field(
-                controller: _discountCtrl,
-                label: '${'invoice.discount'.tr()} (${widget.order.currency})',
-                hint: '0',
-                keyboard: TextInputType.number,
-              ),
-            ),
-          ),
+        DiscountEditor(
+          currency: curr,
+          subtotal: _subtotal,
+          isPercent: _discountIsPercent,
+          valueController: _discountValueCtrl,
+          remarkController: _discountRemarkCtrl,
+          onTypeChanged: (isPercent) => setState(() {
+            _discountIsPercent = isPercent;
+            _discountValueCtrl.clear();
+          }),
+          onChanged: () => setState(() {}),
         ),
         const SizedBox(height: 12),
 
@@ -1944,7 +1996,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             ],
             if (_discount > 0)
               _PreviewRow(
-                label: 'invoice.discount'.tr(),
+                label: _storedDiscountPercent > 0
+                    ? '${'invoice.discount'.tr()} (${formatDiscountPercent(_storedDiscountPercent)}%)'
+                    : 'invoice.discount'.tr(),
                 value: '-${curr.format(_discount)}',
               ),
             const Divider(),
