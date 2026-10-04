@@ -572,6 +572,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       return;
     }
 
+    // Without a Microsoft login the OneDrive upload is silently skipped,
+    // so ask first. Declining still saves and creates the link.
+    if (microsoftGraphService.isSupported && EnvConfig.isOneDriveEnabled) {
+      await _ensureMicrosoftLogin();
+      if (!mounted) return;
+    }
+
     setState(() => _isGenerating = true);
     try {
       final saved = await _saveInvoiceData();
@@ -591,7 +598,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
       // Upload to OneDrive if supported and in production
       final fileName = InvoicePdfGenerator.getFilename(updatedOrder);
-      if (microsoftGraphService.isSupported && EnvConfig.isOneDriveEnabled) {
+      if (microsoftGraphService.isSupported &&
+          EnvConfig.isOneDriveEnabled &&
+          microsoftGraphService.isLoggedIn) {
         final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
           rootFolder: 'Aufträge',
           date: updatedOrder.date,
@@ -677,6 +686,42 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
   }
 
+  /// Makes sure a Microsoft account is signed in (needed for OneDrive and
+  /// the calendar). If not, asks the user to sign in via popup. Returns
+  /// true when signed in afterwards.
+  Future<bool> _ensureMicrosoftLogin() async {
+    if (!microsoftGraphService.isSupported) return false;
+    if (microsoftGraphService.isLoggedIn) return true;
+
+    final wantsLogin = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('invoice.ms_login_title'.tr()),
+        content: Text('invoice.ms_login_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.login),
+            label: Text('invoice.ms_login_button'.tr()),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (wantsLogin != true) return false;
+
+    final account = await microsoftGraphService.login();
+    if (account == null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('invoice.ms_login_failed'.tr())),
+      );
+    }
+    return account != null;
+  }
+
   /// Creates the Outlook calendar entry for this order with the
   /// confirmation PDF attached (and uploaded to OneDrive for the link).
   Future<void> _createCalendarEntry() async {
@@ -693,6 +738,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       );
       return;
     }
+    if (!await _ensureMicrosoftLogin()) return;
 
     setState(() => _isGenerating = true);
     try {

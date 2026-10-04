@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import '../../../models/order.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/invoice_pdf_generator.dart';
+import '../../orders/order_detail_sheet.dart';
 import '../../orders/order_status_helpers.dart';
 
 /// Shows a read-only summary of a customer's own submitted request. Unlike
@@ -102,6 +104,24 @@ class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
                   label: Text('dashboard.view_confirmation'.tr()),
                 ),
               ),
+              if (authService.isEmployeeOrHigher) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      // Close this sheet, then open the staff order view
+                      // with the navigator's context (this sheet's own
+                      // context is gone after the pop).
+                      final navigator = Navigator.of(context);
+                      navigator.pop();
+                      showOrderDetails(navigator.context, request);
+                    },
+                    icon: const Icon(Icons.assignment_outlined, size: 18),
+                    label: Text('dashboard.open_order'.tr()),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
             ],
             const Divider(height: 24),

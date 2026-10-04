@@ -55,6 +55,7 @@
     "request_shots": "Shots",
     "request_remarks": "Bemerkungen",
     "view_confirmation": "Auftragsbestätigung ansehen",
+    "open_order": "Zum Auftrag",
     "confirmation_failed": "Auftragsbestätigung konnte nicht geöffnet werden."
   },
   "dialog": {
@@ -406,7 +407,11 @@
     "create_calendar": "Kalendereintrag erstellen",
     "calendar_created": "Kalendereintrag erstellt!",
     "calendar_failed": "Kalendereintrag konnte nicht erstellt werden.",
-    "calendar_unsupported": "Kalendereinträge sind nur im Web mit Microsoft-Anmeldung verfügbar."
+    "calendar_unsupported": "Kalendereinträge sind nur im Web mit Microsoft-Anmeldung verfügbar.",
+    "ms_login_title": "Microsoft-Anmeldung erforderlich",
+    "ms_login_message": "Für OneDrive und den Kalendereintrag musst du dich mit dem Microsoft-Konto anmelden.",
+    "ms_login_button": "Mit Microsoft anmelden",
+    "ms_login_failed": "Microsoft-Anmeldung fehlgeschlagen."
   },
   "orders": {
     "title": "Bestellungsübersicht",

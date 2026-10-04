@@ -53,6 +53,7 @@
     "request_shots": "Shots",
     "request_remarks": "Remarks",
     "view_confirmation": "View order confirmation",
+    "open_order": "Go to order",
     "confirmation_failed": "Could not open the order confirmation."
   },
   "dialog": {
@@ -400,7 +401,11 @@
     "create_calendar": "Create calendar entry",
     "calendar_created": "Calendar entry created!",
     "calendar_failed": "Could not create the calendar entry.",
-    "calendar_unsupported": "Calendar entries are only available on web with Microsoft sign-in."
+    "calendar_unsupported": "Calendar entries are only available on web with Microsoft sign-in.",
+    "ms_login_title": "Microsoft sign-in required",
+    "ms_login_message": "Sign in with your Microsoft account to use OneDrive and the calendar entry.",
+    "ms_login_button": "Sign in with Microsoft",
+    "ms_login_failed": "Microsoft sign-in failed."
   },
   "orders": {
     "title": "Orders Overview",
