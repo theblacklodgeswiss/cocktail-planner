@@ -53,7 +53,9 @@
     "request_service_type": "Service",
     "request_cocktails": "Cocktails",
     "request_shots": "Shots",
-    "request_remarks": "Bemerkungen"
+    "request_remarks": "Bemerkungen",
+    "view_confirmation": "Auftragsbestätigung ansehen",
+    "confirmation_failed": "Auftragsbestätigung konnte nicht geöffnet werden."
   },
   "dialog": {
     "title": "Cocktails auswählen",

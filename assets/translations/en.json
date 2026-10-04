@@ -51,7 +51,9 @@
     "request_service_type": "Service",
     "request_cocktails": "Cocktails",
     "request_shots": "Shots",
-    "request_remarks": "Remarks"
+    "request_remarks": "Remarks",
+    "view_confirmation": "View order confirmation",
+    "confirmation_failed": "Could not open the order confirmation."
   },
   "dialog": {
     "title": "Select Cocktails",

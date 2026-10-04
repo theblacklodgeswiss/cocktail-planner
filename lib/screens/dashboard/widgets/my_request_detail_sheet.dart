@@ -1,7 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../../../models/order.dart';
+import '../../../services/invoice_pdf_generator.dart';
 import '../../orders/order_status_helpers.dart';
 
 /// Shows a read-only summary of a customer's own submitted request. Unlike
@@ -17,10 +19,40 @@ Future<void> showMyRequestDetails(BuildContext context, SavedOrder request) {
   );
 }
 
-class MyRequestDetailSheet extends StatelessWidget {
+class MyRequestDetailSheet extends StatefulWidget {
   const MyRequestDetailSheet({super.key, required this.request});
 
   final SavedOrder request;
+
+  @override
+  State<MyRequestDetailSheet> createState() => _MyRequestDetailSheetState();
+}
+
+class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
+  bool _opening = false;
+
+  SavedOrder get request => widget.request;
+
+  /// Renders the order confirmation locally from the customer's own order
+  /// (no share link needed, so it never expires).
+  Future<void> _openConfirmation() async {
+    setState(() => _opening = true);
+    try {
+      final bytes = await InvoicePdfGenerator.generateBytes(request);
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: InvoicePdfGenerator.getFilename(request),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('dashboard.confirmation_failed'.tr())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +108,23 @@ class MyRequestDetailSheet extends StatelessWidget {
               _row(context, 'dashboard.request_shots'.tr(), request.shots.join(', ')),
             if (request.remarks.isNotEmpty)
               _row(context, 'dashboard.request_remarks'.tr(), request.remarks),
+            if (request.isAccepted) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _opening ? null : _openConfirmation,
+                  icon: _opening
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf, size: 18),
+                  label: Text('dashboard.view_confirmation'.tr()),
+                ),
+              ),
+            ],
           ],
         ),
       ),
