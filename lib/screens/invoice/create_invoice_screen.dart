@@ -14,6 +14,7 @@ import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
+import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
 import '../../utils/signed_number_input.dart';
 import '../../widgets/discount_editor.dart';
@@ -710,8 +711,16 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         language: _language,
       );
       final fileName = InvoicePdfGenerator.getFilename(order);
+      final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(
+        order,
+      );
+      final dateTag =
+          '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
+      final shoppingListName =
+          'Einkaufsliste_${order.name.replaceAll(' ', '_')}_$dateTag.pdf';
 
       String? documentUrl;
+      String? shoppingListUrl;
       if (EnvConfig.isOneDriveEnabled) {
         documentUrl = await microsoftGraphService.uploadToOneDrive(
           oneDrivePath: MicrosoftGraphService.buildOneDrivePath(
@@ -720,6 +729,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             fileName: fileName,
           ),
           bytes: pdfBytes,
+        );
+        shoppingListUrl = await microsoftGraphService.uploadToOneDrive(
+          oneDrivePath: MicrosoftGraphService.buildOneDrivePath(
+            rootFolder: 'Aufträge',
+            date: order.date,
+            fileName: shoppingListName,
+          ),
+          bytes: shoppingListBytes,
         );
       }
 
@@ -734,30 +751,43 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           int.tryParse(timeParts[1]) ?? 0,
         );
       }
+      final customer = order.offerClientName.isNotEmpty
+          ? order.offerClientName
+          : order.name;
       final employeeNames = order.assignedEmployees.isNotEmpty
           ? order.assignedEmployees.join(', ')
           : 'TBD';
       final bodyLines = <String>[
-        'Auftrag: ${order.name}',
+        'Auftrag: $customer',
+        if (order.location.isNotEmpty) 'Adresse: ${order.location}',
         'Personen: ${order.personCount}',
         'Mitarbeiter: $employeeNames',
-        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total)}',
+        // Discounted total, matching the price preview (order.total is
+        // the undiscounted positions sum).
+        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(_grandTotal)}',
         '',
         '--- Dokumente ---',
         if (documentUrl != null) 'Auftragsbestätigung: $documentUrl',
+        if (shoppingListUrl != null) 'Einkaufsliste: $shoppingListUrl',
       ];
 
       final eventId = await microsoftGraphService.createCalendarEvent(
-        subject: order.name,
+        subject: 'Blacklodge - $customer',
         start: eventStart,
         end: eventStart.add(const Duration(hours: 5)),
         bodyContent: bodyLines.join('\n'),
+        location: order.location,
       );
       if (eventId != null && eventId != 'unknown') {
         await microsoftGraphService.addCalendarAttachment(
           eventId: eventId,
           fileName: fileName,
           bytes: pdfBytes,
+        );
+        await microsoftGraphService.addCalendarAttachment(
+          eventId: eventId,
+          fileName: shoppingListName,
+          bytes: shoppingListBytes,
         );
       }
 

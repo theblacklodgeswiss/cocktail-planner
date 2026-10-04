@@ -841,11 +841,16 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           : 'TBD';
 
       // Build event body with document links
+      final customer = order.offerClientName.isNotEmpty
+          ? order.offerClientName
+          : order.name;
       final bodyLines = <String>[
-        'Auftrag: ${order.name}',
+        'Auftrag: $customer',
+        if (order.location.isNotEmpty) 'Adresse: ${order.location}',
         'Personen: ${order.personCount}',
         'Mitarbeiter: $employeeNames',
-        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total)}',
+        // order.total is the undiscounted positions sum.
+        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total - order.offerDiscount)}',
         '',
         '--- Dokumente ---',
       ];
@@ -857,10 +862,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       }
 
       final eventId = await microsoftGraphService.createCalendarEvent(
-        subject: order.name,
+        subject: 'Blacklodge - $customer',
         start: eventStart,
         end: eventEnd,
         bodyContent: bodyLines.join('\n'),
+        location: order.location,
       );
 
       // 6. Add PDF attachments to calendar event

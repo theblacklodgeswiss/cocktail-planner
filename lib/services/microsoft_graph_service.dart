@@ -462,6 +462,7 @@ class MicrosoftGraphService {
     required DateTime start,
     required DateTime end,
     required String bodyContent,
+    String location = '',
   }) async {
     if (!kIsWeb) return null;
     final token = await _getToken(_calendarScope);
@@ -472,6 +473,7 @@ class MicrosoftGraphService {
       final payload = jsonEncode({
         'subject': subject,
         'body': {'contentType': 'Text', 'content': bodyContent},
+        if (location.isNotEmpty) 'location': {'displayName': location},
         'start': {
           'dateTime': start.toIso8601String(),
           'timeZone': 'Europe/Zurich',
