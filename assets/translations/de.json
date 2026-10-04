@@ -404,6 +404,7 @@
     "confirm_save_msg": "Möchtest du die Auftragsbestätigung als PDF speichern, auf OneDrive hochladen und den Link kopieren?",
     "share": "Teilen",
     "share_message": "Hier ist deine Auftragsbestätigung für {name}: {url}",
+    "copy": "Kopieren",
     "create_calendar": "Kalendereintrag erstellen",
     "calendar_created": "Kalendereintrag erstellt!",
     "calendar_failed": "Kalendereintrag konnte nicht erstellt werden.",

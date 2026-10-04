@@ -665,16 +665,44 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         namedArgs: {'name': widget.order.name, 'url': shareUrl},
       );
       await Clipboard.setData(ClipboardData(text: message));
-      final webUrl = Uri.parse(
-        'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}',
+      if (!mounted) return;
+      // Browsers (iOS Safari especially) block window.open after an async
+      // gap, so WhatsApp is opened from a fresh tap in this dialog rather
+      // than straight after creating the link.
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('invoice.share'.tr()),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: message));
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('invoice.share_link_copied'.tr())),
+                  );
+                }
+              },
+              child: Text('invoice.copy'.tr()),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.chat),
+              label: const Text('WhatsApp'),
+              onPressed: () {
+                launchUrl(
+                  Uri.parse(
+                    'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}',
+                  ),
+                  mode: LaunchMode.externalApplication,
+                );
+                Navigator.of(ctx).pop();
+              },
+            ),
+          ],
+        ),
       );
-      if (await canLaunchUrl(webUrl)) {
-        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('invoice.share_link_copied'.tr())),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
