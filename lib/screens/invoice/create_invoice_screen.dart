@@ -556,7 +556,22 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         language: _language,
       );
       if (mounted) {
-        await Printing.layoutPdf(onLayout: (_) async => pdfBytes);
+        // In-app preview: layoutPdf's print dialog shows nothing on iOS
+        // Safari once there has been an async gap after the tap.
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text('invoice.preview'.tr())),
+              body: PdfPreview(
+                build: (_) async => pdfBytes,
+                pdfFileName: InvoicePdfGenerator.getFilename(updatedOrder),
+                canChangeOrientation: false,
+                canChangePageFormat: false,
+                canDebug: false,
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
