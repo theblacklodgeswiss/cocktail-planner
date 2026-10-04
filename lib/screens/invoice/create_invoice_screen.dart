@@ -16,6 +16,7 @@ import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
+import '../../utils/position_translation.dart';
 import '../../utils/signed_number_input.dart';
 import '../../widgets/discount_editor.dart';
 import '../offer/widgets/event_type_selector.dart';
@@ -281,7 +282,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   void _onLanguageChanged(String lang) {
-    setState(() => _language = lang);
+    setState(() {
+      _language = lang;
+      // Standard positions (Extrastunden, Bargetränke, ...) follow the
+      // selected language; custom-typed texts are left alone.
+      for (var i = 0; i < _offerPositions.length; i++) {
+        _offerPositions[i] = translateStandardPosition(_offerPositions[i], lang);
+      }
+    });
   }
 
   double get _barServiceCost =>
@@ -676,9 +684,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         _buildUpdatedOrder(),
       );
       final shareUrl = '${Uri.base.origin}/s/$code';
-      final message = 'invoice.share_message'.tr(
-        namedArgs: {'name': widget.order.name, 'url': shareUrl},
-      );
+      // Follows the DE/EN toggle of this screen, not the app locale.
+      final message = _language == 'en'
+          ? 'Hello, here is your order confirmation for ${widget.order.name}: $shareUrl'
+          : 'Hallo, hier ist deine Auftragsbestätigung für ${widget.order.name}: $shareUrl';
       await Clipboard.setData(ClipboardData(text: message));
       if (!mounted) return;
       // Browsers (iOS Safari especially) block window.open after an async

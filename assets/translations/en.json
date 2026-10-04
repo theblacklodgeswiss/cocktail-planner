@@ -397,7 +397,6 @@
     "confirm_save_title": "Save PDF?",
     "confirm_save_msg": "Do you want to save the order confirmation as PDF, upload it to OneDrive, and copy the link?",
     "share": "Share",
-    "share_message": "Here is your order confirmation for {name}: {url}",
     "copy": "Copy",
     "create_calendar": "Create calendar entry",
     "calendar_created": "Calendar entry created!",
