@@ -418,6 +418,9 @@
   },
   "orders": {
     "title": "Bestellungsübersicht",
+    "shopping_list_title": "Einkaufsliste",
+    "edit_shopping_list": "Einkaufsliste bearbeiten",
+    "shopping_list_total": "Total",
     "creator": "Bearbeiter",
     "total_revenue": "Gesamtumsatz",
     "order_count": "Bestellungen",

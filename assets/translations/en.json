@@ -412,6 +412,9 @@
   },
   "orders": {
     "title": "Orders Overview",
+    "shopping_list_title": "Shopping list",
+    "edit_shopping_list": "Edit shopping list",
+    "shopping_list_total": "Total",
     "creator": "Created by",
     "total_revenue": "Total Revenue",
     "order_count": "Orders",

@@ -20,6 +20,7 @@ import '../../utils/currency.dart';
 import '../../widgets/cocktail_popularity_dialog.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
+import 'order_shopping_list_page.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
 
@@ -1017,9 +1018,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             ],
             _buildInfoCard(),
             const SizedBox(height: 16),
-            _buildItemsHeader(),
-            const SizedBox(height: 8),
-            ..._buildItemsList(),
+            if (widget.order.items.isNotEmpty) _buildShoppingListTile(),
             if (AuthService().isSuperAdmin) _buildDeleteSection(),
           ],
         ),
@@ -1657,49 +1656,33 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     );
   }
 
-  Widget _buildItemsHeader() {
-    return Text(
-      '${widget.order.items.length} ${'orders.articles'.tr()}',
-      style: Theme.of(
-        context,
-      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+  Widget _buildShoppingListTile() {
+    final order = widget.order;
+    final total = order.items.fold<double>(
+      0,
+      (sum, item) =>
+          sum +
+          ((item['price'] as num?)?.toDouble() ?? 0) *
+              ((item['quantity'] as num?)?.toInt() ?? 1),
     );
-  }
-
-  List<Widget> _buildItemsList() {
-    return widget.order.items.map((item) {
-      final name = item['name'] as String? ?? '';
-      final unit = item['unit'] as String? ?? '';
-      final price = (item['price'] as num?)?.toDouble() ?? 0;
-      final quantity = (item['quantity'] as num?)?.toInt() ?? 1;
-      final note = item['note'] as String? ?? '';
-      final total = price * quantity;
-
-      return Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: widget.colorScheme.primaryContainer,
-            child: Text(
-              '${quantity}x',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: widget.colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-          title: Text(name),
-          subtitle: Text(
-            '$unit • ${widget.currency.format(price)}${note.isNotEmpty ? ' • $note' : ''}',
-          ),
-          trailing: Text(
-            widget.currency.format(total),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.shopping_cart_outlined),
+        title: Text('orders.shopping_list_title'.tr()),
+        subtitle: Text(
+          '${order.items.length} ${'orders.articles'.tr()} • ${widget.currency.format(total)}',
         ),
-      );
-    }).toList();
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () async {
+          final edit = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => OrderShoppingListPage(order: order),
+            ),
+          );
+          if (edit == true && mounted) _editShoppingList();
+        },
+      ),
+    );
   }
 
   Widget _buildDeleteSection() {
