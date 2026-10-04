@@ -39,9 +39,11 @@ class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
     setState(() => _opening = true);
     try {
       final bytes = await InvoicePdfGenerator.generateBytes(request);
-      await Printing.layoutPdf(
-        onLayout: (_) async => bytes,
-        name: InvoicePdfGenerator.getFilename(request),
+      // sharePdf downloads/opens the file on web; layoutPdf's print
+      // dialog silently does nothing on iOS Safari after an async gap.
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: InvoicePdfGenerator.getFilename(request),
       );
     } catch (_) {
       if (mounted) {
@@ -84,7 +86,25 @@ class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
                     style: TextStyle(color: statusColor(request.status))),
               ],
             ),
-            const Divider(height: 32),
+            const SizedBox(height: 16),
+            if (request.isAccepted) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _opening ? null : _openConfirmation,
+                  icon: _opening
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf, size: 18),
+                  label: Text('dashboard.view_confirmation'.tr()),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const Divider(height: 24),
             _row(context, 'dashboard.request_date'.tr(), formatDate(request.date)),
             if (request.effectiveEventTime.isNotEmpty)
               _row(context, 'dashboard.request_time'.tr(), request.effectiveEventTime),
@@ -108,23 +128,6 @@ class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
               _row(context, 'dashboard.request_shots'.tr(), request.shots.join(', ')),
             if (request.remarks.isNotEmpty)
               _row(context, 'dashboard.request_remarks'.tr(), request.remarks),
-            if (request.isAccepted) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _opening ? null : _openConfirmation,
-                  icon: _opening
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.picture_as_pdf, size: 18),
-                  label: Text('dashboard.view_confirmation'.tr()),
-                ),
-              ),
-            ],
           ],
         ),
       ),
