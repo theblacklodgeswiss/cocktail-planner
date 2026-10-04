@@ -23,6 +23,7 @@ import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../utils/signed_number_input.dart';
 import '../../widgets/discount_editor.dart';
+import 'widgets/cocktail_chips_field.dart';
 import 'widgets/event_type_selector.dart';
 import 'widgets/offer_action_buttons.dart';
 import 'widgets/offer_price_preview.dart';
@@ -1344,10 +1345,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       children: [
         SectionHeader(label: 'offer.services'.tr()),
         const SizedBox(height: 8),
-        _field(
+        CocktailChipsField(
           controller: _cocktailsCtrl,
           label: 'offer.cocktails'.tr(),
-          hint: 'offer.cocktails_hint'.tr(),
           validator: _validateCocktails,
         ),
         const SizedBox(height: 8),

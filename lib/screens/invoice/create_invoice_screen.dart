@@ -19,6 +19,7 @@ import '../../utils/currency.dart';
 import '../../utils/position_translation.dart';
 import '../../utils/signed_number_input.dart';
 import '../../widgets/discount_editor.dart';
+import '../offer/widgets/cocktail_chips_field.dart';
 import '../offer/widgets/event_type_selector.dart';
 import '../offer/widgets/section_header.dart';
 
@@ -1202,10 +1203,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       children: [
         SectionHeader(label: 'invoice.services'.tr()),
         const SizedBox(height: 8),
-        _field(
+        CocktailChipsField(
           controller: _cocktailsCtrl,
           label: 'invoice.cocktails'.tr(),
-          hint: 'invoice.cocktails_hint'.tr(),
         ),
         const SizedBox(height: 8),
         _field(
