@@ -2317,17 +2317,21 @@ class _PreviewRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-              color: highlight ? Theme.of(context).colorScheme.primary : null,
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                color: highlight ? Theme.of(context).colorScheme.primary : null,
+              ),
             ),
           ),
+          const SizedBox(width: 12),
           Text(
             value,
+            textAlign: TextAlign.right,
             style: TextStyle(
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
               color: highlight ? Theme.of(context).colorScheme.primary : null,
