@@ -398,7 +398,13 @@
     "employees": "Mitarbeiter",
     "extra_hours_label": "Extrastunden",
     "confirm_save_title": "PDF speichern?",
-    "confirm_save_msg": "Möchtest du die Auftragsbestätigung als PDF speichern, auf OneDrive hochladen und einen Kalendereintrag erstellen?"
+    "confirm_save_msg": "Möchtest du die Auftragsbestätigung als PDF speichern, auf OneDrive hochladen und den Link kopieren?",
+    "share": "Teilen",
+    "share_message": "Hier ist deine Auftragsbestätigung für {name}: {url}",
+    "create_calendar": "Kalendereintrag erstellen",
+    "calendar_created": "Kalendereintrag erstellt!",
+    "calendar_failed": "Kalendereintrag konnte nicht erstellt werden.",
+    "calendar_unsupported": "Kalendereinträge sind nur im Web mit Microsoft-Anmeldung verfügbar."
   },
   "orders": {
     "title": "Bestellungsübersicht",

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/env_config.dart';
 import '../../data/employee_repository.dart';
@@ -619,6 +620,164 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('invoice.share_link_failed'.tr())));
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  /// Saves, creates a 14-day link and opens WhatsApp with it.
+  Future<void> _shareConfirmation() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_validateAll()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
+      );
+      return;
+    }
+
+    setState(() => _isGenerating = true);
+    try {
+      final saved = await _saveInvoiceData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
+        }
+        return;
+      }
+      final code = await shareLinkRepository.createInvoiceShareLink(
+        _buildUpdatedOrder(),
+      );
+      final shareUrl = '${Uri.base.origin}/s/$code';
+      final message = 'invoice.share_message'.tr(
+        namedArgs: {'name': widget.order.name, 'url': shareUrl},
+      );
+      await Clipboard.setData(ClipboardData(text: message));
+      final webUrl = Uri.parse(
+        'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}',
+      );
+      if (await canLaunchUrl(webUrl)) {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('invoice.share_link_copied'.tr())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('invoice.share_link_failed'.tr())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  /// Creates the Outlook calendar entry for this order with the
+  /// confirmation PDF attached (and uploaded to OneDrive for the link).
+  Future<void> _createCalendarEntry() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_validateAll()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
+      );
+      return;
+    }
+    if (!microsoftGraphService.isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('invoice.calendar_unsupported'.tr())),
+      );
+      return;
+    }
+
+    setState(() => _isGenerating = true);
+    try {
+      final saved = await _saveInvoiceData();
+      if (!saved) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
+        }
+        return;
+      }
+      final order = _buildUpdatedOrder();
+      final pdfBytes = await InvoicePdfGenerator.generateBytes(
+        order,
+        language: _language,
+      );
+      final fileName = InvoicePdfGenerator.getFilename(order);
+
+      String? documentUrl;
+      if (EnvConfig.isOneDriveEnabled) {
+        documentUrl = await microsoftGraphService.uploadToOneDrive(
+          oneDrivePath: MicrosoftGraphService.buildOneDrivePath(
+            rootFolder: 'Aufträge',
+            date: order.date,
+            fileName: fileName,
+          ),
+          bytes: pdfBytes,
+        );
+      }
+
+      var eventStart = order.date;
+      final timeParts = order.offerEventTime.split(':');
+      if (timeParts.length >= 2) {
+        eventStart = DateTime(
+          order.date.year,
+          order.date.month,
+          order.date.day,
+          int.tryParse(timeParts[0]) ?? 0,
+          int.tryParse(timeParts[1]) ?? 0,
+        );
+      }
+      final employeeNames = order.assignedEmployees.isNotEmpty
+          ? order.assignedEmployees.join(', ')
+          : 'TBD';
+      final bodyLines = <String>[
+        'Auftrag: ${order.name}',
+        'Personen: ${order.personCount}',
+        'Mitarbeiter: $employeeNames',
+        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total)}',
+        '',
+        '--- Dokumente ---',
+        if (documentUrl != null) 'Auftragsbestätigung: $documentUrl',
+      ];
+
+      final eventId = await microsoftGraphService.createCalendarEvent(
+        subject: order.name,
+        start: eventStart,
+        end: eventStart.add(const Duration(hours: 5)),
+        bodyContent: bodyLines.join('\n'),
+      );
+      if (eventId != null && eventId != 'unknown') {
+        await microsoftGraphService.addCalendarAttachment(
+          eventId: eventId,
+          fileName: fileName,
+          bytes: pdfBytes,
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              eventId != null
+                  ? 'invoice.calendar_created'.tr()
+                  : 'invoice.calendar_failed'.tr(),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Calendar entry error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('invoice.calendar_failed'.tr())),
+        );
       }
     } finally {
       if (mounted) setState(() => _isGenerating = false);
@@ -2055,14 +2214,30 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       ),
     );
 
+    final shareBtn = OutlinedButton.icon(
+      onPressed: _isGenerating ? null : _shareConfirmation,
+      icon: const Icon(Icons.share, size: 18),
+      label: Text('invoice.share'.tr()),
+    );
+
+    final calendarBtn = OutlinedButton.icon(
+      onPressed: _isGenerating ? null : _createCalendarEntry,
+      icon: const Icon(Icons.event, size: 18),
+      label: Text('invoice.create_calendar'.tr()),
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= 520) {
+        if (constraints.maxWidth >= 720) {
           return Row(
             children: [
               saveBtn,
               const SizedBox(width: 8),
               previewBtn,
+              const SizedBox(width: 8),
+              shareBtn,
+              const SizedBox(width: 8),
+              calendarBtn,
               const Spacer(),
               pdfBtn,
             ],
@@ -2080,6 +2255,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               ),
               const SizedBox(height: 8),
               pdfBtn,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: shareBtn),
+                  const SizedBox(width: 8),
+                  Expanded(child: calendarBtn),
+                ],
+              ),
             ],
           );
         }
