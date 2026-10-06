@@ -194,6 +194,7 @@ void main() {
       expect(order.isPendingDismissed, false); // Default value
       expect(order.cocktails, []); // Default empty list
       expect(order.phone, ''); // Default empty string
+      expect(order.declineReason, ''); // Default empty string
     });
 
     test('isAccepted returns true for accepted status', () {
@@ -475,6 +476,7 @@ void main() {
         alcoholPurchase: const ['Wodka'],
         additionalServices: const ['photobooth'],
         remarks: 'Welcomedrinks',
+        declineReason: 'Datum ausgebucht',
       );
 
       final rebuilt = SavedOrder.fromFirestore('new-id', original.toJson());
@@ -512,6 +514,7 @@ void main() {
       expect(rebuilt.alcoholPurchase, original.alcoholPurchase);
       expect(rebuilt.additionalServices, original.additionalServices);
       expect(rebuilt.remarks, original.remarks);
+      expect(rebuilt.declineReason, original.declineReason);
     });
   });
 }
