@@ -113,6 +113,7 @@ class SavedOrder {
     this.alcoholPurchase = const [],
     this.additionalServices = const [],
     this.remarks = '',
+    this.declineReason = '',
   });
 
   final String id;
@@ -196,6 +197,10 @@ class SavedOrder {
 
   /// Free-form remarks/notes for additional services
   final String remarks;
+
+  /// Why the order was declined (entered when the status is set to
+  /// [OrderStatus.declined]). Empty when no reason was given.
+  final String declineReason;
 
   int get year => date.year;
 
@@ -331,6 +336,7 @@ class SavedOrder {
       additionalServices:
           (data['additionalServices'] as List<dynamic>?)?.cast<String>() ?? [],
       remarks: data['remarks'] as String? ?? '',
+      declineReason: data['declineReason'] as String? ?? '',
     );
   }
 
@@ -399,5 +405,6 @@ class SavedOrder {
     'alcoholPurchase': alcoholPurchase,
     'additionalServices': additionalServices,
     'remarks': remarks,
+    'declineReason': declineReason,
   };
 }

@@ -110,13 +110,20 @@ class OrderRepository {
   }
 
   /// Update order status in Firestore.
-  Future<bool> updateStatus(String orderId, String status) async {
+  /// Pass [declineReason] to store why the order was declined alongside the
+  /// status change; omit it to leave any stored reason untouched.
+  Future<bool> updateStatus(
+    String orderId,
+    String status, {
+    String? declineReason,
+  }) async {
     if (!await _ensureFirestoreAvailable()) return false;
 
     try {
       await firestoreService.ordersCollection.doc(orderId).update({
         'status': status,
         'statusUpdatedAt': FieldValue.serverTimestamp(),
+        if (declineReason != null) 'declineReason': declineReason,
       });
       return true;
     } catch (e) {

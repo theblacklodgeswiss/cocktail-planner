@@ -67,6 +67,7 @@ class _OrderDetailSheet extends StatefulWidget {
 
 class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   late OrderStatus _currentStatus;
+  late String _declineReason;
   late List<String> _assignedEmployees;
   late DateTime _currentDate;
 
@@ -99,6 +100,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   void initState() {
     super.initState();
     _currentStatus = widget.order.status;
+    _declineReason = widget.order.declineReason;
     _assignedEmployees = List.from(widget.order.assignedEmployees);
     _currentDate = widget.order.date;
   }
@@ -154,15 +156,25 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       );
       if (confirmed != true) return;
     }
+    // If declining, ask for an (optional) reason first
+    String? declineReason;
+    if (newStatus == OrderStatus.declined) {
+      declineReason = await _askDeclineReason();
+      if (declineReason == null || !mounted) return;
+    }
     setState(() => _isUpdatingStatus = true);
     final success = await orderRepository.updateStatus(
       widget.order.id,
       newStatus.value,
+      declineReason: declineReason,
     );
     if (!mounted) return;
     setState(() => _isUpdatingStatus = false);
     if (success) {
-      setState(() => _currentStatus = newStatus);
+      setState(() {
+        _currentStatus = newStatus;
+        if (declineReason != null) _declineReason = declineReason;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -176,6 +188,59 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (newStatus == OrderStatus.accepted) {
         _triggerMicrosoftIntegration();
       }
+    }
+  }
+
+  /// Shows a dialog to enter why the order is declined. Returns the trimmed
+  /// reason (possibly empty), or null if the dialog was cancelled.
+  Future<String?> _askDeclineReason() async {
+    final controller = TextEditingController(text: _declineReason);
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('orders.decline_reason_title'.tr()),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 5,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            labelText: 'orders.decline_reason'.tr(),
+            hintText: 'orders.decline_reason_hint'.tr(),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: Text('common.save'.tr()),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return reason;
+  }
+
+  /// Edits the reason of an already declined order without changing status.
+  Future<void> _editDeclineReason() async {
+    final reason = await _askDeclineReason();
+    if (reason == null || !mounted) return;
+    final success = await orderRepository.updateOrder(
+      widget.order.id,
+      {'declineReason': reason},
+    );
+    if (!mounted) return;
+    if (success) {
+      setState(() => _declineReason = reason);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('orders.decline_reason_saved'.tr())),
+      );
     }
   }
 
@@ -1302,6 +1367,36 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 ),
               ],
             ),
+            if (_currentStatus == OrderStatus.declined) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: _editDeclineReason,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _declineReason.isEmpty
+                              ? 'orders.decline_reason_add'.tr()
+                              : '${'orders.decline_reason'.tr()}: $_declineReason',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                fontStyle: _declineReason.isEmpty
+                                    ? FontStyle.italic
+                                    : null,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.edit, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             // Show "Complete Offer" button if offer is incomplete and status is quote
             if (!isComplete && _currentStatus == OrderStatus.quote) ...[
