@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/env_config.dart';
 import '../../data/cocktail_repository.dart';
+import '../../data/admin_repository.dart';
 import '../../data/employee_repository.dart';
+import '../../data/stock_repository.dart';
 import '../../models/cocktail_data.dart';
 import '../../data/order_repository.dart';
 import '../../models/employee.dart';
@@ -21,6 +23,7 @@ import '../../widgets/cocktail_popularity_dialog.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../inventory/rest_entry_sheet.dart';
+import '../shopping_list/completion_deduction.dart';
 import '../shopping_list/stock_logic.dart';
 import 'order_shopping_list_page.dart';
 import 'order_status_helpers.dart';
@@ -196,6 +199,32 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (declineReason == null || !mounted) return;
     }
     setState(() => _isUpdatingStatus = true);
+    OrderDeductionPlan? deduction;
+    if (newStatus == OrderStatus.completed) {
+      // Stock is deducted before the status changes. If this throws, the order
+      // stays accepted and a retry is safe (deterministic movement ids).
+      // Going back to accepted never reverses stock and keeps stockApplied, so
+      // completing again later deducts nothing a second time.
+      try {
+        final catalog = await adminRepository.getMaterialsWithIds(
+          isFixedValue: false,
+        );
+        deduction = await stockRepository.deductForOrder(widget.order, catalog);
+      } catch (e) {
+        debugPrint('Stock deduction failed: $e');
+        if (!mounted) return;
+        setState(() => _isUpdatingStatus = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('orders.stock_deduct_failed'.tr()),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+    }
     final success = await orderRepository.updateStatus(
       widget.order.id,
       newStatus.value,
@@ -217,6 +246,24 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
         ),
       );
+      if (deduction != null && deduction.hasNotes) {
+        final lines = [
+          for (final s in deduction.shortfalls)
+            'orders.stock_shortfall_line'.tr(
+              namedArgs: {'name': s.name, 'qty': _formatQty(s.quantity)},
+            ),
+          for (final name in deduction.unresolved)
+            'orders.stock_unresolved_line'.tr(namedArgs: {'name': name}),
+        ];
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${'orders.stock_summary_title'.tr()}\n${lines.join('\n')}',
+            ),
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
       // Trigger Microsoft integration when status becomes accepted
       if (newStatus == OrderStatus.accepted && !isReopening) {
         _triggerMicrosoftIntegration();
@@ -226,6 +273,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (newStatus == OrderStatus.completed) await _recordRest();
     }
   }
+
+  static String _formatQty(double q) =>
+      q == q.roundToDouble() ? q.toInt().toString() : q.toStringAsFixed(2);
 
   Future<void> _recordRest() async {
     final saved = await showRestEntrySheet(context, order: widget.order);

@@ -3,7 +3,12 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cocktail_planer/models/stock.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
+import 'package:cocktail_planer/models/material_item.dart';
+import 'package:cocktail_planer/models/order.dart';
+import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
+import 'package:cocktail_planer/screens/shopping_list/stock_logic.dart';
 import 'firestore_service.dart';
+import 'order_repository.dart';
 
 /// Returns the location owned by [email] (case-insensitive), or null.
 StorageLocation? pickOwn(List<StorageLocation> locations, String email) {
@@ -34,6 +39,11 @@ Map<String, dynamic> stockEntryFields({
     if (trimmed != null && trimmed.isNotEmpty) 'note': trimmed,
   };
 }
+
+/// A movement with an explicit id is only applied if no movement with that id
+/// exists yet, which makes retries and double submits no-ops.
+bool shouldApplyMovement({required String? movementId, required bool exists}) =>
+    movementId == null || !exists;
 
 /// Repository for storage locations, stock quantities and stock movements.
 class StockRepository {
@@ -109,12 +119,24 @@ class StockRepository {
     required String reason,
     String? orderId,
     String? note,
+    String? movementId,
   }) {
     final entryRef = _stock.doc(
       StockEntry.buildId(materialId, locationId, origin),
     );
-    final movementRef = _movements.doc();
+    final movementRef = movementId == null
+        ? _movements.doc()
+        : _movements.doc(movementId);
     return firestoreService.firestore.runTransaction((tx) async {
+      // Reads before writes: an already booked movement id means this call is
+      // a retry, so nothing may change.
+      final existing = movementId == null ? null : await tx.get(movementRef);
+      if (!shouldApplyMovement(
+        movementId: movementId,
+        exists: existing?.exists ?? false,
+      )) {
+        return;
+      }
       final snap = await tx.get(entryRef);
       final old = snap.exists ? _toDouble(snap.data()?['quantity']) : 0.0;
       final next = math.max(0.0, old + delta);
@@ -143,6 +165,61 @@ class StockRepository {
         ),
       );
     });
+  }
+
+  /// Books the stock deduction of a completed order, then marks the order
+  /// `stockApplied`. Idempotent: returns without booking if the order is
+  /// already applied, and every movement uses a deterministic id, so a retry
+  /// after a partial failure books only what is still missing. Throws if a
+  /// booking or the final flag write fails (the caller must not complete the
+  /// order then). Returns the plan so the caller can report shortfalls.
+  Future<OrderDeductionPlan> deductForOrder(
+    SavedOrder order,
+    List<({String id, MaterialItem item})> catalog,
+  ) async {
+    if (order.stockApplied) return const OrderDeductionPlan();
+    // The sheet's order may be stale (second tab, reload): re-check the flag.
+    final fresh = await orderRepository.getOrderById(order.id);
+    if (fresh?.stockApplied ?? false) return const OrderDeductionPlan();
+    final entries = (await _stock.get()).docs
+        .map((d) => StockEntry.fromMap(d.id, d.data()))
+        .toList();
+    // Deltas of movements booked by an earlier, partly failed attempt.
+    final booked = <String, double>{};
+    for (final item in order.items) {
+      final source = ItemSource.fromItem(item);
+      final materialId = resolveMaterialId(item, catalog);
+      if (!source.isStock || materialId == null) continue;
+      for (final origin in StockOrigin.values) {
+        final id = orderMovementId(
+          order.id,
+          materialId,
+          source.locationId!,
+          origin,
+        );
+        if (booked.containsKey(id)) continue;
+        final doc = await _movements.doc(id).get();
+        if (doc.exists) booked[id] = _toDouble(doc.data()?['delta']);
+      }
+    }
+    final plan = planOrderDeduction(order, entries, catalog, booked: booked);
+    for (final m in plan.movements) {
+      await applyMovement(
+        materialId: m.materialId,
+        materialName: m.materialName,
+        locationId: m.locationId,
+        origin: m.origin,
+        delta: m.delta,
+        reason: 'order_deduction',
+        orderId: order.id,
+        movementId: m.id,
+      );
+    }
+    final ok = await orderRepository.updateOrder(order.id, {
+      'stockApplied': true,
+    });
+    if (!ok) throw StateError('stockApplied could not be saved');
+    return plan;
   }
 
   /// Sets an absolute quantity and logs the difference as a correction.

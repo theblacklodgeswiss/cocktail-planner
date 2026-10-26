@@ -58,7 +58,14 @@ void main() {
   });
 
   testWidgets('shows the expired message for an unknown code', (tester) async {
-    await tester.pumpWidget(wrapLocalized(const SharedDocumentScreen(code: 'unknown1')));
+    // de.json is above the 50 KB limit where rootBundle decodes in an isolate,
+    // which needs the real event loop, so build and wait inside runAsync.
+    await tester.runAsync(() async {
+      await tester.pumpWidget(
+        wrapLocalized(const SharedDocumentScreen(code: 'unknown1')),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
     expect(find.textContaining('abgelaufen'), findsOneWidget);
