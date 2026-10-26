@@ -35,6 +35,15 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get shareLinksCollection =>
       firestore.collection('shareLinks');
 
+  CollectionReference<Map<String, dynamic>> get storageLocationsCollection =>
+      firestore.collection('storageLocations');
+
+  CollectionReference<Map<String, dynamic>> get stockEntriesCollection =>
+      firestore.collection('stockEntries');
+
+  CollectionReference<Map<String, dynamic>> get stockMovementsCollection =>
+      firestore.collection('stockMovements');
+
   /// Initialize Firestore connection.
   Future<bool> initialize() async {
     try {

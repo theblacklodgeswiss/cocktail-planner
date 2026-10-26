@@ -199,6 +199,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Stock: employee-or-higher only, customers never. Staff may book stock
+    // at any location, but only a location's owner or an admin may rename or
+    // delete it.
+    match /storageLocations/{locationId} {
+      allow read, create: if hasFullOrderAccess();
+      allow update, delete: if isAdmin() ||
+                               (hasFullOrderAccess() &&
+                                resource.data.get('ownerEmail', '') != '' &&
+                                resource.data.ownerEmail.lower() == authEmail());
+    }
+
+    match /stockEntries/{entryId} {
+      allow read, write: if hasFullOrderAccess();
+    }
+
+    // Append-only movement log: no update, no delete.
+    match /stockMovements/{movementId} {
+      allow read, create: if hasFullOrderAccess();
+      allow update, delete: if false;
+    }
+
     // Microsoft Forms collection - authenticated users can read/write
     match /microsoftForms/{document=**} {
       allow read: if isAuthenticated();
