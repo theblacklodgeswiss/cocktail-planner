@@ -94,6 +94,7 @@ class AppSize {
   static const double glowFade = 0.7;
   static const double glassBlur = 22;
   static const double glassShadowBleed = 80;
+  static const double minTileTextScale = 1.0;
   static const double maxTileTextScale = 1.15;
 }
 

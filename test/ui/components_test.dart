@@ -295,6 +295,64 @@ void main() {
     });
   });
 
+  group('scroll drag', () {
+    for (final c in <String, Widget Function()>{
+      'PrimaryButton': () => PrimaryButton(label: 'Los', onPressed: () {}),
+      'FloatingCard': () =>
+          FloatingCard(onTap: () {}, child: const Text('Los')),
+    }.entries) {
+      testWidgets('${c.key} unpresses once a scroll moves past touch slop', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          host(ListView(children: [c.value(), const SizedBox(height: 2000)])),
+        );
+        double scale() => tester
+            .widget<AnimatedScale>(
+              find.descendant(
+                of: find.byType(Pressable),
+                matching: find.byType(AnimatedScale),
+              ),
+            )
+            .scale;
+        final g = await tester.startGesture(tester.getCenter(find.text('Los')));
+        await tester.pump();
+        expect(scale(), AppSize.pressScale);
+        await g.moveBy(const Offset(0, 5));
+        await tester.pump();
+        expect(scale(), AppSize.pressScale);
+        await g.moveBy(const Offset(0, 40));
+        await tester.pump();
+        expect(scale(), 1);
+        await g.up();
+      });
+    }
+  });
+
+  testWidgets('focus ring wrapper keeps child state across focus changes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(Pressable(onTap: () {}, child: const _Counter())),
+    );
+    await tester.tap(find.byType(_Counter));
+    await tester.pump();
+    final before = tester.state<_CounterState>(find.byType(_Counter));
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(tester.state<_CounterState>(find.byType(_Counter)), same(before));
+  });
+
+  testWidgets('DateTile label stays >= 10 px at text scale below 1', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(Align(child: DateTile(DateTime(2026, 6, 14))), textScale: 0.8),
+    );
+    final p = tester.renderObject<RenderParagraph>(find.text('JUN'));
+    expect(p.textScaler.scale(10), greaterThanOrEqualTo(10));
+  });
+
   group('keyboard', () {
     testWidgets('Enter on focused PrimaryButton calls onPressed once', (
       tester,
@@ -332,13 +390,18 @@ void main() {
       await tester.pumpWidget(
         host(PrimaryButton(label: 'Los', onPressed: () {})),
       );
-      bool ring() => find
-          .descendant(
-            of: find.byType(PrimaryButton),
-            matching: find.byKey(const ValueKey('focus-ring')),
-          )
-          .evaluate()
-          .isNotEmpty;
+      bool ring() =>
+          (tester
+                      .widget<DecoratedBox>(
+                        find.descendant(
+                          of: find.byType(PrimaryButton),
+                          matching: find.byKey(const ValueKey('focus-ring')),
+                        ),
+                      )
+                      .decoration
+                  as BoxDecoration)
+              .border !=
+          null;
       expect(ring(), isFalse);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
@@ -520,4 +583,16 @@ void main() {
       });
     }
   }
+}
+
+class _Counter extends StatefulWidget {
+  const _Counter();
+
+  @override
+  State<_Counter> createState() => _CounterState();
+}
+
+class _CounterState extends State<_Counter> {
+  @override
+  Widget build(BuildContext context) => const SizedBox(width: 20, height: 20);
 }

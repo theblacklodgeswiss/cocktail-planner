@@ -57,6 +57,7 @@ class DateTile extends StatelessWidget {
         ),
         // Clamp instead of shrinking so the label never renders below 10 px.
         child: MediaQuery.withClampedTextScaling(
+          minScaleFactor: AppSize.minTileTextScale,
           maxScaleFactor: AppSize.maxTileTextScale,
           child: Center(
             child: Column(

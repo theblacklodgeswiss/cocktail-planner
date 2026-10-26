@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -35,6 +36,7 @@ class Pressable extends StatefulWidget {
 class _PressableState extends State<Pressable> {
   bool _down = false;
   bool _focused = false;
+  Offset? _downAt;
 
   void _setDown(bool v) {
     if (_down != v && mounted) setState(() => _down = v);
@@ -50,17 +52,18 @@ class _PressableState extends State<Pressable> {
     final palette = AppPalette.of(context);
 
     Widget content = widget.child;
-    if (_focused && enabled) {
-      content = DecoratedBox(
-        key: const ValueKey('focus-ring'),
-        position: DecorationPosition.foreground,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(widget.radius),
-          border: Border.all(color: palette.primary, width: AppSize.focusRing),
-        ),
-        child: content,
-      );
-    }
+    // Always present so a stateful child keeps its state when focus changes.
+    content = DecoratedBox(
+      key: const ValueKey('focus-ring'),
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(widget.radius),
+        border: _focused && enabled
+            ? Border.all(color: palette.primary, width: AppSize.focusRing)
+            : null,
+      ),
+      child: content,
+    );
     if (reduced) {
       content = Opacity(
         opacity: pressed ? AppSize.pressedOpacity : 1,
@@ -98,12 +101,20 @@ class _PressableState extends State<Pressable> {
         // Listener, not onTapDown: the latter waits for the press timeout.
         child: Listener(
           behavior: HitTestBehavior.opaque,
-          onPointerDown: enabled ? (_) => _setDown(true) : null,
+          onPointerDown: enabled
+              ? (e) {
+                  _downAt = e.position;
+                  _setDown(true);
+                }
+              : null,
           onPointerUp: (_) => _setDown(false),
           onPointerCancel: (_) => _setDown(false),
+          // A scroll that wins the gesture arena sends no cancel to a
+          // Listener and the content moves with the finger, so measure the
+          // global distance from the touch-down point.
           onPointerMove: (e) {
-            final box = context.size;
-            if (box != null && !(Offset.zero & box).contains(e.localPosition)) {
+            final start = _downAt;
+            if (start != null && (e.position - start).distance > kTouchSlop) {
               _setDown(false);
             }
           },
