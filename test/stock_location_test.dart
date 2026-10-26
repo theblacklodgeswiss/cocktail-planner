@@ -18,4 +18,37 @@ void main() {
   test('pickOwn ignores email case', () {
     expect(pickOwn([mine], 'me@x.DE'), mine);
   });
+
+  group('findClaimableLocation', () {
+    const biri = StorageLocation(id: 'x', name: 'Biri');
+    const biriEmpty = StorageLocation(id: 'y', name: 'Biri', ownerEmail: '');
+    const biriOwned = StorageLocation(
+      id: 'z',
+      name: 'Biri',
+      ownerEmail: 'b@x.de',
+    );
+
+    test('matches an ownerless location by name, ignoring case and spaces', () {
+      expect(findClaimableLocation([other, biri], ' biri '), biri);
+      expect(findClaimableLocation([biriEmpty], 'BIRI'), biriEmpty);
+    });
+
+    test('ignores owned locations and other names', () {
+      expect(findClaimableLocation([biriOwned, other], 'Biri'), isNull);
+      expect(findClaimableLocation([biri], 'Tuji'), isNull);
+      expect(findClaimableLocation([biri], '  '), isNull);
+    });
+  });
+
+  group('owner email helpers', () {
+    test('normalise to lower case and trim', () {
+      expect(normalizeOwnerEmail('  Me@X.DE '), 'me@x.de');
+    });
+
+    test('valid when empty or containing @', () {
+      expect(isValidOwnerEmail(''), isTrue);
+      expect(isValidOwnerEmail('a@b.de'), isTrue);
+      expect(isValidOwnerEmail('nope'), isFalse);
+    });
+  });
 }

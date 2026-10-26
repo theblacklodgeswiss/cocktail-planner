@@ -17,6 +17,30 @@ StorageLocation? pickOwn(List<StorageLocation> locations, String email) {
   return null;
 }
 
+/// An ownerless location (no or empty ownerEmail) whose name equals [name]
+/// (trimmed, case-insensitive), or null. Used to offer claiming it instead of
+/// creating a duplicate.
+StorageLocation? findClaimableLocation(
+  List<StorageLocation> locations,
+  String name,
+) {
+  final wanted = name.trim().toLowerCase();
+  if (wanted.isEmpty) return null;
+  for (final l in locations) {
+    final ownerless = (l.ownerEmail ?? '').trim().isEmpty;
+    if (ownerless && l.name.trim().toLowerCase() == wanted) return l;
+  }
+  return null;
+}
+
+String normalizeOwnerEmail(String raw) => raw.trim().toLowerCase();
+
+/// An owner email is optional; if given it must contain '@'.
+bool isValidOwnerEmail(String raw) {
+  final v = raw.trim();
+  return v.isEmpty || v.contains('@');
+}
+
 /// Fields written to a stock entry document. [note] is only included when
 /// non-empty, so merging never clears an existing note.
 Map<String, dynamic> stockEntryFields({
@@ -95,8 +119,31 @@ class StockRepository {
     );
   }
 
-  Future<void> renameLocation(String id, String name) {
-    return _locations.doc(id).update({'name': name});
+  /// Renames a location and, if [ownerEmail] is given, sets its owner. Both
+  /// need admin rights in the rules unless the caller already owns it.
+  Future<void> renameLocation(String id, String name, {String? ownerEmail}) {
+    return _locations.doc(id).update({
+      'name': name,
+      if (ownerEmail != null && ownerEmail.isNotEmpty)
+        'ownerEmail': normalizeOwnerEmail(ownerEmail),
+    });
+  }
+
+  /// Sets the owner of a location (admin only per the rules).
+  Future<void> setLocationOwner(String id, String ownerEmail) {
+    return _locations.doc(id).update({
+      'ownerEmail': normalizeOwnerEmail(ownerEmail),
+    });
+  }
+
+  /// True if at least one movement with reason `import` exists. A single
+  /// equality filter plus limit(1) needs no composite index.
+  Future<bool> hasImportMovements() async {
+    final snap = await _movements
+        .where('reason', isEqualTo: 'import')
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
   }
 
   Stream<List<StockEntry>> watchStock() {

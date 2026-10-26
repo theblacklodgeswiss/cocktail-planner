@@ -21,6 +21,7 @@ import '../../utils/currency.dart';
 import '../../widgets/cocktail_popularity_dialog.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
+import '../inventory/inventory_rows.dart' show formatQuantity;
 import '../inventory/rest_entry_sheet.dart';
 import '../shopping_list/completion_deduction.dart';
 import '../shopping_list/stock_logic.dart';
@@ -75,6 +76,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   late List<String> _assignedEmployees;
   late DateTime _currentDate;
   late bool _restRecorded;
+  late bool _stockApplied;
 
   /// Guards the "Mit Claude regenerieren/erstellen" buttons against a
   /// double-tap and drives their loading spinner while a Firestore/Claude
@@ -109,6 +111,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     _assignedEmployees = List.from(widget.order.assignedEmployees);
     _currentDate = widget.order.date;
     _restRecorded = widget.order.restRecorded;
+    _stockApplied = widget.order.stockApplied;
   }
 
   Future<void> _editDate() async {
@@ -208,6 +211,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         // Plans from the order as stored now, not widget.order (its items may
         // be outdated after editing the source on the shopping-list page).
         deduction = await stockRepository.deductForOrder(widget.order.id);
+        _stockApplied = true;
       } catch (e) {
         debugPrint('Stock deduction failed: $e');
         if (!mounted) return;
@@ -254,7 +258,20 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       }
       // Ask for the leftovers right after completing; skippable, can be
       // redone via "Rest erfassen".
-      if (newStatus == OrderStatus.completed) await _recordRest();
+      if (newStatus == OrderStatus.completed) {
+        // Decided from the fresh order loaded for the deduction, never from
+        // widget.order: after reopening, restRecorded may already be true and
+        // saving again would book the leftovers twice.
+        final fresh = deduction?.restRecorded;
+        if (fresh == true && mounted) setState(() => _restRecorded = true);
+        if (shouldOfferRest(freshRestRecorded: fresh)) {
+          await _recordRest();
+        } else if (fresh == null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('rest.state_unknown'.tr())),
+          );
+        }
+      }
     } else if (deduction != null) {
       // Stock is booked and stockApplied is set, only the status failed.
       ScaffoldMessenger.of(context).showSnackBar(
@@ -280,7 +297,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               for (final s in plan.shortfalls)
                 Text(
                   'orders.stock_shortfall_line'.tr(
-                    namedArgs: {'name': s.name, 'qty': _formatQty(s.quantity)},
+                    namedArgs: {'name': s.name, 'qty': formatQuantity(s.quantity)},
                   ),
                 ),
               for (final name in plan.unresolved)
@@ -299,9 +316,6 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       ),
     );
   }
-
-  static String _formatQty(double q) =>
-      q == q.roundToDouble() ? q.toInt().toString() : q.toStringAsFixed(2);
 
   Future<void> _recordRest() async {
     final saved = await showRestEntrySheet(context, order: widget.order);
@@ -1951,6 +1965,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             MaterialPageRoute(
               builder: (_) => OrderShoppingListPage(
                 order: order,
+                stockApplied: _stockApplied,
                 items: items,
                 onItemsChanged: (changed) => _itemsOverride = changed,
               ),

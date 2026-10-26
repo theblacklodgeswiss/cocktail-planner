@@ -165,8 +165,11 @@ double customerTotal(List<Map<String, dynamic>> items) => items.fold<double>(
 
 /// The source switch may always be turned off for a stock item (even when
 /// it can no longer be resolved); turning it on needs a resolvable material.
+/// Once the order's stock was booked, the source is frozen (corrections are
+/// made in the inventory).
 bool canToggleSource({
   required bool canStock,
   required bool isStock,
   required bool saving,
-}) => (canStock || isStock) && !saving;
+  bool stockApplied = false,
+}) => (canStock || isStock) && !saving && !stockApplied;

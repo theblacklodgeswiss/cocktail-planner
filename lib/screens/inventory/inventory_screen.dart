@@ -483,6 +483,10 @@ class _LocationsSheetState extends State<_LocationsSheet> {
   late final Stream<List<StorageLocation>> _stream = stockRepository
       .watchLocations();
 
+  // NOTE: authService.isAdmin includes the super admin, but the Firestore
+  // rules' isAdmin() does not. A super admin who is not also a rules-admin sees
+  // these buttons and the write fails (shown via _fail). Known, no behavior
+  // change on purpose.
   bool _canRename(StorageLocation l) {
     if (authService.isAdmin) return true;
     final mine = authService.email?.toLowerCase();
@@ -515,11 +519,24 @@ class _LocationsSheetState extends State<_LocationsSheet> {
   Future<void> _rename(StorageLocation l) async {
     final result = await showDialog<({String name, String owner})>(
       context: context,
-      builder: (_) => _NameDialog(initial: l.name, askOwner: false),
+      builder: (_) => _NameDialog(
+        initial: l.name,
+        askOwner: authService.isAdmin,
+        initialOwner: l.ownerEmail ?? '',
+      ),
     );
-    if (result == null || result.name == l.name) return;
+    if (result == null) return;
+    final owner = normalizeOwnerEmail(result.owner);
+    final ownerChanged =
+        owner.isNotEmpty && owner != (l.ownerEmail ?? '').toLowerCase();
+    if (result.name == l.name && !ownerChanged) return;
     try {
-      await stockRepository.renameLocation(l.id, result.name);
+      // An empty owner field leaves the owner unchanged (it is never cleared).
+      await stockRepository.renameLocation(
+        l.id,
+        result.name,
+        ownerEmail: ownerChanged ? owner : null,
+      );
     } catch (_) {
       _fail();
     }
@@ -576,9 +593,14 @@ class _LocationsSheetState extends State<_LocationsSheet> {
 }
 
 class _NameDialog extends StatefulWidget {
-  const _NameDialog({required this.initial, required this.askOwner});
+  const _NameDialog({
+    required this.initial,
+    required this.askOwner,
+    this.initialOwner = '',
+  });
 
   final String initial;
+  final String initialOwner;
   final bool askOwner;
 
   @override
@@ -587,7 +609,7 @@ class _NameDialog extends StatefulWidget {
 
 class _NameDialogState extends State<_NameDialog> {
   late final _controller = TextEditingController(text: widget.initial);
-  final _owner = TextEditingController();
+  late final _owner = TextEditingController(text: widget.initialOwner);
   String? _error;
   String? _ownerError;
 
@@ -604,7 +626,7 @@ class _NameDialogState extends State<_NameDialog> {
     final nameError = value.isEmpty
         ? 'stock.location_name_required'.tr()
         : null;
-    final ownerError = owner.isNotEmpty && !owner.contains('@')
+    final ownerError = !isValidOwnerEmail(owner)
         ? 'inventory.owner_invalid'.tr()
         : null;
     if (nameError != null || ownerError != null) {

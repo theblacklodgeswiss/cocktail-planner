@@ -25,11 +25,15 @@ class OrderShoppingListPage extends StatefulWidget {
   const OrderShoppingListPage({
     super.key,
     required this.order,
+    this.stockApplied,
     this.items,
     this.onItemsChanged,
   });
 
   final SavedOrder order;
+
+  /// Overrides `order.stockApplied` (the opened order may be outdated).
+  final bool? stockApplied;
   final List<Map<String, dynamic>>? items;
   final void Function(List<Map<String, dynamic>> items)? onItemsChanged;
 
@@ -101,6 +105,8 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
     }
   }
 
+  bool get _applied => widget.stockApplied ?? widget.order.stockApplied;
+
   @override
   Widget build(BuildContext context) {
     final stock = _stock;
@@ -156,6 +162,7 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
                       canStock: canStock,
                       isStock: source.isStock,
                       saving: _saving,
+                      stockApplied: _applied,
                     )
                     ? (on) {
                         if (!on) {
@@ -183,7 +190,7 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
                       for (final l in locations)
                         DropdownMenuItem(value: l.id, child: Text(l.name)),
                     ],
-                    onChanged: _saving
+                    onChanged: _saving || _applied
                         ? null
                         : (id) {
                             if (id != null) {
@@ -212,10 +219,18 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
               ),
               style: theme.textTheme.bodySmall,
             ),
-          Text(
-            '${'orders.internal_cost'.tr()}: ${currency.format(cost)}',
-            style: theme.textTheme.bodySmall,
-          ),
+          // After booking, the cost would be recomputed from the current stock
+          // and be misleading, so it is hidden together with a note.
+          if (_applied)
+            Text(
+              'orders.stock_already_booked'.tr(),
+              style: theme.textTheme.bodySmall,
+            )
+          else
+            Text(
+              '${'orders.internal_cost'.tr()}: ${currency.format(cost)}',
+              style: theme.textTheme.bodySmall,
+            ),
         ],
       ),
     );
@@ -316,7 +331,7 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
               ),
             ],
           ),
-          if (_staff) ...[
+          if (_staff && !_applied) ...[
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

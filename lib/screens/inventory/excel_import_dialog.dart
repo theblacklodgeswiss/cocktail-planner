@@ -32,6 +32,10 @@ const _columnOrigins = [
 
 /// One-time import of the Excel Materialliste. Admin only.
 Future<void> showExcelImportDialog(BuildContext context) {
+  // NOTE: authService.isAdmin includes the super admin, but the Firestore
+  // rules' isAdmin() does not. A super admin who is not also a rules-admin
+  // passes this gate and the location/stock writes then fail. Known, no
+  // behavior change on purpose.
   if (!authService.isAdmin) return Future.value();
   return showDialog<void>(
     context: context,
@@ -197,12 +201,52 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
       _movementCount > 0 &&
       _rows.every((s) => !s.active || s.materialId != null);
 
+  /// The import is meant to run once. If an earlier import exists, ask before
+  /// booking everything a second time. Only checked on the first attempt (a
+  /// retry after a partial failure continues the same import). Fails closed.
+  Future<bool> _confirmRepeat() async {
+    if (_booked.isNotEmpty || _createdLocationIds.isNotEmpty) return true;
+    final bool exists;
+    try {
+      exists = await stockRepository.hasImportMovements();
+    } catch (e) {
+      debugPrint('Import check failed: $e');
+      if (mounted) setState(() => _error = 'excel_import.failed'.tr());
+      return false;
+    }
+    if (!exists) return true;
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('excel_import.repeat_title'.tr()),
+        content: Text('excel_import.repeat_body'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('excel_import.repeat_confirm'.tr()),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _import() async {
     if (!_canImport) return;
     setState(() {
       _saving = true;
       _error = null;
     });
+    if (!await _confirmRepeat()) {
+      if (mounted) setState(() => _saving = false);
+      return;
+    }
+    if (!mounted) return;
     try {
       // Create locations that are used by an active cell and do not exist.
       final used = <String>{
@@ -430,7 +474,13 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 ),
                 enabled: !_saving,
                 keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
+                  helperText: _owners[name]!.text.trim().isEmpty
+                      ? 'excel_import.owner_missing'.tr()
+                      : null,
+                  helperMaxLines: 3,
+                  helperStyle: const TextStyle(color: Colors.orange),
                   labelText: 'excel_import.owner_for'.tr(
                     namedArgs: {'name': name},
                   ),

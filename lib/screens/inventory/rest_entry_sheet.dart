@@ -146,6 +146,47 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
     Navigator.of(context).pop(true);
   }
 
+  /// Records "nothing left over": only sets restRecorded, books nothing.
+  Future<void> _nothingLeft() async {
+    if (_loading || _saving || _booked.isNotEmpty) return;
+    if (_listening) await _speech.stop();
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('rest.nothing_left'.tr()),
+        content: Text('rest.nothing_left_confirm'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('common.ok'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    final saved = await orderRepository.updateOrder(widget.order.id, {
+      'restRecorded': true,
+    });
+    if (!mounted) return;
+    if (!saved) {
+      setState(() {
+        _saving = false;
+        _micError = 'rest.mark_failed'.tr();
+      });
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
   Future<void> _continue() async {
     if (_loading) return;
     if (_listening) await _speech.stop();
@@ -373,6 +414,17 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           const SizedBox(height: 12),
           Text(_micError!, style: const TextStyle(color: Colors.orange)),
         ],
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _loading || _saving || _booked.isNotEmpty
+                ? null
+                : _nothingLeft,
+            icon: const Icon(Icons.check_circle_outline),
+            label: Text('rest.nothing_left'.tr()),
+          ),
+        ),
       ],
     );
   }
