@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'page_transitions.dart';
 import 'tokens.dart';
 
 class AppTheme {
@@ -102,7 +103,7 @@ class AppTheme {
       pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           for (final p in TargetPlatform.values)
-            p: const CupertinoPageTransitionsBuilder(),
+            p: const AppPageTransitionsBuilder(),
         },
       ),
       appBarTheme: AppBarTheme(

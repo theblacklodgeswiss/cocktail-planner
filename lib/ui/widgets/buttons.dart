@@ -85,11 +85,15 @@ class PrimaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.loading = false,
+    this.destructive = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+
+  /// Error-colored fill for irreversible actions.
+  final bool destructive;
 
   @override
   Widget build(BuildContext context) {
@@ -99,8 +103,10 @@ class PrimaryButton extends StatelessWidget {
       label: label,
       onPressed: onPressed,
       loading: loading,
-      fill: disabled ? p.surface : p.primary,
-      foreground: p.onPrimary,
+      fill: disabled ? p.surface : (destructive ? p.error : p.primary),
+      foreground: destructive
+          ? Theme.of(context).colorScheme.onError
+          : p.onPrimary,
     );
   }
 }

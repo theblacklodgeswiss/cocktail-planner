@@ -50,6 +50,7 @@ class AppColors {
   /// Soft card shadow (0 2 10 @ 5%) and glass shadow base.
   static const Color shadow = Color(0x0D000000);
   static const Color shadowStrong = Color(0x38000000);
+  static const Color scrim = Color(0x66000000);
   static const Color shadowGlass = Color(0x1A000000);
   static const Color glow = Color(0x24FFFFFF);
   static const Color glowClear = Color(0x00FFFFFF);
@@ -96,6 +97,22 @@ class AppSize {
   static const double glassShadowBleed = 80;
   static const double minTileTextScale = 1.0;
   static const double maxTileTextScale = 1.15;
+  static const double tabBarHeight = 46;
+  static const double barSide = 14;
+  static const double barGap = 12;
+  static const double fab = 40;
+  static const double fabIcon = 22;
+  static const double topBar = 44;
+  static const double titleCollapse = 40;
+  static const double progressHeight = 3;
+  static const double sheetHandleWidth = 36;
+  static const double sheetHandleHeight = 5;
+  static const double sheetMaxFraction = 0.9;
+  static const double sheetFullFraction = 0.94;
+  /// Scroll padding that keeps the last item clear of a floating bar.
+  static const double barClearance = 96;
+  static const double stateIconBox = 56;
+  static const double stateIcon = 28;
 }
 
 /// Elevation shadows shared by cards and glass.
@@ -110,6 +127,13 @@ class AppShadow {
       color: AppColors.shadowStrong,
       blurRadius: 26,
       offset: Offset(0, 10),
+    ),
+  ];
+  static const List<BoxShadow> fab = [
+    BoxShadow(
+      color: AppColors.shadowStrong,
+      blurRadius: 14,
+      offset: Offset(0, 6),
     ),
   ];
   static const List<BoxShadow> glass = [
@@ -129,6 +153,7 @@ class AppRadius {
   static const double heroXl = 30;
   static const double control = 12;
   static const double tile = 12;
+  static const double sheet = 28;
   static const double pill = 999;
 }
 
@@ -140,6 +165,15 @@ class AppText {
     fontSize: 24,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.8,
+  );
+  static const TextStyle largeTitle = TextStyle(
+    fontSize: 26,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.9,
+  );
+  static const TextStyle tab = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
   );
   static const TextStyle section = TextStyle(
     fontSize: 15,

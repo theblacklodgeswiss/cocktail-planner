@@ -93,6 +93,7 @@
     "pdf": "PDF",
     "close": "Schließen",
     "save_offer": "Angebot speichern",
+    "cancel": "Abbrechen",
     "add": "Hinzufügen",
     "user_added": "Benutzer hinzugefügt!",
     "add_error": "Fehler beim Hinzufügen",
@@ -848,5 +849,17 @@
     "accepted": "Angenommen",
     "completed": "Abgeschlossen",
     "declined": "Abgelehnt"
+  },
+  "ui": {
+      "back": "Zurück",
+      "close": "Schließen",
+      "retry": "Erneut versuchen",
+      "step_of": "{} von {}",
+      "loading": "Wird geladen",
+      "tab_orders": "Aufträge",
+      "tab_inventory": "Bestand",
+      "tab_more": "Mehr",
+      "cancel": "Abbrechen",
+      "add": "Hinzufügen"
   }
 }

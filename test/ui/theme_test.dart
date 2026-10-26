@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:cocktail_planer/ui/app_theme.dart';
 import 'package:cocktail_planer/ui/motion.dart';
+import 'package:cocktail_planer/ui/page_transitions.dart';
 import 'package:cocktail_planer/ui/tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,11 +80,11 @@ void main() {
     }
   });
 
-  test('page transitions are Cupertino on every platform', () {
+  test('page transitions use the app builder (Cupertino or fade) on every platform', () {
     for (final t in [light, dark]) {
       final builders = t.pageTransitionsTheme.builders;
       for (final p in TargetPlatform.values) {
-        expect(builders[p], isA<CupertinoPageTransitionsBuilder>(),
+        expect(builders[p], isA<AppPageTransitionsBuilder>(),
             reason: '$p');
       }
     }

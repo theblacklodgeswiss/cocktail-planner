@@ -9,6 +9,9 @@ class AppMotion {
   static const Duration page = Duration(milliseconds: 280);
   static const Duration sheet = Duration(milliseconds: 300);
 
+  /// Sheet start position: one sheet height below its final place.
+  static const Offset sheetFrom = Offset(0, 1);
+
   /// True when the user asked the OS to reduce motion.
   static bool reduced(BuildContext context) =>
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
