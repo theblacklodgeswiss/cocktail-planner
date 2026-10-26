@@ -741,6 +741,8 @@
       "create_failed": "Item could not be created",
       "save_failed": "Saving failed. Lines already booked will not be booked twice, please save again.",
       "mark_failed": "Stock booked, but the order could not be marked as recorded. Please save again.",
-      "record": "Record leftovers"
+      "partial_closed": "{count} line(s) were already booked. Please add the rest on the inventory page.",
+    "ask_admin": "No item fits? Ask an admin to add it to the catalog.",
+    "record": "Record leftovers"
   }
 }

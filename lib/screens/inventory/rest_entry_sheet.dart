@@ -119,6 +119,35 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
     );
   }
 
+  Future<void> _skip() async {
+    final count = _booked.length;
+    if (!shouldMarkRecordedOnClose(count)) {
+      Navigator.of(context).pop(false);
+      return;
+    }
+    setState(() => _saving = true);
+    final ok = await orderRepository.updateOrder(widget.order.id, {
+      'restRecorded': true,
+    });
+    if (!mounted) return;
+    if (!ok) {
+      setState(() {
+        _saving = false;
+        _saveError = 'rest.mark_failed'.tr();
+      });
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'rest.partial_closed'.tr(namedArgs: {'count': '$count'}),
+        ),
+        duration: const Duration(seconds: 8),
+      ),
+    );
+    Navigator.of(context).pop(true);
+  }
+
   Future<void> _continue() async {
     if (_loading) return;
     if (_listening) await _speech.stop();
@@ -145,7 +174,6 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           _locations,
           _defaultLocation,
         );
-        _booked.clear();
         _confirming = true;
         _loading = false;
       });
@@ -284,7 +312,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           title: Text('rest.title'.tr()),
           actions: [
             TextButton(
-              onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+              onPressed: _saving ? null : _skip,
               child: Text('rest.skip'.tr()),
             ),
           ],
@@ -395,7 +423,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             child: Row(
               children: [
                 TextButton(
-                  onPressed: _saving
+                  onPressed: _saving || mustLockRest(_booked.length)
                       ? null
                       : () => setState(() => _confirming = false),
                   child: Text('rest.back'.tr()),
@@ -499,13 +527,20 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                     label: Text('rest.pick_other'.tr()),
                     onPressed: () => _pickAnyItem(line),
                   ),
-                  ActionChip(
-                    avatar: const Icon(Icons.add, size: 16),
-                    label: Text('rest.create_item'.tr()),
-                    onPressed: () => _createItem(line),
-                  ),
+                  // /materials is writable by admins only.
+                  if (authService.isAdmin)
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 16),
+                      label: Text('rest.create_item'.tr()),
+                      onPressed: () => _createItem(line),
+                    ),
                 ],
               ),
+              if (!authService.isAdmin)
+                Text(
+                  'rest.ask_admin'.tr(),
+                  style: const TextStyle(fontSize: 12),
+                ),
             ] else if (!booked)
               Align(
                 alignment: Alignment.centerLeft,

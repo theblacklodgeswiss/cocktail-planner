@@ -75,6 +75,8 @@ void main() {
     expect(sprite.candidates, isNotEmpty);
   });
 
+  lockTests();
+
   test('originHint investment is taken over', () {
     final line = build([
       const ParsedLine(
@@ -84,5 +86,14 @@ void main() {
       ),
     ]).single;
     expect(line.origin, StockOrigin.investment);
+  });
+}
+
+void lockTests() {
+  test('lock and mark-on-close only once something is booked', () {
+    expect(mustLockRest(0), isFalse);
+    expect(mustLockRest(2), isTrue);
+    expect(shouldMarkRecordedOnClose(0), isFalse);
+    expect(shouldMarkRecordedOnClose(1), isTrue);
   });
 }

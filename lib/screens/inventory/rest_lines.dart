@@ -63,3 +63,11 @@ List<RestLine> buildRestLines(
     );
   }).toList();
 }
+
+/// Once any line is booked, going back would rebuild the lines and book them
+/// again, so the confirmation view is locked.
+bool mustLockRest(int bookedCount) => bookedCount > 0;
+
+/// Closing after a partial save must still mark the rest as recorded: part of
+/// it is in stock already, so redoing it later would double-book.
+bool shouldMarkRecordedOnClose(int bookedCount) => bookedCount > 0;
