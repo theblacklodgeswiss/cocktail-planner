@@ -20,6 +20,7 @@ import '../../utils/currency.dart';
 import '../../widgets/cocktail_popularity_dialog.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
+import '../inventory/rest_entry_sheet.dart';
 import 'order_shopping_list_page.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -70,6 +71,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   late String _declineReason;
   late List<String> _assignedEmployees;
   late DateTime _currentDate;
+  late bool _restRecorded;
 
   /// Guards the "Mit Claude regenerieren/erstellen" buttons against a
   /// double-tap and drives their loading spinner while a Firestore/Claude
@@ -103,6 +105,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
     _declineReason = widget.order.declineReason;
     _assignedEmployees = List.from(widget.order.assignedEmployees);
     _currentDate = widget.order.date;
+    _restRecorded = widget.order.restRecorded;
   }
 
   Future<void> _editDate() async {
@@ -217,7 +220,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       if (newStatus == OrderStatus.accepted && !isReopening) {
         _triggerMicrosoftIntegration();
       }
+      // Ask for the leftovers right after completing; skippable, can be
+      // redone via "Rest erfassen".
+      if (newStatus == OrderStatus.completed) await _recordRest();
     }
+  }
+
+  Future<void> _recordRest() async {
+    final saved = await showRestEntrySheet(context, order: widget.order);
+    if (saved && mounted) setState(() => _restRecorded = true);
   }
 
   /// Shows a dialog to enter why the order is declined. Returns the trimmed
@@ -1457,6 +1468,19 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 ),
               ),
             ] else ...[
+              if (_currentStatus == OrderStatus.completed &&
+                  !_restRecorded &&
+                  AuthService().isEmployeeOrHigher) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _recordRest,
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: Text('rest.record'.tr()),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               Text(
                 'orders.change_status'.tr(),
                 style: Theme.of(context).textTheme.bodySmall,
