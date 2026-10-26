@@ -9,6 +9,16 @@ void main() {
       expect(OrderStatus.declined.value, 'declined');
     });
 
+    test('completed round-trips and canComplete is only true for accepted', () {
+      expect(OrderStatus.completed.value, 'completed');
+      expect(OrderStatus.completed.label, 'Abgeschlossen');
+      expect(OrderStatus.fromString('completed'), OrderStatus.completed);
+      expect(OrderStatus.canComplete(OrderStatus.accepted), isTrue);
+      expect(OrderStatus.canComplete(OrderStatus.quote), isFalse);
+      expect(OrderStatus.canComplete(OrderStatus.declined), isFalse);
+      expect(OrderStatus.canComplete(OrderStatus.completed), isFalse);
+    });
+
     test('has correct labels', () {
       expect(OrderStatus.quote.label, 'Angebot');
       expect(OrderStatus.accepted.label, 'Angenommen');
@@ -195,6 +205,28 @@ void main() {
       expect(order.cocktails, []); // Default empty list
       expect(order.phone, ''); // Default empty string
       expect(order.declineReason, ''); // Default empty string
+    });
+
+    test('stockApplied and restRecorded default false and survive serialization', () {
+      final data = {
+        'name': 'X',
+        'date': '2026-01-01',
+        'status': 'completed',
+        'stockApplied': true,
+        'restRecorded': true,
+      };
+      final order = SavedOrder.fromFirestore('id1', data);
+      expect(order.status, OrderStatus.completed);
+      expect(order.stockApplied, isTrue);
+      expect(order.restRecorded, isTrue);
+      expect(order.isAccepted, isTrue);
+      expect(order.customerStatus, OrderStatus.accepted);
+      final map = order.toJson();
+      expect(map['stockApplied'], true);
+      expect(map['restRecorded'], true);
+      final plain = SavedOrder.fromFirestore('id2', {'name': 'Y', 'date': '2026-01-01'});
+      expect(plain.stockApplied, isFalse);
+      expect(plain.restRecorded, isFalse);
     });
 
     test('isAccepted returns true for accepted status', () {

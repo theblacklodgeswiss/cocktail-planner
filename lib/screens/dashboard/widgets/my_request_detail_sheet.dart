@@ -81,11 +81,11 @@ class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(statusIcon(request.status),
-                    size: 16, color: statusColor(request.status)),
+                Icon(statusIcon(request.customerStatus),
+                    size: 16, color: statusColor(request.customerStatus)),
                 const SizedBox(width: 4),
-                Text(statusLabel(request.status),
-                    style: TextStyle(color: statusColor(request.status))),
+                Text(statusLabel(request.customerStatus),
+                    style: TextStyle(color: statusColor(request.customerStatus))),
               ],
             ),
             const SizedBox(height: 16),

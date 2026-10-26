@@ -110,7 +110,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
         case OrderStatusFilter.quotes:
           return o.status == OrderStatus.quote;
         case OrderStatusFilter.accepted:
-          return o.status == OrderStatus.accepted;
+          return o.isAccepted;
         default:
           return true;
       }

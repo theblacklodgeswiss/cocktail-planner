@@ -59,19 +59,19 @@ class MyRequestsList extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor(request.status).withValues(alpha: 0.1),
+                      color: statusColor(request.customerStatus).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(statusIcon(request.status),
-                            size: 14, color: statusColor(request.status)),
+                        Icon(statusIcon(request.customerStatus),
+                            size: 14, color: statusColor(request.customerStatus)),
                         const SizedBox(width: 4),
                         Text(
-                          statusLabel(request.status),
+                          statusLabel(request.customerStatus),
                           style: TextStyle(
-                            color: statusColor(request.status),
+                            color: statusColor(request.customerStatus),
                             fontWeight: FontWeight.w500,
                             fontSize: 12,
                           ),

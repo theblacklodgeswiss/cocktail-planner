@@ -158,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Only count orders with total > 0 for status counts
           final completedOrders = orders.where((o) => o.total > 0).toList();
           final acceptedCount = completedOrders
-              .where((o) => o.status == OrderStatus.accepted)
+              .where((o) => o.isAccepted)
               .length;
           final openOffersCount = completedOrders
               .where((o) => o.status == OrderStatus.quote)
@@ -166,7 +166,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Compute statistics from accepted orders
           final acceptedOrders = completedOrders
-              .where((o) => o.status == OrderStatus.accepted)
+              .where((o) => o.isAccepted)
               .toList();
           final totalRevenue = acceptedOrders.fold<double>(
             0,

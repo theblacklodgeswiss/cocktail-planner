@@ -122,8 +122,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   Future<void> _updateStatus(OrderStatus newStatus) async {
     if (_isUpdatingStatus) return;
+    // Going back from completed to accepted skips the accept checks, dialog
+    // and integrations: the order was already accepted before.
+    final isReopening =
+        newStatus == OrderStatus.accepted &&
+        _currentStatus == OrderStatus.completed;
     // Block accepting if no shopping list / price has been calculated
-    if (newStatus == OrderStatus.accepted && widget.order.total <= 0) {
+    if (newStatus == OrderStatus.accepted &&
+        !isReopening &&
+        widget.order.total <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -135,8 +142,30 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       );
       return;
     }
+    // Completing is only possible from accepted; confirm first
+    if (newStatus == OrderStatus.completed) {
+      if (!OrderStatus.canComplete(_currentStatus)) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('orders.complete_confirm_title'.tr()),
+          content: Text('orders.complete_confirm_msg'.tr()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('common.cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('orders.complete'.tr()),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     // If accepting, show confirmation dialog first
-    if (newStatus == OrderStatus.accepted) {
+    if (newStatus == OrderStatus.accepted && !isReopening) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -185,7 +214,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         ),
       );
       // Trigger Microsoft integration when status becomes accepted
-      if (newStatus == OrderStatus.accepted) {
+      if (newStatus == OrderStatus.accepted && !isReopening) {
         _triggerMicrosoftIntegration();
       }
     }
@@ -1126,7 +1155,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
-                  if (_currentStatus == OrderStatus.accepted) ...[
+                  if (_currentStatus == OrderStatus.accepted ||
+                      _currentStatus == OrderStatus.completed) ...[
                     const SizedBox(height: 8),
                     FilledButton.icon(
                       onPressed: _isOpeningInvoice ? null : _generateInvoice,
@@ -1163,7 +1193,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
-                  if (_currentStatus == OrderStatus.accepted) ...[
+                  if (_currentStatus == OrderStatus.accepted ||
+                      _currentStatus == OrderStatus.completed) ...[
                     const SizedBox(width: 8),
                     FilledButton.icon(
                       onPressed: _isOpeningInvoice ? null : _generateInvoice,
@@ -1433,7 +1464,51 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  if (_currentStatus != OrderStatus.accepted)
+                  if (_currentStatus == OrderStatus.accepted)
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _isUpdatingStatus
+                            ? null
+                            : () => _updateStatus(OrderStatus.completed),
+                        icon: _isUpdatingStatus
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.verified),
+                        label: Text('orders.complete'.tr()),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                        ),
+                      ),
+                    ),
+                  if (_currentStatus == OrderStatus.accepted)
+                    const SizedBox(width: 8),
+                  if (_currentStatus == OrderStatus.completed)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isUpdatingStatus
+                            ? null
+                            : () => _updateStatus(OrderStatus.accepted),
+                        icon: _isUpdatingStatus
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.undo),
+                        label: Text('orders.back_to_accepted'.tr()),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.green,
+                        ),
+                      ),
+                    ),
+                  if (_currentStatus != OrderStatus.accepted &&
+                      _currentStatus != OrderStatus.completed)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1471,9 +1546,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                       ),
                     ),
                   if (_currentStatus != OrderStatus.accepted &&
+                      _currentStatus != OrderStatus.completed &&
                       _currentStatus != OrderStatus.declined)
                     const SizedBox(width: 8),
-                  if (_currentStatus != OrderStatus.declined)
+                  if (_currentStatus != OrderStatus.declined &&
+                      _currentStatus != OrderStatus.completed)
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _isUpdatingStatus
@@ -1492,7 +1569,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         ),
                       ),
                     ),
-                  if (_currentStatus != OrderStatus.quote) ...[
+                  if (_currentStatus != OrderStatus.quote &&
+                      _currentStatus != OrderStatus.completed) ...[
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(

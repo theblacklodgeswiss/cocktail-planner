@@ -4,6 +4,7 @@ import '../utils/currency.dart';
 enum OrderStatus {
   quote('quote', 'Angebot'),
   accepted('accepted', 'Angenommen'),
+  completed('completed', 'Abgeschlossen'),
   declined('declined', 'Abgelehnt');
 
   const OrderStatus(this.value, this.label);
@@ -16,6 +17,9 @@ enum OrderStatus {
       orElse: () => OrderStatus.quote,
     );
   }
+
+  /// An order can only be completed once it has been accepted.
+  static bool canComplete(OrderStatus from) => from == OrderStatus.accepted;
 }
 
 /// Order source enum
@@ -114,6 +118,8 @@ class SavedOrder {
     this.additionalServices = const [],
     this.remarks = '',
     this.declineReason = '',
+    this.stockApplied = false,
+    this.restRecorded = false,
   });
 
   final String id;
@@ -202,9 +208,22 @@ class SavedOrder {
   /// [OrderStatus.declined]). Empty when no reason was given.
   final String declineReason;
 
+  /// True once the stock bookings for this order have been applied (set when
+  /// the order is completed).
+  final bool stockApplied;
+
+  /// True once the leftover (rest) quantities have been recorded.
+  final bool restRecorded;
+
   int get year => date.year;
 
-  bool get isAccepted => status == OrderStatus.accepted;
+  /// Completed orders count as accepted everywhere accepted is counted.
+  bool get isAccepted =>
+      status == OrderStatus.accepted || status == OrderStatus.completed;
+
+  /// Status as the customer sees it: completed is shown as accepted.
+  OrderStatus get customerStatus =>
+      status == OrderStatus.completed ? OrderStatus.accepted : status;
 
   bool get isFromForm => source == OrderSource.form;
 
@@ -337,6 +356,8 @@ class SavedOrder {
           (data['additionalServices'] as List<dynamic>?)?.cast<String>() ?? [],
       remarks: data['remarks'] as String? ?? '',
       declineReason: data['declineReason'] as String? ?? '',
+      stockApplied: data['stockApplied'] as bool? ?? false,
+      restRecorded: data['restRecorded'] as bool? ?? false,
     );
   }
 
@@ -406,5 +427,7 @@ class SavedOrder {
     'additionalServices': additionalServices,
     'remarks': remarks,
     'declineReason': declineReason,
+    'stockApplied': stockApplied,
+    'restRecorded': restRecorded,
   };
 }

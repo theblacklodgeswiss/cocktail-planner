@@ -22,6 +22,8 @@ String statusLabel(OrderStatus status) {
       return 'orders.status_quote'.tr();
     case OrderStatus.accepted:
       return 'orders.status_accepted'.tr();
+    case OrderStatus.completed:
+      return 'orders.status_completed'.tr();
     case OrderStatus.declined:
       return 'orders.status_declined'.tr();
   }
@@ -33,6 +35,8 @@ Color statusColor(OrderStatus status) {
       return Colors.orange;
     case OrderStatus.accepted:
       return Colors.green;
+    case OrderStatus.completed:
+      return Colors.teal;
     case OrderStatus.declined:
       return Colors.red;
   }
@@ -44,6 +48,8 @@ IconData statusIcon(OrderStatus status) {
       return Icons.hourglass_empty;
     case OrderStatus.accepted:
       return Icons.check_circle;
+    case OrderStatus.completed:
+      return Icons.verified;
     case OrderStatus.declined:
       return Icons.cancel;
   }
