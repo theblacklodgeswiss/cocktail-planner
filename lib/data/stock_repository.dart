@@ -56,6 +56,8 @@ class StockRepository {
         .map((d) => StorageLocation.fromMap(d.id, d.data()))
         .toList();
     if (owned.isNotEmpty) return owned.first;
+    // Firestore has no case-insensitive query and the collection is tiny
+    // (a few locations), so a full read is cheap.
     // Fall back to a case-insensitive match for differently cased owners.
     final all = await _locations.get();
     return pickOwn(
