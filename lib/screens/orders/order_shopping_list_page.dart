@@ -73,6 +73,8 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
     }
   }
 
+  /// Saves the whole items list; a concurrent edit elsewhere is
+  /// overwritten (last write wins), like the existing shopping-list editor.
   Future<void> _setSource(int index, ItemSource source) async {
     if (_saving) return;
     final previous = _items;
@@ -149,18 +151,23 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
               Text('orders.source_shop'.tr()),
               Switch(
                 value: source.isStock,
-                onChanged: canStock && !_saving
+                onChanged:
+                    canToggleSource(
+                      canStock: canStock,
+                      isStock: source.isStock,
+                      saving: _saving,
+                    )
                     ? (on) {
+                        if (!on) {
+                          _setSource(index, const ItemSource.shop());
+                          return;
+                        }
+                        if (!canStock) return;
                         final first =
                             locations.any((l) => l.id == _ownLocationId)
                             ? _ownLocationId!
                             : locations.first.id;
-                        _setSource(
-                          index,
-                          on
-                              ? ItemSource.stock(first)
-                              : const ItemSource.shop(),
-                        );
+                        _setSource(index, ItemSource.stock(first));
                       }
                     : null,
               ),

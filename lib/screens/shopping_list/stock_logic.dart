@@ -44,6 +44,7 @@ double internalCost({
   required double catalogPrice,
   required double shopPrice,
 }) =>
+    // Auftrag stock is free by spec; the term stays to mirror the formula.
     plan.fromOrder * 0 +
     plan.fromInvestment * catalogPrice +
     plan.fromShop * shopPrice;
@@ -161,3 +162,11 @@ double customerTotal(List<Map<String, dynamic>> items) => items.fold<double>(
       ((item['price'] as num?)?.toDouble() ?? 0) *
           ((item['quantity'] as num?)?.toInt() ?? 1),
 );
+
+/// The source switch may always be turned off for a stock item (even when
+/// it can no longer be resolved); turning it on needs a resolvable material.
+bool canToggleSource({
+  required bool canStock,
+  required bool isStock,
+  required bool saving,
+}) => (canStock || isStock) && !saving;

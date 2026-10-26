@@ -73,7 +73,14 @@ class ShareLinkRepository {
   static Map<String, dynamic> invoiceSnapshotFields(Map<String, dynamic> json) {
     return {
       for (final entry in json.entries)
-        if (_invoiceSnapshotKeys.contains(entry.key)) entry.key: entry.value,
+        if (_invoiceSnapshotKeys.contains(entry.key))
+          // Items carry internal stock-source fields; never publish them.
+          entry.key: entry.key == 'items'
+              ? [
+                  for (final item in entry.value as List<dynamic>)
+                    withoutInternalItemFields(item as Map<String, dynamic>),
+                ]
+              : entry.value,
     };
   }
 

@@ -56,6 +56,13 @@ class ShotSelection {
   String toString() => 'ShotSelection(name: $name, quantity: $quantity)';
 }
 
+/// Item map without internal stock-source fields. Use for everything a
+/// customer can see (share links, PDFs data copies).
+Map<String, dynamic> withoutInternalItemFields(Map<String, dynamic> item) =>
+    Map<String, dynamic>.from(item)
+      ..remove('source')
+      ..remove('sourceLocationId');
+
 class SavedOrder {
   const SavedOrder({
     required this.id,

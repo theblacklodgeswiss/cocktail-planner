@@ -1,3 +1,4 @@
+import 'order.dart' show withoutInternalItemFields;
 /// Event type for an offer
 enum EventType { birthday, wedding, company, babyshower, other }
 
@@ -257,7 +258,7 @@ class OfferData {
     'language': language,
     'extraPositions': extraPositions.map((p) => p.toJson()).toList(),
     'assignedEmployees': assignedEmployees,
-    'supervisorItems': supervisorItems,
+    'supervisorItems': supervisorItems.map(withoutInternalItemFields).toList(),
     'barDrinks': barDrinks,
     'alcoholPurchase': alcoholPurchase,
     'additionalServices': additionalServices,
