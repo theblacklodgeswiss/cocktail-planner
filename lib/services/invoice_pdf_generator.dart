@@ -627,9 +627,9 @@ class InvoicePdfGenerator {
       0: const pw.FlexColumnWidth(1.1), // Datum
       1: const pw.FlexColumnWidth(1.8), // Paket
       2: const pw.FlexColumnWidth(0.8), // Anzahl
-      3: const pw.FlexColumnWidth(1.0), // Preis
+      3: const pw.FlexColumnWidth(1.4), // Preis
       4: const pw.FlexColumnWidth(1.1), // Gesamtpreis
-      5: const pw.FlexColumnWidth(2.5), // Bemerkung
+      5: const pw.FlexColumnWidth(2.1), // Bemerkung
     };
 
     final rows = <pw.TableRow>[
