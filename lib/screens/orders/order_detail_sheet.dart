@@ -21,6 +21,7 @@ import '../../widgets/cocktail_popularity_dialog.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 import '../../widgets/order_setup_dialog.dart';
 import '../inventory/rest_entry_sheet.dart';
+import '../shopping_list/stock_logic.dart';
 import 'order_shopping_list_page.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -295,6 +296,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   /// Navigate to shopping list to edit the existing order
+  /// Items as last saved from the shopping-list page (source choice), since
+  /// [widget.order] is a snapshot from when the sheet opened.
+  List<Map<String, dynamic>>? _itemsOverride;
+
   Future<void> _editShoppingList() async {
     if (_isEditingList) return;
     setState(() => _isEditingList = true);
@@ -341,7 +346,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         order.id,
         order.name,
         requestedCocktails: order.requestedCocktails,
-        savedItems: order.items,
+        savedItems: _itemsOverride ?? order.items,
       );
 
       // Set selected recipes from the order's cocktails and shots with real ingredients
@@ -1855,13 +1860,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   Widget _buildShoppingListTile() {
     final order = widget.order;
-    final total = order.items.fold<double>(
-      0,
-      (sum, item) =>
-          sum +
-          ((item['price'] as num?)?.toDouble() ?? 0) *
-              ((item['quantity'] as num?)?.toInt() ?? 1),
-    );
+    final items = _itemsOverride ?? order.items;
+    final total = customerTotal(items);
     return Card(
       child: ListTile(
         leading: const Icon(Icons.shopping_cart_outlined),
@@ -1873,7 +1873,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         onTap: () async {
           final edit = await Navigator.of(context).push<bool>(
             MaterialPageRoute(
-              builder: (_) => OrderShoppingListPage(order: order),
+              builder: (_) => OrderShoppingListPage(
+                order: order,
+                items: items,
+                onItemsChanged: (changed) => _itemsOverride = changed,
+              ),
             ),
           );
           if (edit == true && mounted) _editShoppingList();

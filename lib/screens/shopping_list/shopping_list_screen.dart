@@ -12,6 +12,7 @@ import '../../state/app_state.dart';
 import '../../utils/currency.dart';
 import 'shopping_list_dialogs.dart';
 import 'shopping_list_logic.dart';
+import 'stock_logic.dart';
 import 'widgets/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -529,18 +530,28 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       }
     }
 
+    // The editor rebuilds items from the catalog; keep the stock source
+    // chosen on the order's shopping-list page.
+    final savedSources = <String, ItemSource>{
+      for (final saved in appState.savedOrderItems ?? const [])
+        '${saved['name']}|${saved['unit']}': ItemSource.fromItem(saved),
+    };
     final itemsData = selectedOrderItems
         .map(
-          (oi) => {
-            'name': oi.item.name,
-            'unit': oi.item.unit,
-            'price': oi.item.price,
-            'currency': oi.item.currency,
-            'note': oi.item.note,
-            'quantity': oi.quantity,
-            'total': oi.total,
-            'category': oi.item.category,
-          },
+          (oi) => withItemSource(
+            {
+              'name': oi.item.name,
+              'unit': oi.item.unit,
+              'price': oi.item.price,
+              'currency': oi.item.currency,
+              'note': oi.item.note,
+              'quantity': oi.quantity,
+              'total': oi.total,
+              'category': oi.item.category,
+            },
+            savedSources['${oi.item.name}|${oi.item.unit}'] ??
+                const ItemSource.shop(),
+          ),
         )
         .toList();
 
