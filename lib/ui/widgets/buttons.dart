@@ -34,7 +34,10 @@ class _ButtonBase extends StatelessWidget {
         if (loading) ...[
           SizedBox.square(
             dimension: AppSpace.s16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+            child: CircularProgressIndicator(
+              strokeWidth: AppSize.spinnerStroke,
+              color: fg,
+            ),
           ),
           const SizedBox(width: AppSpace.s8),
         ],
@@ -68,6 +71,7 @@ class _ButtonBase extends StatelessWidget {
 
     return Pressable(
       minSize: AppSize.minTap,
+      radius: AppRadius.pill,
       onTap: enabled ? onPressed : null,
       child: body,
     );

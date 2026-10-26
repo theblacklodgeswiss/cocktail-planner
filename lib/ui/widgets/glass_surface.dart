@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../motion.dart';
@@ -15,6 +16,11 @@ const _saturate = ColorFilter.matrix(<double>[
 
 /// Frosted glass (blur 22, saturate 180%). With reduced transparency the
 /// blur is dropped and the fill becomes nearly opaque.
+///
+/// On Flutter Web a composed color-matrix backdrop filter can degrade or
+/// fall back, so the web path is blur-only with a slightly denser fill.
+/// The drop shadow is clipped to the outside of the shape so it does not
+/// grey the translucent glass.
 class GlassSurface extends StatelessWidget {
   const GlassSurface({
     super.key,
@@ -30,39 +36,79 @@ class GlassSurface extends StatelessWidget {
     final p = AppPalette.of(context);
     final solid = AppMotion.reducedTransparency(context);
     final shape = BorderRadius.circular(radius);
+    final fill = solid ? p.glassSolid : (kIsWeb ? p.glassWeb : p.glass);
+
+    final blur = ImageFilter.blur(
+      sigmaX: AppSize.glassBlur,
+      sigmaY: AppSize.glassBlur,
+    );
 
     final body = DecoratedBox(
       decoration: BoxDecoration(
-        color: solid ? p.glassSolid : p.glass,
+        color: fill,
         borderRadius: shape,
-        border: Border.all(color: p.glassBorder),
+        border: Border.all(color: p.glassBorder, width: AppSize.hairline),
       ),
       child: child,
     );
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: shape,
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadowGlass,
-            blurRadius: 22,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: shape,
-        child: solid
-            ? body
-            : BackdropFilter(
-                filter: ImageFilter.compose(
-                  outer: _saturate,
-                  inner: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ClipPath(
+              clipper: _OutsideClipper(radius),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: shape,
+                  boxShadow: AppShadow.glass,
                 ),
-                child: body,
               ),
+            ),
+          ),
+        ),
+        ClipRRect(
+          borderRadius: shape,
+          child: solid
+              ? body
+              : BackdropFilter(
+                  filter: kIsWeb
+                      ? blur
+                      : ImageFilter.compose(outer: _saturate, inner: blur),
+                  child: body,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Everything except the rounded rect, so the shadow only paints outside.
+class _OutsideClipper extends CustomClipper<Path> {
+  const _OutsideClipper(this.radius);
+
+  final double radius;
+
+  @override
+  Path getClip(Size size) {
+    const bleed = AppSize.glassShadowBleed;
+    return Path.combine(
+      PathOperation.difference,
+      Path()..addRect(
+        Rect.fromLTWH(
+          -bleed,
+          -bleed,
+          size.width + 2 * bleed,
+          size.height + 2 * bleed,
+        ),
+      ),
+      Path()..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
       ),
     );
   }
+
+  @override
+  bool shouldReclip(_OutsideClipper old) => old.radius != radius;
 }

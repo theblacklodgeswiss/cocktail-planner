@@ -52,6 +52,10 @@ class AppColors {
   static const Color shadowStrong = Color(0x38000000);
   static const Color shadowGlass = Color(0x1A000000);
   static const Color glow = Color(0x24FFFFFF);
+  static const Color glowClear = Color(0x00FFFFFF);
+  // Web renders the glass without saturate, so the fill is a bit denser.
+  static const Color glassWebLight = Color(0xB8FFFFFF);
+  static const Color glassWebDark = Color(0xB82C2C2E);
   static const Color heroMeta = Color(0xFFA1A1A6);
   static const Color border = Color(0x14000000);
   static const Color borderDark = Color(0x1FFFFFFF);
@@ -80,6 +84,40 @@ class AppSize {
   static const double statusDot = 6;
   static const double heroGlow = 130;
   static const double pressScale = 0.97;
+  static const double pressedOpacity = 0.7;
+  static const double hairline = 1;
+  static const double focusRing = 2;
+  static const double spinnerStroke = 2;
+  static const double tileGap = 2;
+  static const double glowRight = -30;
+  static const double glowTop = -40;
+  static const double glowFade = 0.7;
+  static const double glassBlur = 22;
+  static const double glassShadowBleed = 80;
+  static const double maxTileTextScale = 1.15;
+}
+
+/// Elevation shadows shared by cards and glass.
+class AppShadow {
+  AppShadow._();
+
+  static const List<BoxShadow> card = [
+    BoxShadow(color: AppColors.shadow, blurRadius: 10, offset: Offset(0, 2)),
+  ];
+  static const List<BoxShadow> hero = [
+    BoxShadow(
+      color: AppColors.shadowStrong,
+      blurRadius: 26,
+      offset: Offset(0, 10),
+    ),
+  ];
+  static const List<BoxShadow> glass = [
+    BoxShadow(
+      color: AppColors.shadowGlass,
+      blurRadius: 22,
+      offset: Offset(0, 6),
+    ),
+  ];
 }
 
 class AppRadius {
@@ -117,7 +155,7 @@ class AppText {
   );
 
   static const TextStyle kicker = TextStyle(
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.9,
   );
@@ -144,7 +182,7 @@ class AppText {
     height: 1,
   );
   static const TextStyle tileLabel = TextStyle(
-    fontSize: 7,
+    fontSize: 10,
     fontWeight: FontWeight.w600,
     height: 1,
     letterSpacing: 0.4,
@@ -175,7 +213,14 @@ class AppPalette {
       dark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
   Color get disabled => dark ? AppColors.disabledDark : AppColors.disabledLight;
   Color get border => dark ? AppColors.borderDark : AppColors.border;
+
+  /// Dark cards equal the dark background, so they get a hairline edge.
+  Border? get cardBorder => dark
+      ? Border.all(color: AppColors.borderDark, width: AppSize.hairline)
+      : null;
+
   Color get glass => dark ? AppColors.glassDark : AppColors.glassLight;
+  Color get glassWeb => dark ? AppColors.glassWebDark : AppColors.glassWebLight;
   Color get glassSolid =>
       dark ? AppColors.glassSolidDark : AppColors.glassSolidLight;
   Color get glassBorder =>

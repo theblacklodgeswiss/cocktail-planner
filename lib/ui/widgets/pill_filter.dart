@@ -31,18 +31,21 @@ class PillFilter<T> extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final o in options) ...[
+          for (var i = 0; i < options.length; i++) ...[
             Pressable(
               minSize: AppSize.minTap,
-              selected: o.value == value,
-              onTap: () => onChanged(o.value),
+              radius: AppRadius.pill,
+              selected: options[i].value == value,
+              onTap: () => onChanged(options[i].value),
               child: _Pill(
-                text: o.count == null ? o.label : '${o.label} ${o.count}',
-                active: o.value == value,
+                text: options[i].count == null
+                    ? options[i].label
+                    : '${options[i].label} ${options[i].count}',
+                active: options[i].value == value,
                 palette: p,
               ),
             ),
-            if (o != options.last) const SizedBox(width: AppSpace.s4),
+            if (i < options.length - 1) const SizedBox(width: AppSpace.s4),
           ],
         ],
       ),

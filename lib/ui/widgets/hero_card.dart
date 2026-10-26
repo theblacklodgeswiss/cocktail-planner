@@ -28,13 +28,8 @@ class HeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: p.hero,
         borderRadius: BorderRadius.circular(AppRadius.hero),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadowStrong,
-            blurRadius: 26,
-            offset: Offset(0, 10),
-          ),
-        ],
+        border: p.cardBorder,
+        boxShadow: AppShadow.hero,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.hero),
@@ -42,8 +37,8 @@ class HeroCard extends StatelessWidget {
           children: [
             // Faint glow in the top right corner.
             Positioned(
-              right: -30,
-              top: -40,
+              right: AppSize.glowRight,
+              top: AppSize.glowTop,
               child: IgnorePointer(
                 child: Container(
                   width: AppSize.heroGlow,
@@ -51,8 +46,8 @@ class HeroCard extends StatelessWidget {
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
-                      colors: [AppColors.glow, Color(0x00FFFFFF)],
-                      stops: [0, 0.7],
+                      colors: [AppColors.glow, AppColors.glowClear],
+                      stops: [0, AppSize.glowFade],
                     ),
                   ),
                 ),
@@ -115,6 +110,6 @@ class HeroCard extends StatelessWidget {
       ),
     );
     if (onTap == null) return card;
-    return Pressable(onTap: onTap, child: card);
+    return Pressable(onTap: onTap, radius: AppRadius.hero, child: card);
   }
 }

@@ -55,18 +55,24 @@ class DateTile extends StatelessWidget {
           color: p.surface,
           borderRadius: BorderRadius.circular(AppRadius.tile),
         ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(day, style: AppText.tileDay.copyWith(color: p.text)),
-              const SizedBox(height: 2),
-              Text(
-                months[date.month - 1],
-                style: AppText.tileLabel.copyWith(color: p.textSecondary),
-              ),
-            ],
+        // Clamp instead of shrinking so the label never renders below 10 px.
+        child: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: AppSize.maxTileTextScale,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(day, style: AppText.tileDay.copyWith(color: p.text)),
+                const SizedBox(height: AppSize.tileGap),
+                Text(
+                  months[date.month - 1],
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.clip,
+                  style: AppText.tileLabel.copyWith(color: p.textSecondary),
+                ),
+              ],
+            ),
           ),
         ),
       ),

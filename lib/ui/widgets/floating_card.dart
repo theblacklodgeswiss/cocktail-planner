@@ -22,17 +22,12 @@ class FloatingCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppPalette.of(context).card,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: AppPalette.of(context).cardBorder,
+        boxShadow: AppShadow.card,
       ),
       child: Padding(padding: padding, child: child),
     );
     if (onTap == null) return card;
-    return Pressable(onTap: onTap, child: card);
+    return Pressable(onTap: onTap, radius: AppRadius.card, child: card);
   }
 }
