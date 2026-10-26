@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/env_config.dart';
 import '../../data/cocktail_repository.dart';
-import '../../data/admin_repository.dart';
 import '../../data/employee_repository.dart';
 import '../../data/stock_repository.dart';
 import '../../models/cocktail_data.dart';
@@ -206,10 +205,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       // Going back to accepted never reverses stock and keeps stockApplied, so
       // completing again later deducts nothing a second time.
       try {
-        final catalog = await adminRepository.getMaterialsWithIds(
-          isFixedValue: false,
-        );
-        deduction = await stockRepository.deductForOrder(widget.order, catalog);
+        // Plans from the order as stored now, not widget.order (its items may
+        // be outdated after editing the source on the shopping-list page).
+        deduction = await stockRepository.deductForOrder(widget.order.id);
       } catch (e) {
         debugPrint('Stock deduction failed: $e');
         if (!mounted) return;
@@ -223,6 +221,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         );
         return;
       }
+      if (!mounted) return;
+      // Shown right after booking and awaited: it is the only record of a
+      // shortfall (a retry after a failed status update plans nothing).
+      if (deduction.hasNotes) await _showStockSummary(deduction);
       if (!mounted) return;
     }
     final success = await orderRepository.updateStatus(
@@ -246,24 +248,6 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
           ),
         ),
       );
-      if (deduction != null && deduction.hasNotes) {
-        final lines = [
-          for (final s in deduction.shortfalls)
-            'orders.stock_shortfall_line'.tr(
-              namedArgs: {'name': s.name, 'qty': _formatQty(s.quantity)},
-            ),
-          for (final name in deduction.unresolved)
-            'orders.stock_unresolved_line'.tr(namedArgs: {'name': name}),
-        ];
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${'orders.stock_summary_title'.tr()}\n${lines.join('\n')}',
-            ),
-            duration: const Duration(seconds: 10),
-          ),
-        );
-      }
       // Trigger Microsoft integration when status becomes accepted
       if (newStatus == OrderStatus.accepted && !isReopening) {
         _triggerMicrosoftIntegration();
@@ -271,7 +255,49 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
       // Ask for the leftovers right after completing; skippable, can be
       // redone via "Rest erfassen".
       if (newStatus == OrderStatus.completed) await _recordRest();
+    } else if (deduction != null) {
+      // Stock is booked and stockApplied is set, only the status failed.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('orders.stock_done_status_failed'.tr()),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
+  }
+
+  Future<void> _showStockSummary(OrderDeductionPlan plan) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('orders.stock_summary_title'.tr()),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final s in plan.shortfalls)
+                Text(
+                  'orders.stock_shortfall_line'.tr(
+                    namedArgs: {'name': s.name, 'qty': _formatQty(s.quantity)},
+                  ),
+                ),
+              for (final name in plan.unresolved)
+                Text(
+                  'orders.stock_unresolved_line'.tr(namedArgs: {'name': name}),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('common.ok'.tr()),
+          ),
+        ],
+      ),
+    );
   }
 
   static String _formatQty(double q) =>

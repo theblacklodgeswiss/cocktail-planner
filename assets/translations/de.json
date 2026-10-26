@@ -454,6 +454,7 @@
     "stock_summary_title": "Aus dem Lager nicht gedeckt, aus dem Laden:",
     "stock_shortfall_line": "{name}: {qty} aus Laden",
     "stock_unresolved_line": "{name}: nicht im Katalog, nicht abgebucht",
+    "stock_done_status_failed": "Lagerabzug erfolgt, aber der Status konnte nicht geändert werden. Bitte erneut auf Abschließen tippen, der Bestand wird nicht doppelt abgezogen.",
     "stock_deduct_failed": "Lagerbestand konnte nicht abgebucht werden. Der Auftrag wurde nicht abgeschlossen. Bitte erneut versuchen, bereits gebuchte Mengen werden nicht doppelt abgezogen.",
     "back_to_accepted": "Zurück auf Angenommen",
     "status_declined": "Abgelehnt",

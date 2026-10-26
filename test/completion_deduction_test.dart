@@ -164,4 +164,71 @@ void main() {
     expect(shouldApplyMovement(movementId: 'x', exists: false), isTrue);
     expect(shouldApplyMovement(movementId: 'x', exists: true), isFalse);
   });
+
+  group('prepareOrderDeduction', () {
+    final staleShop = _order([
+      {'name': 'Rum', 'unit': 'Fl', 'quantity': 3, 'source': 'shop'},
+    ]);
+    final freshStock = _order([_stockItem('Rum', 3)]);
+    final entries = [_entry('rum', 'l1', StockOrigin.order, 5)];
+
+    Future<OrderDeductionPlan> run({
+      required Future<SavedOrder?> Function() fetch,
+      Future<List<({String id, MaterialItem item})>> Function()? catalog,
+    }) => prepareOrderDeduction(
+      fetchOrder: fetch,
+      loadCatalog: catalog ?? () async => _catalog,
+      loadEntries: () async => entries,
+      loadBooked: (_) async => {},
+    );
+
+    test('plans from the fresh order, not the stale one', () async {
+      expect(staleShop.items.single['source'], 'shop');
+      final plan = await run(fetch: () async => freshStock);
+      expect(plan.movements.single.delta, -3);
+    });
+
+    test('fresh order missing or failing to load fails closed', () async {
+      expect(run(fetch: () async => null), throwsStateError);
+      expect(run(fetch: () async => throw Exception('x')), throwsStateError);
+    });
+
+    test('empty or failing catalog with stock items fails closed', () async {
+      expect(
+        run(fetch: () async => freshStock, catalog: () async => []),
+        throwsStateError,
+      );
+      expect(
+        run(
+          fetch: () async => freshStock,
+          catalog: () async => throw Exception('offline'),
+        ),
+        throwsException,
+      );
+    });
+
+    test('catalog is not needed without stock items', () async {
+      final plan = await run(
+        fetch: () async => staleShop,
+        catalog: () async => throw Exception('must not be called'),
+      );
+      expect(plan.movements, isEmpty);
+      expect(plan.alreadyApplied, isFalse);
+    });
+
+    test('fresh stockApplied is reported as already applied', () async {
+      final plan = await run(
+        fetch: () async => _order([_stockItem('Rum', 3)], stockApplied: true),
+      );
+      expect(plan.alreadyApplied, isTrue);
+      expect(plan.movements, isEmpty);
+    });
+
+    test('loaded catalog: unresolved items are listed, not an error', () async {
+      final plan = await run(
+        fetch: () async => _order([_stockItem('Unbekannt', 1)]),
+      );
+      expect(plan.unresolved, ['Unbekannt']);
+    });
+  });
 }

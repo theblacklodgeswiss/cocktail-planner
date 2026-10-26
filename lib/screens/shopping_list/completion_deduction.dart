@@ -38,6 +38,7 @@ class OrderDeductionPlan {
     this.movements = const [],
     this.shortfalls = const [],
     this.unresolved = const [],
+    this.alreadyApplied = false,
   });
 
   final List<PlannedMovement> movements;
@@ -45,6 +46,9 @@ class OrderDeductionPlan {
 
   /// Names of stock items that no longer resolve to a catalog material.
   final List<String> unresolved;
+
+  /// The fresh order already had stockApplied set; nothing to book.
+  final bool alreadyApplied;
 
   bool get hasNotes => shortfalls.isNotEmpty || unresolved.isNotEmpty;
 }
@@ -154,4 +158,50 @@ OrderDeductionPlan planOrderDeduction(
     shortfalls: shortfalls,
     unresolved: unresolved,
   );
+}
+
+/// Reads everything needed from the sources (injectable for tests) and plans
+/// from the FRESH order, never from an order object opened earlier: source
+/// choices are saved on another page after the sheet was opened. Fails closed:
+/// throws if the fresh order cannot be read, or if it has stock items and the
+/// catalog cannot be loaded or is empty (otherwise every item would look
+/// unresolved and be skipped for good).
+Future<OrderDeductionPlan> prepareOrderDeduction({
+  required Future<SavedOrder?> Function() fetchOrder,
+  required Future<List<({String id, MaterialItem item})>> Function()
+  loadCatalog,
+  required Future<List<StockEntry>> Function() loadEntries,
+  required Future<Map<String, double>> Function(List<String> ids) loadBooked,
+}) async {
+  final SavedOrder? fresh;
+  try {
+    fresh = await fetchOrder();
+  } catch (e) {
+    throw StateError('order could not be read: $e');
+  }
+  if (fresh == null) throw StateError('order could not be read');
+  if (fresh.stockApplied) {
+    return const OrderDeductionPlan(alreadyApplied: true);
+  }
+  final hasStockItems = fresh.items.any((i) => ItemSource.fromItem(i).isStock);
+  if (!hasStockItems) return const OrderDeductionPlan();
+
+  final catalog = await loadCatalog();
+  if (catalog.isEmpty) throw StateError('catalog is empty or not loaded');
+
+  // Entries must be read BEFORE the already booked movements: a movement
+  // booked in between would otherwise be subtracted twice (stock already
+  // reduced, delta added back too little), which can over-deduct.
+  final entries = await loadEntries();
+  final ids = <String>{};
+  for (final item in fresh.items) {
+    final source = ItemSource.fromItem(item);
+    final materialId = resolveMaterialId(item, catalog);
+    if (!source.isStock || materialId == null) continue;
+    for (final origin in StockOrigin.values) {
+      ids.add(orderMovementId(fresh.id, materialId, source.locationId!, origin));
+    }
+  }
+  final booked = await loadBooked(ids.toList());
+  return planOrderDeduction(fresh, entries, catalog, booked: booked);
 }

@@ -448,6 +448,7 @@
     "stock_summary_title": "Not covered by stock, bought from the shop:",
     "stock_shortfall_line": "{name}: {qty} from shop",
     "stock_unresolved_line": "{name}: not in catalog, not deducted",
+    "stock_done_status_failed": "Stock was deducted, but the status could not be changed. Press Complete again; stock is not deducted twice.",
     "stock_deduct_failed": "Stock could not be deducted. The order was not completed. Please try again; quantities already booked are not deducted twice.",
     "back_to_accepted": "Back to Accepted",
     "status_declined": "Declined",

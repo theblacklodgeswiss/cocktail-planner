@@ -3,10 +3,8 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cocktail_planer/models/stock.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
-import 'package:cocktail_planer/models/material_item.dart';
-import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
-import 'package:cocktail_planer/screens/shopping_list/stock_logic.dart';
+import 'admin_repository.dart';
 import 'firestore_service.dart';
 import 'order_repository.dart';
 
@@ -173,36 +171,23 @@ class StockRepository {
   /// after a partial failure books only what is still missing. Throws if a
   /// booking or the final flag write fails (the caller must not complete the
   /// order then). Returns the plan so the caller can report shortfalls.
-  Future<OrderDeductionPlan> deductForOrder(
-    SavedOrder order,
-    List<({String id, MaterialItem item})> catalog,
-  ) async {
-    if (order.stockApplied) return const OrderDeductionPlan();
-    // The sheet's order may be stale (second tab, reload): re-check the flag.
-    final fresh = await orderRepository.getOrderById(order.id);
-    if (fresh?.stockApplied ?? false) return const OrderDeductionPlan();
-    final entries = (await _stock.get()).docs
-        .map((d) => StockEntry.fromMap(d.id, d.data()))
-        .toList();
-    // Deltas of movements booked by an earlier, partly failed attempt.
-    final booked = <String, double>{};
-    for (final item in order.items) {
-      final source = ItemSource.fromItem(item);
-      final materialId = resolveMaterialId(item, catalog);
-      if (!source.isStock || materialId == null) continue;
-      for (final origin in StockOrigin.values) {
-        final id = orderMovementId(
-          order.id,
-          materialId,
-          source.locationId!,
-          origin,
-        );
-        if (booked.containsKey(id)) continue;
-        final doc = await _movements.doc(id).get();
-        if (doc.exists) booked[id] = _toDouble(doc.data()?['delta']);
-      }
-    }
-    final plan = planOrderDeduction(order, entries, catalog, booked: booked);
+  Future<OrderDeductionPlan> deductForOrder(String orderId) async {
+    final plan = await prepareOrderDeduction(
+      fetchOrder: () => orderRepository.getOrderById(orderId),
+      loadCatalog: () => adminRepository.getMaterialsWithIdsOrThrow(),
+      loadEntries: () async => (await _stock.get()).docs
+          .map((d) => StockEntry.fromMap(d.id, d.data()))
+          .toList(),
+      loadBooked: (ids) async {
+        final booked = <String, double>{};
+        for (final id in ids) {
+          final doc = await _movements.doc(id).get();
+          if (doc.exists) booked[id] = _toDouble(doc.data()?['delta']);
+        }
+        return booked;
+      },
+    );
+    if (plan.alreadyApplied) return plan;
     for (final m in plan.movements) {
       await applyMovement(
         materialId: m.materialId,
@@ -211,11 +196,11 @@ class StockRepository {
         origin: m.origin,
         delta: m.delta,
         reason: 'order_deduction',
-        orderId: order.id,
+        orderId: orderId,
         movementId: m.id,
       );
     }
-    final ok = await orderRepository.updateOrder(order.id, {
+    final ok = await orderRepository.updateOrder(orderId, {
       'stockApplied': true,
     });
     if (!ok) throw StateError('stockApplied could not be saved');

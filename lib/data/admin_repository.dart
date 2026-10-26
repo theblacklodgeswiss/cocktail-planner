@@ -141,6 +141,19 @@ class AdminRepository {
     }
   }
 
+  /// Like [getMaterialsWithIds] for the catalog, but throws instead of
+  /// returning an empty list when Firestore is unavailable or the read fails.
+  Future<List<({String id, MaterialItem item})>>
+  getMaterialsWithIdsOrThrow() async {
+    if (!firestoreService.isAvailable) {
+      throw StateError('Firestore not available');
+    }
+    final snapshot = await firestoreService.materialsCollection.get();
+    return snapshot.docs
+        .map((doc) => (id: doc.id, item: MaterialItem.fromJson(doc.data())))
+        .toList();
+  }
+
   /// Update sort order for fixed values.
   Future<bool> updateFixedValueSortOrders(List<String> orderedDocIds) async {
     if (!firestoreService.isAvailable) return false;

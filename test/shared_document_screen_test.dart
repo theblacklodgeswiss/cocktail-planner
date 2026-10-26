@@ -64,7 +64,12 @@ void main() {
       await tester.pumpWidget(
         wrapLocalized(const SharedDocumentScreen(code: 'unknown1')),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      // Poll (bounded) until the asset is loaded instead of a fixed delay.
+      for (var i = 0; i < 50; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+        if (find.textContaining('abgelaufen').evaluate().isNotEmpty) break;
+      }
     });
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
