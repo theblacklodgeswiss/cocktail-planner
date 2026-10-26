@@ -9,6 +9,7 @@ import '../screens/dashboard/my_requests_screen.dart';
 import '../screens/dashboard/simple_dashboard_screen.dart';
 import '../screens/forms/modern_order_form_screen.dart';
 import '../screens/forms/order_success_screen.dart';
+import '../screens/inventory/inventory_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
@@ -85,6 +86,10 @@ final GoRouter appRouter = GoRouter(
         final status = state.uri.queryParameters['status'];
         return OrdersOverviewScreen(initialStatus: status);
       },
+    ),
+    GoRoute(
+      path: '/inventory',
+      builder: (context, state) => const InventoryScreen(),
     ),
     GoRoute(
       path: '/pending-orders',

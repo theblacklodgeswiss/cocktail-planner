@@ -32,6 +32,8 @@ class _UserMenuSheet extends StatelessWidget {
           if (authService.isAdmin) _buildAdminTile(context),
           if (authService.isEmployeeOrHigher)
             _buildOrdersTile(context),
+          if (authService.isEmployeeOrHigher)
+            _buildInventoryTile(context),
           _buildSettingsTile(context),
           if (user.isAnonymous) _buildLinkGoogleTile(context),
           _buildLogoutTile(context),
@@ -95,6 +97,18 @@ class _UserMenuSheet extends StatelessWidget {
       onTap: () {
         Navigator.pop(context);
         context.push('/orders');
+      },
+    );
+  }
+
+  Widget _buildInventoryTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.warehouse_outlined),
+      title: Text('drawer.inventory_page_title'.tr()),
+      subtitle: Text('drawer.inventory_page_subtitle'.tr()),
+      onTap: () {
+        Navigator.pop(context);
+        context.push('/inventory');
       },
     );
   }
