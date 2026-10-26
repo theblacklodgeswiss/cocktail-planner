@@ -5,6 +5,15 @@ import 'package:cocktail_planer/models/stock.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
 import 'firestore_service.dart';
 
+/// Returns the location owned by [email] (case-insensitive), or null.
+StorageLocation? pickOwn(List<StorageLocation> locations, String email) {
+  final wanted = email.toLowerCase();
+  for (final location in locations) {
+    if (location.ownerEmail?.toLowerCase() == wanted) return location;
+  }
+  return null;
+}
+
 /// Repository for storage locations, stock quantities and stock movements.
 class StockRepository {
   CollectionReference<Map<String, dynamic>> get _locations =>
@@ -15,7 +24,10 @@ class StockRepository {
       firestoreService.stockMovementsCollection;
 
   Stream<List<StorageLocation>> watchLocations() {
-    return _locations.orderBy('name').snapshots().map(
+    return _locations
+        .orderBy('name')
+        .snapshots()
+        .map(
           (snap) => snap.docs
               .map((d) => StorageLocation.fromMap(d.id, d.data()))
               .toList(),
@@ -35,16 +47,32 @@ class StockRepository {
     return StorageLocation(id: ref.id, name: name, ownerEmail: ownerEmail);
   }
 
+  /// The storage location of the current user, or null if none exists yet.
+  Future<StorageLocation?> ownLocation() async {
+    final email = authService.email;
+    if (email == null) return null;
+    final snap = await _locations.where('ownerEmail', isEqualTo: email).get();
+    final owned = snap.docs
+        .map((d) => StorageLocation.fromMap(d.id, d.data()))
+        .toList();
+    if (owned.isNotEmpty) return owned.first;
+    // Fall back to a case-insensitive match for differently cased owners.
+    final all = await _locations.get();
+    return pickOwn(
+      all.docs.map((d) => StorageLocation.fromMap(d.id, d.data())).toList(),
+      email,
+    );
+  }
+
   Future<void> renameLocation(String id, String name) {
     return _locations.doc(id).update({'name': name});
   }
 
   Stream<List<StockEntry>> watchStock() {
     return _stock.snapshots().map(
-          (snap) => snap.docs
-              .map((d) => StockEntry.fromMap(d.id, d.data()))
-              .toList(),
-        );
+      (snap) =>
+          snap.docs.map((d) => StockEntry.fromMap(d.id, d.data())).toList(),
+    );
   }
 
   /// Changes a quantity by [delta] in one transaction. The quantity never
@@ -58,25 +86,22 @@ class StockRepository {
     required String reason,
     String? orderId,
   }) {
-    final entryRef =
-        _stock.doc(StockEntry.buildId(materialId, locationId, origin));
+    final entryRef = _stock.doc(
+      StockEntry.buildId(materialId, locationId, origin),
+    );
     final movementRef = _movements.doc();
     return firestoreService.firestore.runTransaction((tx) async {
       final snap = await tx.get(entryRef);
       final old = snap.exists ? _toDouble(snap.data()?['quantity']) : 0.0;
       final next = math.max(0.0, old + delta);
       final applied = next - old;
-      tx.set(
-        entryRef,
-        {
-          'materialId': materialId,
-          'materialName': materialName,
-          'locationId': locationId,
-          'origin': origin.name,
-          'quantity': next,
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(entryRef, {
+        'materialId': materialId,
+        'materialName': materialName,
+        'locationId': locationId,
+        'origin': origin.name,
+        'quantity': next,
+      }, SetOptions(merge: true));
       tx.set(
         movementRef,
         _movement(
@@ -99,24 +124,21 @@ class StockRepository {
     required StockOrigin origin,
     required double quantity,
   }) {
-    final entryRef =
-        _stock.doc(StockEntry.buildId(materialId, locationId, origin));
+    final entryRef = _stock.doc(
+      StockEntry.buildId(materialId, locationId, origin),
+    );
     final movementRef = _movements.doc();
     final target = math.max(0.0, quantity);
     return firestoreService.firestore.runTransaction((tx) async {
       final snap = await tx.get(entryRef);
       final old = snap.exists ? _toDouble(snap.data()?['quantity']) : 0.0;
-      tx.set(
-        entryRef,
-        {
-          'materialId': materialId,
-          'materialName': materialName,
-          'locationId': locationId,
-          'origin': origin.name,
-          'quantity': target,
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(entryRef, {
+        'materialId': materialId,
+        'materialName': materialName,
+        'locationId': locationId,
+        'origin': origin.name,
+        'quantity': target,
+      }, SetOptions(merge: true));
       tx.set(
         movementRef,
         _movement(
@@ -135,7 +157,10 @@ class StockRepository {
     if (materialId != null) {
       query = query.where('materialId', isEqualTo: materialId);
     }
-    return query.orderBy('at', descending: true).snapshots().map(
+    return query
+        .orderBy('at', descending: true)
+        .snapshots()
+        .map(
           (snap) => snap.docs
               .map((d) => StockMovement.fromMap(d.id, d.data()))
               .toList(),

@@ -705,5 +705,11 @@
     "remark_hint": "z.B. Familie/Freunde Rabatt",
     "percent_too_high": "Maximal 100 %",
     "resolved": "Rabatt: -{} → neue Summe: {}"
+  },
+  "stock": {
+    "location_prompt_title": "Dein Lagerort",
+    "location_name": "Name des Lagerorts",
+    "location_prompt_hint": "Wo lagerst du dein Material? Gib deinem Lagerort einen Namen.",
+    "location_name_required": "Name darf nicht leer sein"
   }
 }

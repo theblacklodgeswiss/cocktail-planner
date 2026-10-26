@@ -697,5 +697,11 @@
     "remark_hint": "e.g. Family/Friends discount",
     "percent_too_high": "Maximum 100 %",
     "resolved": "Discount: -{} → new total: {}"
+  },
+  "stock": {
+    "location_prompt_title": "Your storage location",
+    "location_name": "Location name",
+    "location_prompt_hint": "Where do you keep your stock? Give your storage location a name.",
+    "location_name_required": "Name must not be empty"
   }
 }
