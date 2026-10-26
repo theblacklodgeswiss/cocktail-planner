@@ -203,7 +203,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
   Future<void> _pickAnyItem(RestLine line) async {
     final picked = await showDialog<(String, MaterialItem)>(
       context: context,
-      builder: (_) => _CatalogPickerDialog(catalog: _catalog),
+      builder: (_) => CatalogPickerDialog(catalog: _catalog),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -215,7 +215,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
   Future<void> _createItem(RestLine line) async {
     final result = await showDialog<(String, String)>(
       context: context,
-      builder: (_) => _NewItemDialog(initialName: line.parsed.spokenName),
+      builder: (_) => NewItemDialog(initialName: line.parsed.spokenName),
     );
     if (result == null || !mounted) return;
     final (name, unit) = result;
@@ -635,16 +635,16 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
   }
 }
 
-class _CatalogPickerDialog extends StatefulWidget {
-  const _CatalogPickerDialog({required this.catalog});
+class CatalogPickerDialog extends StatefulWidget {
+  const CatalogPickerDialog({super.key, required this.catalog});
 
   final List<(String, MaterialItem)> catalog;
 
   @override
-  State<_CatalogPickerDialog> createState() => _CatalogPickerDialogState();
+  State<CatalogPickerDialog> createState() => CatalogPickerDialogState();
 }
 
-class _CatalogPickerDialogState extends State<_CatalogPickerDialog> {
+class CatalogPickerDialogState extends State<CatalogPickerDialog> {
   String _filter = '';
 
   @override
@@ -697,16 +697,16 @@ class _CatalogPickerDialogState extends State<_CatalogPickerDialog> {
   }
 }
 
-class _NewItemDialog extends StatefulWidget {
-  const _NewItemDialog({required this.initialName});
+class NewItemDialog extends StatefulWidget {
+  const NewItemDialog({super.key, required this.initialName});
 
   final String initialName;
 
   @override
-  State<_NewItemDialog> createState() => _NewItemDialogState();
+  State<NewItemDialog> createState() => NewItemDialogState();
 }
 
-class _NewItemDialogState extends State<_NewItemDialog> {
+class NewItemDialogState extends State<NewItemDialog> {
   late final _name = TextEditingController(text: widget.initialName);
   final _unit = TextEditingController(text: 'Fl.');
 

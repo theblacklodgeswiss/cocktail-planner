@@ -8,6 +8,7 @@ import '../../models/app_role.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/role_protected_screen.dart';
+import 'excel_import_dialog.dart';
 import 'inventory_rows.dart';
 
 /// Stock overview. Layout: one table, horizontally scrollable so it stays
@@ -71,6 +72,12 @@ class _InventoryViewState extends State<_InventoryView> {
           onPressed: () => context.canPop() ? context.pop() : context.go('/'),
         ),
         actions: [
+          if (authService.isAdmin)
+            IconButton(
+              tooltip: 'excel_import.button'.tr(),
+              icon: const Icon(Icons.upload_file),
+              onPressed: () => showExcelImportDialog(context),
+            ),
           IconButton(
             tooltip: 'inventory.manage_locations'.tr(),
             icon: const Icon(Icons.warehouse_outlined),
