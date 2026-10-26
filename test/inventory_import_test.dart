@@ -88,4 +88,10 @@ void main() {
     expect(r.cells.single.quantity, 1.0);
     expect(parse('1L\tGin').single.note, isNull);
   });
+
+  test('quoted cell containing a tab stays one cell', () {
+    final r = parse('1L\t"Gin\tTonic"\t2').single;
+    expect(r.name, 'Gin\tTonic');
+    expect(r.cells.single.quantity, 2.0);
+  });
 }

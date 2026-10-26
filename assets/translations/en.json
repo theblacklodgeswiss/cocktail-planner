@@ -759,7 +759,6 @@
       "skipped": "Skipped",
       "ask_admin": "Only admins can create new items.",
       "invalid_cells": "Invalid number in: {columns}. These values will not be booked.",
-      "note_not_imported": "Note (not imported): {note}",
       "summary": "{movements} bookings for {rows} items",
       "import": "Import",
       "done": "{count} bookings imported.",

@@ -243,6 +243,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             origin: _columnOrigins[cell.column],
             delta: cell.quantity,
             reason: 'import',
+            note: s.row.note,
           );
           _booked.add((i, cell.column));
           booked++;
@@ -511,12 +512,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 style: const TextStyle(color: Colors.red, fontSize: 12),
               ),
             if (s.row.note != null)
-              Text(
-                'excel_import.note_not_imported'.tr(
-                  namedArgs: {'note': s.row.note!},
-                ),
-                style: const TextStyle(fontSize: 12),
-              ),
+              Text(s.row.note!, style: const TextStyle(fontSize: 12)),
             if (s.skipped)
               Text(
                 'excel_import.skipped'.tr(),

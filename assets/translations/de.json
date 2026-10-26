@@ -767,7 +767,6 @@
       "skipped": "Übersprungen",
       "ask_admin": "Nur Admins dürfen neue Artikel anlegen.",
       "invalid_cells": "Ungültige Zahl in: {columns}. Diese Werte werden nicht gebucht.",
-      "note_not_imported": "Bemerkung (wird nicht übernommen): {note}",
       "summary": "{movements} Buchungen für {rows} Artikel",
       "import": "Importieren",
       "done": "{count} Buchungen importiert.",

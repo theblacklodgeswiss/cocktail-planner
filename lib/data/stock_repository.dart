@@ -14,6 +14,27 @@ StorageLocation? pickOwn(List<StorageLocation> locations, String email) {
   return null;
 }
 
+/// Fields written to a stock entry document. [note] is only included when
+/// non-empty, so merging never clears an existing note.
+Map<String, dynamic> stockEntryFields({
+  required String materialId,
+  required String materialName,
+  required String locationId,
+  required StockOrigin origin,
+  required double quantity,
+  String? note,
+}) {
+  final trimmed = note?.trim();
+  return {
+    'materialId': materialId,
+    'materialName': materialName,
+    'locationId': locationId,
+    'origin': origin.name,
+    'quantity': quantity,
+    if (trimmed != null && trimmed.isNotEmpty) 'note': trimmed,
+  };
+}
+
 /// Repository for storage locations, stock quantities and stock movements.
 class StockRepository {
   CollectionReference<Map<String, dynamic>> get _locations =>
@@ -87,6 +108,7 @@ class StockRepository {
     required double delta,
     required String reason,
     String? orderId,
+    String? note,
   }) {
     final entryRef = _stock.doc(
       StockEntry.buildId(materialId, locationId, origin),
@@ -97,13 +119,18 @@ class StockRepository {
       final old = snap.exists ? _toDouble(snap.data()?['quantity']) : 0.0;
       final next = math.max(0.0, old + delta);
       final applied = next - old;
-      tx.set(entryRef, {
-        'materialId': materialId,
-        'materialName': materialName,
-        'locationId': locationId,
-        'origin': origin.name,
-        'quantity': next,
-      }, SetOptions(merge: true));
+      tx.set(
+        entryRef,
+        stockEntryFields(
+          materialId: materialId,
+          materialName: materialName,
+          locationId: locationId,
+          origin: origin,
+          quantity: next,
+          note: note,
+        ),
+        SetOptions(merge: true),
+      );
       tx.set(
         movementRef,
         _movement(
