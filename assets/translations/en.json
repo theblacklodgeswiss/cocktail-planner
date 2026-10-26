@@ -834,5 +834,11 @@
       "partial_closed": "{count} line(s) were already booked. Please add the rest on the inventory page.",
       "ask_admin": "No item fits? Ask an admin to add it to the catalog.",
       "record": "Record leftovers"
+  },
+  "status": {
+    "offer": "Offer",
+    "accepted": "Accepted",
+    "completed": "Completed",
+    "declined": "Declined"
   }
 }

@@ -842,5 +842,11 @@
       "partial_closed": "{count} Zeile(n) wurden bereits gebucht. Den Rest bitte über die Inventur-Seite ergänzen.",
       "ask_admin": "Passt kein Artikel? Bitte einen Admin, ihn im Katalog anzulegen.",
       "record": "Rest erfassen"
+  },
+  "status": {
+    "offer": "Angebot",
+    "accepted": "Angenommen",
+    "completed": "Abgeschlossen",
+    "declined": "Abgelehnt"
   }
 }

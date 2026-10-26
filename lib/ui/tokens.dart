@@ -38,6 +38,24 @@ class AppColors {
   static const Color statusOffer = Color(0xFFC7C7CC);
   static const Color statusDone = Color(0xFFE5E5EA);
 
+  // Glass (white 62% light; dark counterpart) and its hairline border
+  static const Color glassLight = Color(0x9EFFFFFF);
+  static const Color glassDark = Color(0x9E2C2C2E);
+  static const Color glassBorderLight = Color(0xD9FFFFFF);
+  static const Color glassBorderDark = Color(0x33FFFFFF);
+  // Near-opaque fallback when transparency is reduced
+  static const Color glassSolidLight = Color(0xF5FFFFFF);
+  static const Color glassSolidDark = Color(0xF52C2C2E);
+
+  /// Soft card shadow (0 2 10 @ 5%) and glass shadow base.
+  static const Color shadow = Color(0x0D000000);
+  static const Color shadowStrong = Color(0x38000000);
+  static const Color shadowGlass = Color(0x1A000000);
+  static const Color glow = Color(0x24FFFFFF);
+  static const Color heroMeta = Color(0xFFA1A1A6);
+  static const Color border = Color(0x14000000);
+  static const Color borderDark = Color(0x1FFFFFFF);
+
   // Errors and destructive actions only
   static const Color errorLight = Color(0xFFB3261E);
   static const Color errorDark = Color(0xFFFF6B63);
@@ -53,6 +71,17 @@ class AppSpace {
   static const double s24 = 24;
 }
 
+/// Fixed sizes shared by the base widgets.
+class AppSize {
+  AppSize._();
+
+  static const double minTap = 44;
+  static const double dateTile = 34;
+  static const double statusDot = 6;
+  static const double heroGlow = 130;
+  static const double pressScale = 0.97;
+}
+
 class AppRadius {
   AppRadius._();
 
@@ -60,6 +89,7 @@ class AppRadius {
   static const double hero = 24;
   static const double heroXl = 30;
   static const double control = 12;
+  static const double tile = 12;
   static const double pill = 999;
 }
 
@@ -85,4 +115,84 @@ class AppText {
     letterSpacing: -0.3,
     fontFeatures: [FontFeature.tabularFigures()],
   );
+
+  static const TextStyle kicker = TextStyle(
+    fontSize: 8.5,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.9,
+  );
+  static const TextStyle heroTitle = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+  );
+  static const TextStyle heroMeta = TextStyle(fontSize: 10);
+  static const TextStyle heroNumber = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -1.5,
+    height: 1,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+  static const TextStyle pill = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+  );
+  static const TextStyle tileDay = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w700,
+    height: 1,
+  );
+  static const TextStyle tileLabel = TextStyle(
+    fontSize: 7,
+    fontWeight: FontWeight.w600,
+    height: 1,
+    letterSpacing: 0.4,
+  );
+  static const TextStyle button = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+  );
+  static const TextStyle status = TextStyle(
+    fontSize: 10.5,
+    fontWeight: FontWeight.w500,
+  );
+}
+
+/// Brightness-dependent colors for the base widgets.
+class AppPalette {
+  const AppPalette._(this.dark);
+
+  final bool dark;
+
+  factory AppPalette.of(BuildContext context) =>
+      AppPalette._(Theme.of(context).brightness == Brightness.dark);
+
+  Color get card => dark ? AppColors.cardDark : AppColors.cardLight;
+  Color get surface => dark ? AppColors.surfaceDark : AppColors.surfaceLight;
+  Color get text => dark ? AppColors.textDark : AppColors.textLight;
+  Color get textSecondary =>
+      dark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+  Color get disabled => dark ? AppColors.disabledDark : AppColors.disabledLight;
+  Color get border => dark ? AppColors.borderDark : AppColors.border;
+  Color get glass => dark ? AppColors.glassDark : AppColors.glassLight;
+  Color get glassSolid =>
+      dark ? AppColors.glassSolidDark : AppColors.glassSolidLight;
+  Color get glassBorder =>
+      dark ? AppColors.glassBorderDark : AppColors.glassBorderLight;
+  Color get error => dark ? AppColors.errorDark : AppColors.errorLight;
+
+  /// Hero card and primary button fill; inverted text in dark.
+  Color get hero => dark ? AppColors.surfaceDark : AppColors.ink;
+  Color get onHero => AppColors.textDark;
+
+  /// Primary button: black on light, white on dark.
+  Color get primary => dark ? AppColors.textDark : AppColors.ink;
+  Color get onPrimary => dark ? AppColors.ink : AppColors.textDark;
+
+  Color get gold => dark ? AppColors.goldOnBlack : AppColors.goldDotOnWhite;
+  Color get statusDone =>
+      dark ? AppColors.textTertiaryDark : AppColors.statusDone;
+  Color get statusOffer =>
+      dark ? AppColors.disabledDark : AppColors.statusOffer;
 }
