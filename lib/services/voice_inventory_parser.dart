@@ -71,10 +71,14 @@ final _separator = RegExp(
   caseSensitive: false,
 );
 
+final _plainNumber = RegExp(r'^\d+([.,]\d+)?$');
+
 double? _parseNumber(String token) {
   final lower = token.toLowerCase();
   final word = _numberWords[lower];
   if (word != null) return word;
+  // Plain non-negative decimals only: no sign, exponent, NaN or Infinity.
+  if (!_plainNumber.hasMatch(lower)) return null;
   return double.tryParse(lower.replaceAll(',', '.'));
 }
 
@@ -149,8 +153,10 @@ double _scoreAgainst(String query, String candidate) {
   final q = query.replaceAll(' ', '');
   final c = candidate.replaceAll(' ', '');
   if (q == c) return 1.0;
-  if (c.startsWith(q)) return 0.85;
-  if (candidate.split(' ').any((w) => w.startsWith(query))) return 0.75;
+  // Prefixes are only candidates for manual confirmation (< 0.8): "Gin" must
+  // not auto-confirm "Ginger Ale", nor "Sprite" "Sprite Zero".
+  if (candidate.startsWith('$query ')) return 0.75;
+  if (candidate.split(' ').any((w) => w.startsWith(query))) return 0.7;
   if (c.contains(q)) return 0.6;
   // Spoken name is longer than the catalog name ("weisser rum bacardi").
   if (c.length >= 4 && q.contains(c)) return 0.7;

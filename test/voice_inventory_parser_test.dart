@@ -87,6 +87,49 @@ void main() {
     });
   });
 
+  group('parseRestText quantity validation', () {
+    test('negative and exponent forms are skipped', () {
+      expect(parseRestText('-3 Sprite'), isEmpty);
+      expect(parseRestText('1e3 Sprite'), isEmpty);
+      expect(parseRestText('+3 Sprite'), isEmpty);
+      expect(parseRestText('Infinity Sprite'), isEmpty);
+      expect(parseRestText('NaN Sprite'), isEmpty);
+      expect(parseRestText('1.2.3 Sprite'), isEmpty);
+    });
+
+    test('zero is valid: an empty bottle is a meaningful remainder', () {
+      final r = parseRestText('0 Sprite').single;
+      expect(r.quantity, 0);
+      expect(parseRestText('null Sprite').single.quantity, 0);
+    });
+  });
+
+  group('matchCatalog prefix strictness', () {
+    List<(String, MaterialItem)> only(String n) => [('a', _item(n))];
+
+    test('prefix hits alone are never confident', () {
+      expect(isConfident(matchCatalog('Gin', only('Ginger Ale'))), isFalse);
+      expect(isConfident(matchCatalog('Eis', only('Eistee'))), isFalse);
+      expect(isConfident(matchCatalog('Sprite', only('Sprite Zero'))), isFalse);
+      // Still offered as a candidate for manual confirmation.
+      expect(matchCatalog('Sprite', only('Sprite Zero')), hasLength(1));
+    });
+
+    test('exact match wins outright over a longer name', () {
+      final m = matchCatalog('Sprite', [
+        ('z', _item('Sprite Zero')),
+        ('s', _item('Sprite')),
+      ]);
+      expect(m.first.materialId, 's');
+      expect(m.first.score, 1.0);
+      expect(isConfident(m), isTrue);
+    });
+
+    test('two exact hits stay ambiguous', () {
+      expect(isConfident(matchCatalog('Vodka', _catalog)), isFalse);
+    });
+  });
+
   group('matchCatalog', () {
     test('Bacardi matches via bracket addition, confident', () {
       final m = matchCatalog('Bacardi', _catalog);
