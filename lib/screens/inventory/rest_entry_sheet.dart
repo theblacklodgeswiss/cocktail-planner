@@ -139,9 +139,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'rest.partial_closed'.tr(namedArgs: {'count': '$count'}),
-        ),
+        content: Text('rest.partial_closed'.tr(namedArgs: {'count': '$count'})),
         duration: const Duration(seconds: 8),
       ),
     );
@@ -302,22 +300,31 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          title: Text('rest.title'.tr()),
-          actions: [
-            TextButton(
-              onPressed: _saving ? null : _skip,
-              child: Text('rest.skip'.tr()),
-            ),
-          ],
+    // System/browser back must not close the sheet silently after a partial
+    // booking: it takes the same path as "Überspringen".
+    return PopScope(
+      canPop: !_saving && !shouldMarkRecordedOnClose(_booked.length),
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _saving) return;
+        _skip();
+      },
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        body: _confirming ? _buildConfirm() : _buildInput(),
+        child: Scaffold(
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            title: Text('rest.title'.tr()),
+            actions: [
+              TextButton(
+                onPressed: _saving ? null : _skip,
+                child: Text('rest.skip'.tr()),
+              ),
+            ],
+          ),
+          body: _confirming ? _buildConfirm() : _buildInput(),
+        ),
       ),
     );
   }
@@ -473,9 +480,8 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                       isDense: true,
                       border: const OutlineInputBorder(),
                     ),
-                    onChanged: (v) => setState(
-                      () => line.quantity = _parseQuantity(v) ?? 0,
-                    ),
+                    onChanged: (v) =>
+                        setState(() => line.quantity = _parseQuantity(v) ?? 0),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -643,10 +649,13 @@ class _CatalogPickerDialogState extends State<_CatalogPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.catalog
-        .where((e) => e.$2.name.toLowerCase().contains(_filter.toLowerCase()))
-        .toList()
-      ..sort((a, b) => a.$2.name.compareTo(b.$2.name));
+    final items =
+        widget.catalog
+            .where(
+              (e) => e.$2.name.toLowerCase().contains(_filter.toLowerCase()),
+            )
+            .toList()
+          ..sort((a, b) => a.$2.name.compareTo(b.$2.name));
     return AlertDialog(
       title: Text('rest.pick_other'.tr()),
       content: SizedBox(

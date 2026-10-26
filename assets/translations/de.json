@@ -750,7 +750,7 @@
       "save_failed": "Speichern fehlgeschlagen. Bereits gebuchte Zeilen werden nicht doppelt gebucht, bitte erneut speichern.",
       "mark_failed": "Bestand gebucht, aber der Auftrag konnte nicht als erfasst markiert werden. Bitte erneut speichern.",
       "partial_closed": "{count} Zeile(n) wurden bereits gebucht. Den Rest bitte über die Inventur-Seite ergänzen.",
-    "ask_admin": "Passt kein Artikel? Bitte einen Admin, ihn im Katalog anzulegen.",
-    "record": "Rest erfassen"
+      "ask_admin": "Passt kein Artikel? Bitte einen Admin, ihn im Katalog anzulegen.",
+      "record": "Rest erfassen"
   }
 }
