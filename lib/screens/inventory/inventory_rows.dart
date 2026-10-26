@@ -84,3 +84,17 @@ String formatQuantity(double q) {
   final text = r == r.truncateToDouble() ? r.toInt().toString() : r.toString();
   return text.replaceAll('.', ',');
 }
+
+/// Parses a user-entered quantity (comma or dot). Returns null for empty,
+/// garbage, negative or non-finite input, and for 0 unless [allowZero].
+double? parseQuantity(String text, {required bool allowZero}) {
+  final value = double.tryParse(text.trim().replaceAll(',', '.'));
+  if (value == null || value.isNaN || value.isInfinite || value < 0) {
+    return null;
+  }
+  if (value == 0 && !allowZero) return null;
+  return value;
+}
+
+/// Short readable reference for an order id (first 6 characters).
+String shortOrderId(String id) => id.length <= 6 ? id : id.substring(0, 6);

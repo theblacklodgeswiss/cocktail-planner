@@ -731,7 +731,13 @@
       "reason_take": "Entnahme",
       "reason_correction": "Korrektur",
       "reason_import": "Import",
-      "reason_order_deduction": "Auftragsabzug"
+      "reason_order_deduction": "Auftragsabzug",
+    "only_available": "Nur {quantity} vorhanden",
+    "order_ref": "Auftrag {id}",
+    "owner_email": "Besitzer (E-Mail)",
+    "owner_hint": "Leer lassen für dich selbst",
+    "owner_invalid": "Ungültige E-Mail-Adresse",
+    "location_failed": "Lagerort konnte nicht gespeichert werden (fehlende Berechtigung?)"
   },
   "stock": {
     "location_prompt_title": "Dein Lagerort",

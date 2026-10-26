@@ -98,4 +98,19 @@ void main() {
     expect(formatQuantity(10), '10');
     expect(formatQuantity(2.8 + 10), '12,8');
   });
+
+  test('parseQuantity handles comma, dot, empty, negative, garbage', () {
+    expect(parseQuantity('2,8', allowZero: false), 2.8);
+    expect(parseQuantity('2.8', allowZero: false), 2.8);
+    expect(parseQuantity('', allowZero: true), isNull);
+    expect(parseQuantity('-1', allowZero: true), isNull);
+    expect(parseQuantity('abc', allowZero: true), isNull);
+    expect(parseQuantity('0', allowZero: true), 0);
+    expect(parseQuantity('0', allowZero: false), isNull);
+  });
+
+  test('shortOrderId shortens long ids', () {
+    expect(shortOrderId('abcdefghij'), 'abcdef');
+    expect(shortOrderId('abc'), 'abc');
+  });
 }

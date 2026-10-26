@@ -723,7 +723,13 @@
       "reason_take": "Taken out",
       "reason_correction": "Correction",
       "reason_import": "Import",
-      "reason_order_deduction": "Order deduction"
+      "reason_order_deduction": "Order deduction",
+    "only_available": "Only {quantity} available",
+    "order_ref": "Order {id}",
+    "owner_email": "Owner (email)",
+    "owner_hint": "Leave blank for yourself",
+    "owner_invalid": "Invalid email address",
+    "location_failed": "Location could not be saved (missing permission?)"
   },
   "stock": {
     "location_prompt_title": "Your storage location",

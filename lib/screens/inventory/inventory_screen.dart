@@ -234,18 +234,9 @@ class _InventoryViewState extends State<_InventoryView> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _LocationsSheet(stream: _locations),
+      builder: (_) => _LocationsSheet(),
     );
   }
-}
-
-double? _parseNumber(String text, {required bool allowZero}) {
-  final value = double.tryParse(text.trim().replaceAll(',', '.'));
-  if (value == null || value.isNaN || value.isInfinite || value < 0) {
-    return null;
-  }
-  if (value == 0 && !allowZero) return null;
-  return value;
 }
 
 class _QuantityDialog extends StatefulWidget {
@@ -282,9 +273,17 @@ class _QuantityDialogState extends State<_QuantityDialog> {
   }
 
   Future<void> _save() async {
-    final value = _parseNumber(_controller.text, allowZero: !_take);
+    final value = parseQuantity(_controller.text, allowZero: !_take);
     if (value == null) {
       setState(() => _error = 'inventory.quantity_invalid'.tr());
+      return;
+    }
+    if (_take && value > _current + 1e-9) {
+      setState(
+        () => _error = 'inventory.only_available'.tr(
+          namedArgs: {'quantity': formatQuantity(_current)},
+        ),
+      );
       return;
     }
     setState(() {
@@ -445,7 +444,8 @@ class _HistorySheet extends StatelessWidget {
                       ),
                       subtitle: Text(
                         '${fmt.format(m.at)}  ${m.byEmail}  '
-                        '${_reason(m.reason)}',
+                        '${_reason(m.reason)}'
+                        '${m.orderId == null ? '' : '  ${'inventory.order_ref'.tr(namedArgs: {'id': shortOrderId(m.orderId!)})}'}',
                       ),
                     );
                   },
@@ -464,10 +464,17 @@ class _HistorySheet extends StatelessWidget {
   }
 }
 
-class _LocationsSheet extends StatelessWidget {
-  const _LocationsSheet({required this.stream});
+class _LocationsSheet extends StatefulWidget {
+  const _LocationsSheet();
 
-  final Stream<List<StorageLocation>> stream;
+  @override
+  State<_LocationsSheet> createState() => _LocationsSheetState();
+}
+
+class _LocationsSheetState extends State<_LocationsSheet> {
+  // Own subscription, so the sheet works regardless of the page's stream.
+  late final Stream<List<StorageLocation>> _stream = stockRepository
+      .watchLocations();
 
   bool _canRename(StorageLocation l) {
     if (authService.isAdmin) return true;
@@ -475,11 +482,47 @@ class _LocationsSheet extends StatelessWidget {
     return mine != null && l.ownerEmail?.toLowerCase() == mine;
   }
 
+  void _fail() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('inventory.location_failed'.tr())));
+  }
+
+  Future<void> _create() async {
+    final result = await showDialog<({String name, String owner})>(
+      context: context,
+      builder: (_) => _NameDialog(initial: '', askOwner: authService.isAdmin),
+    );
+    if (result == null) return;
+    final owner = result.owner.isEmpty
+        ? authService.email
+        : result.owner.toLowerCase();
+    try {
+      await stockRepository.createLocation(result.name, ownerEmail: owner);
+    } catch (_) {
+      _fail();
+    }
+  }
+
+  Future<void> _rename(StorageLocation l) async {
+    final result = await showDialog<({String name, String owner})>(
+      context: context,
+      builder: (_) => _NameDialog(initial: l.name, askOwner: false),
+    );
+    if (result == null || result.name == l.name) return;
+    try {
+      await stockRepository.renameLocation(l.id, result.name);
+    } catch (_) {
+      _fail();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: StreamBuilder<List<StorageLocation>>(
-        stream: stream,
+        stream: _stream,
         builder: (context, snap) {
           final locations = snap.data ?? const <StorageLocation>[];
           return Column(
@@ -493,12 +536,7 @@ class _LocationsSheet extends StatelessWidget {
                 trailing: FilledButton.icon(
                   icon: const Icon(Icons.add),
                   label: Text('inventory.add_location'.tr()),
-                  onPressed: () async {
-                    final name = await _askName(context, '');
-                    if (name != null) {
-                      await stockRepository.createLocation(name);
-                    }
-                  },
+                  onPressed: _create,
                 ),
               ),
               Flexible(
@@ -515,15 +553,7 @@ class _LocationsSheet extends StatelessWidget {
                             ? IconButton(
                                 tooltip: 'inventory.rename_location'.tr(),
                                 icon: const Icon(Icons.edit_outlined),
-                                onPressed: () async {
-                                  final name = await _askName(context, l.name);
-                                  if (name != null && name != l.name) {
-                                    await stockRepository.renameLocation(
-                                      l.id,
-                                      name,
-                                    );
-                                  }
-                                },
+                                onPressed: () => _rename(l),
                               )
                             : null,
                       ),
@@ -538,17 +568,11 @@ class _LocationsSheet extends StatelessWidget {
   }
 }
 
-Future<String?> _askName(BuildContext context, String initial) {
-  return showDialog<String>(
-    context: context,
-    builder: (_) => _NameDialog(initial: initial),
-  );
-}
-
 class _NameDialog extends StatefulWidget {
-  const _NameDialog({required this.initial});
+  const _NameDialog({required this.initial, required this.askOwner});
 
   final String initial;
+  final bool askOwner;
 
   @override
   State<_NameDialog> createState() => _NameDialogState();
@@ -556,37 +580,69 @@ class _NameDialog extends StatefulWidget {
 
 class _NameDialogState extends State<_NameDialog> {
   late final _controller = TextEditingController(text: widget.initial);
+  final _owner = TextEditingController();
   String? _error;
+  String? _ownerError;
 
   @override
   void dispose() {
     _controller.dispose();
+    _owner.dispose();
     super.dispose();
   }
 
   void _submit() {
     final value = _controller.text.trim();
-    if (value.isEmpty) {
-      setState(() => _error = 'stock.location_name_required'.tr());
+    final owner = _owner.text.trim();
+    final nameError = value.isEmpty
+        ? 'stock.location_name_required'.tr()
+        : null;
+    final ownerError = owner.isNotEmpty && !owner.contains('@')
+        ? 'inventory.owner_invalid'.tr()
+        : null;
+    if (nameError != null || ownerError != null) {
+      setState(() {
+        _error = nameError;
+        _ownerError = ownerError;
+      });
       return;
     }
-    Navigator.of(context).pop(value);
+    Navigator.of(context).pop((name: value, owner: owner));
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text('stock.location_name'.tr()),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        onSubmitted: (_) => _submit(),
-        decoration: InputDecoration(
-          labelText: 'stock.location_name'.tr(),
-          errorText: _error,
-          border: const OutlineInputBorder(),
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: 'stock.location_name'.tr(),
+              errorText: _error,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          if (widget.askOwner) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _owner,
+              keyboardType: TextInputType.emailAddress,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: 'inventory.owner_email'.tr(),
+                helperText: 'inventory.owner_hint'.tr(),
+                errorText: _ownerError,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ],
       ),
       actions: [
         TextButton(
