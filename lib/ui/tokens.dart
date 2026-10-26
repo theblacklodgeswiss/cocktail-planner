@@ -83,5 +83,6 @@ class AppText {
     fontSize: 17,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.3,
+    fontFeatures: [FontFeature.tabularFigures()],
   );
 }

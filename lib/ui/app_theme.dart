@@ -5,7 +5,11 @@ import 'tokens.dart';
 class AppTheme {
   AppTheme._();
 
-  static ThemeData light() => _build(
+  // Themes depend on nothing dynamic, so build each once.
+  static ThemeData light() => _light;
+  static ThemeData dark() => _dark;
+
+  static final ThemeData _light = _build(
     const ColorScheme(
       brightness: Brightness.light,
       primary: AppColors.ink,
@@ -44,7 +48,7 @@ class AppTheme {
     AppColors.bgTopLight,
   );
 
-  static ThemeData dark() => _build(
+  static final ThemeData _dark = _build(
     const ColorScheme(
       brightness: Brightness.dark,
       primary: Colors.white,

@@ -2,8 +2,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import 'router/app_router.dart';
-import 'ui/app_theme.dart';
 import 'services/user_preferences_service.dart';
+import 'ui/app_theme.dart';
 
 class CocktailPlanerApp extends StatefulWidget {
   const CocktailPlanerApp({super.key});

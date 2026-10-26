@@ -122,4 +122,27 @@ void main() {
     ));
     expect(reduced, isTrue);
   });
+
+  testWidgets('AppMotion.reducedTransparency follows highContrast',
+      (tester) async {
+    Future<bool> read(MediaQueryData? data) async {
+      late bool v;
+      Widget child = Builder(builder: (c) {
+        v = AppMotion.reducedTransparency(c);
+        return const SizedBox();
+      });
+      if (data != null) child = MediaQuery(data: data, child: child);
+      await tester.pumpWidget(child);
+      return v;
+    }
+
+    expect(await read(const MediaQueryData(highContrast: true)), isTrue);
+    expect(await read(const MediaQueryData()), isFalse);
+    expect(await read(null), isFalse);
+  });
+
+  test('sheet duration stays within 200-300 ms', () {
+    expect(AppMotion.sheet.inMilliseconds, inInclusiveRange(200, 300));
+    expect(AppMotion.page.inMilliseconds, inInclusiveRange(200, 300));
+  });
 }
