@@ -607,7 +607,14 @@
     "decline": "Decline",
     "responded_accepted": "You accepted this offer. We'll be in touch shortly!",
     "responded_declined": "You declined this offer.",
-    "response_error": "This offer has already been processed."
+    "response_error": "This offer has already been processed.",
+    "view_offer": "View offer",
+    "view_invoice": "View invoice",
+    "confirm_accept_title": "Accept this offer?",
+    "confirm_accept_body": "By accepting you confirm the offer.",
+    "confirm_decline_title": "Decline this offer?",
+    "confirm_decline_body": "The offer will be declined. This cannot be undone.",
+    "pdf_error": "The document could not be created."
   },
   "settings": {
     "title": "Settings",

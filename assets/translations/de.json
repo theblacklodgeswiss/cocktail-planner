@@ -612,7 +612,14 @@
     "decline": "Ablehnen",
     "responded_accepted": "Du hast dieses Angebot angenommen. Wir melden uns in Kürze bei dir!",
     "responded_declined": "Du hast dieses Angebot abgelehnt.",
-    "response_error": "Dieses Angebot wurde bereits bearbeitet."
+    "response_error": "Dieses Angebot wurde bereits bearbeitet.",
+    "view_offer": "Angebot ansehen",
+    "view_invoice": "Rechnung ansehen",
+    "confirm_accept_title": "Angebot annehmen?",
+    "confirm_accept_body": "Mit deiner Zusage nimmst du das Angebot verbindlich an.",
+    "confirm_decline_title": "Angebot ablehnen?",
+    "confirm_decline_body": "Das Angebot wird abgelehnt. Das kann nicht rückgängig gemacht werden.",
+    "pdf_error": "Das Dokument konnte nicht erstellt werden."
   },
   "settings": {
     "title": "Einstellungen",
