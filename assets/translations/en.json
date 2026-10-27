@@ -923,6 +923,13 @@
     "completed": "Completed",
     "declined": "Declined"
   },
+  "order_detail": {
+    "more_actions": "More actions",
+    "accept_needs_list": "Create the shopping list first",
+    "accept_blocked_msg": "An offer cannot be accepted without a shopping list.\nPlease create the shopping list first.",
+    "without_prices": "Without prices",
+    "change_date": "Change date"
+  },
   "more": {
     "title": "More",
     "section_overview": "Overview",
