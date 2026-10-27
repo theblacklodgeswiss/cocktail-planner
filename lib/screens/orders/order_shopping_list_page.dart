@@ -9,7 +9,7 @@ import '../../models/order.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../utils/currency.dart';
-import '../inventory/inventory_rows.dart';
+import 'order_shopping_list_view.dart';
 import '../shopping_list/stock_logic.dart';
 
 /// Read-only overview of an order's shopping list. Pops with `true` when
@@ -127,228 +127,24 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
     );
   }
 
-  Widget _sourceRow(
-    int index,
-    Map<String, dynamic> item,
-    List<StockEntry> entries,
-    List<StorageLocation> locations,
-    Currency currency,
-  ) {
-    final source = ItemSource.fromItem(item);
-    final materialId = resolveMaterialId(item, _catalog);
-    final canStock = materialId != null && locations.isNotEmpty;
-    final locationId = source.locationId;
-    final selected = locations.any((l) => l.id == locationId)
-        ? locationId
-        : null;
-    final available = selected != null && materialId != null
-        ? availableAt(entries, materialId, selected)
-        : null;
-    final cost = itemInternalCost(item, entries, _catalog);
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('orders.source_shop'.tr()),
-              Switch(
-                value: source.isStock,
-                onChanged:
-                    canToggleSource(
-                      canStock: canStock,
-                      isStock: source.isStock,
-                      saving: _saving,
-                      stockApplied: _applied,
-                    )
-                    ? (on) {
-                        if (!on) {
-                          _setSource(index, const ItemSource.shop());
-                          return;
-                        }
-                        if (!canStock) return;
-                        final first =
-                            locations.any((l) => l.id == _ownLocationId)
-                            ? _ownLocationId!
-                            : locations.first.id;
-                        _setSource(index, ItemSource.stock(first));
-                      }
-                    : null,
-              ),
-              Text('orders.source_stock'.tr()),
-              if (source.isStock) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: selected,
-                    hint: Text('orders.source_location'.tr()),
-                    items: [
-                      for (final l in locations)
-                        DropdownMenuItem(value: l.id, child: Text(l.name)),
-                    ],
-                    onChanged: _saving || _applied
-                        ? null
-                        : (id) {
-                            if (id != null) {
-                              _setSource(index, ItemSource.stock(id));
-                            }
-                          },
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (!canStock)
-            Text(
-              materialId == null
-                  ? 'orders.source_unresolved'.tr()
-                  : 'orders.source_no_location'.tr(),
-              style: theme.textTheme.bodySmall,
-            ),
-          if (available != null)
-            Text(
-              'orders.source_available'.tr(
-                namedArgs: {
-                  'order': formatQuantity(available.order),
-                  'investment': formatQuantity(available.investment),
-                },
-              ),
-              style: theme.textTheme.bodySmall,
-            ),
-          // After booking, the cost would be recomputed from the current stock
-          // and be misleading, so it is hidden together with a note.
-          if (_applied)
-            Text(
-              'orders.stock_already_booked'.tr(),
-              style: theme.textTheme.bodySmall,
-            )
-          else
-            Text(
-              '${'orders.internal_cost'.tr()}: ${currency.format(cost)}',
-              style: theme.textTheme.bodySmall,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _itemTile(
-    Map<String, dynamic> item,
-    Currency currency,
-    ColorScheme scheme,
-  ) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: scheme.primaryContainer,
-        child: Text(
-          '${(item['quantity'] as num?)?.toInt() ?? 1}x',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: scheme.onPrimaryContainer,
-          ),
-        ),
-      ),
-      title: Text(item['name'] as String? ?? ''),
-      subtitle: Text(
-        '${item['unit'] as String? ?? ''} • '
-        '${currency.format((item['price'] as num?)?.toDouble() ?? 0)}'
-        '${(item['note'] as String? ?? '').isNotEmpty ? ' • ${item['note']}' : ''}',
-      ),
-      trailing: Text(
-        currency.format(
-          ((item['price'] as num?)?.toDouble() ?? 0) *
-              ((item['quantity'] as num?)?.toInt() ?? 1),
-        ),
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-
   Widget _buildPage(
     BuildContext context,
     List<StockEntry> entries,
     List<StorageLocation> locations,
   ) {
-    final order = widget.order;
-    final currency = Currency.fromCode(order.currency);
-    final scheme = Theme.of(context).colorScheme;
-    final items = _items;
-    final total = customerTotal(items);
-    final internalTotal = items.fold<double>(
-      0,
-      (sum, item) => sum + itemInternalCost(item, entries, _catalog),
-    );
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('orders.shopping_list_title'.tr()),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).pop(true),
-            icon: const Icon(Icons.edit),
-            label: Text('orders.edit_shopping_list'.tr()),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            '${items.length} ${'orders.articles'.tr()}',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          for (var i = 0; i < items.length; i++)
-            Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                children: [
-                  _itemTile(items[i], currency, scheme),
-                  if (_staff)
-                    _sourceRow(i, items[i], entries, locations, currency),
-                ],
-              ),
-            ),
-
-          const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'orders.shopping_list_total'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                currency.format(total),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          if (_staff && !_applied) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('orders.internal_cost_total'.tr()),
-                Text(currency.format(internalTotal)),
-              ],
-            ),
-          ],
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).pop(true),
-            icon: const Icon(Icons.edit),
-            label: Text('orders.edit_shopping_list'.tr()),
-          ),
-        ],
-      ),
+    return OrderShoppingListView(
+      items: _items,
+      currency: Currency.fromCode(widget.order.currency),
+      staff: _staff,
+      applied: _applied,
+      saving: _saving,
+      entries: entries,
+      locations: locations,
+      catalog: _catalog,
+      ownLocationId: _ownLocationId,
+      onSetSource: _setSource,
+      onBack: () => Navigator.of(context).pop(),
+      onEdit: () => Navigator.of(context).pop(true),
     );
   }
 }
