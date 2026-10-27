@@ -2,30 +2,17 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/env_config.dart';
-import '../../data/cocktail_repository.dart';
 import '../../data/employee_repository.dart';
-import '../../data/stock_repository.dart';
-import '../../models/cocktail_data.dart';
-import '../../data/order_repository.dart';
 import '../../models/employee.dart';
 import '../../models/order.dart';
-import '../../models/recipe.dart';
-import '../../services/auth_service.dart';
-import '../../services/claude_service.dart';
-import '../../services/invoice_pdf_generator.dart';
-import '../../services/microsoft_graph_service.dart';
-import '../../services/pdf_generator.dart';
 import '../../state/app_state.dart';
 import '../../utils/currency.dart';
-import '../../widgets/cocktail_popularity_dialog.dart';
-import '../../widgets/gemini_material_review_dialog.dart';
-import '../../widgets/order_setup_dialog.dart';
-import '../inventory/inventory_rows.dart' show formatQuantity;
-import '../inventory/rest_entry_sheet.dart';
-import '../shopping_list/completion_deduction.dart';
 import '../shopping_list/stock_logic.dart';
+import 'detail/microsoft_integration.dart';
+import 'detail/order_detail_controller.dart';
 import 'detail/order_detail_logic.dart';
+import 'detail/order_detail_services.dart';
+import 'detail/shopping_actions.dart';
 import 'order_shopping_list_page.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -71,1132 +58,32 @@ class _OrderDetailSheet extends StatefulWidget {
   State<_OrderDetailSheet> createState() => _OrderDetailSheetState();
 }
 
-class _OrderDetailSheetState extends State<_OrderDetailSheet> {
-  late OrderStatus _currentStatus;
-  late String _declineReason;
-  late List<String> _assignedEmployees;
-  late DateTime _currentDate;
-  late bool _restRecorded;
-  late bool _stockApplied;
-
-  /// Guards the "Mit Claude regenerieren/erstellen" buttons against a
-  /// double-tap and drives their loading spinner while a Firestore/Claude
-  /// round trip is in flight.
-  bool _isGeneratingList = false;
-
-  /// Guards the invoice-open button against a double-tap and drives its
-  /// loading spinner while the fresh order data is fetched from Firestore.
-  bool _isOpeningInvoice = false;
-
-  /// Guards the accept/decline/status-change buttons against a double-tap
-  /// and drives their loading spinner while the status update is in flight.
-  bool _isUpdatingStatus = false;
-
-  /// Guards the shopping-list "Bearbeiten" button against a double-tap and
-  /// drives its loading spinner while cocktail data is loaded.
-  bool _isEditingList = false;
-
-  /// Guards the shopping-list PDF download buttons against a double-tap and
-  /// drives their loading spinner while the PDF is generated.
-  bool _isDownloadingPdf = false;
-
-  /// Guards the "Einkaufsliste erstellen" button against a double-tap and
-  /// drives its loading spinner while cocktail data is loaded.
-  bool _isOpeningShoppingList = false;
+class _OrderDetailSheetState extends State<_OrderDetailSheet>
+    implements OrderDetailHost {
+  late final OrderDetailController _c;
 
   @override
   void initState() {
     super.initState();
-    _currentStatus = widget.order.status;
-    _declineReason = widget.order.declineReason;
-    _assignedEmployees = List.from(widget.order.assignedEmployees);
-    _currentDate = widget.order.date;
-    _restRecorded = widget.order.restRecorded;
-    _stockApplied = widget.order.stockApplied;
-  }
-
-  Future<void> _editDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _currentDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-    );
-    if (picked == null || !mounted) return;
-    setState(() => _currentDate = picked);
-    await orderRepository.updateOrder(
-      widget.order.id,
-      {'date': picked.toIso8601String()},
-    );
-  }
-
-  Future<void> _updateStatus(OrderStatus newStatus) async {
-    if (_isUpdatingStatus) return;
-    // Going back from completed to accepted skips the accept checks, dialog
-    // and integrations: the order was already accepted before.
-    final isReopening =
-        newStatus == OrderStatus.accepted &&
-        _currentStatus == OrderStatus.completed;
-    // Block accepting if no shopping list / price has been calculated
-    if (newStatus == OrderStatus.accepted &&
-        !isReopening &&
-        widget.order.total <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Kein Angebot annehmen ohne Einkaufsliste.\nBitte zuerst Einkaufsliste erstellen.',
-          ),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-    // Completing is only possible from accepted; confirm first
-    if (newStatus == OrderStatus.completed) {
-      if (!OrderStatus.canComplete(_currentStatus)) return;
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('orders.complete_confirm_title'.tr()),
-          content: Text('orders.complete_confirm_msg'.tr()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text('orders.complete'.tr()),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true || !mounted) return;
-    }
-    // If accepting, show confirmation dialog first
-    if (newStatus == OrderStatus.accepted && !isReopening) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('invoice.confirm_save_title'.tr()),
-          content: Text('invoice.confirm_save_msg'.tr()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text('common.save'.tr()),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-    }
-    // If declining, ask for an (optional) reason first
-    String? declineReason;
-    if (newStatus == OrderStatus.declined) {
-      declineReason = await _askDeclineReason();
-      if (declineReason == null || !mounted) return;
-    }
-    setState(() => _isUpdatingStatus = true);
-    OrderDeductionPlan? deduction;
-    if (newStatus == OrderStatus.completed) {
-      // Stock is deducted before the status changes. If this throws, the order
-      // stays accepted and a retry is safe (deterministic movement ids).
-      // Going back to accepted never reverses stock and keeps stockApplied, so
-      // completing again later deducts nothing a second time.
-      try {
-        // Plans from the order as stored now, not widget.order (its items may
-        // be outdated after editing the source on the shopping-list page).
-        deduction = await stockRepository.deductForOrder(widget.order.id);
-        _stockApplied = true;
-      } catch (e) {
-        debugPrint('Stock deduction failed: $e');
-        if (!mounted) return;
-        setState(() => _isUpdatingStatus = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.stock_deduct_failed'.tr()),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 6),
-          ),
-        );
-        return;
-      }
-      if (!mounted) return;
-      // Shown right after booking and awaited: it is the only record of a
-      // shortfall (a retry after a failed status update plans nothing).
-      if (deduction.hasNotes) await _showStockSummary(deduction);
-      if (!mounted) return;
-    }
-    final success = await orderRepository.updateStatus(
-      widget.order.id,
-      newStatus.value,
-      declineReason: declineReason,
-    );
-    if (!mounted) return;
-    setState(() => _isUpdatingStatus = false);
-    if (success) {
-      setState(() {
-        _currentStatus = newStatus;
-        if (declineReason != null) _declineReason = declineReason;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'orders.status_changed'.tr(
-              namedArgs: {'status': statusLabel(newStatus)},
-            ),
-          ),
-        ),
-      );
-      // Trigger Microsoft integration when status becomes accepted
-      if (newStatus == OrderStatus.accepted && !isReopening) {
-        _triggerMicrosoftIntegration();
-      }
-      // Ask for the leftovers right after completing; skippable, can be
-      // redone via "Rest erfassen".
-      if (newStatus == OrderStatus.completed) {
-        // Decided from the fresh order loaded for the deduction, never from
-        // widget.order: after reopening, restRecorded may already be true and
-        // saving again would book the leftovers twice.
-        final fresh = deduction?.restRecorded;
-        if (fresh == true && mounted) setState(() => _restRecorded = true);
-        if (shouldOfferRest(freshRestRecorded: fresh)) {
-          await _recordRest();
-        } else if (fresh == null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('rest.state_unknown'.tr())),
-          );
-        }
-      }
-    } else if (deduction != null) {
-      // Stock is booked and stockApplied is set, only the status failed.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('orders.stock_done_status_failed'.tr()),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 8),
-        ),
-      );
-    }
-  }
-
-  Future<void> _showStockSummary(OrderDeductionPlan plan) {
-    return showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('orders.stock_summary_title'.tr()),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final s in plan.shortfalls)
-                Text(
-                  'orders.stock_shortfall_line'.tr(
-                    namedArgs: {'name': s.name, 'qty': formatQuantity(s.quantity)},
-                  ),
-                ),
-              for (final name in plan.unresolved)
-                Text(
-                  'orders.stock_unresolved_line'.tr(namedArgs: {'name': name}),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('common.ok'.tr()),
-          ),
-        ],
+    _c = OrderDetailController(
+      order: widget.order,
+      host: this,
+      services: const OrderDetailServices(
+        triggerMicrosoftIntegration: runMicrosoftIntegration,
       ),
     );
+    _c.addListener(_onControllerChanged);
   }
 
-  Future<void> _recordRest() async {
-    final saved = await showRestEntrySheet(context, order: widget.order);
-    if (saved && mounted) setState(() => _restRecorded = true);
-  }
-
-  /// Shows a dialog to enter why the order is declined. Returns the trimmed
-  /// reason (possibly empty), or null if the dialog was cancelled.
-  Future<String?> _askDeclineReason() async {
-    final controller = TextEditingController(text: _declineReason);
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('orders.decline_reason_title'.tr()),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 2,
-          maxLines: 5,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            labelText: 'orders.decline_reason'.tr(),
-            hintText: 'orders.decline_reason_hint'.tr(),
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: Text('common.save'.tr()),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    return reason;
-  }
-
-  /// Edits the reason of an already declined order without changing status.
-  Future<void> _editDeclineReason() async {
-    final reason = await _askDeclineReason();
-    if (reason == null || !mounted) return;
-    final success = await orderRepository.updateOrder(
-      widget.order.id,
-      {'declineReason': reason},
-    );
-    if (!mounted) return;
-    if (success) {
-      setState(() => _declineReason = reason);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.decline_reason_saved'.tr())),
-      );
-    }
-  }
-
-  Future<void> _updateAssignedEmployees(List<String> employeeIds) async {
-    final success = await orderRepository.updateAssignedEmployees(
-      widget.order.id,
-      employeeIds,
-    );
-    if (success && mounted) {
-      setState(() => _assignedEmployees = employeeIds);
-    }
-  }
-
-  /// Navigate to shopping list to edit the existing order
-  /// Items as last saved from the shopping-list page (source choice), since
-  /// [widget.order] is a snapshot from when the sheet opened.
-  List<Map<String, dynamic>>? _itemsOverride;
-
-  Future<void> _editShoppingList() async {
-    if (_isEditingList) return;
-    setState(() => _isEditingList = true);
-    final order = widget.order;
-
-    // Parse eventTime from string
-    TimeOfDay? eventTime;
-    if (order.eventTime.isNotEmpty) {
-      try {
-        final parts = order.eventTime.split(':');
-        if (parts.length == 2) {
-          eventTime = TimeOfDay(
-            hour: int.parse(parts[0]),
-            minute: int.parse(parts[1]),
-          );
-        }
-      } catch (e) {
-        debugPrint('Failed to parse event time: $e');
-      }
-    }
-
-    // Convert SavedOrder to OrderSetupData
-    final orderSetup = OrderSetupData(
-      orderName: order.name,
-      phoneNumber: order.phone.isNotEmpty ? order.phone : null,
-      eventDate: order.date,
-      eventTime: eventTime,
-      address: order.location.isNotEmpty ? order.location : null,
-      personCount: order.personCount,
-      distanceKm: order.distanceKm > 0 ? order.distanceKm : null,
-      currency: order.currency,
-      drinkerType: order.drinkerType,
-      serviceType: order.serviceType.isNotEmpty
-          ? order.serviceType
-          : 'cocktail_barservice',
-    );
-
-    // Load cocktail data to get recipe ingredients
-    try {
-      final cocktailData = await cocktailRepository.load();
-
-      // Link this order so it gets updated instead of creating a new one
-      appState.setLinkedOrder(
-        order.id,
-        order.name,
-        requestedCocktails: order.requestedCocktails,
-        savedItems: _itemsOverride ?? order.items,
-      );
-
-      // Set selected recipes from the order's cocktails and shots with real ingredients
-      final allRecipes = <Recipe>[];
-
-      for (final cocktailName in order.cocktails) {
-        // Try to find recipe in loaded data
-        final recipe = cocktailData.recipes.firstWhere(
-          (r) => r.name == cocktailName,
-          orElse: () => Recipe(
-            id: cocktailName.toLowerCase().replaceAll(' ', '_'),
-            name: cocktailName,
-            ingredients: [],
-            type: 'cocktail',
-          ),
-        );
-        allRecipes.add(recipe);
-      }
-
-      for (final shotName in order.shots) {
-        // Try to find recipe in loaded data
-        final recipe = cocktailData.recipes.firstWhere(
-          (r) => r.name == shotName,
-          orElse: () => Recipe(
-            id: shotName.toLowerCase().replaceAll(' ', '_'),
-            name: shotName,
-            ingredients: [],
-            type: 'shot',
-          ),
-        );
-        allRecipes.add(recipe);
-      }
-
-      if (allRecipes.isNotEmpty) {
-        appState.setSelectedRecipes(allRecipes);
-      }
-
-      // Navigate to shopping list
-      if (mounted) {
-        Navigator.pop(context);
-        context.push('/shopping-list', extra: orderSetup);
-      }
-    } catch (e) {
-      debugPrint('Failed to load cocktail data: $e');
-      if (mounted) {
-        setState(() => _isEditingList = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
-        );
-      }
-    }
-  }
-
-  /// Download shopping list PDF directly without navigating to shopping list screen
-  Future<void> _downloadShoppingList() async {
-    if (_isDownloadingPdf) return;
-    if (!widget.order.hasShoppingList) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.no_shopping_list'.tr())),
-      );
-      return;
-    }
-
-    setState(() => _isDownloadingPdf = true);
-    try {
-      await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('shopping.download_list'.tr())),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fehler beim Erstellen der PDF: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isDownloadingPdf = false);
-    }
-  }
-
-  /// Download shopping list PDF without prices for employees
-  Future<void> _downloadShoppingListWithoutPrices() async {
-    if (_isDownloadingPdf) return;
-    setState(() => _isDownloadingPdf = true);
-    try {
-      await PdfGenerator.generateFromSavedOrder(widget.order, includePrices: false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('shopping.download_list_no_prices'.tr())),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fehler beim Erstellen der PDF: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isDownloadingPdf = false);
-    }
-  }
-
-  /// Generate Gemini material suggestions for the shopping list.
-  /// 1. Load cocktail data and set up recipes in app state.
-  /// 2. Show cocktail popularity dialog.
-  /// 3. Generate material suggestions via Gemini.
-  /// 4. Show review dialog, then navigate to shopping list.
-  Future<void> _openShoppingList() async {
-    if (_isOpeningShoppingList) return;
-    setState(() => _isOpeningShoppingList = true);
-    final order = widget.order;
-
-    // Load recipes to populate the popularity dialog
-    CocktailData cocktailData;
-    try {
-      cocktailData = await cocktailRepository.load();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isOpeningShoppingList = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
-        );
-      }
-      return;
-    }
-
-    // Build recipe list from structured cocktails + shots stored on the order
-    final allRecipes = <Recipe>[];
-    // For form orders, cocktails may only be in requestedCocktails
-    final cocktailNames = order.cocktails.isNotEmpty
-        ? [...order.cocktails, ...order.shots]
-        : [...order.requestedCocktails, ...order.shots];
-    for (final name in cocktailNames) {
-      final recipe = cocktailData.recipes.firstWhere(
-        (r) => r.name == name,
-        orElse: () => Recipe(
-          id: name.toLowerCase().replaceAll(' ', '_'),
-          name: name,
-          ingredients: [],
-          type: order.shots.contains(name) ? 'shot' : 'cocktail',
-        ),
-      );
-      allRecipes.add(recipe);
-    }
-    if (allRecipes.isNotEmpty) {
-      appState.setSelectedRecipes(allRecipes);
-    }
-
-    if (!mounted) return;
-    setState(() => _isOpeningShoppingList = false);
-
-    // Show popularity dialog so user can set probabilities per cocktail
-    if (allRecipes.isNotEmpty) {
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => CocktailPopularityDialog(
-          cocktails: allRecipes,
-          onConfirm: () {},
-        ),
-      );
-    }
-    if (!mounted) return;
-
-    // Link the order and navigate to shopping list
-    appState.setLinkedOrder(
-      order.id,
-      order.name,
-      requestedCocktails: order.requestedCocktails,
-      savedItems: order.items,
-    );
-    Navigator.pop(context); // close bottom sheet
-    context.push('/shopping-list');
-  }
-
-  Future<void> _generateWithGemini() async {
-    if (_isGeneratingList) return;
-    if (!claudeService.isConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.claude_not_configured'.tr())),
-      );
-      return;
-    }
-
-    setState(() => _isGeneratingList = true);
-
-    final order = widget.order;
-    var resetExistingShoppingList = false;
-
-    if (order.hasShoppingList) {
-      final confirmedReset = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('orders.claude_reset_confirm_title'.tr()),
-          content: Text('orders.claude_reset_confirm_message'.tr()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text('orders.claude_reset_confirm'.tr()),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmedReset != true) {
-        setState(() => _isGeneratingList = false);
-        return;
-      }
-      resetExistingShoppingList = true;
-    }
-
-    // Parse eventTime
-    TimeOfDay? eventTime;
-    if (order.eventTime.isNotEmpty) {
-      try {
-        final parts = order.eventTime.split(':');
-        if (parts.length == 2) {
-          eventTime = TimeOfDay(
-            hour: int.parse(parts[0]),
-            minute: int.parse(parts[1]),
-          );
-        }
-      } catch (_) {}
-    }
-
-    final orderSetup = OrderSetupData(
-      orderName: order.name,
-      phoneNumber: order.phone.isNotEmpty ? order.phone : null,
-      eventDate: order.date,
-      eventTime: eventTime,
-      address: order.location.isNotEmpty ? order.location : null,
-      personCount: order.personCount,
-      distanceKm: order.distanceKm > 0 ? order.distanceKm : null,
-      currency: order.currency,
-      drinkerType: order.drinkerType,
-      serviceType: order.serviceType.isNotEmpty
-          ? order.serviceType
-          : 'cocktail_barservice',
-    );
-
-    // Step 1: load cocktail data
-    CocktailData cocktailData;
-    try {
-      cocktailData = await cocktailRepository.load();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isGeneratingList = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
-        );
-      }
-      return;
-    }
-
-    // Build recipe list
-    final allRecipes = <Recipe>[];
-    // For form orders, cocktails may only be in requestedCocktails
-    final cocktailNames = order.cocktails.isNotEmpty
-        ? [...order.cocktails, ...order.shots]
-        : [...order.requestedCocktails, ...order.shots];
-    for (final name in cocktailNames) {
-      final recipe = cocktailData.recipes.firstWhere(
-        (r) => r.name == name,
-        orElse: () => Recipe(
-          id: name.toLowerCase().replaceAll(' ', '_'),
-          name: name,
-          ingredients: [],
-          type: order.shots.contains(name) ? 'shot' : 'cocktail',
-        ),
-      );
-      allRecipes.add(recipe);
-    }
-    if (allRecipes.isNotEmpty) {
-      appState.setSelectedRecipes(allRecipes);
-    }
-
-    if (mounted) setState(() => _isGeneratingList = false);
-
-    // Step 2: cocktail popularity dialog
-    if (!mounted) return;
-    if (allRecipes.isNotEmpty) {
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => CocktailPopularityDialog(
-          cocktails: allRecipes,
-          onConfirm: () {},
-        ),
-      );
-    }
-    if (!mounted) return;
-
-    // Step 3: show loading + generate
-    final secondsNotifier = ValueNotifier<int>(0);
-    final timer = Stream.periodic(const Duration(seconds: 1), (i) => i + 1);
-    final timerSub = timer.listen((s) => secondsNotifier.value = s);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('orders.claude_generating'.tr()),
-            const SizedBox(height: 8),
-            ValueListenableBuilder<int>(
-              valueListenable: secondsNotifier,
-              builder: (_, s, __) => Text(
-                '${s}s',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final materials = cocktailData.materials
-          .where((m) => m.visible)
-          .map((m) => {
-                'name': m.name,
-                'unit': m.unit,
-                'price': m.price,
-                'currency': m.currency,
-              })
-          .toList();
-
-      final recipeIngredients = allRecipes
-          .map((r) => {
-                'cocktail': r.name,
-                'ingredients': r.ingredients,
-                if (r.ingredientAmounts.isNotEmpty) 'amounts': r.ingredientAmounts,
-              })
-          .toList();
-
-      final suggestion = await claudeService.generateMaterialSuggestions(
-        guestCount: order.personCount,
-        guestRange: order.guestCountRange,
-        requestedCocktails: allRecipes.map((r) => r.name).toList(),
-        eventType: order.drinkerType,
-        drinkerType: order.drinkerType,
-        availableMaterials: materials,
-        recipeIngredients: recipeIngredients,
-        cocktailPopularity: appState.cocktailPopularity,
-        excludeOrderId: widget.order.id,
-      );
-
-      timerSub.cancel();
-      secondsNotifier.dispose();
-      if (mounted) Navigator.pop(context); // close loading
-
-      if (suggestion.hasError) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(suggestion.errorMessage ?? 'orders.claude_error'.tr()),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Step 4: review dialog
-      if (mounted) {
-        appState.setLinkedOrder(
-          order.id,
-          order.name,
-          requestedCocktails: order.requestedCocktails,
-          savedItems: resetExistingShoppingList ? const [] : order.items,
-        );
-        showDialog(
-          context: context,
-          builder: (ctx) => GeminiMaterialReviewDialog(
-            suggestion: suggestion,
-            personCount: order.personCount,
-            cocktailNames: allRecipes.map((r) => r.name).toList(),
-            onConfirm: (confirmedSuggestions, explanation) {
-              appState.setMaterialSuggestions(confirmedSuggestions, explanation);
-              // Dialog pops itself after this callback.
-              // Defer sheet close + navigation until after dialog has fully closed.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  Navigator.pop(context); // close bottom sheet
-                  context.push('/shopping-list', extra: orderSetup);
-                }
-              });
-            },
-          ),
-        );
-      }
-    } catch (e) {
-      timerSub.cancel();
-      secondsNotifier.dispose();
-      if (mounted) Navigator.pop(context); // close loading
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.claude_error'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// Check if offer has all required fields filled
-  bool _isOfferComplete() => isOfferComplete(widget.order);
-
-  Set<OrderDetailAction> _actions() => availableActions(
-    _currentStatus,
-    offerComplete: _isOfferComplete(),
-    restRecorded: _restRecorded,
-    isEmployeeOrHigher: AuthService().isEmployeeOrHigher,
-    isSuperAdmin: AuthService().isSuperAdmin,
-  );
-
-  /// Fetches the latest version of this order before opening its offer/
-  /// invoice editor, so a change made elsewhere (e.g. by another staff
-  /// member) isn't silently overwritten. On a slow connection this single
-  /// Firestore read can occasionally take several seconds; capped at 4s so
-  /// a bad connection falls back to the already-loaded local copy instead
-  /// of leaving the user staring at a spinner for 10-15s.
-  Future<SavedOrder> _loadLatestOrder() async {
-    final freshOrder = await orderRepository
-        .getOrderById(widget.order.id)
-        .timeout(const Duration(seconds: 4), onTimeout: () => null);
-    return freshOrder ?? widget.order;
-  }
-
-  /// Guards the offer-open buttons below against a double-tap and drives
-  /// their loading spinner - without this, `_openOfferEditor` awaits a
-  /// fresh Firestore read with no visual feedback at all, which on a slow
-  /// connection looks like the button simply isn't responding.
-  bool _isOpeningOffer = false;
-
-  Future<void> _openOfferEditor() async {
-    if (_isOpeningOffer) return;
-    setState(() => _isOpeningOffer = true);
-    final router = GoRouter.of(context);
-    final order = await _loadLatestOrder();
-    if (!mounted) return;
-    setState(() => _isOpeningOffer = false);
-    Navigator.of(context).pop();
-    router.push('/create-offer', extra: order);
-  }
-
-  Future<void> _openInvoiceEditor() async {
-    if (_isOpeningInvoice) return;
-    setState(() => _isOpeningInvoice = true);
-    final router = GoRouter.of(context);
-    final order = await _loadLatestOrder();
-    if (!mounted) return;
-    setState(() => _isOpeningInvoice = false);
-    Navigator.of(context).pop();
-    router.push('/create-invoice', extra: order);
-  }
-
-  /// Show message that offer needs to be completed first
-  void _showOfferIncompleteMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('orders.offer_incomplete'.tr()),
-        action: SnackBarAction(
-          label: 'orders.complete_offer'.tr(),
-          onPressed: _openOfferEditor,
-        ),
-      ),
-    );
-  }
-
-  /// Try to update status, but check if offer is complete first (for accepting)
-  void _tryUpdateStatus(OrderStatus newStatus) {
-    if (newStatus == OrderStatus.accepted && !_isOfferComplete()) {
-      _showOfferIncompleteMessage();
-      return;
-    }
-    _updateStatus(newStatus);
-  }
-
-  Future<void> _triggerMicrosoftIntegration() async {
-    if (!microsoftGraphService.isSupported) return;
-    
-    // Skip OneDrive uploads in development environment
-    if (!EnvConfig.isOneDriveEnabled) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.dev_mode_no_upload'.tr()),
-          ),
-        );
-      }
-      return;
-    }
-
-    final statusNotifier = ValueNotifier<String>(
-      'orders.ms_step_generating_shopping_list'.tr(),
-    );
-
-    // Show progress dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          content: ValueListenableBuilder<String>(
-            valueListenable: statusNotifier,
-            builder: (_, status, child) => Row(
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(width: 20),
-                Expanded(child: Text(status)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    try {
-      // Fetch fresh order data to get the current event date
-      final freshOrder = await orderRepository.getOrderById(widget.order.id);
-      final order = freshOrder ?? widget.order;
-
-      final safeName = order.name.replaceAll(' ', '_');
-      final dateTag =
-          '${order.date.year}${order.date.month.toString().padLeft(2, '0')}${order.date.day.toString().padLeft(2, '0')}';
-      String? einkaufslisteUrl;
-      String? auftragsbestaetigungUrl;
-
-      // 1. Generate Einkaufsliste (Shopping List) PDF
-      final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(
-        order,
-      );
-      final shoppingListFileName = 'Einkaufsliste_${safeName}_$dateTag.pdf';
-
-      // 2. Upload Einkaufsliste to OneDrive
-      statusNotifier.value = 'orders.ms_step_uploading_shopping_list'.tr();
-      final shoppingListPath = MicrosoftGraphService.buildOneDrivePath(
-        rootFolder: 'Aufträge',
-        date: order.date,
-        fileName: shoppingListFileName,
-      );
-      einkaufslisteUrl = await microsoftGraphService.uploadToOneDrive(
-        oneDrivePath: shoppingListPath,
-        bytes: shoppingListBytes,
-      );
-
-      // 3. Generate Auftragsbestätigung (Order Confirmation) PDF
-      statusNotifier.value = 'orders.ms_step_generating_invoice'.tr();
-      final invoiceBytes = await InvoicePdfGenerator.generateBytes(order);
-      final invoiceFileName = InvoicePdfGenerator.getFilename(order);
-
-      // 4. Upload Auftragsbestätigung to OneDrive
-      statusNotifier.value = 'orders.ms_step_uploading_invoice'.tr();
-      final invoicePath = MicrosoftGraphService.buildOneDrivePath(
-        rootFolder: 'Aufträge',
-        date: order.date,
-        fileName: invoiceFileName,
-      );
-      auftragsbestaetigungUrl = await microsoftGraphService.uploadToOneDrive(
-        oneDrivePath: invoicePath,
-        bytes: invoiceBytes,
-      );
-
-      // 5. Create calendar event with document links
-      statusNotifier.value = 'orders.ms_step_creating_calendar'.tr();
-
-      // Parse event time (e.g. "17:30") and combine with date
-      DateTime eventStart = order.date;
-      if (order.offerEventTime.isNotEmpty) {
-        final timeParts = order.offerEventTime.split(':');
-        if (timeParts.length >= 2) {
-          final hour = int.tryParse(timeParts[0]) ?? 0;
-          final minute = int.tryParse(timeParts[1]) ?? 0;
-          eventStart = DateTime(
-            order.date.year,
-            order.date.month,
-            order.date.day,
-            hour,
-            minute,
-          );
-        }
-      }
-      final eventEnd = eventStart.add(const Duration(hours: 5));
-      final employeeNames = _assignedEmployees.isNotEmpty
-          ? _assignedEmployees.join(', ')
-          : 'TBD';
-
-      // Build event body with document links
-      final customer = order.offerClientName.isNotEmpty
-          ? order.offerClientName
-          : order.name;
-      final bodyLines = <String>[
-        'Auftrag: $customer',
-        if (order.location.isNotEmpty) 'Adresse: ${order.location}',
-        'Personen: ${order.personCount}',
-        'Mitarbeiter: $employeeNames',
-        // order.total is the undiscounted positions sum.
-        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(order.total - order.offerDiscount)}',
-        '',
-        '--- Dokumente ---',
-      ];
-      if (einkaufslisteUrl != null) {
-        bodyLines.add('Einkaufsliste: $einkaufslisteUrl');
-      }
-      if (auftragsbestaetigungUrl != null) {
-        bodyLines.add('Auftragsbestätigung: $auftragsbestaetigungUrl');
-      }
-
-      final eventId = await microsoftGraphService.createCalendarEvent(
-        subject: 'Blacklodge - $customer',
-        start: eventStart,
-        end: eventEnd,
-        bodyContent: bodyLines.join('\n'),
-        location: order.location,
-      );
-
-      // 6. Add PDF attachments to calendar event
-      if (eventId != null && eventId != 'unknown') {
-        statusNotifier.value = 'orders.ms_step_adding_attachments'.tr();
-        await microsoftGraphService.addCalendarAttachment(
-          eventId: eventId,
-          fileName: shoppingListFileName,
-          bytes: shoppingListBytes,
-        );
-        await microsoftGraphService.addCalendarAttachment(
-          eventId: eventId,
-          fileName: invoiceFileName,
-          bytes: invoiceBytes,
-        );
-      }
-
-      final uploadSuccess =
-          einkaufslisteUrl != null || auftragsbestaetigungUrl != null;
-      final calendarSuccess = eventId != null;
-
-      // Close progress dialog
-      if (mounted) Navigator.of(context).pop();
-
-      if (mounted && (uploadSuccess || calendarSuccess)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('orders.microsoft_integration_success'.tr())),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('orders.microsoft_integration_failed'.tr())),
-        );
-      }
-    } catch (e) {
-      debugPrint('Microsoft integration error: $e');
-      // Close progress dialog
-      if (mounted) Navigator.of(context).pop();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('orders.microsoft_integration_failed'.tr())),
-        );
-      }
-    }
-  }
-
-  Future<void> _generateInvoice() async {
-    await _openInvoiceEditor();
-  }
-
-  Future<void> _deleteOrder() async {
-    // Keep the confirm dialog open with a spinner on the delete button
-    // until the delete actually resolves, instead of popping immediately
-    // and performing the Firestore write invisibly behind a closed dialog.
-    bool saving = false;
-    String? error;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('orders.delete_confirm_title'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'orders.delete_confirm_message'.tr(
-                  namedArgs: {'name': widget.order.name},
-                ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  error!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final success =
-                          await orderRepository.deleteOrder(widget.order.id);
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'orders.delete_failed'.tr();
-                        });
-                      }
-                    },
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text('common.delete'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm == true && mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.deleted'.tr())),
-      );
-    }
+  /// The whole sheet rebuilds on every controller change, exactly as the
+  /// old `setState` calls did.
+  void _onControllerChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    _c.removeListener(_onControllerChanged);
+    _c.dispose();
+    super.dispose();
   }
 
   @override
@@ -1223,7 +110,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             _buildInfoCard(),
             const SizedBox(height: 16),
             if (widget.order.items.isNotEmpty) _buildShoppingListTile(),
-            if (_actions().contains(OrderDetailAction.delete))
+            if (_c.actions.contains(OrderDetailAction.delete))
               _buildDeleteSection(),
           ],
         ),
@@ -1256,8 +143,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   FilledButton.icon(
-                    onPressed: _isOpeningOffer ? null : _openOfferEditor,
-                    icon: _isOpeningOffer
+                    onPressed: _c.isOpeningOffer ? null : _c.openOfferEditor,
+                    icon: _c.isOpeningOffer
                         ? const SizedBox(
                             width: 16,
                             height: 16,
@@ -1266,11 +153,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
-                  if (_actions().contains(OrderDetailAction.invoice)) ...[
+                  if (_c.actions.contains(OrderDetailAction.invoice)) ...[
                     const SizedBox(height: 8),
                     FilledButton.icon(
-                      onPressed: _isOpeningInvoice ? null : _generateInvoice,
-                      icon: _isOpeningInvoice
+                      onPressed: _c.isOpeningInvoice ? null : _c.generateInvoice,
+                      icon: _c.isOpeningInvoice
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -1293,8 +180,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               child: Row(
                 children: [
                   FilledButton.icon(
-                    onPressed: _isOpeningOffer ? null : _openOfferEditor,
-                    icon: _isOpeningOffer
+                    onPressed: _c.isOpeningOffer ? null : _c.openOfferEditor,
+                    icon: _c.isOpeningOffer
                         ? const SizedBox(
                             width: 16,
                             height: 16,
@@ -1303,11 +190,11 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
-                  if (_actions().contains(OrderDetailAction.invoice)) ...[
+                  if (_c.actions.contains(OrderDetailAction.invoice)) ...[
                     const SizedBox(width: 8),
                     FilledButton.icon(
-                      onPressed: _isOpeningInvoice ? null : _generateInvoice,
-                      icon: _isOpeningInvoice
+                      onPressed: _c.isOpeningInvoice ? null : _c.generateInvoice,
+                      icon: _c.isOpeningInvoice
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -1353,8 +240,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _isDownloadingPdf ? null : _downloadShoppingList,
-                      icon: _isDownloadingPdf
+                      onPressed: _c.isDownloadingPdf ? null : _c.downloadShoppingList,
+                      icon: _c.isDownloadingPdf
                           ? const SizedBox(
                               width: 15,
                               height: 15,
@@ -1368,8 +255,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed:
-                          _isDownloadingPdf ? null : _downloadShoppingListWithoutPrices,
-                      icon: _isDownloadingPdf
+                          _c.isDownloadingPdf ? null : _c.downloadShoppingListWithoutPrices,
+                      icon: _c.isDownloadingPdf
                           ? const SizedBox(
                               width: 15,
                               height: 15,
@@ -1382,8 +269,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _isEditingList ? null : _editShoppingList,
-                      icon: _isEditingList
+                      onPressed: _c.isEditingList ? null : _c.editShoppingList,
+                      icon: _c.isEditingList
                           ? const SizedBox(
                               width: 15,
                               height: 15,
@@ -1399,8 +286,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isGeneratingList ? null : _generateWithGemini,
-                icon: _isGeneratingList
+                onPressed: _c.isGeneratingList ? null : _c.generateWithGemini,
+                icon: _c.isGeneratingList
                     ? const SizedBox(
                         width: 16,
                         height: 16,
@@ -1420,8 +307,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               children: [
                 if (hasList) ...[
                   OutlinedButton.icon(
-                    onPressed: _isDownloadingPdf ? null : _downloadShoppingList,
-                    icon: _isDownloadingPdf
+                    onPressed: _c.isDownloadingPdf ? null : _c.downloadShoppingList,
+                    icon: _c.isDownloadingPdf
                         ? const SizedBox(
                             width: 15,
                             height: 15,
@@ -1433,8 +320,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   const SizedBox(width: 4),
                   OutlinedButton.icon(
                     onPressed:
-                        _isDownloadingPdf ? null : _downloadShoppingListWithoutPrices,
-                    icon: _isDownloadingPdf
+                        _c.isDownloadingPdf ? null : _c.downloadShoppingListWithoutPrices,
+                    icon: _c.isDownloadingPdf
                         ? const SizedBox(
                             width: 15,
                             height: 15,
@@ -1445,8 +332,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   ),
                   const SizedBox(width: 4),
                   OutlinedButton.icon(
-                    onPressed: _isEditingList ? null : _editShoppingList,
-                    icon: _isEditingList
+                    onPressed: _c.isEditingList ? null : _c.editShoppingList,
+                    icon: _c.isEditingList
                         ? const SizedBox(
                             width: 15,
                             height: 15,
@@ -1458,8 +345,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   const SizedBox(width: 4),
                 ],
                 FilledButton.icon(
-                  onPressed: _isGeneratingList ? null : _generateWithGemini,
-                  icon: _isGeneratingList
+                  onPressed: _c.isGeneratingList ? null : _c.generateWithGemini,
+                  icon: _c.isGeneratingList
                       ? const SizedBox(
                           width: 16,
                           height: 16,
@@ -1481,10 +368,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Widget _buildStatusCard() {
-    final actions = _actions();
+    final actions = _c.actions;
 
     return Card(
-      color: statusColor(_currentStatus).withValues(alpha: 0.1),
+      color: statusColor(_c.currentStatus).withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1493,15 +380,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             Row(
               children: [
                 Icon(
-                  statusIcon(_currentStatus),
-                  color: statusColor(_currentStatus),
+                  statusIcon(_c.currentStatus),
+                  color: statusColor(_c.currentStatus),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${"orders.status".tr()}: ${statusLabel(_currentStatus)}',
+                  '${"orders.status".tr()}: ${statusLabel(_c.currentStatus)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: statusColor(_currentStatus),
+                    color: statusColor(_c.currentStatus),
                     fontSize: 16,
                   ),
                 ),
@@ -1510,7 +397,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             if (actions.contains(OrderDetailAction.editDeclineReason)) ...[
               const SizedBox(height: 8),
               InkWell(
-                onTap: _editDeclineReason,
+                onTap: _c.editDeclineReason,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1519,12 +406,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     children: [
                       Expanded(
                         child: Text(
-                          _declineReason.isEmpty
+                          _c.declineReason.isEmpty
                               ? 'orders.decline_reason_add'.tr()
-                              : '${'orders.decline_reason'.tr()}: $_declineReason',
+                              : '${'orders.decline_reason'.tr()}: ${_c.declineReason}',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
-                                fontStyle: _declineReason.isEmpty
+                                fontStyle: _c.declineReason.isEmpty
                                     ? FontStyle.italic
                                     : null,
                               ),
@@ -1550,8 +437,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _isOpeningOffer ? null : _openOfferEditor,
-                  icon: _isOpeningOffer
+                  onPressed: _c.isOpeningOffer ? null : _c.openOfferEditor,
+                  icon: _c.isOpeningOffer
                       ? const SizedBox(
                           width: 16,
                           height: 16,
@@ -1570,7 +457,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: _recordRest,
+                    onPressed: _c.recordRest,
                     icon: const Icon(Icons.inventory_2_outlined),
                     label: Text('rest.record'.tr()),
                   ),
@@ -1587,10 +474,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   if (actions.contains(OrderDetailAction.complete))
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: _isUpdatingStatus
+                        onPressed: _c.isUpdatingStatus
                             ? null
-                            : () => _updateStatus(OrderStatus.completed),
-                        icon: _isUpdatingStatus
+                            : () => _c.updateStatus(OrderStatus.completed),
+                        icon: _c.isUpdatingStatus
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
@@ -1611,10 +498,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   if (actions.contains(OrderDetailAction.backToAccepted))
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isUpdatingStatus
+                        onPressed: _c.isUpdatingStatus
                             ? null
-                            : () => _updateStatus(OrderStatus.accepted),
-                        icon: _isUpdatingStatus
+                            : () => _c.updateStatus(OrderStatus.accepted),
+                        icon: _c.isUpdatingStatus
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
@@ -1634,10 +521,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         children: [
                           FilledButton.icon(
                             onPressed: (!acceptBlockedByTotal(widget.order.total) &&
-                                    !_isUpdatingStatus)
-                                ? () => _tryUpdateStatus(OrderStatus.accepted)
+                                    !_c.isUpdatingStatus)
+                                ? () => _c.tryUpdateStatus(OrderStatus.accepted)
                                 : null,
-                            icon: _isUpdatingStatus
+                            icon: _c.isUpdatingStatus
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
@@ -1671,10 +558,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   if (actions.contains(OrderDetailAction.decline))
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isUpdatingStatus
+                        onPressed: _c.isUpdatingStatus
                             ? null
-                            : () => _updateStatus(OrderStatus.declined),
-                        icon: _isUpdatingStatus
+                            : () => _c.updateStatus(OrderStatus.declined),
+                        icon: _c.isUpdatingStatus
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
@@ -1691,10 +578,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isUpdatingStatus
+                        onPressed: _c.isUpdatingStatus
                             ? null
-                            : () => _updateStatus(OrderStatus.quote),
-                        icon: _isUpdatingStatus
+                            : () => _c.updateStatus(OrderStatus.quote),
+                        icon: _c.isUpdatingStatus
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
@@ -1804,8 +691,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _isOpeningShoppingList ? null : _openShoppingList,
-                      icon: _isOpeningShoppingList
+                      onPressed: _c.isOpeningShoppingList ? null : _c.openShoppingList,
+                      icon: _c.isOpeningShoppingList
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -1824,8 +711,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _isGeneratingList ? null : () => _generateWithGemini(),
-                      icon: _isGeneratingList
+                      onPressed: _c.isGeneratingList ? null : () => _c.generateWithGemini(),
+                      icon: _c.isGeneratingList
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -1886,12 +773,12 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 ),
                 const SizedBox(width: 8),
                 InkWell(
-                  onTap: _editDate,
+                  onTap: _c.editDate,
                   borderRadius: BorderRadius.circular(4),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(formatDate(_currentDate)),
+                      Text(formatDate(_c.currentDate)),
                       const SizedBox(width: 4),
                       Icon(Icons.edit, size: 14, color: widget.colorScheme.outline),
                     ],
@@ -1937,8 +824,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             const Divider(),
             const SizedBox(height: 8),
             _EmployeeAssignmentWidget(
-              assignedEmployeeIds: _assignedEmployees,
-              onAssignmentChanged: _updateAssignedEmployees,
+              assignedEmployeeIds: _c.assignedEmployees,
+              onAssignmentChanged: _c.updateAssignedEmployees,
             ),
           ],
         ),
@@ -1948,7 +835,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
 
   Widget _buildShoppingListTile() {
     final order = widget.order;
-    final items = _itemsOverride ?? order.items;
+    final items = _c.itemsOverride ?? order.items;
     final total = customerTotal(items);
     return Card(
       child: ListTile(
@@ -1963,13 +850,13 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             MaterialPageRoute(
               builder: (_) => OrderShoppingListPage(
                 order: order,
-                stockApplied: _stockApplied,
+                stockApplied: _c.stockApplied,
                 items: items,
-                onItemsChanged: (changed) => _itemsOverride = changed,
+                onItemsChanged: (changed) => _c.itemsOverride = changed,
               ),
             ),
           );
-          if (edit == true && mounted) _editShoppingList();
+          if (edit == true && mounted) _c.editShoppingList();
         },
       ),
     );
@@ -1984,7 +871,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: _deleteOrder,
+            onPressed: _c.deleteOrder,
             icon: const Icon(Icons.delete_forever),
             label: Text('orders.delete_order'.tr()),
             style: OutlinedButton.styleFrom(foregroundColor: Colors.red),

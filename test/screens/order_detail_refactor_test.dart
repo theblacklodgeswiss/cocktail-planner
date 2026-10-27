@@ -2,9 +2,24 @@
 //
 // The pure part pins the status-card rules read from the pre-refactoring
 // `_buildStatusCard`, `_buildActionButtons` and `_buildDeleteSection`.
+//
+// The flow part drives the status transitions with injected fakes. The old
+// sheet could not be pumped in the VM (it imported the dart:js_interop
+// Microsoft code), so these run against the extracted
+// OrderDetailController, whose handler bodies were moved verbatim.
+import 'dart:async';
+
 import 'package:cocktail_planer/models/order.dart';
+import 'package:cocktail_planer/screens/orders/detail/order_detail_controller.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_logic.dart';
+import 'package:cocktail_planer/screens/orders/order_status_helpers.dart';
+import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'order_detail_test_harness.dart';
 
 typedef A = OrderDetailAction;
 
@@ -54,6 +69,13 @@ Set<A> actions(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await EasyLocalization.ensureInitialized();
+  });
+
   group('availableActions (pure, characterizes old _buildStatusCard)', () {
     test('quote, offer complete: finalize, accept, decline', () {
       expect(actions(OrderStatus.quote), {
@@ -204,6 +226,405 @@ void main() {
       expect(acceptBlockedByTotal(0), isTrue);
       expect(acceptBlockedByTotal(-1), isTrue);
       expect(acceptBlockedByTotal(0.01), isFalse);
+    });
+  });
+
+  group('status flows (OrderDetailController with fakes)', () {
+    late DetailFakes fakes;
+    late OrderDetailController c;
+    late int notifications;
+
+    setUp(() {
+      fakes = DetailFakes();
+      notifications = 0;
+    });
+
+    Future<void> pumpHost(WidgetTester tester, SavedOrder order) async {
+      await pumpDetailApp(
+        tester,
+        detailApp(
+          ControllerHost(
+            order: order,
+            services: fakes.services,
+            onCreated: (created) {
+              c = created;
+              c.addListener(() => notifications++);
+            },
+          ),
+        ),
+      );
+    }
+
+    Future<void> tapText(WidgetTester tester, String key) async {
+      await tester.tap(find.text(key.tr()).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('complete: confirm -> deduct -> summary -> status -> rest', (
+      tester,
+    ) async {
+      fakes.plan = const OrderDeductionPlan(
+        shortfalls: [DeductionShortfall(name: 'Rum', quantity: 2)],
+        restRecorded: false,
+      );
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      expect(find.text('orders.complete_confirm_title'.tr()), findsOneWidget);
+      expect(fakes.log, isEmpty);
+
+      await tapText(tester, 'orders.complete');
+      // Deducted before the status changes; the summary waits for OK.
+      expect(fakes.log, ['deduct:o1']);
+      expect(find.text('orders.stock_summary_title'.tr()), findsOneWidget);
+      expect(c.stockApplied, isTrue);
+      expect(c.isUpdatingStatus, isTrue);
+
+      await tapText(tester, 'common.ok');
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed', 'rest']);
+      expect(c.currentStatus, OrderStatus.completed);
+      expect(c.isUpdatingStatus, isFalse);
+      expect(c.restRecorded, isTrue);
+      expect(notifications, greaterThan(0));
+    });
+
+    testWidgets('complete without notes: no summary dialog', (tester) async {
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(find.text('orders.stock_summary_title'.tr()), findsNothing);
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed', 'rest']);
+    });
+
+    testWidgets('complete: rest sheet skipped keeps restRecorded false', (
+      tester,
+    ) async {
+      fakes.restSaved = false;
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(fakes.log.last, 'rest');
+      expect(c.restRecorded, isFalse);
+    });
+
+    testWidgets('complete: fresh restRecorded true -> no rest sheet', (
+      tester,
+    ) async {
+      fakes.plan = const OrderDeductionPlan(
+        alreadyApplied: true,
+        restRecorded: true,
+      );
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
+      expect(c.restRecorded, isTrue);
+    });
+
+    testWidgets('complete: fresh restRecorded unknown -> snackbar only', (
+      tester,
+    ) async {
+      fakes.plan = const OrderDeductionPlan();
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
+      // Queued behind the "Status geändert" snackbar.
+      expect(
+        find.text(
+          'orders.status_changed'.tr(
+            namedArgs: {'status': statusLabel(OrderStatus.completed)},
+          ),
+        ),
+        findsOneWidget,
+      );
+      ScaffoldMessenger.of(
+        tester.element(find.text('host page')),
+      ).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+      expect(find.text('rest.state_unknown'.tr()), findsOneWidget);
+      expect(c.restRecorded, isFalse);
+    });
+
+    testWidgets('complete: cancel the confirm dialog changes nothing', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'common.cancel');
+      expect(fakes.log, isEmpty);
+      expect(c.currentStatus, OrderStatus.accepted);
+      expect(c.isUpdatingStatus, isFalse);
+    });
+
+    testWidgets('complete only from accepted (no dialog otherwise)', (
+      tester,
+    ) async {
+      for (final s in [
+        OrderStatus.quote,
+        OrderStatus.declined,
+        OrderStatus.completed,
+      ]) {
+        await pumpHost(tester, detailOrder(status: s));
+        await c.updateStatus(OrderStatus.completed);
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing, reason: s.name);
+        expect(fakes.log, isEmpty, reason: s.name);
+        expect(c.currentStatus, s);
+      }
+    });
+
+    testWidgets('complete: deduction fails -> no status change', (
+      tester,
+    ) async {
+      fakes.deductError = Exception('offline');
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(fakes.log, ['deduct:o1']);
+      expect(find.text('orders.stock_deduct_failed'.tr()), findsOneWidget);
+      expect(c.currentStatus, OrderStatus.accepted);
+      expect(c.stockApplied, isFalse);
+      expect(c.isUpdatingStatus, isFalse);
+    });
+
+    testWidgets('complete: status update fails after the deduction', (
+      tester,
+    ) async {
+      fakes.repo.statusResult = false;
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
+      expect(find.text('orders.stock_done_status_failed'.tr()), findsOneWidget);
+      expect(c.currentStatus, OrderStatus.accepted);
+      expect(c.stockApplied, isTrue);
+      expect(c.isUpdatingStatus, isFalse);
+    });
+
+    testWidgets('double-tap guard: a second update while busy is ignored', (
+      tester,
+    ) async {
+      fakes.deductCompleter = Completer();
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      unawaited(c.updateStatus(OrderStatus.completed));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'orders.complete');
+      expect(c.isUpdatingStatus, isTrue);
+
+      await c.updateStatus(OrderStatus.completed);
+      await c.updateStatus(OrderStatus.declined);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(fakes.log, ['deduct:o1']);
+
+      fakes.deductCompleter!.complete(
+        const OrderDeductionPlan(restRecorded: true),
+      );
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
+    });
+
+    testWidgets('accept with total 0: snackbar, no dialog, no update', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder(total: 0));
+      await c.updateStatus(OrderStatus.accepted);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        find.textContaining('Kein Angebot annehmen ohne Einkaufsliste'),
+        findsOneWidget,
+      );
+      expect(fakes.log, isEmpty);
+    });
+
+    testWidgets('accept: confirm -> status -> Microsoft integration', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder());
+      unawaited(c.updateStatus(OrderStatus.accepted));
+      await tester.pumpAndSettle();
+      expect(find.text('invoice.confirm_save_title'.tr()), findsOneWidget);
+      await tapText(tester, 'common.save');
+      expect(fakes.log, ['updateStatus:accepted', 'microsoft']);
+      expect(c.currentStatus, OrderStatus.accepted);
+      expect(
+        find.text(
+          'orders.status_changed'.tr(
+            namedArgs: {'status': statusLabel(OrderStatus.accepted)},
+          ),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('accept: cancel the confirm dialog changes nothing', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder());
+      unawaited(c.updateStatus(OrderStatus.accepted));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'common.cancel');
+      expect(fakes.log, isEmpty);
+      expect(c.currentStatus, OrderStatus.quote);
+    });
+
+    testWidgets('tryUpdateStatus(accepted) with an incomplete offer', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder(offerComplete: false));
+      c.tryUpdateStatus(OrderStatus.accepted);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('orders.offer_incomplete'.tr()), findsOneWidget);
+      expect(fakes.log, isEmpty);
+    });
+
+    testWidgets('decline: cancel via injected prompt changes nothing', (
+      tester,
+    ) async {
+      fakes.declineReasonAnswer = (_) => null;
+      await pumpHost(tester, detailOrder(status: OrderStatus.accepted));
+      await c.updateStatus(OrderStatus.declined);
+      await tester.pumpAndSettle();
+      expect(fakes.reasonPrompts, ['']);
+      expect(fakes.log, isEmpty);
+      expect(c.currentStatus, OrderStatus.accepted);
+    });
+
+    testWidgets('decline: saves the reason with the status', (tester) async {
+      fakes.declineReasonAnswer = (_) => 'Zu teuer';
+      await pumpHost(
+        tester,
+        detailOrder(status: OrderStatus.accepted, declineReason: 'alt'),
+      );
+      await c.updateStatus(OrderStatus.declined);
+      await tester.pumpAndSettle();
+      expect(fakes.reasonPrompts, ['alt']);
+      expect(fakes.repo.statusCalls, [('o1', 'declined', 'Zu teuer')]);
+      expect(fakes.log, ['updateStatus:declined']);
+      expect(c.currentStatus, OrderStatus.declined);
+      expect(c.declineReason, 'Zu teuer');
+    });
+
+    testWidgets('decline: an empty reason still declines', (tester) async {
+      fakes.declineReasonAnswer = (_) => '';
+      await pumpHost(tester, detailOrder());
+      await c.updateStatus(OrderStatus.declined);
+      await tester.pumpAndSettle();
+      expect(fakes.repo.statusCalls, [('o1', 'declined', '')]);
+      expect(c.currentStatus, OrderStatus.declined);
+    });
+
+    testWidgets('reopen (completed -> accepted): no dialog, no stock, no MS', (
+      tester,
+    ) async {
+      await pumpHost(
+        tester,
+        detailOrder(status: OrderStatus.completed, stockApplied: true),
+      );
+      await c.updateStatus(OrderStatus.accepted);
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['updateStatus:accepted']);
+      expect(c.currentStatus, OrderStatus.accepted);
+      expect(c.stockApplied, isTrue);
+    });
+
+    testWidgets('reopen with total 0 is still allowed', (tester) async {
+      await pumpHost(
+        tester,
+        detailOrder(status: OrderStatus.completed, total: 0),
+      );
+      await c.updateStatus(OrderStatus.accepted);
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['updateStatus:accepted']);
+    });
+
+    testWidgets('back to quote: no dialog, no stock, no MS', (tester) async {
+      await pumpHost(tester, detailOrder(status: OrderStatus.declined));
+      await c.updateStatus(OrderStatus.quote);
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['updateStatus:quote']);
+      expect(fakes.repo.statusCalls.single.$3, isNull);
+      expect(c.currentStatus, OrderStatus.quote);
+    });
+
+    testWidgets('editDeclineReason updates only the reason', (tester) async {
+      fakes.declineReasonAnswer = (_) => 'neu';
+      await pumpHost(
+        tester,
+        detailOrder(status: OrderStatus.declined, declineReason: 'alt'),
+      );
+      await c.editDeclineReason();
+      await tester.pumpAndSettle();
+      expect(fakes.reasonPrompts, ['alt']);
+      expect(fakes.repo.updateCalls.single.$2, {'declineReason': 'neu'});
+      expect(fakes.repo.statusCalls, isEmpty);
+      expect(c.declineReason, 'neu');
+      expect(c.currentStatus, OrderStatus.declined);
+      expect(find.text('orders.decline_reason_saved'.tr()), findsOneWidget);
+    });
+
+    testWidgets('recordRest marks rest recorded only when saved', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder(status: OrderStatus.completed));
+      fakes.restSaved = false;
+      await c.recordRest();
+      expect(c.restRecorded, isFalse);
+      fakes.restSaved = true;
+      await c.recordRest();
+      expect(c.restRecorded, isTrue);
+      expect(fakes.log, ['rest', 'rest']);
+    });
+
+    testWidgets('updateAssignedEmployees keeps the list only on success', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder(assignedEmployees: ['Mario']));
+      fakes.repo.assignResult = false;
+      await c.updateAssignedEmployees(['Mario', 'Prince']);
+      expect(c.assignedEmployees, ['Mario']);
+      fakes.repo.assignResult = true;
+      await c.updateAssignedEmployees(['Prince']);
+      expect(c.assignedEmployees, ['Prince']);
+    });
+
+    testWidgets('deleteOrder: failure keeps the dialog open with an error', (
+      tester,
+    ) async {
+      fakes.repo.deleteResult = false;
+      await pumpHost(tester, detailOrder());
+      unawaited(c.deleteOrder());
+      await tester.pumpAndSettle();
+      expect(find.text('orders.delete_confirm_title'.tr()), findsOneWidget);
+      await tapText(tester, 'common.delete');
+      expect(fakes.log, ['delete:o1']);
+      expect(find.text('orders.delete_failed'.tr()), findsOneWidget);
+      await tapText(tester, 'common.cancel');
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('host page'), findsOneWidget);
+    });
+
+    testWidgets('actions getter reads role and flags from the services', (
+      tester,
+    ) async {
+      await pumpHost(tester, detailOrder(status: OrderStatus.completed));
+      expect(c.actions, contains(OrderDetailAction.recordRest));
+      expect(c.actions, isNot(contains(OrderDetailAction.delete)));
+      fakes.superAdmin = true;
+      fakes.staff = false;
+      expect(c.actions, contains(OrderDetailAction.delete));
+      expect(c.actions, isNot(contains(OrderDetailAction.recordRest)));
     });
   });
 }
