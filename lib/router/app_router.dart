@@ -25,6 +25,7 @@ import '../screens/settings/services_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/settings/user_management_screen.dart';
 import '../screens/shopping_list/shopping_list_screen.dart';
+import '../ui/widgets/staff_scaffold.dart' show staffTabExtra;
 
 /// Notifier that listens to Firebase Auth state changes
 class AuthNotifier extends ChangeNotifier {
@@ -85,12 +86,16 @@ final GoRouter appRouter = GoRouter(
       path: '/orders',
       builder: (context, state) {
         final status = state.uri.queryParameters['status'];
-        return OrdersOverviewScreen(initialStatus: status);
+        return OrdersOverviewScreen(
+          initialStatus: status,
+          showBack: state.extra != staffTabExtra,
+        );
       },
     ),
     GoRoute(
       path: '/inventory',
-      builder: (context, state) => const InventoryScreen(),
+      builder: (context, state) =>
+          InventoryScreen(showBack: state.extra != staffTabExtra),
     ),
     // Staff "Mehr" tab (new, additional route).
     GoRoute(

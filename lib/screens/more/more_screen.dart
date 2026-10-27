@@ -39,41 +39,41 @@ class _MoreScreenState extends State<MoreScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    // Same call as the user menu.
-    await authService.signOut();
-    if (mounted) context.go('/login');
-  }
-
   @override
   Widget build(BuildContext context) {
-    return RoleProtectedScreen(
-      minimumRole: AppRole.employee,
-      child: ListenableBuilder(
-        listenable: formSync,
-        builder: (context, _) {
-          final user = authService.currentUser;
-          return MoreView(
-            user: MoreUser(
-              name: user?.displayName,
-              email: user?.email,
-              photoUrl: user?.photoURL,
-              isAnonymous: user?.isAnonymous ?? false,
-            ),
-            flags: MoreFlags(
-              isAdmin: authService.isAdmin,
-              canManageUsers: authService.canManageUsers,
-              isAnonymous: user?.isAnonymous ?? false,
-              web: microsoftGraphService.isSupported,
-            ),
-            version: _version,
-            formSyncBusy: formSync.isSyncing,
-            onLinkGoogle: () =>
-                linkGoogleAccount(ScaffoldMessenger.of(context)),
-            onFormSync: () => showFormSyncSheet(context),
-            onLogout: _logout,
-          );
-        },
+    // Same sign-out call and target as the user menu, without the
+    // access-denied frame in between.
+    return LogoutTransition(
+      signOut: authService.signOut,
+      onSignedOut: () => context.go('/login'),
+      builder: (context, logout) => RoleProtectedScreen(
+        minimumRole: AppRole.employee,
+        child: ListenableBuilder(
+          listenable: formSync,
+          builder: (context, _) {
+            final user = authService.currentUser;
+            return MoreView(
+              user: MoreUser(
+                name: user?.displayName,
+                email: user?.email,
+                photoUrl: user?.photoURL,
+                isAnonymous: user?.isAnonymous ?? false,
+              ),
+              flags: MoreFlags(
+                isAdmin: authService.isAdmin,
+                canManageUsers: authService.canManageUsers,
+                isAnonymous: user?.isAnonymous ?? false,
+                web: microsoftGraphService.isSupported,
+              ),
+              version: _version,
+              formSyncBusy: formSync.isSyncing,
+              onLinkGoogle: () =>
+                  linkGoogleAccount(ScaffoldMessenger.of(context)),
+              onFormSync: () => showFormSyncSheet(context),
+              onLogout: logout,
+            );
+          },
+        ),
       ),
     );
   }

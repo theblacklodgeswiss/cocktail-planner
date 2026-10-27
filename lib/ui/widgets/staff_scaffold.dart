@@ -18,6 +18,17 @@ const staffTabRoutes = {
   StaffTab.more: '/more',
 };
 
+/// `extra` of a tab navigation. Pages reached through the bar read it to
+/// hide their old "back to home" arrow (home is just another tab); the same
+/// pages opened from elsewhere (e.g. pushed from the dashboard) keep it.
+const staffTabExtra = 'staff-tab';
+
+/// Bottom padding the scroll view of a page inside [StaffFrame] needs so its
+/// last row scrolls clear of the "+" button (the bar has its own space).
+/// Matches the FAB clearance of [LargeTitleScaffold].
+double staffFrameFabClearance(BuildContext context) =>
+    AppSize.minTap + AppSpace.s16;
+
 /// Target of the round "+" button (same form the dashboard FAB opens).
 const staffNewOrderRoute = '/order-form';
 
@@ -34,7 +45,7 @@ void selectStaffTab(
     scrollToTop();
     return;
   }
-  context.go(staffTabRoutes[selected]!);
+  context.go(staffTabRoutes[selected]!, extra: staffTabExtra);
 }
 
 void _toTop(BuildContext context, ScrollController controller) {

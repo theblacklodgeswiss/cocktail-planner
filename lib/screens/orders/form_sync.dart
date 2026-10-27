@@ -24,6 +24,19 @@ class FormSync extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _showFailed(BuildContext context) {
+    final p = AppPalette.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'orders.sync_failed'.tr(),
+          style: TextStyle(color: p.onError),
+        ),
+        backgroundColor: p.error,
+      ),
+    );
+  }
+
   void openOneDriveForm() {
     launchUrl(Uri.parse(oneDriveFormUrl), mode: LaunchMode.externalApplication);
   }
@@ -47,17 +60,15 @@ class FormSync extends ChangeNotifier {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text('orders.sync_login_required'.tr()),
-          content: const Text(
-            'Bitte melde dich mit dem Microsoft-Konto an, um Formulare zu synchronisieren.',
-          ),
+          content: Text('orders.sync_login_message'.tr()),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Abbrechen'),
+              child: Text('common.cancel'.tr()),
             ),
             ElevatedButton.icon(
               icon: const Icon(Icons.login),
-              label: const Text('Mit Microsoft anmelden'),
+              label: Text('orders.sync_login_button'.tr()),
               onPressed: () {
                 Navigator.pop(ctx);
                 _loginAndSync(context);
@@ -81,12 +92,7 @@ class FormSync extends ChangeNotifier {
       if (!context.mounted) return;
 
       if (rows == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.sync_failed'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showFailed(context);
         return;
       }
 
@@ -95,21 +101,17 @@ class FormSync extends ChangeNotifier {
       if (!context.mounted) return;
 
       if (count == -1) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.sync_failed'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showFailed(context);
       } else if (count == 0) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('orders.sync_no_new'.tr())));
       } else {
+        // The neutral palette has no green; success uses the default
+        // snackbar.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('orders.sync_success'.tr(args: [count.toString()])),
-            backgroundColor: Colors.green,
           ),
         );
       }

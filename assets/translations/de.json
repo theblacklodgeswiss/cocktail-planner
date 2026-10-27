@@ -565,6 +565,8 @@
     "reset_sync_confirm": "Löschen & Importieren",
     "sync_excel_hint": "Excel muss zuerst im Browser geöffnet werden (mit dem Microsoft Blacklodge-Konto), damit die neuesten Anträge ins OneDrive geladen werden. Dann hier synchronisieren.",
     "sync_onedrive_form": "Formular OneDrive",
+    "sync_login_message": "Bitte melde dich mit dem Microsoft-Konto an, um Formulare zu synchronisieren.",
+    "sync_login_button": "Mit Microsoft anmelden",
     "search_hint": "Name oder Gästeanzahl suchen...",
     "sort_event_date": "Eventdatum",
     "sort_created_at": "Erstellt am",

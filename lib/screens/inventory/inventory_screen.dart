@@ -17,19 +17,28 @@ import 'inventory_rows.dart';
 /// usable on a phone (columns: article, Auftrag/Investition per location,
 /// total, note).
 class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key});
+  const InventoryScreen({super.key, this.showBack = true});
+
+  /// False when opened from the staff bar (the back arrow would only lead
+  /// to another tab).
+  final bool showBack;
 
   @override
   Widget build(BuildContext context) {
-    return const RoleProtectedScreen(
+    return RoleProtectedScreen(
       minimumRole: AppRole.employee,
-      child: StaffFrame(tab: StaffTab.inventory, child: _InventoryView()),
+      child: StaffFrame(
+        tab: StaffTab.inventory,
+        child: _InventoryView(showBack: showBack),
+      ),
     );
   }
 }
 
 class _InventoryView extends StatefulWidget {
-  const _InventoryView();
+  const _InventoryView({required this.showBack});
+
+  final bool showBack;
 
   @override
   State<_InventoryView> createState() => _InventoryViewState();
@@ -69,10 +78,14 @@ class _InventoryViewState extends State<_InventoryView> {
     return Scaffold(
       appBar: AppBar(
         title: Text('inventory.title'.tr()),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
-        ),
+        automaticallyImplyLeading: false,
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () =>
+                    context.canPop() ? context.pop() : context.go('/'),
+              )
+            : null,
         actions: [
           if (authService.isAdmin)
             IconButton(
@@ -142,6 +155,10 @@ class _InventoryViewState extends State<_InventoryView> {
           child: rows.isEmpty
               ? Center(child: Text('inventory.empty'.tr()))
               : SingleChildScrollView(
+                  // Room to scroll the last row clear of the "+" button.
+                  padding: EdgeInsets.only(
+                    bottom: staffFrameFabClearance(context),
+                  ),
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: _buildTable(context, rows, locations),

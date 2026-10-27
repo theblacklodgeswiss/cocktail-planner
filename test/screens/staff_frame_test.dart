@@ -5,6 +5,7 @@ import 'package:cocktail_planer/screens/more/more_view.dart';
 import 'package:cocktail_planer/ui/app_theme.dart';
 import 'package:cocktail_planer/ui/widgets/staff_scaffold.dart';
 import 'package:cocktail_planer/ui/widgets/staff_tab_bar.dart';
+import 'package:cocktail_planer/ui/widgets/states.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,10 +35,16 @@ GoRouter router(Widget home) => GoRouter(
     for (final path in _pages)
       GoRoute(
         path: path,
-        builder: (_, _) => Scaffold(body: Text('page $path')),
+        builder: (_, state) {
+          lastExtra = state.extra;
+          return Scaffold(body: Text('page $path'));
+        },
       ),
   ],
 );
+
+/// `extra` of the last stand-in page built.
+Object? lastExtra;
 
 Widget app(GoRouter r, {ThemeData? theme, double textScale = 1}) {
   return EasyLocalization(
@@ -263,6 +270,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('page /inventory'), findsOneWidget);
       expect(r.canPop(), isFalse);
+      // Marks tab navigation, so the page hides its "back to home" arrow.
+      expect(lastExtra, staffTabExtra);
     });
 
     testWidgets('Mehr tab goes to /more', (tester) async {
@@ -303,6 +312,49 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Neuer Auftrag'));
       await tester.pumpAndSettle();
       expect(find.text('page /order-form'), findsOneWidget);
+    });
+
+    testWidgets('last row scrolls clear of the + button', (tester) async {
+      phone(tester);
+      final r = router(
+        StaffFrame(
+          tab: StaffTab.orders,
+          child: Scaffold(
+            body: Builder(
+              builder: (context) => SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  16 + staffFrameFabClearance(context),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < 40; i++)
+                      SizedBox(
+                        height: 40,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text('row $i'),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await pumpApp(tester, app(r));
+      final scrollable = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+      await tester.pump();
+      final last = tester.getRect(find.text('row 39'));
+      final fab = tester.getRect(find.bySemanticsLabel('Neuer Auftrag'));
+      expect(last.bottom, lessThanOrEqualTo(fab.top));
     });
 
     testWidgets('active tab scrolls the page to top', (tester) async {
@@ -351,7 +403,8 @@ void main() {
 
     testWidgets('employee: no admin, no user management', (tester) async {
       await pumpMore(tester, more(), h: 1400);
-      expect(find.text('Dashboard-Kennzahlen'), findsOneWidget);
+      expect(find.text('Dashboard-Kennzahlen'), findsNothing);
+      expect(find.text('Aufträge mit Pendenzen'), findsOneWidget);
       expect(find.text('Einstellungen'), findsOneWidget);
       expect(find.text('Abmelden'), findsOneWidget);
       expect(find.text('Admin-Bereich'), findsNothing);
@@ -369,6 +422,7 @@ void main() {
     ) async {
       await pumpMore(tester, more(isAdmin: true), h: 1400);
       expect(find.text('Admin-Bereich'), findsOneWidget);
+      expect(find.text('Dashboard-Kennzahlen'), findsOneWidget);
       expect(find.text('Admin'), findsOneWidget, reason: 'badge');
       expect(find.text('Benutzer verwalten'), findsNothing);
     });
@@ -398,16 +452,25 @@ void main() {
       expect(linked, 1);
     });
 
-    testWidgets('OneDrive sync only when enabled', (tester) async {
+    testWidgets('OneDrive sync for every employee on web', (tester) async {
       var synced = 0;
       await pumpMore(
         tester,
-        more(isAdmin: true, showFormSync: true, onFormSync: () => synced++),
+        more(showFormSync: true, onFormSync: () => synced++),
         h: 1400,
       );
       await tester.tap(find.text('OneDrive-Sync'));
       expect(synced, 1);
     });
+
+    for (final admin in [false, true]) {
+      testWidgets('no OneDrive sync off the web (admin: $admin)', (
+        tester,
+      ) async {
+        await pumpMore(tester, more(isAdmin: admin), h: 1400);
+        expect(find.text('OneDrive-Sync'), findsNothing);
+      });
+    }
 
     testWidgets('rows push their routes', (tester) async {
       final r = await pumpMore(
@@ -438,6 +501,46 @@ void main() {
       expect(loggedOut, 1);
     });
 
+    testWidgets('no access-denied flash while signing out', (tester) async {
+      phone(tester);
+      final role = ValueNotifier(true);
+      addTearDown(role.dispose);
+      final signedOut = Completer<void>();
+      var done = 0;
+      late Future<void> Function() logout;
+      final r = router(
+        LogoutTransition(
+          signOut: () async {
+            // Like authService.signOut: the role drops before it returns.
+            role.value = false;
+            await signedOut.future;
+          },
+          onSignedOut: () => done++,
+          builder: (context, l) {
+            logout = l;
+            return ValueListenableBuilder<bool>(
+              valueListenable: role,
+              builder: (_, staff, _) =>
+                  Scaffold(body: Text(staff ? 'more page' : 'access denied')),
+            );
+          },
+        ),
+      );
+      await pumpApp(tester, app(r));
+      expect(find.text('more page'), findsOneWidget);
+
+      final pending = logout();
+      await tester.pump();
+      expect(find.text('access denied'), findsNothing);
+      expect(find.byType(LoadingState), findsOneWidget);
+
+      signedOut.complete();
+      await pending;
+      await tester.pump();
+      expect(done, 1);
+      expect(find.text('access denied'), findsNothing);
+    });
+
     for (final dark in [false, true]) {
       testWidgets('fits 360x640 at text scale 1.3 (dark: $dark)', (
         tester,
@@ -458,22 +561,28 @@ void main() {
   });
 
   group('lost functions', () {
-    // Every entry of the old user menu (user_menu_sheet.dart) with the role
-    // that could see it. 'logout' and 'link-google' are actions.
-    final oldMenu = <(String, bool Function(MoreFlags))>[
-      ('/admin', (f) => f.isAdmin),
-      ('/orders', (f) => true),
-      ('/inventory', (f) => true),
-      ('/settings', (f) => true),
-      ('link-google', (f) => f.isAnonymous),
-      ('logout', (f) => true),
-    ];
-    // Old app-bar / dashboard entries for staff.
-    final oldBars = <(String, bool Function(MoreFlags))>[
-      ('/dashboard', (f) => f.isAdmin),
-      ('/pending-orders', (f) => true),
-      ('/order-form', (f) => true),
-      ('form-sync', (f) => f.isAdmin && f.web),
+    // Hand-written from the old user menu (user_menu_sheet.dart), the old
+    // orders app bar and the old dashboard: destination, the role that could
+    // see it, and the label it now has in the staff frame (a Mehr row, a
+    // tab, or the "+" button). Not derived from moreGroups.
+    final old = <(String, bool Function(MoreFlags), String)>[
+      // user menu
+      ('/admin', (f) => f.isAdmin, 'Admin-Bereich'),
+      ('/orders', (f) => true, 'Aufträge'),
+      ('/inventory', (f) => true, 'Inventur'),
+      ('/settings', (f) => true, 'Einstellungen'),
+      ('link-google', (f) => f.isAnonymous, 'Mit Google verknüpfen'),
+      ('logout', (f) => true, 'Abmelden'),
+      // orders app bar (dashboard icon: admin only; sync popup: web)
+      ('/dashboard', (f) => f.isAdmin, 'Dashboard-Kennzahlen'),
+      ('form-sync', (f) => f.web, 'OneDrive-Sync'),
+      // dashboard
+      ('/pending-orders', (f) => true, 'Aufträge mit Pendenzen'),
+      ('/order-form', (f) => true, 'Neuer Auftrag'),
+      // settings admin section
+      ('/settings/users', (f) => f.canManageUsers, 'Benutzer verwalten'),
+      ('/settings/employees', (f) => f.canManageUsers, 'Mitarbeiter'),
+      ('/settings/services', (f) => f.canManageUsers, 'Zusatzleistungen'),
     ];
 
     final combos = [
@@ -490,20 +599,48 @@ void main() {
                 ),
     ];
 
-    test('every old entry has a destination for the same role', () {
-      for (final f in combos) {
-        final reachable = {
-          for (final group in moreGroups(f))
-            for (final item in group.items) item.destination,
-          ...staffTabRoutes.values,
-          staffNewOrderRoute,
-        };
-        for (final (dest, visible) in [...oldMenu, ...oldBars]) {
+    for (final f in combos) {
+      testWidgets('every old entry is reachable for $f', (tester) async {
+        for (final (dest, visible, label) in old) {
           if (!visible(f)) continue;
-          expect(reachable, contains(dest), reason: '$dest for $f');
+          var action = '';
+          phone(tester, h: 1800);
+          final r = router(
+            MoreView(
+              user: f.isAnonymous
+                  ? const MoreUser(name: null, email: null, isAnonymous: true)
+                  : _user,
+              flags: f,
+              version: '1.2.3',
+              onLinkGoogle: () => action = 'link-google',
+              onFormSync: () => action = 'form-sync',
+              onLogout: () async => action = 'logout',
+            ),
+          );
+          await pumpApp(tester, app(r));
+          final target = find.bySemanticsLabel(label).evaluate().isNotEmpty
+              ? find.bySemanticsLabel(label).last
+              : find.text(label).last;
+          await tester.tap(target);
+          await tester.pumpAndSettle();
+          if (dest == 'logout') {
+            await tester.tap(find.text('Abmelden').last);
+            await tester.pumpAndSettle();
+          }
+          if (dest.startsWith('/')) {
+            expect(
+              find.text('page $dest'),
+              findsOneWidget,
+              reason: '$dest via "$label"',
+            );
+          } else {
+            expect(action, dest, reason: '$dest via "$label"');
+          }
+          // Fresh tree for the next entry.
+          await tester.pumpWidget(const SizedBox());
         }
-      }
-    });
+      });
+    }
 
     test('role-only items stay role-only', () {
       for (final f in combos) {
@@ -512,6 +649,7 @@ void main() {
             for (final item in group.items) item.destination,
         };
         expect(dests.contains('/admin'), f.isAdmin, reason: '$f');
+        expect(dests.contains('/dashboard'), f.isAdmin, reason: '$f');
         for (final d in [
           '/settings/users',
           '/settings/employees',
@@ -520,7 +658,7 @@ void main() {
           expect(dests.contains(d), f.canManageUsers, reason: '$d $f');
         }
         expect(dests.contains('link-google'), f.isAnonymous, reason: '$f');
-        expect(dests.contains('form-sync'), f.isAdmin && f.web, reason: '$f');
+        expect(dests.contains('form-sync'), f.web, reason: '$f');
       }
     });
   });

@@ -24,8 +24,8 @@ enum OrderStatusFilter { all, quotes, accepted, declined }
 class OrdersOverviewScreen extends StatefulWidget {
   final String? initialStatus;
 
-  /// False on the staff home (`/`), where "back to home" would lead to the
-  /// same page.
+  /// False on the staff home (`/`) and when opened from the staff bar, where
+  /// "back to home" would only lead to another tab.
   final bool showBack;
 
   const OrdersOverviewScreen({
@@ -208,10 +208,13 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                                 color: Colors.amber.shade700,
                               ),
                               const SizedBox(width: 8),
-                              const Expanded(
+                              Expanded(
                                 child: Text(
-                                  'Excel muss zuerst im Browser geöffnet werden (mit dem Microsoft Blacklodge-Konto), damit die neuesten Anträge ins OneDrive geladen werden. Dann hier synchronisieren.',
-                                  style: TextStyle(fontSize: 12, height: 1.4),
+                                  'orders.sync_excel_hint'.tr(),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    height: 1.4,
+                                  ),
                                 ),
                               ),
                             ],
@@ -222,7 +225,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
                           value: 'onedrive',
                           child: ListTile(
                             leading: const Icon(Icons.table_chart_outlined),
-                            title: const Text('Formular OneDrive'),
+                            title: Text('orders.sync_onedrive_form'.tr()),
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                           ),
@@ -264,7 +267,13 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
           final orders = _filterAndSortOrders(allOrders);
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            // Bottom: room to scroll the last row clear of the "+" button.
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + staffFrameFabClearance(context),
+            ),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 900),

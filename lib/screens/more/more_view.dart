@@ -7,6 +7,7 @@ import '../../ui/widgets/app_sheet.dart';
 import '../../ui/widgets/floating_card.dart';
 import '../../ui/widgets/staff_scaffold.dart';
 import '../../ui/widgets/staff_tab_bar.dart';
+import '../../ui/widgets/states.dart';
 import '../settings/sections/settings_widgets.dart';
 
 /// Role and platform flags that decide which "Mehr" rows exist.
@@ -99,7 +100,8 @@ List<MoreGroup> moreGroups(MoreFlags f) {
         'admin.services_subtitle',
       ),
     ],
-    if (f.isAdmin && f.web)
+    // Same rule as the orders app-bar sync menu: every staff member on web.
+    if (f.web)
       const MoreItem(
         moreFormSync,
         Icons.sync,
@@ -108,14 +110,16 @@ List<MoreGroup> moreGroups(MoreFlags f) {
       ),
   ];
   return [
-    const MoreGroup('more.section_overview', [
-      MoreItem(
-        '/dashboard',
-        Icons.insights_outlined,
-        'more.dashboard',
-        'more.dashboard_subtitle',
-      ),
-      MoreItem(
+    MoreGroup('more.section_overview', [
+      // Admin only, like the old orders app-bar dashboard icon.
+      if (f.isAdmin)
+        const MoreItem(
+          '/dashboard',
+          Icons.insights_outlined,
+          'more.dashboard',
+          'more.dashboard_subtitle',
+        ),
+      const MoreItem(
         '/pending-orders',
         Icons.pending_actions,
         'orders.pending_title',
@@ -333,5 +337,51 @@ class _RolePill extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Signs out without flashing the page underneath: signing out drops the
+/// role first, which would turn a role-guarded page into "access denied"
+/// for a frame before the redirect to the login. While [signOut] runs this
+/// shows a plain loading page instead of [builder]'s output, then calls
+/// [onSignedOut] (navigate to the login).
+class LogoutTransition extends StatefulWidget {
+  const LogoutTransition({
+    super.key,
+    required this.signOut,
+    required this.onSignedOut,
+    required this.builder,
+  });
+
+  final Future<void> Function() signOut;
+  final VoidCallback onSignedOut;
+
+  /// Builds the page; `logout` runs the guarded sign-out.
+  final Widget Function(BuildContext context, Future<void> Function() logout)
+  builder;
+
+  @override
+  State<LogoutTransition> createState() => _LogoutTransitionState();
+}
+
+class _LogoutTransitionState extends State<LogoutTransition> {
+  bool _loggingOut = false;
+
+  Future<void> _logout() async {
+    setState(() => _loggingOut = true);
+    try {
+      await widget.signOut();
+    } catch (_) {
+      // Stay on the page if signing out failed.
+      if (mounted) setState(() => _loggingOut = false);
+      rethrow;
+    }
+    if (mounted) widget.onSignedOut();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loggingOut) return const Scaffold(body: LoadingState());
+    return widget.builder(context, _logout);
   }
 }

@@ -560,6 +560,8 @@
     "reset_sync_confirm": "Delete & Import",
     "sync_excel_hint": "Open the Excel file in the browser first (with the Microsoft Blacklodge account) so the latest requests are saved to OneDrive. Then sync here.",
     "sync_onedrive_form": "OneDrive form",
+    "sync_login_message": "Please sign in with the Microsoft account to sync the forms.",
+    "sync_login_button": "Sign in with Microsoft",
     "search_hint": "Search name or guest count...",
     "sort_event_date": "Event Date",
     "sort_created_at": "Created At",
