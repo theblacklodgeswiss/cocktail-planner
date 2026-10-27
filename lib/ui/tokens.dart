@@ -124,6 +124,7 @@ class AppSize {
   static const double glassButton = 40;
   static const double glassButtonIcon = 20;
   static const double stepDigit = 28;
+  static const double avatar = 44;
 
   // Order wizard
   static const double rowIcon = 20;

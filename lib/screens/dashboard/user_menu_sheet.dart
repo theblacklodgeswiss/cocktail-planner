@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
 import 'link_google.dart';
 
-/// Shows the user menu as a bottom sheet.
+/// Shows the user menu as a bottom sheet. Opened from the customer start
+/// (and the old dashboard app bar); staff screens use the tab bar and the
+/// "Mehr" page (`/more`), which carries every entry of this menu.
 Future<void> showUserMenu(BuildContext context) async {
   final user = authService.currentUser;
   if (user == null) return;

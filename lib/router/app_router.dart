@@ -12,6 +12,7 @@ import '../screens/forms/order_success_screen.dart';
 import '../screens/inventory/inventory_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/more/more_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/share/shared_document_screen.dart';
 import '../screens/orders/orders_overview_screen.dart';
@@ -90,6 +91,11 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/inventory',
       builder: (context, state) => const InventoryScreen(),
+    ),
+    // Staff "Mehr" tab (new, additional route).
+    GoRoute(
+      path: '/more',
+      builder: (context, state) => const MoreScreen(),
     ),
     GoRoute(
       path: '/pending-orders',

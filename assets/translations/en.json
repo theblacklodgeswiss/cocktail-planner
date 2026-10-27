@@ -558,6 +558,8 @@
     "reset_sync_title": "Delete All Form Entries?",
     "reset_sync_message": "All imported form requests will be deleted and re-imported. Continue?",
     "reset_sync_confirm": "Delete & Import",
+    "sync_excel_hint": "Open the Excel file in the browser first (with the Microsoft Blacklodge account) so the latest requests are saved to OneDrive. Then sync here.",
+    "sync_onedrive_form": "OneDrive form",
     "search_hint": "Search name or guest count...",
     "sort_event_date": "Event Date",
     "sort_created_at": "Created At",
@@ -900,6 +902,20 @@
     "accepted": "Accepted",
     "completed": "Completed",
     "declined": "Declined"
+  },
+  "more": {
+    "title": "More",
+    "section_overview": "Overview",
+    "section_admin": "Management",
+    "section_account": "Account",
+    "dashboard": "Dashboard figures",
+    "dashboard_subtitle": "Figures and dates of the year",
+    "form_sync": "OneDrive sync",
+    "logout_confirm_title": "Sign out?",
+    "logout_confirm_body": "You can sign in again at any time.",
+    "role_employee": "Employee",
+    "user": "User",
+    "guest": "Guest"
   },
   "ui": {
     "back": "Back",

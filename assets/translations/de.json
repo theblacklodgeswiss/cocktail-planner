@@ -563,6 +563,8 @@
     "reset_sync_title": "Alle Formular-Einträge löschen?",
     "reset_sync_message": "Alle importierten Formular-Anfragen werden gelöscht und neu importiert. Fortfahren?",
     "reset_sync_confirm": "Löschen & Importieren",
+    "sync_excel_hint": "Excel muss zuerst im Browser geöffnet werden (mit dem Microsoft Blacklodge-Konto), damit die neuesten Anträge ins OneDrive geladen werden. Dann hier synchronisieren.",
+    "sync_onedrive_form": "Formular OneDrive",
     "search_hint": "Name oder Gästeanzahl suchen...",
     "sort_event_date": "Eventdatum",
     "sort_created_at": "Erstellt am",
@@ -905,6 +907,20 @@
     "accepted": "Angenommen",
     "completed": "Abgeschlossen",
     "declined": "Abgelehnt"
+  },
+  "more": {
+    "title": "Mehr",
+    "section_overview": "Übersicht",
+    "section_admin": "Verwaltung",
+    "section_account": "Konto",
+    "dashboard": "Dashboard-Kennzahlen",
+    "dashboard_subtitle": "Zahlen und Termine des Jahres",
+    "form_sync": "OneDrive-Sync",
+    "logout_confirm_title": "Abmelden?",
+    "logout_confirm_body": "Du kannst dich jederzeit wieder anmelden.",
+    "role_employee": "Mitarbeiter",
+    "user": "Benutzer",
+    "guest": "Gast"
   },
   "ui": {
     "back": "Zurück",
