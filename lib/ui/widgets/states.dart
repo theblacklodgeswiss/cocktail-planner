@@ -76,10 +76,19 @@ class LoadingState extends StatelessWidget {
 }
 
 class ErrorState extends StatelessWidget {
-  const ErrorState({super.key, required this.message, required this.onRetry});
+  const ErrorState({
+    super.key,
+    required this.message,
+    required this.onRetry,
+    this.detail,
+  });
 
   final String message;
   final VoidCallback onRetry;
+
+  /// Technical cause in a second, smaller line (selectable, so a link or
+  /// code can be copied), e.g. "Keine Berechtigung (permission-denied)".
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +103,14 @@ class ErrorState extends StatelessWidget {
             style: AppText.body.copyWith(color: p.error),
           ),
         ),
+        if (detail != null) ...[
+          const SizedBox(height: AppSpace.s8),
+          SelectableText(
+            detail!,
+            textAlign: TextAlign.center,
+            style: AppText.caption.copyWith(color: p.textSecondary),
+          ),
+        ],
         const SizedBox(height: AppSpace.s16),
         SecondaryButton(label: 'ui.retry'.tr(), onPressed: onRetry),
       ],

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cocktail_planer/models/stock.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
@@ -67,6 +68,29 @@ Map<String, dynamic> stockEntryFields({
 bool shouldApplyMovement({required String? movementId, required bool exists}) =>
     movementId == null || !exists;
 
+/// Parses each document with [parse]; a document that throws is skipped and
+/// logged instead of failing the whole list (a stream error would hide every
+/// other row behind an error message).
+List<T> parseTolerant<T>(
+  Iterable<({String id, Map<String, dynamic> data})> docs,
+  T Function(String id, Map<String, dynamic> data) parse, {
+  required String collection,
+}) {
+  final result = <T>[];
+  for (final d in docs) {
+    try {
+      result.add(parse(d.id, d.data));
+    } catch (e) {
+      debugPrint('Skipping malformed $collection/${d.id}: $e');
+    }
+  }
+  return result;
+}
+
+Iterable<({String id, Map<String, dynamic> data})> _docs(
+  QuerySnapshot<Map<String, dynamic>> snap,
+) => snap.docs.map((d) => (id: d.id, data: d.data()));
+
 /// Repository for storage locations, stock quantities and stock movements.
 class StockRepository {
   CollectionReference<Map<String, dynamic>> get _locations =>
@@ -81,9 +105,11 @@ class StockRepository {
         .orderBy('name')
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => StorageLocation.fromMap(d.id, d.data()))
-              .toList(),
+          (snap) => parseTolerant(
+            _docs(snap),
+            StorageLocation.fromMap,
+            collection: 'storageLocations',
+          ),
         );
   }
 
@@ -148,8 +174,11 @@ class StockRepository {
 
   Stream<List<StockEntry>> watchStock() {
     return _stock.snapshots().map(
-      (snap) =>
-          snap.docs.map((d) => StockEntry.fromMap(d.id, d.data())).toList(),
+      (snap) => parseTolerant(
+        _docs(snap),
+        StockEntry.fromMap,
+        collection: 'stockEntries',
+      ),
     );
   }
 
@@ -299,9 +328,11 @@ class StockRepository {
         .orderBy('at', descending: true)
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => StockMovement.fromMap(d.id, d.data()))
-              .toList(),
+          (snap) => parseTolerant(
+            _docs(snap),
+            StockMovement.fromMap,
+            collection: 'stockMovements',
+          ),
         );
   }
 

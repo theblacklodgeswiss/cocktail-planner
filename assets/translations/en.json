@@ -937,6 +937,14 @@
     "user": "User",
     "guest": "Guest"
   },
+  "load_error": {
+    "permission_denied": "No permission",
+    "index_missing": "Index missing",
+    "unavailable": "No connection",
+    "unauthenticated": "Not signed in",
+    "timeout": "Timeout: no response from the server",
+    "other": "Unknown error"
+  },
   "ui": {
     "back": "Back",
     "close": "Close",

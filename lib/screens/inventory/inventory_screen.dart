@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/admin_repository.dart';
+import '../../data/load_error.dart';
 import '../../data/stock_repository.dart';
 import '../../models/app_role.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../ui/widgets/staff_scaffold.dart';
 import '../../ui/widgets/staff_tab_bar.dart';
+import '../../ui/widgets/states.dart';
 import '../../widgets/role_protected_screen.dart';
 import 'excel_import_dialog.dart';
 import 'inventory_rows.dart';
+import 'inventory_view.dart';
 
 /// Stock overview. Layout: one table, horizontally scrollable so it stays
 /// usable on a phone (columns: article, Auftrag/Investition per location,
@@ -29,48 +32,26 @@ class InventoryScreen extends StatelessWidget {
       minimumRole: AppRole.employee,
       child: StaffFrame(
         tab: StaffTab.inventory,
-        child: _InventoryView(showBack: showBack),
+        child: _InventoryPage(showBack: showBack),
       ),
     );
   }
 }
 
-class _InventoryView extends StatefulWidget {
-  const _InventoryView({required this.showBack});
+class _InventoryPage extends StatelessWidget {
+  const _InventoryPage({required this.showBack});
 
   final bool showBack;
 
-  @override
-  State<_InventoryView> createState() => _InventoryViewState();
-}
+  static String _originLabel(StockOrigin o) => o == StockOrigin.order
+      ? 'rest.origin_order'.tr()
+      : 'rest.origin_investment'.tr();
 
-class _InventoryViewState extends State<_InventoryView> {
-  final _search = TextEditingController();
-  late final Stream<List<StockEntry>> _stock = stockRepository.watchStock();
-  late final Stream<List<StorageLocation>> _locations = stockRepository
-      .watchLocations();
-  List<({String id, String name})> _catalog = const [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCatalog();
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadCatalog() async {
+  static Future<List<({String id, String name})>> _loadCatalog() async {
     final items = await adminRepository.getMaterialsWithIds(
       isFixedValue: false,
     );
-    if (!mounted) return;
-    setState(() {
-      _catalog = [for (final m in items) (id: m.id, name: m.item.name)];
-    });
+    return [for (final m in items) (id: m.id, name: m.item.name)];
   }
 
   @override
@@ -79,7 +60,7 @@ class _InventoryViewState extends State<_InventoryView> {
       appBar: AppBar(
         title: Text('inventory.title'.tr()),
         automaticallyImplyLeading: false,
-        leading: widget.showBack
+        leading: showBack
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () =>
@@ -100,126 +81,19 @@ class _InventoryViewState extends State<_InventoryView> {
           ),
         ],
       ),
-      body: StreamBuilder<List<StorageLocation>>(
-        stream: _locations,
-        builder: (context, locSnap) {
-          return StreamBuilder<List<StockEntry>>(
-            stream: _stock,
-            builder: (context, stockSnap) {
-              if (locSnap.hasError || stockSnap.hasError) {
-                return Center(child: Text('inventory.load_failed'.tr()));
-              }
-              if (!locSnap.hasData || !stockSnap.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return _buildBody(context, stockSnap.data!, locSnap.data!);
-            },
-          );
-        },
+      body: InventoryView(
+        watchStock: stockRepository.watchStock,
+        watchLocations: stockRepository.watchLocations,
+        loadCatalog: _loadCatalog,
+        originLabel: _originLabel,
+        // Room to scroll the last row clear of the bar and the "+" button.
+        endPadding: staffFrameFabClearance(context),
+        onArticleTap: (row, locations) => _showHistory(context, row, locations),
+        onCellTap: (row, location, origin) =>
+            _showQuantityDialog(context, row, location, origin),
       ),
     );
   }
-
-  Widget _buildBody(
-    BuildContext context,
-    List<StockEntry> entries,
-    List<StorageLocation> locations,
-  ) {
-    final query = _search.text.trim().toLowerCase();
-    // Articles without stock only show up when searched for, otherwise the
-    // whole catalog would flood the table.
-    final rows = buildInventoryRows(entries, locations, catalog: _catalog)
-        .where(
-          (r) => query.isEmpty
-              ? r.total > 0
-              : r.materialName.toLowerCase().contains(query),
-        )
-        .toList();
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: TextField(
-            controller: _search,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              labelText: 'inventory.search'.tr(),
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-        ),
-        Expanded(
-          child: rows.isEmpty
-              ? Center(child: Text('inventory.empty'.tr()))
-              : SingleChildScrollView(
-                  // Room to scroll the last row clear of the "+" button.
-                  padding: EdgeInsets.only(
-                    bottom: staffFrameFabClearance(context),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: _buildTable(context, rows, locations),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTable(
-    BuildContext context,
-    List<InventoryRow> rows,
-    List<StorageLocation> locations,
-  ) {
-    final columns = <DataColumn>[
-      DataColumn(label: Text('inventory.article'.tr())),
-      for (final l in locations)
-        for (final o in StockOrigin.values)
-          DataColumn(
-            numeric: true,
-            label: Text('${l.name}\n${_originLabel(o)}'),
-          ),
-      DataColumn(numeric: true, label: Text('inventory.total'.tr())),
-      DataColumn(label: Text('inventory.note'.tr())),
-    ];
-    return DataTable(
-      columnSpacing: 20,
-      dataRowMinHeight: 44,
-      dataRowMaxHeight: 56,
-      columns: columns,
-      rows: [
-        for (final r in rows)
-          DataRow(
-            cells: [
-              DataCell(
-                Text(r.materialName),
-                onTap: () => _showHistory(context, r, locations),
-              ),
-              for (final l in locations)
-                for (final o in StockOrigin.values)
-                  DataCell(
-                    Text(formatQuantity(r.perLocation[l.id]![o] ?? 0)),
-                    onTap: () => _showQuantityDialog(context, r, l, o),
-                  ),
-              DataCell(
-                Text(
-                  formatQuantity(r.total),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              DataCell(Text(r.note ?? '')),
-            ],
-          ),
-      ],
-    );
-  }
-
-  String _originLabel(StockOrigin o) => o == StockOrigin.order
-      ? 'rest.origin_order'.tr()
-      : 'rest.origin_investment'.tr();
 
   Future<void> _showQuantityDialog(
     BuildContext context,
@@ -260,7 +134,7 @@ class _InventoryViewState extends State<_InventoryView> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => _LocationsSheet(),
+      builder: (_) => const _LocationsSheet(),
     );
   }
 }
@@ -404,7 +278,7 @@ class _QuantityDialogState extends State<_QuantityDialog> {
   }
 }
 
-class _HistorySheet extends StatelessWidget {
+class _HistorySheet extends StatefulWidget {
   const _HistorySheet({
     required this.row,
     required this.locations,
@@ -415,8 +289,22 @@ class _HistorySheet extends StatelessWidget {
   final List<StorageLocation> locations;
   final String Function(StockOrigin) originLabel;
 
+  @override
+  State<_HistorySheet> createState() => _HistorySheetState();
+}
+
+class _HistorySheetState extends State<_HistorySheet> {
+  late Stream<List<StockMovement>> _movements = _watch();
+
+  // Needs the composite index stockMovements(materialId asc, at desc).
+  Stream<List<StockMovement>> _watch() =>
+      stockRepository.watchMovements(materialId: widget.row.materialId);
+
+  InventoryRow get row => widget.row;
+  String Function(StockOrigin) get originLabel => widget.originLabel;
+
   String _locationName(String id) {
-    for (final l in locations) {
+    for (final l in widget.locations) {
       if (l.id == id) return l.name;
     }
     return id;
@@ -441,16 +329,21 @@ class _HistorySheet extends StatelessWidget {
           ),
           Expanded(
             child: StreamBuilder<List<StockMovement>>(
-              stream: stockRepository.watchMovements(
-                materialId: row.materialId,
-              ),
+              stream: _movements,
               builder: (context, snap) {
                 if (snap.hasError) {
-                  return Center(child: Text('inventory.load_failed'.tr()));
+                  final error = snap.error!;
+                  debugPrint(
+                    'Inventory history failed: ${snap.error.runtimeType}: '
+                    '$error',
+                  );
+                  return ErrorState(
+                    message: 'inventory.load_failed'.tr(),
+                    detail: describeLoadError(error),
+                    onRetry: () => setState(() => _movements = _watch()),
+                  );
                 }
-                if (!snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                if (!snap.hasData) return const LoadingState();
                 final items = snap.data!;
                 if (items.isEmpty) {
                   return Center(child: Text('inventory.history_empty'.tr()));

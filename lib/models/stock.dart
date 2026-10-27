@@ -17,7 +17,30 @@ enum StockOrigin {
   }
 }
 
-double _toDouble(dynamic value) => (value as num?)?.toDouble() ?? 0;
+/// Numbers may arrive as int, double or (hand-edited / imported) as text
+/// with a comma or dot; anything else counts as 0.
+double _toDouble(dynamic value) {
+  if (value is num) return value.isFinite ? value.toDouble() : 0;
+  if (value is String) {
+    final parsed = double.tryParse(value.trim().replaceAll(',', '.'));
+    return parsed != null && parsed.isFinite ? parsed : 0;
+  }
+  return 0;
+}
+
+/// Text field that tolerates other types (e.g. a number in a note).
+String? _str(dynamic value) {
+  if (value == null) return null;
+  return value is String ? value : value.toString();
+}
+
+/// Timestamp, DateTime or epoch millis; anything else is epoch 0.
+DateTime _toDate(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  return DateTime.fromMillisecondsSinceEpoch(0);
+}
 
 /// A physical place where stock is kept.
 class StorageLocation {
@@ -34,8 +57,8 @@ class StorageLocation {
   factory StorageLocation.fromMap(String id, Map<String, dynamic> map) {
     return StorageLocation(
       id: id,
-      name: map['name'] as String? ?? '',
-      ownerEmail: map['ownerEmail'] as String?,
+      name: _str(map['name']) ?? '',
+      ownerEmail: _str(map['ownerEmail']),
     );
   }
 
@@ -76,12 +99,12 @@ class StockEntry {
   factory StockEntry.fromMap(String id, Map<String, dynamic> map) {
     return StockEntry(
       id: id,
-      materialId: map['materialId'] as String? ?? '',
-      materialName: map['materialName'] as String? ?? '',
-      locationId: map['locationId'] as String? ?? '',
-      origin: StockOrigin.fromString(map['origin'] as String?),
+      materialId: _str(map['materialId']) ?? '',
+      materialName: _str(map['materialName']) ?? '',
+      locationId: _str(map['locationId']) ?? '',
+      origin: StockOrigin.fromString(_str(map['origin'])),
       quantity: _toDouble(map['quantity']),
-      note: map['note'] as String?,
+      note: _str(map['note']),
     );
   }
 
@@ -121,19 +144,16 @@ class StockMovement {
   final DateTime at;
 
   factory StockMovement.fromMap(String id, Map<String, dynamic> map) {
-    final at = map['at'];
     return StockMovement(
       id: id,
-      materialId: map['materialId'] as String? ?? '',
-      locationId: map['locationId'] as String? ?? '',
-      origin: StockOrigin.fromString(map['origin'] as String?),
+      materialId: _str(map['materialId']) ?? '',
+      locationId: _str(map['locationId']) ?? '',
+      origin: StockOrigin.fromString(_str(map['origin'])),
       delta: _toDouble(map['delta']),
-      reason: map['reason'] as String? ?? '',
-      orderId: map['orderId'] as String?,
-      byEmail: map['byEmail'] as String? ?? '',
-      at: at is Timestamp
-          ? at.toDate()
-          : DateTime.fromMillisecondsSinceEpoch(0),
+      reason: _str(map['reason']) ?? '',
+      orderId: _str(map['orderId']),
+      byEmail: _str(map['byEmail']) ?? '',
+      at: _toDate(map['at']),
     );
   }
 

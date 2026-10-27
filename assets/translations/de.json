@@ -942,6 +942,14 @@
     "user": "Benutzer",
     "guest": "Gast"
   },
+  "load_error": {
+    "permission_denied": "Keine Berechtigung",
+    "index_missing": "Index fehlt",
+    "unavailable": "Keine Verbindung",
+    "unauthenticated": "Nicht angemeldet",
+    "timeout": "Zeitüberschreitung: keine Antwort vom Server",
+    "other": "Unbekannter Fehler"
+  },
   "ui": {
     "back": "Zurück",
     "close": "Schließen",
