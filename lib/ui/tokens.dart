@@ -58,6 +58,25 @@ class AppColors {
   static const Color glassWebLight = Color(0xB8FFFFFF);
   static const Color glassWebDark = Color(0xB82C2C2E);
   static const Color heroMeta = Color(0xFFA1A1A6);
+
+  // Liquid Glass (floating tab bar and "+"): thinner fill over a stronger
+  // blur, a bright rim, a top highlight and a brighter lens for the active tab.
+  static const Color liquidLight = Color(0x8CFFFFFF);
+  static const Color liquidDark = Color(0x1AFFFFFF);
+  // Web has no saturate boost, so the fill is denser to keep labels legible.
+  static const Color liquidWebLight = Color(0xC7FFFFFF);
+  static const Color liquidWebDark = Color(0xD12C2C2E);
+  static const Color liquidBorderLight = Color(0xF2FFFFFF);
+  static const Color liquidBorderDark = Color(0x47FFFFFF);
+  static const Color liquidHighlightLight = Color(0xA6FFFFFF);
+  static const Color liquidHighlightDark = Color(0x2EFFFFFF);
+  static const Color lensLight = Color(0xBFFFFFFF);
+  static const Color lensDark = Color(0x33FFFFFF);
+  static const Color lensBorderLight = Color(0xFFFFFFFF);
+  static const Color lensBorderDark = Color(0x52FFFFFF);
+  static const Color shadowLiquid = Color(0x2E000000);
+  static const Color shadowLiquidNear = Color(0x14000000);
+  static const Color shadowLens = Color(0x1F000000);
   static const Color border = Color(0x14000000);
   static const Color borderDark = Color(0x1FFFFFFF);
 
@@ -97,10 +116,18 @@ class AppSize {
   static const double glassShadowBleed = 80;
   static const double minTileTextScale = 1.0;
   static const double maxTileTextScale = 1.15;
-  static const double tabBarHeight = 46;
+  static const double tabBarHeight = 56;
+  static const double tabIcon = 20;
+  static const double tabIconGap = 2;
+
+  /// Largest text scale inside the tab bar (labels stay >= 10 px, bar fits).
+  static const double maxTabTextScale = 1.3;
+
+  /// Liquid Glass blur, stronger than [glassBlur].
+  static const double liquidBlur = 30;
+  static const double liquidFab = 48;
   static const double barSide = 14;
   static const double barGap = 12;
-  static const double fab = 40;
   static const double fabIcon = 22;
   static const double fabRight = 20;
   static const double topBar = 44;
@@ -111,8 +138,6 @@ class AppSize {
   static const double sheetMaxFraction = 0.9;
   static const double sheetFullFraction = 0.94;
 
-  /// Scroll padding that keeps the last item clear of a floating bar.
-  static const double barClearance = 96;
   static const double maxContentWidth = 720;
   static const double maxBarWidth = 520;
   static const double sheetDismissFraction = 1 / 3;
@@ -160,6 +185,29 @@ class AppShadow {
       color: AppColors.shadowStrong,
       blurRadius: 14,
       offset: Offset(0, 6),
+    ),
+  ];
+
+  /// Deeper, softer shadow of the Liquid Glass bar ("lens" on the page).
+  static const List<BoxShadow> liquid = [
+    BoxShadow(
+      color: AppColors.shadowLiquid,
+      blurRadius: 30,
+      offset: Offset(0, 10),
+    ),
+    BoxShadow(
+      color: AppColors.shadowLiquidNear,
+      blurRadius: 6,
+      offset: Offset(0, 2),
+    ),
+  ];
+
+  /// Active-tab lens inside the bar.
+  static const List<BoxShadow> lens = [
+    BoxShadow(
+      color: AppColors.shadowLens,
+      blurRadius: 10,
+      offset: Offset(0, 3),
     ),
   ];
   static const List<BoxShadow> glass = [
@@ -292,6 +340,16 @@ class AppPalette {
       dark ? AppColors.glassSolidDark : AppColors.glassSolidLight;
   Color get glassBorder =>
       dark ? AppColors.glassBorderDark : AppColors.glassBorderLight;
+  Color get liquid => dark ? AppColors.liquidDark : AppColors.liquidLight;
+  Color get liquidWeb =>
+      dark ? AppColors.liquidWebDark : AppColors.liquidWebLight;
+  Color get liquidBorder =>
+      dark ? AppColors.liquidBorderDark : AppColors.liquidBorderLight;
+  Color get liquidHighlight =>
+      dark ? AppColors.liquidHighlightDark : AppColors.liquidHighlightLight;
+  Color get lens => dark ? AppColors.lensDark : AppColors.lensLight;
+  Color get lensBorder =>
+      dark ? AppColors.lensBorderDark : AppColors.lensBorderLight;
   Color get error => dark ? AppColors.errorDark : AppColors.errorLight;
   Color get onError => dark ? AppColors.ink : AppColors.textDark;
 

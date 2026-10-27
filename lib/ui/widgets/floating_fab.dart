@@ -2,10 +2,12 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../tokens.dart';
+import 'glass_surface.dart';
 import 'pressable.dart';
 
-/// Black round "+" button with a soft shadow. Only draws the button; the
-/// caller positions it.
+/// Round Liquid Glass "+" button (same material as the staff tab bar) with a
+/// primary-colored glyph: black on light, white on dark. Only draws the
+/// button; the caller positions it.
 class FloatingFab extends StatelessWidget {
   const FloatingFab({
     super.key,
@@ -28,15 +30,13 @@ class FloatingFab extends StatelessWidget {
       minSize: AppSize.minTap,
       radius: AppRadius.pill,
       semanticLabel: semanticLabel ?? 'ui.add'.tr(),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: p.primary,
-          shape: BoxShape.circle,
-          boxShadow: AppShadow.fab,
-        ),
-        child: SizedBox.square(
-          dimension: AppSize.fab,
-          child: Icon(icon, size: AppSize.fabIcon, color: p.onPrimary),
+      child: SizedBox.square(
+        dimension: AppSize.liquidFab,
+        child: GlassSurface(
+          liquid: true,
+          child: Center(
+            child: Icon(icon, size: AppSize.fabIcon, color: p.primary),
+          ),
         ),
       ),
     );

@@ -17,8 +17,12 @@ const _saturate = ColorFilter.matrix(<double>[
 /// Frosted glass (blur 22, saturate 180%). With reduced transparency the
 /// blur is dropped and the fill becomes nearly opaque.
 ///
+/// [liquid] is the Liquid Glass material of the floating tab bar and "+":
+/// stronger blur ([AppSize.liquidBlur]), thinner fill, a bright rim, an inner
+/// top highlight and a deeper shadow, so it reads as a lens over the content.
+///
 /// On Flutter Web a composed color-matrix backdrop filter can degrade or
-/// fall back, so the web path is blur-only with a slightly denser fill.
+/// fall back, so the web path is blur-only with a denser fill.
 /// The drop shadow is clipped to the outside of the shape so it does not
 /// grey the translucent glass.
 class GlassSurface extends StatelessWidget {
@@ -26,30 +30,50 @@ class GlassSurface extends StatelessWidget {
     super.key,
     required this.child,
     this.radius = AppRadius.pill,
+    this.liquid = false,
   });
 
   final Widget child;
   final double radius;
+  final bool liquid;
 
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
     final solid = AppMotion.reducedTransparency(context);
     final shape = BorderRadius.circular(radius);
-    final fill = solid ? p.glassSolid : (kIsWeb ? p.glassWeb : p.glass);
+    final fill = solid
+        ? p.glassSolid
+        : liquid
+        ? (kIsWeb ? p.liquidWeb : p.liquid)
+        : (kIsWeb ? p.glassWeb : p.glass);
+    final sigma = liquid ? AppSize.liquidBlur : AppSize.glassBlur;
 
-    final blur = ImageFilter.blur(
-      sigmaX: AppSize.glassBlur,
-      sigmaY: AppSize.glassBlur,
-    );
+    final blur = ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
 
     final body = DecoratedBox(
       decoration: BoxDecoration(
         color: fill,
         borderRadius: shape,
-        border: Border.all(color: p.glassBorder, width: AppSize.hairline),
+        border: Border.all(
+          color: liquid ? p.liquidBorder : p.glassBorder,
+          width: AppSize.hairline,
+        ),
       ),
-      child: child,
+      // Inner highlight: light falling on the upper rim of the lens.
+      child: liquid && !solid
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: shape,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: [p.liquidHighlight, AppColors.glowClear],
+                ),
+              ),
+              child: child,
+            )
+          : child,
     );
 
     return Stack(
@@ -62,7 +86,7 @@ class GlassSurface extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: shape,
-                  boxShadow: AppShadow.glass,
+                  boxShadow: liquid ? AppShadow.liquid : AppShadow.glass,
                 ),
               ),
             ),

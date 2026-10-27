@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cocktail_planer/screens/dashboard/home_switch.dart';
 import 'package:cocktail_planer/screens/more/more_view.dart';
 import 'package:cocktail_planer/ui/app_theme.dart';
+import 'package:cocktail_planer/ui/widgets/glass_surface.dart';
 import 'package:cocktail_planer/ui/widgets/staff_scaffold.dart';
 import 'package:cocktail_planer/ui/widgets/staff_tab_bar.dart';
 import 'package:cocktail_planer/ui/widgets/states.dart';
@@ -326,7 +327,7 @@ void main() {
                   16,
                   16,
                   16,
-                  16 + staffFrameFabClearance(context),
+                  16 + staffFrameContentClearance(context),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -355,6 +356,96 @@ void main() {
       final last = tester.getRect(find.text('row 39'));
       final fab = tester.getRect(find.bySemanticsLabel('Neuer Auftrag'));
       expect(last.bottom, lessThanOrEqualTo(fab.top));
+    });
+
+    Widget framedList() => StaffFrame(
+      tab: StaffTab.inventory,
+      child: Scaffold(
+        body: Builder(
+          builder: (context) => SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: staffFrameContentClearance(context),
+            ),
+            child: Column(
+              children: [
+                const TextField(key: Key('tf')),
+                for (var i = 0; i < 40; i++)
+                  SizedBox(
+                    key: ValueKey('row $i'),
+                    height: 40,
+                    child: Text('row $i'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Rect barRect(WidgetTester tester) => tester.getRect(
+      find.descendant(
+        of: find.byType(StaffTabBar),
+        matching: find.byType(GlassSurface),
+      ),
+    );
+
+    testWidgets('bar floats over the page; the page fills the screen', (
+      tester,
+    ) async {
+      phone(tester);
+      await pumpApp(tester, app(router(framedList())));
+      final bar = barRect(tester);
+      // The page's Scaffold reaches the bottom edge: content runs under the
+      // glass instead of stopping above it.
+      expect(tester.getRect(find.byType(Scaffold).last).bottom, 640);
+      final rows = [
+        for (var i = 0; i < 40; i++)
+          tester.getRect(find.byKey(ValueKey('row $i'))),
+      ];
+      expect(rows.where((r) => r.overlaps(bar)), isNotEmpty);
+      // The page gets the bar + "+" clearance as its bottom padding.
+      final padding = MediaQuery.paddingOf(
+        tester.element(find.byKey(const ValueKey('row 0'))),
+      ).bottom;
+      expect(padding, greaterThanOrEqualTo(640 - bar.top));
+      final fab = tester.getRect(find.bySemanticsLabel('Neuer Auftrag'));
+      expect(fab.bottom, lessThanOrEqualTo(bar.top));
+
+      final scrollable = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+      await tester.pump();
+      final last = tester.getRect(find.byKey(const ValueKey('row 39')));
+      expect(last.bottom, lessThanOrEqualTo(bar.top));
+      expect(last.bottom, lessThanOrEqualTo(fab.top));
+    });
+
+    testWidgets('keyboard hides bar and +, drops the padding', (tester) async {
+      phone(tester);
+      await pumpApp(tester, app(router(framedList())));
+      await tester.tap(find.byKey(const Key('tf')));
+      await tester.pump();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Inventur').hitTestable(), findsNothing);
+      expect(
+        find.bySemanticsLabel('Neuer Auftrag').hitTestable(),
+        findsNothing,
+      );
+      expect(
+        MediaQuery.paddingOf(
+          tester.element(find.byKey(const ValueKey('row 0'))),
+        ).bottom,
+        0,
+      );
+      final field = tester.getRect(find.byKey(const Key('tf')));
+      expect(field.bottom, lessThanOrEqualTo(640 - 300));
+
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Inventur').hitTestable(), findsOneWidget);
     });
 
     testWidgets('active tab scrolls the page to top', (tester) async {

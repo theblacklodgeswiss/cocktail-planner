@@ -23,11 +23,19 @@ const staffTabRoutes = {
 /// pages opened from elsewhere (e.g. pushed from the dashboard) keep it.
 const staffTabExtra = 'staff-tab';
 
-/// Bottom padding the scroll view of a page inside [StaffFrame] needs so its
-/// last row scrolls clear of the "+" button (the bar has its own space).
-/// Matches the FAB clearance of [LargeTitleScaffold].
-double staffFrameFabClearance(BuildContext context) =>
-    AppSize.minTap + AppSpace.s16;
+/// Bottom padding the main scroll view of a page inside [StaffFrame] needs
+/// so its last row scrolls clear of the floating bar and the "+" button.
+///
+/// [StaffFrame] publishes this as the page's bottom `MediaQuery` padding
+/// (ListView and SafeArea pick it up on their own); this helper reads it for
+/// scroll views that do not (e.g. SingleChildScrollView). It is 0 while the
+/// keyboard is open, because the bar and the "+" hide then.
+double staffFrameContentClearance(BuildContext context) =>
+    MediaQuery.paddingOf(context).bottom;
+
+/// Clearance [StaffFrame] gives its page: bar, gap, safe area and "+".
+double _frameClearance(BuildContext context) =>
+    staffBarClearance(context) + AppSize.liquidFab + AppSpace.s16;
 
 /// Target of the round "+" button (same form the dashboard FAB opens).
 const staffNewOrderRoute = '/order-form';
@@ -68,8 +76,10 @@ class _NewOrderFab extends StatelessWidget {
   );
 }
 
-/// Staff page: [LargeTitleScaffold] with the floating [StaffTabBar] and the
-/// round "+" button (new order) above it. Pass [fab] to replace the "+".
+/// Staff page: [LargeTitleScaffold] with the floating Liquid Glass
+/// [StaffTabBar] (content scrolls underneath) and the round "+" button (new
+/// order) above it; both hide while the keyboard is open. Pass [fab] to
+/// replace the "+".
 class StaffScaffold extends StatefulWidget {
   const StaffScaffold({
     super.key,
@@ -116,7 +126,7 @@ class _StaffScaffoldState extends State<StaffScaffold> {
       controller: _controller,
       slivers: widget.slivers,
       fab: widget.fab ?? const _NewOrderFab(),
-      bottomBar: StaffTabBar(
+      tabBar: StaffTabBar(
         current: widget.tab,
         onSelect: (tab) => selectStaffTab(
           context,
@@ -129,11 +139,14 @@ class _StaffScaffoldState extends State<StaffScaffold> {
   }
 }
 
-/// Puts the staff bar and the "+" button around an existing (not yet
-/// restyled) Material page. The page keeps its own Scaffold and AppBar; the
-/// bar takes its own space below it. Its main vertical scroll view picks up
-/// the frame's PrimaryScrollController (on phones, where Flutter inherits
-/// it), so tapping the active tab scrolls it to the top.
+/// Puts the floating staff bar and the "+" button over an existing (not yet
+/// restyled) Material page. The page keeps its own Scaffold and AppBar and
+/// fills the screen; its content scrolls under the glass bar. The page gets
+/// the bar and "+" clearance as its bottom MediaQuery padding (see
+/// [staffFrameContentClearance]). While the keyboard is open the bar and the
+/// "+" slide away and the padding drops to 0. Its main vertical scroll view
+/// picks up the frame's PrimaryScrollController (on phones, where Flutter
+/// inherits it), so tapping the active tab scrolls it to the top.
 ///
 /// Interim wrapper: Tasks 11/14 move these pages to [StaffScaffold].
 class StaffFrame extends StatefulWidget {
@@ -157,38 +170,52 @@ class _StaffFrameState extends State<StaffFrame> {
 
   @override
   Widget build(BuildContext context) {
+    // Read above the Scaffold, which strips the inset for its body.
+    final keyboard = keyboardOpen(context);
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: Stack(
-              children: [
-                // The bar below handles the bottom safe area.
-                Positioned.fill(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeBottom: true,
-                    child: PrimaryScrollController(
-                      controller: _scroll,
-                      child: widget.child,
+          Positioned.fill(
+            child: Builder(
+              builder: (context) {
+                final m = MediaQuery.of(context);
+                return MediaQuery(
+                  data: m.copyWith(
+                    padding: m.padding.copyWith(
+                      bottom: keyboard ? 0 : _frameClearance(context),
                     ),
                   ),
-                ),
-                const Positioned(
-                  right: AppSize.fabRight,
-                  bottom: AppSpace.s8,
-                  child: _NewOrderFab(),
-                ),
-              ],
+                  child: PrimaryScrollController(
+                    controller: _scroll,
+                    child: widget.child,
+                  ),
+                );
+              },
             ),
           ),
-          StaffTabBar(
-            current: widget.tab,
-            onSelect: (tab) => selectStaffTab(
-              context,
-              current: widget.tab,
-              selected: tab,
-              scrollToTop: () => _toTop(context, _scroll),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: HideOnKeyboard(
+              hidden: keyboard,
+              child: StaffTabBar(
+                current: widget.tab,
+                onSelect: (tab) => selectStaffTab(
+                  context,
+                  current: widget.tab,
+                  selected: tab,
+                  scrollToTop: () => _toTop(context, _scroll),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: AppSize.fabRight,
+            bottom: staffTabBarExtent(context) + AppSpace.s8,
+            child: HideOnKeyboard(
+              hidden: keyboard,
+              child: const _NewOrderFab(),
             ),
           ),
         ],

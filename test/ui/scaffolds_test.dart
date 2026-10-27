@@ -156,7 +156,7 @@ void main() {
         LargeTitleScaffold(
           title: 'Titel',
           fab: FloatingFab(onPressed: () {}),
-          bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+          tabBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
           slivers: const [SliverToBoxAdapter(child: Text('x'))],
         ),
       ),
@@ -178,7 +178,7 @@ void main() {
         app(
           LargeTitleScaffold(
             title: 'Titel',
-            bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+            tabBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
             slivers: [
               SliverToBoxAdapter(
                 child: Container(key: const Key('c'), height: 20),
@@ -628,7 +628,7 @@ void main() {
             IconButton(onPressed: () {}, icon: const Icon(Icons.search)),
           ],
           fab: FloatingFab(onPressed: () {}),
-          bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+          tabBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
           slivers: [
             SliverList.builder(
               itemCount: 40,
@@ -1096,7 +1096,7 @@ void main() {
         LargeTitleScaffold(
           title: 'Titel',
           fab: FloatingFab(onPressed: () {}),
-          bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+          tabBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
           slivers: [
             SliverList.builder(
               itemCount: 30,
@@ -1116,6 +1116,20 @@ void main() {
     expect(
       last.bottom,
       lessThanOrEqualTo(tester.getRect(find.byType(FloatingFab)).top),
+    );
+    expect(
+      last.bottom,
+      lessThanOrEqualTo(
+        tester
+            .getRect(
+              find.descendant(
+                of: find.byType(StaffTabBar),
+                matching: find.byType(GlassSurface),
+              ),
+            )
+            .top,
+      ),
+      reason: 'clear of the floating tab bar too',
     );
   });
 
@@ -1183,6 +1197,17 @@ void main() {
         ),
         fab: FloatingFab(onPressed: () {}),
         slivers: const [SliverToBoxAdapter(child: Text('x'))],
+      ),
+      'LargeTitleScaffold+tabBar': () => LargeTitleScaffold(
+        title: 'Ein sehr langer Titel fuer die Uebersicht',
+        tabBar: StaffTabBar(current: StaffTab.inventory, onSelect: (_) {}),
+        fab: FloatingFab(onPressed: () {}),
+        slivers: [
+          SliverList.builder(
+            itemCount: 30,
+            itemBuilder: (_, i) => SizedBox(height: 60, child: Text('r$i')),
+          ),
+        ],
       ),
       'StaffTabBar': () => Scaffold(
         body: Align(

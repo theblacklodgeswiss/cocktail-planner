@@ -87,7 +87,7 @@ class _InventoryPage extends StatelessWidget {
         loadCatalog: _loadCatalog,
         originLabel: _originLabel,
         // Room to scroll the last row clear of the bar and the "+" button.
-        endPadding: staffFrameFabClearance(context),
+        endPadding: staffFrameContentClearance(context),
         onArticleTap: (row, locations) => _showHistory(context, row, locations),
         onCellTap: (row, location, origin) =>
             _showQuantityDialog(context, row, location, origin),

@@ -13,6 +13,15 @@ class AppMotion {
   static const Duration page = Duration(milliseconds: 280);
   static const Duration sheet = Duration(milliseconds: 300);
 
+  /// Active-tab lens sliding between tabs.
+  static const Duration lens = Duration(milliseconds: 220);
+
+  /// Tab bar and "+" sliding away while the keyboard is open.
+  static const Duration barHide = Duration(milliseconds: 200);
+
+  /// Hidden position of a floating bottom bar: one own height down.
+  static const Offset barHidden = Offset(0, 1);
+
   /// Sheet start position: one sheet height below its final place.
   static const Offset sheetFrom = Offset(0, 1);
 
