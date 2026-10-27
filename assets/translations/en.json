@@ -64,7 +64,9 @@
     "requests_load_error": "Could not load your requests.",
     "open_order": "Go to order",
     "confirmation_failed": "Could not open the order confirmation.",
-    "stat_open": "Open",
+    "stat_open": "Pending",
+    "kpi_title": "Key figures",
+    "kpi_all": "All time",
     "stat_accepted": "Accepted",
     "stat_this_week": "This week",
     "upcoming": "Upcoming events",
@@ -616,7 +618,8 @@
     "empty_body": "Tap + to create an order.",
     "no_results": "No results",
     "load_error": "Orders could not be loaded.",
-    "search_close": "Close search"
+    "search_close": "Close search",
+    "latest_of": {"one": "{} latest of {}", "other": "{} latest of {}"}
   },
   "share": {
     "loading": "Loading document...",

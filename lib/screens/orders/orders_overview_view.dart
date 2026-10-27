@@ -199,6 +199,15 @@ class _OrdersOverviewViewState extends State<OrdersOverviewView> {
                   child: Text(
                     _query.isNotEmpty
                         ? '${visible.length} ${'orders.search_results'.tr()}'
+                        // Counts cover all orders; the list only the latest.
+                        : counts.of(_filter) > visible.length
+                        ? 'orders.latest_of'.plural(
+                            visible.length,
+                            args: [
+                              '${visible.length}',
+                              '${counts.of(_filter)}',
+                            ],
+                          )
                         : '${'orders.order_count'.tr()} · ${visible.length}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -228,7 +237,7 @@ class _OrdersOverviewViewState extends State<OrdersOverviewView> {
                   ),
           )
         else
-          SliverOrderMonthList(orders: visible, onOpen: widget.onOpen),
+          SliverOrderList(orders: visible, onOpen: widget.onOpen),
       ];
     }
 

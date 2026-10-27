@@ -17,6 +17,7 @@ SavedOrder order(
   bool dismissed = false,
   DateTime? createdAt,
   DateTime? formCreatedAt,
+  String currency = 'CHF',
 }) => SavedOrder(
   id: id,
   name: name,
@@ -25,7 +26,7 @@ SavedOrder order(
   total: total,
   personCount: persons,
   drinkerType: 'normal',
-  currency: 'CHF',
+  currency: currency,
   status: status,
   guestCountRange: guestRange,
   location: location,
@@ -426,7 +427,7 @@ void main() {
       expect(nextAppointment([evening, noon], now)?.id, 'noon');
     });
 
-    test('completed future orders count as accepted', () {
+    test('completed orders are not "next" (already done)', () {
       expect(
         nextAppointment([
           order(
@@ -434,8 +435,23 @@ void main() {
             status: OrderStatus.completed,
             date: DateTime(2026, 11, 1),
           ),
+        ], now),
+        isNull,
+      );
+    });
+
+    test('accepted orders without a total are ignored', () {
+      expect(
+        nextAppointment([
+          order(
+            'zero',
+            status: OrderStatus.accepted,
+            total: 0,
+            date: DateTime(2026, 10, 28),
+          ),
+          order('a', status: OrderStatus.accepted, date: DateTime(2026, 11, 3)),
         ], now)?.id,
-        'c',
+        'a',
       );
     });
 
@@ -498,22 +514,101 @@ void main() {
   });
 
   group('groupByMonth', () {
-    test('groups by event month, keeping the input order', () {
+    test('month groups by event date, newest first; newest event first', () {
       final groups = groupByMonth([
         order('a', date: DateTime(2026, 6, 20)),
         order('b', date: DateTime(2026, 7, 1)),
         order('c', date: DateTime(2026, 6, 2)),
         order('d', date: DateTime(2025, 6, 2)),
+        order('e', date: DateTime(2026, 6, 25)),
       ]);
       expect(
         [for (final g in groups) '${g.year}-${g.month}'],
-        ['2026-6', '2026-7', '2025-6'],
+        ['2026-7', '2026-6', '2025-6'],
       );
-      expect(ids(groups.first.orders), ['a', 'c']);
+      expect(ids(groups[1].orders), ['e', 'a', 'c']);
     });
 
     test('empty input -> no groups', () {
       expect(groupByMonth([]), isEmpty);
+    });
+  });
+
+  // Expected values computed by hand from the formulas at 8c17f84
+  // (dashboard stats bar / overview summary cards).
+  group('dashboardStats (old dashboard stats bar)', () {
+    test(
+      'accepted with total > 0; currency of the first order with a total',
+      () {
+        final s = dashboardStats([
+          order('p0', total: 0, status: OrderStatus.accepted, persons: 999),
+          order(
+            'a1',
+            total: 1000,
+            status: OrderStatus.accepted,
+            persons: 80,
+            currency: 'EUR',
+          ),
+          order('q1', total: 300, persons: 40),
+          order('c1', total: 500, status: OrderStatus.completed, persons: 20),
+          order('d1', total: 200, status: OrderStatus.declined),
+        ]);
+        expect(s.offers, 1);
+        expect(s.offersOf, 2); // "open offers / accepted"
+        expect(s.accepted, 2);
+        expect(s.revenue, 1500);
+        expect(s.persons, 100);
+        expect(s.average, 750);
+        expect(s.currency, 'EUR');
+        expect(kpiMoney(s.revenue, s.currency), '1500.00 EUR');
+      },
+    );
+
+    test('empty: zeros and the default currency', () {
+      final s = dashboardStats([]);
+      expect(s.revenue, 0);
+      expect(s.average, 0);
+      expect(s.currency, 'CHF');
+    });
+  });
+
+  group('overviewTotals (old overview summary cards)', () {
+    test('quotes / total, isAccepted, dominant currency of accepted', () {
+      final s = overviewTotals([
+        order('q1', total: 300, persons: 40),
+        order(
+          'a1',
+          total: 1000,
+          status: OrderStatus.accepted,
+          persons: 80,
+          currency: 'EUR',
+        ),
+        order('c1', total: 500, status: OrderStatus.completed, persons: 20),
+        order('a2', total: 250, status: OrderStatus.accepted, persons: 10),
+        order('d1', total: 200, status: OrderStatus.declined, currency: 'EUR'),
+      ]);
+      expect(s.offers, 1);
+      expect(s.offersOf, 5); // "open quotes / all orders"
+      expect(s.accepted, 3);
+      expect(s.revenue, 1750);
+      expect(s.persons, 110);
+      expect(kpiMoney(s.average, s.currency), '583.33 CHF');
+      expect(s.currency, 'CHF');
+    });
+
+    test('currency tie: the later currency wins (reduce keeps b)', () {
+      final s = overviewTotals([
+        order('a', status: OrderStatus.accepted, currency: 'EUR'),
+        order('b', status: OrderStatus.accepted, currency: 'CHF'),
+      ]);
+      expect(s.currency, 'CHF');
+    });
+
+    test('no accepted orders: default currency, average 0', () {
+      final s = overviewTotals([order('q')]);
+      expect(s.currency, 'CHF');
+      expect(s.average, 0);
+      expect(s.offersOf, 1);
     });
   });
 }

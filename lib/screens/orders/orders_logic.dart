@@ -1,4 +1,5 @@
 import '../../models/order.dart';
+import '../../utils/currency.dart';
 
 /// Pure list rules of the staff order screens (overview, pending, years,
 /// dashboard). Moved unchanged out of the screens so they can be tested;
@@ -216,14 +217,18 @@ DateTime eventStart(SavedOrder o) {
   return day.add(Duration(hours: h, minutes: min));
 }
 
-/// Accepted orders ([SavedOrder.isAccepted], so completed ones too) whose
-/// event day is today or later, soonest first (by day, then time; ties keep
-/// the input order).
+/// Accepted, not yet completed orders with a total whose event day is
+/// today or later, soonest first (by day, then time; ties keep the input
+/// order). A completed event is never "next".
 List<SavedOrder> upcomingAppointments(List<SavedOrder> orders, DateTime now) {
   final today = _day(now);
   final upcoming = [
     for (final o in orders)
-      if (o.isAccepted && !_day(o.date).isBefore(today)) o,
+      if (o.isAccepted &&
+          o.status != OrderStatus.completed &&
+          o.total > 0 &&
+          !_day(o.date).isBefore(today))
+        o,
   ];
   // List.sort is not stable; sort indices to keep ties in input order.
   final indexed = [for (var i = 0; i < upcoming.length; i++) i];
@@ -234,7 +239,8 @@ List<SavedOrder> upcomingAppointments(List<SavedOrder> orders, DateTime now) {
   return [for (final i in indexed) upcoming[i]];
 }
 
-/// The next accepted appointment from today on, or null.
+/// The next appointment from today on (see [upcomingAppointments]), or
+/// null.
 SavedOrder? nextAppointment(List<SavedOrder> orders, DateTime now) {
   final upcoming = upcomingAppointments(orders, now);
   return upcoming.isEmpty ? null : upcoming.first;
@@ -269,17 +275,119 @@ class MonthGroup {
   final List<SavedOrder> orders;
 }
 
-/// Groups [orders] by event month without re-sorting: orders keep their
-/// input order inside a month, and months appear in the order of their
-/// first order. With the overview's createdAt-descending stream the newest
-/// created order's month comes first.
+/// Groups [orders] by event month for the year archive: months newest
+/// first, inside a month the latest event first (by [eventStart]; ties keep
+/// the input order). This deliberately replaces the createdAt order there.
 List<MonthGroup> groupByMonth(List<SavedOrder> orders) {
-  final groups = <int, List<SavedOrder>>{};
-  for (final o in orders) {
-    groups.putIfAbsent(o.date.year * 100 + o.date.month, () => []).add(o);
+  final indexed = [for (var i = 0; i < orders.length; i++) i];
+  indexed.sort((a, b) {
+    final c = eventStart(orders[b]).compareTo(eventStart(orders[a]));
+    return c != 0 ? c : a.compareTo(b);
+  });
+  final groups = <MonthGroup>[];
+  for (final i in indexed) {
+    final o = orders[i];
+    if (groups.isEmpty ||
+        groups.last.year != o.date.year ||
+        groups.last.month != o.date.month) {
+      groups.add(MonthGroup(o.date.year, o.date.month, []));
+    }
+    groups.last.orders.add(o);
   }
-  return [
-    for (final e in groups.entries)
-      MonthGroup(e.key ~/ 100, e.key % 100, e.value),
-  ];
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// KPIs (formulas copied 1:1 from the pre-redesign screens, 8c17f84)
+// ---------------------------------------------------------------------------
+
+/// Revenue, persons and average of accepted orders.
+class KpiStats {
+  const KpiStats({
+    required this.offers,
+    required this.offersOf,
+    required this.accepted,
+    required this.revenue,
+    required this.persons,
+    required this.average,
+    required this.currency,
+  });
+
+  /// Open offers (quotes).
+  final int offers;
+
+  /// Second number of the offers tile: accepted count ([dashboardStats]) or
+  /// all orders ([overviewTotals]), as the old tiles showed it.
+  final int offersOf;
+  final int accepted;
+  final double revenue;
+  final int persons;
+  final double average;
+  final String currency;
+}
+
+/// "1234.50 CHF", as the old cards formatted money.
+String kpiMoney(double value, String currency) =>
+    '${value.toStringAsFixed(2)} $currency';
+
+/// Old dashboard stats bar. Input: the dashboard stream
+/// (`watchOrders(includePending: true, year: <current year>)`).
+KpiStats dashboardStats(List<SavedOrder> orders) {
+  final completedOrders = orders.where((o) => o.total > 0).toList();
+  final acceptedOrders = completedOrders.where((o) => o.isAccepted).toList();
+  final totalRevenue = acceptedOrders.fold<double>(
+    0,
+    (sum, o) => sum + o.total,
+  );
+  final totalPersons = acceptedOrders.fold<int>(
+    0,
+    (sum, o) => sum + o.personCount,
+  );
+  return KpiStats(
+    offers: completedOrders.where((o) => o.status == OrderStatus.quote).length,
+    offersOf: acceptedOrders.length,
+    accepted: acceptedOrders.length,
+    revenue: totalRevenue,
+    persons: totalPersons,
+    average: acceptedOrders.isNotEmpty
+        ? totalRevenue / acceptedOrders.length
+        : 0.0,
+    currency: completedOrders.firstOrNull?.currency ?? defaultCurrency.code,
+  );
+}
+
+/// Old orders overview summary cards. Input: `watchOrders()` (all years,
+/// without pending orders).
+KpiStats overviewTotals(List<SavedOrder> orders) {
+  final acceptedOrders = orders.where((o) => o.isAccepted).toList();
+  final totalRevenue = acceptedOrders.fold<double>(
+    0,
+    (sum, o) => sum + o.total,
+  );
+  final totalPersons = acceptedOrders.fold<int>(
+    0,
+    (sum, o) => sum + o.personCount,
+  );
+  return KpiStats(
+    offers: orders.where((o) => o.status == OrderStatus.quote).length,
+    offersOf: orders.length,
+    accepted: acceptedOrders.length,
+    revenue: totalRevenue,
+    persons: totalPersons,
+    average: acceptedOrders.isNotEmpty
+        ? totalRevenue / acceptedOrders.length
+        : 0.0,
+    currency: _dominantCurrency(acceptedOrders),
+  );
+}
+
+/// Most common currency of [orders]; on a tie the later one wins (as the
+/// old `reduce`).
+String _dominantCurrency(List<SavedOrder> orders) {
+  final currencyCounts = <String, int>{};
+  for (final order in orders) {
+    currencyCounts[order.currency] = (currencyCounts[order.currency] ?? 0) + 1;
+  }
+  if (currencyCounts.isEmpty) return defaultCurrency.code;
+  return currencyCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
 }

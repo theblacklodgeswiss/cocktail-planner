@@ -7,6 +7,7 @@ import '../../ui/tokens.dart';
 import '../../ui/widgets/floating_card.dart';
 import '../../ui/widgets/glass_icon_button.dart';
 import '../../ui/widgets/large_title_scaffold.dart';
+import '../../ui/widgets/pill_filter.dart';
 import '../../ui/widgets/states.dart';
 import '../orders/orders_logic.dart';
 import '../orders/widgets/order_card.dart';
@@ -14,15 +15,21 @@ import '../orders/widgets/order_card.dart';
 /// Number of appointments listed below the hero.
 const dashboardUpcomingLimit = 5;
 
-/// Staff dashboard (`/dashboard`): number row (Offen, Angenommen, Diese
-/// Woche), "Nächster Termin", the following appointments and quick
-/// actions. Input is the dashboard stream
-/// (`watchOrders(includePending: true, year: <current year>)`); counts
-/// follow [dashboardCounts]. Null [orders] means loading.
+/// Staff dashboard (`/dashboard`): number row (Pendenzen, Angenommen,
+/// Diese Woche), "Kennzahlen" (year / all time), "Nächster Termin", the
+/// following appointments and quick actions.
+///
+/// [orders] is the dashboard stream
+/// (`watchOrders(includePending: true, year: <current year>)`, null while
+/// loading); the number row follows [dashboardCounts], the year KPIs
+/// [dashboardStats]. [allOrders] is `watchOrders()` (all years): the
+/// appointments, so December sees January, and the all-time KPIs
+/// ([overviewTotals]).
 class StaffDashboardView extends StatelessWidget {
   const StaffDashboardView({
     super.key,
     required this.orders,
+    required this.allOrders,
     this.error,
     required this.onRetry,
     required this.now,
@@ -32,6 +39,7 @@ class StaffDashboardView extends StatelessWidget {
   });
 
   final List<SavedOrder>? orders;
+  final List<SavedOrder>? allOrders;
   final Object? error;
   final VoidCallback onRetry;
   final DateTime now;
@@ -64,7 +72,7 @@ class StaffDashboardView extends StatelessWidget {
       ];
     } else {
       final counts = dashboardCounts(list);
-      final upcoming = upcomingAppointments(list, now);
+      final upcoming = upcomingAppointments(allOrders ?? const [], now);
       final next = upcoming.isEmpty ? null : upcoming.first;
       final following = upcoming.skip(1).take(dashboardUpcomingLimit).toList();
 
@@ -118,6 +126,8 @@ class StaffDashboardView extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpace.s8),
+              _KpiCard(year: list, all: allOrders),
               const SizedBox(height: AppSpace.s12),
               if (next != null)
                 NextAppointmentHero(
@@ -271,6 +281,158 @@ class _Action extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+enum _KpiScope { year, all }
+
+/// "Kennzahlen": revenue, persons and average, for the current year (old
+/// dashboard stats bar) or all time (old orders summary cards).
+class _KpiCard extends StatefulWidget {
+  const _KpiCard({required this.year, required this.all});
+
+  final List<SavedOrder> year;
+
+  /// Null while the all-years stream loads.
+  final List<SavedOrder>? all;
+
+  @override
+  State<_KpiCard> createState() => _KpiCardState();
+}
+
+class _KpiCardState extends State<_KpiCard> {
+  _KpiScope _scope = _KpiScope.year;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    final yearScope = _scope == _KpiScope.year;
+    final all = widget.all;
+    final KpiStats? s = yearScope
+        ? dashboardStats(widget.year)
+        : (all == null ? null : overviewTotals(all));
+
+    return FloatingCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'dashboard.kpi_title'.tr(),
+                    style: AppText.section.copyWith(color: p.text),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: PillFilter<_KpiScope>(
+                  value: _scope,
+                  onChanged: (v) => setState(() => _scope = v),
+                  options: [
+                    PillOption(_KpiScope.year, 'dashboard.year'.tr()),
+                    PillOption(_KpiScope.all, 'dashboard.kpi_all'.tr()),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (s == null)
+            const Padding(
+              padding: EdgeInsets.all(AppSpace.s12),
+              child: LoadingState(),
+            )
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _Kpi(
+                    value: '${s.offers} / ${s.offersOf}',
+                    label: yearScope
+                        ? 'dashboard.stats_offers'.tr()
+                        : 'orders.open_quotes'.tr(),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.s8),
+                Expanded(
+                  child: _Kpi(
+                    value: kpiMoney(s.revenue, s.currency),
+                    label: yearScope
+                        ? 'dashboard.stats_revenue'.tr()
+                        : 'orders.total_revenue'.tr(),
+                    subtitle: yearScope
+                        ? '${s.accepted} ${'dashboard.stats_accepted_suffix'.tr()}'
+                        : '${s.accepted} ${'orders.accepted_only'.tr()}',
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _Kpi(
+                    value: '${s.persons}',
+                    label: yearScope
+                        ? 'dashboard.stats_persons'.tr()
+                        : 'orders.persons'.tr(),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.s8),
+                Expanded(
+                  child: _Kpi(
+                    value: kpiMoney(s.average, s.currency),
+                    label: yearScope
+                        ? 'dashboard.stats_avg_per_order'.tr()
+                        : 'orders.avg_order'.tr(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Kpi extends StatelessWidget {
+  const _Kpi({required this.value, required this.label, this.subtitle});
+
+  final String value;
+  final String label;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.s8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Large amounts shrink instead of overflowing.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: AppText.number.copyWith(color: p.text),
+            ),
+          ),
+          Text(
+            subtitle == null ? label : '$label · $subtitle',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.caption.copyWith(color: p.textSecondary),
+          ),
+        ],
       ),
     );
   }

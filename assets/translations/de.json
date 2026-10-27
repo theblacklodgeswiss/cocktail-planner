@@ -64,7 +64,9 @@
     "requests_load_error": "Anfragen konnten nicht geladen werden.",
     "open_order": "Zum Auftrag",
     "confirmation_failed": "Auftragsbestätigung konnte nicht geöffnet werden.",
-    "stat_open": "Offen",
+    "stat_open": "Pendenzen",
+    "kpi_title": "Kennzahlen",
+    "kpi_all": "Gesamt",
     "stat_accepted": "Angenommen",
     "stat_this_week": "Diese Woche",
     "upcoming": "Nächste Termine",
@@ -621,7 +623,8 @@
     "empty_body": "Tippe auf +, um einen Auftrag anzulegen.",
     "no_results": "Keine Ergebnisse",
     "load_error": "Aufträge konnten nicht geladen werden.",
-    "search_close": "Suche schließen"
+    "search_close": "Suche schließen",
+    "latest_of": {"one": "{} neuester von {}", "other": "{} neueste von {}"}
   },
   "share": {
     "loading": "Dokument wird geladen...",

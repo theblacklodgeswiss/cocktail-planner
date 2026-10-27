@@ -26,6 +26,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _initialized = false;
   Stream<List<SavedOrder>>? _stream;
 
+  /// All years (no pending): upcoming appointments and all-time KPIs.
+  Stream<List<SavedOrder>>? _all;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       includePending: true,
       year: DateTime.now().year, // Only current year
     );
+    _all = orderRepository.watchOrders();
   }
 
   @override
@@ -65,26 +69,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return StreamBuilder<List<SavedOrder>>(
-      stream: _stream,
-      builder: (context, snapshot) => StaffDashboardView(
-        orders: snapshot.data,
-        error: snapshot.error,
-        onRetry: () => setState(_subscribe),
-        now: DateTime.now(),
-        isAdmin: authService.isAdmin,
-        onOpen: (order) => showOrderDetails(context, order),
-        actions: [
-          GlassIconButton(
-            icon: Icons.settings_outlined,
-            semanticLabel: 'settings.title'.tr(),
-            onPressed: () => context.push('/settings'),
-          ),
-          GlassIconButton(
-            icon: Icons.person_outline,
-            semanticLabel: 'dashboard.user_tooltip'.tr(),
-            onPressed: () => showUserMenu(context),
-          ),
-        ],
+      stream: _all,
+      builder: (context, all) => StreamBuilder<List<SavedOrder>>(
+        stream: _stream,
+        builder: (context, snapshot) => StaffDashboardView(
+          orders: snapshot.data,
+          allOrders: all.data,
+          error: snapshot.error,
+          onRetry: () => setState(_subscribe),
+          now: DateTime.now(),
+          isAdmin: authService.isAdmin,
+          onOpen: (order) => showOrderDetails(context, order),
+          actions: [
+            GlassIconButton(
+              icon: Icons.settings_outlined,
+              semanticLabel: 'settings.title'.tr(),
+              onPressed: () => context.push('/settings'),
+            ),
+            GlassIconButton(
+              icon: Icons.person_outline,
+              semanticLabel: 'dashboard.user_tooltip'.tr(),
+              onPressed: () => showUserMenu(context),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/dashboard/staff_dashboard_view.dart';
 import 'package:cocktail_planer/screens/orders/orders_logic.dart';
@@ -239,18 +241,34 @@ void main() {
       expect(find.text('Hochzeit Meier'), findsNothing);
     });
 
-    testWidgets('month headings, card meta and total', (tester) async {
+    testWidgets('flat list in stream order, no month headings', (tester) async {
       phone(tester, h: 1400);
       await pumpApp(
         tester,
         app(overview(orders: sample, initialFilter: OrderStatusFilter.all)),
       );
-      expect(find.text('Juni 2026'), findsOneWidget);
-      expect(find.text('Juli 2026'), findsOneWidget);
-      expect(find.text('November 2026'), findsOneWidget);
+      expect(find.text('Juni 2026'), findsNothing);
+      expect(find.byType(MonthHeading), findsNothing);
+      double y(String name) =>
+          tester.getTopLeft(find.widgetWithText(OrderCard, name)).dy;
+      final names = [for (final o in sample) o.name];
+      for (var i = 1; i < names.length; i++) {
+        expect(y(names[i - 1]), lessThan(y(names[i])));
+      }
       expect(find.text('50 Gäste · Basel'), findsWidgets);
       expect(find.text('100.00 CHF'), findsWidgets);
       expect(find.byType(DateTile), findsWidgets);
+    });
+
+    testWidgets('caption shows the cap against the pill count', (tester) async {
+      phone(tester);
+      final many = [for (var i = 0; i < 25; i++) order('o$i')];
+      await pumpApp(tester, app(overview(orders: many)));
+      expect(find.text('10 neueste von 25'), findsOneWidget);
+      expect(find.byType(OrderCard), findsWidgets);
+
+      await pumpApp(tester, app(overview(orders: sample)));
+      expect(find.text('Bestellungen · 2'), findsOneWidget);
     });
 
     testWidgets('next appointment hero with countdown in days', (tester) async {
@@ -434,6 +452,38 @@ void main() {
       expect(find.text('Anfrage Keller'), findsNothing);
     });
 
+    testWidgets('double tap on Erledigt asks only once', (tester) async {
+      phone(tester);
+      var asked = 0;
+      final answer = Completer<bool>();
+      await pumpApp(
+        tester,
+        app(
+          PendingOrdersView(
+            orders: pendingSample,
+            onRetry: () {},
+            onOpen: (_) {},
+            onDismiss: (_) async => true,
+            confirm: (_) {
+              asked++;
+              return answer.future;
+            },
+          ),
+        ),
+      );
+      await tester.tap(find.text('Erledigt').first);
+      await tester.pump();
+      await tester.tap(find.text('Erledigt').first);
+      await tester.pump();
+      expect(asked, 1);
+      answer.complete(false);
+      await settle(tester);
+      // Closed: a new tap asks again.
+      await tester.tap(find.text('Erledigt').first);
+      await tester.pump();
+      expect(asked, 2);
+    });
+
     testWidgets('cancel keeps the order', (tester) async {
       phone(tester);
       final dismissed = <String>[];
@@ -501,6 +551,36 @@ void main() {
   });
 
   group('year archive', () {
+    testWidgets('months and orders by event date, newest first', (
+      tester,
+    ) async {
+      phone(tester, h: 1400);
+      await pumpApp(
+        tester,
+        app(
+          OrdersYearView(
+            orders: [
+              order('a', name: 'Zwanzigster', date: DateTime(2026, 6, 20)),
+              order('b', name: 'Juli-Fest', date: DateTime(2026, 7, 1)),
+              order(
+                'c',
+                name: 'Fuenfundzwanzigster',
+                date: DateTime(2026, 6, 25),
+              ),
+            ],
+            onRetry: () {},
+            onOpen: (_) {},
+          ),
+        ),
+      );
+      await tester.tap(find.text('2026'));
+      await settle(tester);
+      double y(String t) => tester.getTopLeft(find.text(t)).dy;
+      expect(y('Juli 2026'), lessThan(y('Juni 2026')));
+      expect(y('Juli-Fest'), lessThan(y('Juni 2026')));
+      expect(y('Fuenfundzwanzigster'), lessThan(y('Zwanzigster')));
+    });
+
     testWidgets('year cards with counts open the month list', (tester) async {
       phone(tester);
       await pumpApp(
@@ -577,12 +657,27 @@ void main() {
       order('d1', status: OrderStatus.declined),
     ];
 
+    // All-years stream: no pending, plus an event next year.
+    final allFixture = [
+      for (final o in fixture)
+        if (o.total > 0) o,
+      order(
+        'n1',
+        name: 'Neujahr-Fest',
+        status: OrderStatus.accepted,
+        total: 400,
+        date: DateTime(2027, 1, 10),
+      ),
+    ];
+
     StaffDashboardView dashboard({
       List<SavedOrder>? orders,
+      List<SavedOrder>? all,
       Object? error,
       bool isAdmin = false,
     }) => StaffDashboardView(
       orders: orders,
+      allOrders: all ?? (orders == null ? null : allFixture),
       error: error,
       onRetry: () {},
       now: now,
@@ -602,7 +697,7 @@ void main() {
       );
       expect(
         find.descendant(
-          of: stat('Offen'),
+          of: stat('Pendenzen'),
           matching: find.text('${old.pending}'),
         ),
         findsOneWidget,
@@ -626,12 +721,43 @@ void main() {
       expect(find.text('Diese-Woche-Fest'), findsOneWidget);
       expect(find.text('Spaeter-Fest'), findsOneWidget);
       expect(find.text('${old.openOffers} Angebote'), findsOneWidget);
+      // Upcoming sees all years.
+      expect(find.text('Neujahr-Fest'), findsOneWidget);
+    });
+
+    testWidgets('KPIs: year = old stats bar, Gesamt = old summary cards', (
+      tester,
+    ) async {
+      phone(tester, h: 1400);
+      await pumpApp(tester, app(dashboard(orders: fixture)));
+      Finder kpi(String text) => find.descendant(
+        of: find.ancestor(
+          of: find.text('Kennzahlen'),
+          matching: find.byType(FloatingCard),
+        ),
+        matching: find.text(text),
+      );
+      final year = dashboardStats(fixture);
+      expect(kpiMoney(year.revenue, year.currency), '300.00 CHF');
+      expect(kpi(kpiMoney(year.revenue, year.currency)), findsOneWidget);
+      expect(kpi('${year.offers} / ${year.offersOf}'), findsOneWidget);
+      expect(kpi('${year.persons}'), findsOneWidget);
+      expect(kpi(kpiMoney(year.average, year.currency)), findsOneWidget);
+
+      await tester.tap(find.text('Gesamt'));
+      await settle(tester);
+      final total = overviewTotals(allFixture);
+      expect(kpiMoney(total.revenue, total.currency), '700.00 CHF');
+      expect(kpi(kpiMoney(total.revenue, total.currency)), findsOneWidget);
+      expect(kpi('${total.offers} / ${total.offersOf}'), findsOneWidget);
+      expect(kpi(kpiMoney(total.average, total.currency)), findsOneWidget);
     });
 
     testWidgets('destinations stay reachable', (tester) async {
       phone(tester, h: 1400);
       await pumpApp(tester, app(dashboard(orders: fixture, isAdmin: true)));
-      await tester.tap(find.text('Offene Angebote'));
+      // The quick action (its subtitle; the KPI tile has the same title).
+      await tester.tap(find.text('3 Angebote'));
       await settle(tester);
       expect(lastPage, '/orders?status=quote');
     });
@@ -728,6 +854,7 @@ void main() {
           app(
             StaffDashboardView(
               orders: long,
+              allOrders: long,
               onRetry: () {},
               now: now,
               isAdmin: true,

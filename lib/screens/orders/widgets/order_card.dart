@@ -164,8 +164,44 @@ class MonthHeading extends StatelessWidget {
   }
 }
 
-/// Lazily built list of [OrderCard]s under month headings (see
-/// [groupByMonth]; the input order is kept).
+/// Lazily built flat list of [OrderCard]s in the given order (the orders
+/// overview: latest created first, as before).
+class SliverOrderList extends StatelessWidget {
+  const SliverOrderList({
+    super.key,
+    required this.orders,
+    required this.onOpen,
+  });
+
+  final List<SavedOrder> orders;
+  final void Function(SavedOrder order) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.s16,
+        AppSpace.s8,
+        AppSpace.s16,
+        0,
+      ),
+      sliver: SliverList.builder(
+        itemCount: orders.length,
+        itemBuilder: (context, i) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpace.s8),
+          child: OrderCard(
+            key: ValueKey(orders[i].id),
+            order: orders[i],
+            onTap: () => onOpen(orders[i]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lazily built list of [OrderCard]s under month headings (year archive;
+/// order and grouping from [groupByMonth]: newest event month first).
 class SliverOrderMonthList extends StatelessWidget {
   const SliverOrderMonthList({
     super.key,

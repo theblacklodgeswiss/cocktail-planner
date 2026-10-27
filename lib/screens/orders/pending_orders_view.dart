@@ -26,6 +26,7 @@ class PendingOrdersView extends StatefulWidget {
     required this.onOpen,
     required this.onDismiss,
     this.onBack,
+    this.confirm,
   });
 
   /// Null while loading.
@@ -37,6 +38,9 @@ class PendingOrdersView extends StatefulWidget {
 
   /// Back button; hidden when null.
   final VoidCallback? onBack;
+
+  /// Asks before dismissing; defaults to the confirm sheet (tests inject).
+  final Future<bool> Function(SavedOrder order)? confirm;
 
   @override
   State<PendingOrdersView> createState() => _PendingOrdersViewState();
@@ -65,7 +69,10 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
     super.dispose();
   }
 
-  Future<bool> _confirm(SavedOrder order) => showConfirmSheet(
+  Future<bool> _confirm(SavedOrder order) =>
+      widget.confirm?.call(order) ?? _confirmSheet(order);
+
+  Future<bool> _confirmSheet(SavedOrder order) => showConfirmSheet(
     context,
     title: 'orders.pending_dismiss_title'.tr(),
     body: 'orders.pending_dismiss_message'.tr(namedArgs: {'name': order.name}),
@@ -78,8 +85,16 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
     if (!ok && mounted) setState(() => _hidden.remove(order.id));
   }
 
+  /// Cards whose "Erledigt" confirmation is open (ignores double taps).
+  final _confirming = <String>{};
+
   Future<void> _dismissWithConfirm(SavedOrder order) async {
-    if (await _confirm(order)) await _dismiss(order);
+    if (!_confirming.add(order.id)) return;
+    try {
+      if (await _confirm(order)) await _dismiss(order);
+    } finally {
+      _confirming.remove(order.id);
+    }
   }
 
   String _sortLabel(PendingSortOption o) => switch (o) {
