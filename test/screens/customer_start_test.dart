@@ -1,5 +1,9 @@
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/dashboard/customer_start.dart';
+import 'package:cocktail_planer/screens/dashboard/link_google.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
+import 'package:cocktail_planer/ui/widgets/glass_icon_button.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cocktail_planer/screens/dashboard/widgets/my_requests_list.dart';
 import 'package:cocktail_planer/screens/forms/order_success_screen.dart';
 import 'package:cocktail_planer/screens/login_screen.dart';
@@ -127,6 +131,37 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    for (final dark in [false, true]) {
+      for (final signedIn in [false, true]) {
+        testWidgets(
+          'fits at text scale 1.3 with CTA visible (dark: $dark, signed in: $signedIn)',
+          (tester) async {
+            phone(tester);
+            await pumpApp(
+              tester,
+              app(
+                CustomerStart(
+                  signedIn: signedIn,
+                  onOpenRequest: (_) {},
+                  orders: signedIn
+                      ? Stream<List<SavedOrder>>.value(const [])
+                      : null,
+                ),
+                theme: dark ? AppTheme.dark() : AppTheme.light(),
+                textScale: 1.3,
+              ),
+            );
+
+            expect(tester.takeException(), isNull);
+            final rect = tester.getRect(find.text('Anfrage starten'));
+            expect(rect.bottom, lessThanOrEqualTo(640));
+            expect(rect.top, greaterThanOrEqualTo(0));
+            expect(rect.right, lessThanOrEqualTo(360));
+          },
+        );
+      }
+    }
+
     testWidgets('settings action opens /settings', (tester) async {
       phone(tester);
       await pumpApp(
@@ -178,6 +213,94 @@ void main() {
       await tester.tap(find.text('Meine Anfragen'));
       await tester.pumpAndSettle();
       expect(find.text('page /my-requests'), findsOneWidget);
+    });
+  });
+
+  group('linkGoogleAccount', () {
+    Future<void> run(
+      WidgetTester tester,
+      Future<UserCredential?> Function() link,
+    ) async {
+      phone(tester);
+      late BuildContext ctx;
+      await pumpApp(
+        tester,
+        app(
+          Builder(
+            builder: (c) {
+              ctx = c;
+              return const Scaffold();
+            },
+          ),
+        ),
+      );
+      await linkGoogleAccount(ScaffoldMessenger.of(ctx), link: link);
+      await tester.pump();
+    }
+
+    testWidgets('shows the error text when linking throws', (tester) async {
+      await run(tester, () async => throw Exception('boom'));
+      expect(find.textContaining('Fehler: '), findsOneWidget);
+    });
+
+    testWidgets('shows nothing when the dialog is cancelled', (tester) async {
+      await run(tester, () async => null);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+  });
+
+  group('ui helpers', () {
+    testWidgets('GlassIconButton has a 44 px target and calls onPressed', (
+      tester,
+    ) async {
+      phone(tester);
+      var taps = 0;
+      await pumpApp(
+        tester,
+        app(
+          Scaffold(
+            body: Center(
+              child: GlassIconButton(
+                icon: Icons.settings,
+                semanticLabel: 'x',
+                onPressed: () => taps++,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final size = tester.getSize(find.byType(GlassIconButton));
+      expect(size.width, greaterThanOrEqualTo(AppSize.minTap));
+      expect(size.height, greaterThanOrEqualTo(AppSize.minTap));
+      await tester.tap(find.byType(GlassIconButton));
+      expect(taps, 1);
+    });
+
+    testWidgets('AppPalette.goldText follows brightness', (tester) async {
+      late AppPalette light;
+      late AppPalette dark;
+      for (final isDark in [false, true]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: isDark ? AppTheme.dark() : AppTheme.light(),
+            home: Builder(
+              builder: (c) {
+                if (isDark) {
+                  dark = AppPalette.of(c);
+                } else {
+                  light = AppPalette.of(c);
+                }
+                return const SizedBox();
+              },
+            ),
+          ),
+        );
+        // Theme changes animate; let the dark theme settle.
+        await tester.pumpAndSettle();
+      }
+      expect(light.goldText, AppColors.goldOnWhite);
+      expect(dark.goldText, AppColors.goldOnBlack);
     });
   });
 }

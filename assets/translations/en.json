@@ -98,12 +98,7 @@
     "error_not_enabled": "Google sign-in is not enabled.",
     "error_disabled": "This account has been disabled."
   },
-  "customer": {
-    "welcome_title": "Welcome to The Blacklodge",
-    "welcome_message": "Create a new request for your event and receive a customized offer.",
-    "info_title": "How it works",
-    "info_message": "Fill out the form with your wishes. We will create an individual offer for you and get back to you as soon as possible."
-  },  "common": {
+  "common": {
     "cancel": "Cancel",
     "ok": "OK",
     "delete": "Delete",

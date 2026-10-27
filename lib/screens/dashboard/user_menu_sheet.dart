@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
+import 'link_google.dart';
 
 /// Shows the user menu as a bottom sheet.
 Future<void> showUserMenu(BuildContext context) async {
@@ -129,22 +130,10 @@ class _UserMenuSheet extends StatelessWidget {
       leading: const Icon(Icons.login),
       title: Text('drawer.link_google_title'.tr()),
       subtitle: Text('drawer.link_google_subtitle'.tr()),
-      onTap: () async {
+      onTap: () {
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
-        try {
-          await authService.linkWithGoogle();
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('drawer.link_success'.tr())),
-            );
-          }
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${'common.error'.tr()}: $e')),
-            );
-          }
-        }
+        linkGoogleAccount(messenger);
       },
     );
   }

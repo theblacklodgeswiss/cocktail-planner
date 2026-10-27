@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/order.dart';
-import '../../services/auth_service.dart';
 import '../../ui/tokens.dart';
 import '../../ui/widgets/buttons.dart';
 import '../../ui/widgets/floating_card.dart';
@@ -11,6 +10,7 @@ import '../../ui/widgets/glass_cta_bar.dart';
 import '../../ui/widgets/glass_icon_button.dart';
 import '../../ui/widgets/hero_card.dart';
 import '../../ui/widgets/large_title_scaffold.dart';
+import 'link_google.dart';
 import 'user_menu_sheet.dart';
 import 'widgets/my_requests_list.dart';
 
@@ -29,20 +29,6 @@ class CustomerStart extends StatelessWidget {
   final bool signedIn;
   final void Function(SavedOrder request) onOpenRequest;
   final Stream<List<SavedOrder>>? orders;
-
-  Future<void> _linkGoogle(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await authService.linkWithGoogle();
-      messenger.showSnackBar(
-        SnackBar(content: Text('drawer.link_success'.tr())),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('${'common.error'.tr()}: $e')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +117,8 @@ class CustomerStart extends StatelessWidget {
                       ),
                       TextAction(
                         label: 'drawer.link_google_title'.tr(),
-                        onPressed: () => _linkGoogle(context),
+                        onPressed: () =>
+                            linkGoogleAccount(ScaffoldMessenger.of(context)),
                       ),
                     ],
                   ),

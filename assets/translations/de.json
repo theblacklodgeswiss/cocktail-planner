@@ -99,12 +99,6 @@
     "error_not_enabled": "Google-Anmeldung ist nicht aktiviert.",
     "error_disabled": "Dieses Konto wurde deaktiviert."
   },
-  "customer": {
-    "welcome_title": "Willkommen bei The Blacklodge",
-    "welcome_message": "Erstelle eine neue Anfrage für deinen Event und erhalte ein maßgeschneidertes Angebot.",
-    "info_title": "So funktioniert's",
-    "info_message": "Fülle das Formular mit deinen Wünschen aus. Wir erstellen dir ein individuelles Angebot und melden uns schnellstmöglich bei dir."
-  },
   "common": {
     "cancel": "Abbrechen",
     "ok": "OK",
