@@ -25,11 +25,15 @@ class GlassCtaBar extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.badge,
+    this.loading = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final String? badge;
+
+  /// Shows a spinner in the button and disables taps; width is unchanged.
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +70,11 @@ class GlassCtaBar extends StatelessWidget {
                     ),
                   Expanded(
                     flex: 2,
-                    child: PrimaryButton(label: label, onPressed: onPressed),
+                    child: PrimaryButton(
+                      label: label,
+                      onPressed: onPressed,
+                      loading: loading,
+                    ),
                   ),
                 ],
               ),

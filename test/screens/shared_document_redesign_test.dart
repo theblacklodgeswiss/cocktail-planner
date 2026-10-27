@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cocktail_planer/data/share_link_repository.dart';
@@ -7,6 +8,7 @@ import 'package:cocktail_planer/ui/app_theme.dart';
 import 'package:cocktail_planer/ui/widgets/buttons.dart';
 import 'package:cocktail_planer/ui/widgets/glass_cta_bar.dart';
 import 'package:cocktail_planer/ui/widgets/states.dart';
+import 'package:cocktail_planer/ui/widgets/status_dot.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +19,7 @@ class FakeRepo implements ShareLinkRepository {
   final ShareLinkResult result;
   final calls = <String>[];
   bool failRespond = false;
+  Completer<void>? gate;
 
   @override
   Future<ShareLinkResult> fetchShareLink(String code) async => result;
@@ -28,6 +31,7 @@ class FakeRepo implements ShareLinkRepository {
     required bool accepted,
   }) async {
     calls.add('respond:$orderId:${accepted ? 'accepted' : 'declined'}');
+    await gate?.future;
     if (failRespond) throw Exception('denied');
   }
 
@@ -327,4 +331,109 @@ void main() {
       expect(find.text('Annehmen'), findsOneWidget);
     });
   }
+
+  // Overflow matrix: invoice view, result cards and confirm sheets.
+  for (final dark in [false, true]) {
+    final theme = dark ? AppTheme.dark() : AppTheme.light();
+    final tag = 'dark: $dark';
+
+    testWidgets('invoice view fits 360px at 1.3x ($tag)', (tester) async {
+      phone(tester);
+      final snap = {
+        'name': 'Ein sehr langer Anlassname fuer die Rechnung',
+        'date': DateTime(2026, 9, 1).toIso8601String(),
+        'currency': 'CHF',
+        'total': 500.0,
+        'location': 'Basel Birkenstrasse 3',
+        'offerEventTypes': ['wedding', 'company'],
+        'offerPositions': [
+          {'name': 'Cocktail- und Barservice Premium', 'price': 500.0},
+        ],
+      };
+      await pumpApp(
+        tester,
+        app(
+          FakeRepo(
+            ShareLinkResult.found(
+              type: 'invoice',
+              snapshot: snap,
+              orderId: 'o1',
+            ),
+          ),
+          theme: theme,
+          textScale: 1.3,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Rechnung ansehen'), findsOneWidget);
+    });
+
+    for (final response in ['accepted', 'declined']) {
+      testWidgets('result card $response fits 360px at 1.3x ($tag)', (
+        tester,
+      ) async {
+        phone(tester);
+        await pumpApp(
+          tester,
+          app(
+            FakeRepo(offerResult(response: response)),
+            theme: theme,
+            textScale: 1.3,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.byType(GlassCtaBar), findsNothing);
+        expect(find.byType(StatusDot), findsOneWidget);
+      });
+    }
+
+    for (final accept in [true, false]) {
+      testWidgets(
+        'confirm sheet (${accept ? 'accept' : 'decline'}) fits 360px at 1.3x ($tag)',
+        (tester) async {
+          phone(tester);
+          await pumpApp(
+            tester,
+            app(FakeRepo(offerResult()), theme: theme, textScale: 1.3),
+          );
+          await tester.tap(find.text(accept ? 'Annehmen' : 'Ablehnen'));
+          await settle(tester);
+          expect(
+            find.text(accept ? 'Angebot annehmen?' : 'Angebot ablehnen?'),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('accept button shows progress and blocks taps while responding', (
+    tester,
+  ) async {
+    phone(tester);
+    final repo = FakeRepo(offerResult())..gate = Completer<void>();
+    await pumpApp(tester, app(repo));
+    await tester.tap(find.text('Annehmen'));
+    await settle(tester);
+    await tester.tap(find.text('Annehmen').last);
+    await settle(tester);
+    final bar = find.byType(GlassCtaBar);
+    expect(
+      find.descendant(
+        of: bar,
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+    // Taps are ignored while loading, decline is disabled too.
+    await tester.tap(find.text('Annehmen'), warnIfMissed: false);
+    await tester.tap(find.text('Ablehnen'), warnIfMissed: false);
+    await settle(tester);
+    expect(repo.calls, ['respond:o1:accepted']);
+    expect(find.text('Angebot ablehnen?'), findsNothing);
+    repo.gate!.complete();
+    await settle(tester);
+    expect(find.byType(GlassCtaBar), findsNothing);
+  });
 }

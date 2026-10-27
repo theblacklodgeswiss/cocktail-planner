@@ -450,6 +450,7 @@ class _SharedDocumentScreenState extends State<SharedDocumentScreen> {
         ),
         GlassCtaBar(
           label: 'share.accept'.tr(),
+          loading: _responding,
           onPressed: _responding ? null : () => _confirmAndRespond(true),
         ),
       ],
