@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../tokens.dart';
@@ -73,12 +74,15 @@ class _ButtonBase extends StatelessWidget {
       ),
     );
 
-    return Pressable(
+    final button = Pressable(
       minSize: AppSize.minTap,
       radius: AppRadius.pill,
       onTap: enabled ? onPressed : null,
       child: body,
     );
+    if (!dimmed) return button;
+    // Tells screen readers why the button looks unavailable.
+    return Semantics(hint: 'ui.fields_missing'.tr(), child: button);
   }
 }
 

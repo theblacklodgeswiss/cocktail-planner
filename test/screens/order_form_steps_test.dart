@@ -111,6 +111,9 @@ void main() {
       expect(form.cocktailPopularity, {'Tequila': 50.0});
       form.update(() => form.toggleRecipeSelection(tequila));
       expect(form.cocktailPopularity, isEmpty);
+      // Re-selecting a dropped drink brings back its last value.
+      form.update(() => form.toggleRecipeSelection(mojito));
+      expect(form.cocktailPopularity, {'Mojito': 70.0});
     });
   });
 
@@ -489,6 +492,137 @@ void main() {
       expect(find.byType(ErrorState), findsNothing);
       expect(find.text('Mojito'), findsOneWidget);
     });
+  });
+
+  group('staff soft validation', () {
+    testWidgets('staff advance past empty steps 1 and 2, seeing the hints', (
+      tester,
+    ) async {
+      mobile(tester);
+      final h = Harness(isStaff: true, url: stepUrl(1));
+      await pumpForm(tester, h.app());
+      await settle(tester);
+      // First tap explains (hints + focus on the first missing field)...
+      await tapNext(tester);
+      expect(find.text(stepTitles[1]), findsOneWidget);
+      expect(find.text('Datum ist erforderlich'), findsOneWidget);
+      expect(find.text('Adresse ist erforderlich'), findsOneWidget);
+      // ...the next one continues anyway.
+      await tapNext(tester);
+      expect(find.text(stepTitles[2]), findsOneWidget);
+      expect(h.urls.last, stepUrl(2));
+      await tapNext(tester);
+      expect(find.text('Name ist erforderlich'), findsOneWidget);
+      expect(hasFocus(tester, fieldWithCaption('Vor- und Nachname *')), isTrue);
+      await tapNext(tester);
+      expect(find.text(stepTitles[3]), findsOneWidget);
+    });
+
+    testWidgets('a guest cannot advance past an invalid step', (tester) async {
+      mobile(tester);
+      final h = Harness(url: stepUrl(2));
+      await pumpForm(tester, h.app());
+      await settle(tester);
+      for (var i = 0; i < 3; i++) {
+        await tapNext(tester);
+      }
+      expect(find.text(stepTitles[2]), findsOneWidget);
+      expect(h.urls, isEmpty);
+    });
+
+    testWidgets('staff jump to any step via the step label', (tester) async {
+      mobile(tester);
+      final h = Harness(isStaff: true, url: stepUrl(0));
+      await pumpForm(tester, h.app());
+      await settle(tester);
+      await tester.tap(find.text('1 von 5'));
+      await sheet(tester);
+      await tester.tap(find.text(stepTitles[4]).last);
+      await sheet(tester);
+      await settle(tester);
+      expect(find.text(stepTitles[4]), findsOneWidget);
+      expect(h.urls.last, stepUrl(4));
+    });
+
+    testWidgets('the step label is not a jump menu for guests', (tester) async {
+      mobile(tester);
+      final h = Harness(url: stepUrl(0));
+      await pumpForm(tester, h.app());
+      await settle(tester);
+      await tester.tap(find.text('1 von 5'), warnIfMissed: false);
+      await sheet(tester);
+      expect(find.text(stepTitles[4]), findsNothing);
+    });
+  });
+
+  group('drinks step order', () {
+    for (final (service, barFirst) in [
+      ('cocktail_barservice', true),
+      ('bar_service', true),
+      ('cocktail_service', false),
+      ('mocktail_service', false),
+    ]) {
+      testWidgets(
+        '$service: ${barFirst ? 'bar drinks first' : 'cocktails '
+                  'only'}',
+        (tester) async {
+          mobile(tester);
+          final h = Harness(url: stepUrl(3));
+          await pumpForm(
+            tester,
+            h.app(
+              prefill: completePrefill(serviceType: service, shots: const []),
+            ),
+          );
+          await settle(tester);
+          final drink = tester.getRect(find.text('Caipirinha')).top;
+          if (barFirst) {
+            final bar = tester.getRect(find.text('Bar-Getränke')).top;
+            final alcohol = tester.getRect(find.text('Alkohol von uns')).top;
+            expect(bar, lessThan(drink));
+            expect(alcohol, lessThan(drink));
+          } else {
+            expect(find.text('Bar-Getränke'), findsNothing);
+            // Cocktails, then the popularity section.
+            expect(
+              drink,
+              lessThan(tester.getRect(find.text('Beliebtheit anpassen')).top),
+            );
+          }
+        },
+      );
+    }
+  });
+
+  group('layout with hints showing (pristine form, Weiter tapped)', () {
+    for (final dark in [false, true]) {
+      for (final step in [1, 2]) {
+        testWidgets('step $step, ${dark ? 'dark' : 'light'}, keyboard 300', (
+          tester,
+        ) async {
+          tester.view.physicalSize = const Size(360, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+          addTearDown(tester.view.reset);
+          final h = Harness(url: stepUrl(step));
+          await pumpForm(
+            tester,
+            h.app(
+              theme: dark ? AppTheme.dark() : AppTheme.light(),
+              textScale: 1.3,
+            ),
+          );
+          await settle(tester);
+          await tester.tap(nextButton());
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          expect(find.byIcon(Icons.error_outline), findsWidgets);
+          final button = tester.getRect(nextButton());
+          expect(button.top, greaterThan(0));
+          expect(button.bottom, lessThanOrEqualTo(640 - 300));
+        });
+      }
+    }
   });
 
   group('layout at 360x640, text scale 1.3', () {

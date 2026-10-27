@@ -912,7 +912,9 @@
     "tab_more": "More",
     "cancel": "Cancel",
     "add": "Add",
-    "sheet": "Dialog"
+    "sheet": "Dialog",
+    "fields_missing": "Required fields missing",
+    "jump_to_step": "Jump to step"
   },
   "order_wizard": {
     "title_occasion": "What are we celebrating?",

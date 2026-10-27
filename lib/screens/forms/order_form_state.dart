@@ -138,6 +138,9 @@ class OrderFormState extends ChangeNotifier {
   /// Steps on which the user tried to continue (or submit) while invalid.
   final Set<int> attemptedSteps = {};
 
+  /// Popularity of drinks that were deselected, restored on re-select.
+  final Map<String, double> _droppedPopularity = {};
+
   /// Whether the optional "Beliebtheit anpassen" section is open.
   bool popularityExpanded = false;
 
@@ -390,14 +393,20 @@ class OrderFormState extends ChangeNotifier {
   /// selection changes - toggling, the mocktail switch and the prefill
   /// preselection - so the values never depend on which step was shown.
   void syncPopularityWithSelection() {
-    // Initialize missing entries with 50%
+    // Initialize missing entries: the value a drink had before it was
+    // deselected, else 50%.
     for (final recipe in selectedRecipes) {
-      cocktailPopularity.putIfAbsent(recipe.name, () => 50.0);
+      cocktailPopularity.putIfAbsent(
+        recipe.name,
+        () => _droppedPopularity.remove(recipe.name) ?? 50.0,
+      );
     }
-    // Remove stale entries
-    cocktailPopularity.removeWhere(
-      (name, _) => !selectedRecipes.any((r) => r.name == name),
-    );
+    // Remove stale entries (remembered for a later re-select)
+    cocktailPopularity.removeWhere((name, value) {
+      final stale = !selectedRecipes.any((r) => r.name == name);
+      if (stale) _droppedPopularity[name] = value;
+      return stale;
+    });
   }
 
   /// The trimmed form values in the shape the setup/shopping-list flow and

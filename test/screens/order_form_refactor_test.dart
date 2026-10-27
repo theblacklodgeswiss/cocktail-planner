@@ -156,7 +156,8 @@ void main() {
 
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
-      expect(find.text('Name ist erforderlich'), findsWidgets);
+      // Snackbar + hint at the name field.
+      expect(find.text('Name ist erforderlich'), findsNWidgets(2));
       expect(find.text(stepTitles[2]), findsOneWidget);
       expect(h.urls.last, stepUrl(2));
       expect(h.repo.saveCalls, isEmpty);
@@ -175,7 +176,8 @@ void main() {
       await tapNext(tester);
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
-      expect(find.text('Datum ist erforderlich'), findsWidgets);
+      // Snackbar + hint at the date row.
+      expect(find.text('Datum ist erforderlich'), findsNWidgets(2));
       expect(h.urls.last, stepUrl(1));
       expect(find.text('Datum auswählen'), findsOneWidget);
       await settle(tester);
@@ -188,10 +190,15 @@ void main() {
       await settle(tester);
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
-      expect(find.text('Bitte wähle mindestens einen Cocktail'), findsWidgets);
       expect(h.urls.last, stepUrl(3));
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text(stepTitles[3]), findsOneWidget);
+      // Snackbar + hint above the drink list (once the catalog
+      // FutureBuilder has delivered its data, one frame later).
+      expect(
+        find.text('Bitte wähle mindestens einen Cocktail'),
+        findsNWidgets(2),
+      );
       await settle(tester);
     });
   });
@@ -550,23 +557,30 @@ void main() {
       // Missing name -> validation applies to staff too.
       await tester.tap(find.text('Einkaufsliste generieren'));
       await tester.pump();
-      expect(find.text('Name ist erforderlich'), findsWidgets);
+      // Snackbar + hint at the name field.
+      expect(find.text('Name ist erforderlich'), findsNWidgets(2));
       expect(find.text(stepTitles[2]), findsOneWidget);
       await settle(tester);
     });
 
-    /// Date/time/address, name/phone, one cocktail, then the overview. The
-    /// sidebar that let staff skip steps (and the address) is gone, so the
-    /// address is now filled in (setup.address below).
+    /// Staff fill in only what they have (no address): name/phone, a
+    /// jump to step 1 via the step label, date/time, then a soft "Weiter"
+    /// past the missing address (first tap shows the hints, second one
+    /// continues), one cocktail and the overview.
     Future<void> fillStaff(WidgetTester tester) async {
-      await pickDate(tester);
-      await pickTime(tester);
-      await tester.enterText(find.byType(TextField).first, 'Zug');
-      await tester.pump();
-      await tapNext(tester);
       await tester.enterText(find.byType(TextField).at(0), 'Staff Event');
       await tester.enterText(find.byType(TextField).at(1), '044');
       await tester.pump();
+      await tester.tap(find.text('3 von 5'));
+      await sheet(tester);
+      await tester.tap(find.text(stepTitles[1]).last);
+      await sheet(tester);
+      await settle(tester);
+      await pickDate(tester);
+      await pickTime(tester);
+      await tapNext(tester);
+      expect(find.text('Adresse ist erforderlich'), findsOneWidget);
+      await tapNext(tester);
       await tapNext(tester);
       await tester.tap(find.text('Mojito'));
       await tester.pump();
@@ -577,7 +591,7 @@ void main() {
       tester,
     ) async {
       desktop(tester);
-      final h = Harness(isStaff: true, url: stepUrl(1));
+      final h = Harness(isStaff: true, url: stepUrl(2));
       await pumpForm(tester, h.app());
       await settle(tester);
       await fillStaff(tester);
@@ -594,7 +608,7 @@ void main() {
       expect(setup.orderName, 'Staff Event');
       expect(setup.phoneNumber, '044');
       expect(setup.eventTime, const TimeOfDay(hour: 18, minute: 0));
-      expect(setup.address, 'Zug');
+      expect(setup.address, isNull);
       expect(setup.personCount, 100);
       expect(setup.distanceKm, 10);
       expect(setup.currency, 'CHF');
@@ -608,7 +622,7 @@ void main() {
 
     testWidgets('onSubmit callback replaces navigation', (tester) async {
       desktop(tester);
-      final h = Harness(isStaff: true, url: stepUrl(1));
+      final h = Harness(isStaff: true, url: stepUrl(2));
       await pumpForm(tester, h.app(withOnSubmit: true));
       await settle(tester);
       await fillStaff(tester);

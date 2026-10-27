@@ -917,7 +917,9 @@
     "tab_more": "Mehr",
     "cancel": "Abbrechen",
     "add": "Hinzufügen",
-    "sheet": "Dialog"
+    "sheet": "Dialog",
+    "fields_missing": "Pflichtfelder fehlen",
+    "jump_to_step": "Zu Schritt springen"
   },
   "order_wizard": {
     "title_occasion": "Was feiern wir?",

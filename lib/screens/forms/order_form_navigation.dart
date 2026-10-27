@@ -9,7 +9,8 @@ import 'order_form_state.dart';
 ///
 /// Steps 0-3: one "Weiter" button (with the drink count on the drinks
 /// step). It looks disabled while required fields are missing but stays
-/// tappable: [onNext] then reveals the hints instead of doing nothing.
+/// tappable: [onNext] then reveals the hints instead of doing nothing
+/// (staff continue with a second tap).
 /// Last step: the single submit button ("Antrag einreichen", staff:
 /// "Einkaufsliste generieren"); staff also get the Claude button above.
 class OrderFormBottomBar extends StatelessWidget {

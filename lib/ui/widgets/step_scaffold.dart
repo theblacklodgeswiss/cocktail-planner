@@ -22,6 +22,7 @@ class StepScaffold extends StatelessWidget {
     required this.bottom,
     this.onBack,
     this.controller,
+    this.onStepLabelTap,
   });
 
   final int step;
@@ -34,6 +35,9 @@ class StepScaffold extends StatelessWidget {
   /// Optional controller of the content scroll view (e.g. to jump back to
   /// the top when the step changes).
   final ScrollController? controller;
+
+  /// Makes the "n von m" label a button (e.g. a step menu for staff).
+  final VoidCallback? onStepLabelTap;
 
   @override
   Widget build(BuildContext context) {
@@ -78,15 +82,39 @@ class StepScaffold extends StatelessWidget {
                               ),
                       ),
                       const Spacer(),
-                      // Announced once, by the progress bar below.
-                      ExcludeSemantics(
-                        child: Text(
-                          label,
-                          style: AppText.status.copyWith(
-                            color: p.textSecondary,
+                      if (onStepLabelTap == null)
+                        // Announced once, by the progress bar below.
+                        ExcludeSemantics(
+                          child: Text(
+                            label,
+                            style: AppText.status.copyWith(
+                              color: p.textSecondary,
+                            ),
+                          ),
+                        )
+                      else
+                        Pressable(
+                          minSize: AppSize.minTap,
+                          radius: AppRadius.pill,
+                          semanticLabel: 'ui.jump_to_step'.tr(),
+                          onTap: onStepLabelTap,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ExcludeSemantics(
+                                child: Text(
+                                  label,
+                                  style: AppText.status.copyWith(color: p.text),
+                                ),
+                              ),
+                              Icon(
+                                Icons.expand_more,
+                                size: AppSpace.s16,
+                                color: p.textSecondary,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),

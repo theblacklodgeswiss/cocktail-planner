@@ -11,6 +11,8 @@ import '../../models/recipe.dart';
 import '../../state/app_state.dart';
 import '../../ui/motion.dart';
 import '../../ui/tokens.dart';
+import '../../ui/widgets/app_sheet.dart';
+import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/step_scaffold.dart';
 import '../../widgets/order_setup_dialog.dart';
 import 'order_form_navigation.dart';
@@ -23,6 +25,7 @@ import 'steps/drinks_step.dart';
 import 'steps/extras_step.dart';
 import 'steps/occasion_step.dart';
 import 'steps/schedule_step.dart';
+import 'steps/wizard_widgets.dart' show CheckMark;
 
 export 'order_form_state.dart' show resolveShotPrefillQuantity;
 
@@ -252,9 +255,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       return;
     }
     if (!_form.canProceed(step)) {
-      // Never a silent no-op: explain at the fields what is missing.
-      _revealMissing(step, _form.firstMissingField(step));
-      return;
+      // Never a silent no-op: the first tap explains at the fields what is
+      // missing. Guests and customers stay on the step until it is valid;
+      // staff (who often fill in only what they know, as the old sidebar
+      // allowed) continue with the next tap. Submit validation is the same
+      // for everyone.
+      final explained = _form.attemptedSteps.contains(step);
+      if (!_isAdminUser || !explained) {
+        _revealMissing(step, _form.firstMissingField(step));
+        return;
+      }
     }
     HapticFeedback.lightImpact();
     _goToStep(step + 1);
@@ -469,6 +479,61 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   void _retryCocktailData() => setState(_loadCocktailData);
 
+  /// Staff only: a sheet listing all steps; picking one jumps there
+  /// without validation (what the old desktop sidebar did).
+  Future<void> _showStepPicker() async {
+    final picked = await showAppSheet<int>(
+      context,
+      builder: (sheet) {
+        final p = AppPalette.of(sheet);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'ui.jump_to_step'.tr(),
+              style: AppText.heroTitle.copyWith(color: p.text),
+            ),
+            const SizedBox(height: AppSpace.s8),
+            for (var i = 0; i < _totalSteps; i++)
+              Pressable(
+                minSize: AppSize.minTap,
+                selected: i == _form.currentStep,
+                onTap: () => Navigator.of(sheet).pop(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: AppSize.stepDigit,
+                        child: Text(
+                          '${i + 1}',
+                          style: AppText.number.copyWith(
+                            color: p.textSecondary,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _titleOf(i),
+                          style: AppText.button.copyWith(color: p.text),
+                        ),
+                      ),
+                      CheckMark(selected: i == _form.currentStep),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+    if (picked != null && mounted && picked != _form.currentStep) {
+      HapticFeedback.selectionClick();
+      _goToStep(picked);
+    }
+  }
+
   String _titleOf(int step) => switch (step) {
     0 => 'order_wizard.title_occasion'.tr(),
     1 => 'order_wizard.title_schedule'.tr(),
@@ -511,6 +576,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         title: _titleOf(step),
         onBack: _onBack,
         controller: _scrollController,
+        onStepLabelTap: _isAdminUser ? _showStepPicker : null,
         bottom: OrderFormBottomBar(
           form: _form,
           isEmployeeOrHigher: _isAdminUser,

@@ -282,6 +282,123 @@ void main() {
     expect(back, 1);
   });
 
+  testWidgets('PrimaryButton.dimmed: tappable, disabled look, hint', (
+    tester,
+  ) async {
+    phone(tester);
+    final handle = tester.ensureSemantics();
+    var taps = 0;
+    await pumpApp(
+      tester,
+      app(
+        Scaffold(
+          body: Center(
+            child: PrimaryButton(
+              label: 'Weiter',
+              dimmed: true,
+              onPressed: () => taps++,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(PrimaryButton));
+    expect(taps, 1, reason: 'dimmed stays tappable');
+    // Same fill and label color as a disabled button.
+    final box = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.byType(PrimaryButton),
+            matching: find.byType(DecoratedBox),
+          )
+          .last,
+    );
+    expect(
+      (box.decoration as BoxDecoration).color,
+      AppPalette.of(tester.element(find.byType(PrimaryButton))).surface,
+    );
+    final text = tester.widget<Text>(find.text('Weiter'));
+    expect(text.style?.color, AppColors.disabledLight);
+    expect(
+      tester.getSemantics(find.byType(PrimaryButton)),
+      matchesSemantics(
+        label: 'Weiter',
+        hint: 'Pflichtfelder fehlen',
+        isButton: true,
+        isEnabled: true,
+        hasEnabledState: true,
+        hasTapAction: true,
+        isFocusable: true,
+        hasFocusAction: true,
+      ),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('PrimaryButton without dimmed has no hint', (tester) async {
+    phone(tester);
+    final handle = tester.ensureSemantics();
+    await pumpApp(
+      tester,
+      app(
+        Scaffold(
+          body: Center(
+            child: PrimaryButton(label: 'Weiter', onPressed: () {}),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSemantics(find.byType(PrimaryButton)).hint, isEmpty);
+    final text = tester.widget<Text>(find.text('Weiter'));
+    expect(text.style?.color, isNot(AppColors.disabledLight));
+    handle.dispose();
+  });
+
+  testWidgets('StepScaffold.controller drives the content scroll view', (
+    tester,
+  ) async {
+    phone(tester, h: 640);
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await pumpApp(
+      tester,
+      app(
+        StepScaffold(
+          step: 1,
+          total: 5,
+          title: 'Titel',
+          controller: controller,
+          bottom: PrimaryButton(label: 'Weiter', onPressed: () {}),
+          child: Column(
+            children: [
+              for (var i = 0; i < 30; i++)
+                SizedBox(height: 60, child: Text('Zeile $i')),
+              const TextField(key: Key('far')),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(controller.hasClients, isTrue);
+    expect(controller.offset, 0);
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
+    expect(find.text('Zeile 0').hitTestable(), findsNothing);
+    controller.jumpTo(0);
+    await tester.pump();
+    expect(find.text('Zeile 0').hitTestable(), findsOneWidget);
+    // Scrolling to a field through its context uses the same scroll view.
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const Key('far'))),
+    );
+    await tester.pump();
+    expect(controller.offset, greaterThan(0));
+    expect(
+      tester.getRect(find.byKey(const Key('far'))).bottom,
+      lessThanOrEqualTo(tester.getRect(find.byType(PrimaryButton)).top),
+    );
+  });
+
   testWidgets('showConfirmSheet returns true and false', (tester) async {
     phone(tester);
     bool? result;

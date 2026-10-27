@@ -6,9 +6,9 @@ import 'bar_drinks_section.dart';
 import 'cocktail_picker.dart';
 import 'popularity_section.dart';
 
-/// Step 3 "Was soll im Glas sein?": cocktails/shots, the optional
-/// popularity section (once something is selected) and, for services with
-/// a bar, bar drinks and alcohol purchase. Nothing here is required to
+/// Step 3 "Was soll im Glas sein?": for services with a bar first bar
+/// drinks and alcohol purchase, then cocktails/shots and the optional
+/// popularity section (once something is selected). Nothing here is required to
 /// continue; the cocktail check happens on submit.
 class DrinksStep extends StatelessWidget {
   const DrinksStep({super.key, required this.form, required this.onRetry});
@@ -20,13 +20,16 @@ class DrinksStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Bar services start with the (short) bar drinks section so it is not
+    // buried below the whole cocktail list.
+    final barFirst = serviceIncludesBar(form.serviceType);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (barFirst) BarDrinksSection(form: form),
         CocktailPicker(form: form, onRetry: onRetry),
         const SizedBox(height: AppSpace.s16),
         if (form.selectedRecipes.isNotEmpty) PopularitySection(form: form),
-        if (serviceIncludesBar(form.serviceType)) BarDrinksSection(form: form),
       ],
     );
   }
