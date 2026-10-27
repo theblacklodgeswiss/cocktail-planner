@@ -4,12 +4,10 @@ import 'package:flutter/material.dart';
 import '../../data/order_repository.dart';
 import '../../models/order.dart';
 import 'order_detail_sheet.dart';
+import 'orders_logic.dart';
 
 import 'package:cocktail_planer/models/app_role.dart';
 import 'package:cocktail_planer/widgets/role_protected_screen.dart';
-
-/// Sort options for pending orders.
-enum PendingSortOption { eventDate, createdAt, guests, name }
 
 /// Screen displaying orders with pending issues (total = 0).
 class PendingOrdersScreen extends StatefulWidget {
@@ -31,44 +29,13 @@ class _PendingOrdersScreenState extends State<PendingOrdersScreen> {
     super.dispose();
   }
 
-  List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) {
-    // Filter by search query
-    var filtered = orders;
-    if (_searchQuery.isNotEmpty) {
-      final query = _searchQuery.toLowerCase();
-      filtered = orders.where((o) {
-        final nameMatch = o.name.toLowerCase().contains(query);
-        final locationMatch = o.location.toLowerCase().contains(query);
-        final guestMatch = o.personCount.toString().contains(query) ||
-            o.guestCountRange.toLowerCase().contains(query);
-        return nameMatch || locationMatch || guestMatch;
-      }).toList();
-    }
-
-    // Sort
-    filtered.sort((a, b) {
-      int comparison;
-      switch (_sortOption) {
-        case PendingSortOption.eventDate:
-          comparison = a.date.compareTo(b.date);
-          break;
-        case PendingSortOption.createdAt:
-          final aCreated = a.formCreatedAt ?? a.createdAt ?? a.date;
-          final bCreated = b.formCreatedAt ?? b.createdAt ?? b.date;
-          comparison = aCreated.compareTo(bCreated);
-          break;
-        case PendingSortOption.guests:
-          comparison = a.personCount.compareTo(b.personCount);
-          break;
-        case PendingSortOption.name:
-          comparison = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-          break;
-      }
-      return _sortAscending ? comparison : -comparison;
-    });
-
-    return filtered;
-  }
+  List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) =>
+      filterAndSortPending(
+        orders,
+        query: _searchQuery,
+        sort: _sortOption,
+        ascending: _sortAscending,
+      );
 
   @override
   Widget build(BuildContext context) {

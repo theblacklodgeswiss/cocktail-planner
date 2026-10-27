@@ -7,6 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import 'order_detail_sheet.dart';
+import 'orders_logic.dart';
 import 'widgets/orders_table.dart';
 
 /// Screen showing all orders grouped by year as tiles. Tapping a year tile
@@ -94,11 +95,8 @@ class _OrdersYearOverviewScreenState extends State<OrdersYearOverviewScreen> {
     ColorScheme colorScheme,
     List<SavedOrder> orders,
   ) {
-    final counts = <int, int>{};
-    for (final order in orders) {
-      counts[order.year] = (counts[order.year] ?? 0) + 1;
-    }
-    final years = counts.keys.toList()..sort((a, b) => b.compareTo(a));
+    final counts = ordersPerYear(orders);
+    final years = counts.keys.toList();
 
     if (years.isEmpty) {
       return Padding(
@@ -161,7 +159,7 @@ class _OrdersYearOverviewScreenState extends State<OrdersYearOverviewScreen> {
     ColorScheme colorScheme,
     List<SavedOrder> orders,
   ) {
-    final yearOrders = orders.where((o) => o.year == _selectedYear).toList();
+    final yearOrders = ordersOfYear(orders, _selectedYear!);
     return OrdersTable(
       orders: yearOrders,
       colorScheme: colorScheme,

@@ -6,6 +6,7 @@ import '../../data/firestore_service.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../utils/currency.dart';
+import '../orders/orders_logic.dart';
 import 'user_menu_sheet.dart';
 import 'customer_landing_screen.dart';
 
@@ -151,18 +152,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Compute counts
           // Pending orders: total == 0 (incomplete forms), regardless of status
-          final pendingCount = orders
-              .where((o) => o.total == 0 && !o.isPendingDismissed)
-              .length;
+          final counts = dashboardCounts(orders);
+          final pendingCount = counts.pending;
 
           // Only count orders with total > 0 for status counts
           final completedOrders = orders.where((o) => o.total > 0).toList();
-          final acceptedCount = completedOrders
-              .where((o) => o.isAccepted)
-              .length;
-          final openOffersCount = completedOrders
-              .where((o) => o.status == OrderStatus.quote)
-              .length;
+          final acceptedCount = counts.accepted;
+          final openOffersCount = counts.openOffers;
 
           // Compute statistics from accepted orders
           final acceptedOrders = completedOrders

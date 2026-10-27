@@ -14,11 +14,9 @@ import 'package:go_router/go_router.dart';
 
 import 'form_sync.dart';
 import 'order_detail_sheet.dart';
+import 'orders_logic.dart';
 import 'widgets/orders_table.dart';
 import 'widgets/summary_card.dart';
-
-/// Status filter for orders
-enum OrderStatusFilter { all, quotes, accepted, declined }
 
 /// Screen displaying an overview of all orders with filtering and summaries.
 class OrdersOverviewScreen extends StatefulWidget {
@@ -38,10 +36,6 @@ class OrdersOverviewScreen extends StatefulWidget {
   State<OrdersOverviewScreen> createState() => _OrdersOverviewScreenState();
 }
 
-/// Number of latest orders shown on the main overview before the user has
-/// to open the full year-by-year archive.
-const _latestOrdersLimit = 10;
-
 class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
   bool _firestoreReady = false;
   String _searchQuery = '';
@@ -56,17 +50,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
       if (mounted) setState(() => _firestoreReady = true);
     });
     // Set initial status filter based on query parameter
-    if (widget.initialStatus != null) {
-      switch (widget.initialStatus) {
-        case 'accepted':
-          _statusFilter = OrderStatusFilter.accepted;
-          break;
-        case 'offer':
-        case 'quote':
-          _statusFilter = OrderStatusFilter.quotes;
-          break;
-      }
-    }
+    _statusFilter = statusFilterFromQuery(widget.initialStatus);
   }
 
   @override
@@ -95,38 +79,8 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     return orderRepository.watchOrders();
   }
 
-  /// Applies the status filter (and search) and, when not searching, caps
-  /// the result to the most recently created [_latestOrdersLimit] orders.
-  /// [orders] is expected to already be sorted by createdAt descending.
-  List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) {
-    var filtered = orders;
-
-    // Filter by search query (searches across all orders, ignores status)
-    if (_searchQuery.isNotEmpty) {
-      final query = _searchQuery.toLowerCase();
-      return filtered.where((o) {
-        final nameMatch = o.name.toLowerCase().contains(query);
-        final guestMatch =
-            o.personCount.toString().contains(query) ||
-            o.guestCountRange.toLowerCase().contains(query);
-        return nameMatch || guestMatch;
-      }).toList();
-    }
-
-    // Filter by status (only quotes / accepted are selectable here)
-    filtered = filtered.where((o) {
-      switch (_statusFilter) {
-        case OrderStatusFilter.quotes:
-          return o.status == OrderStatus.quote;
-        case OrderStatusFilter.accepted:
-          return o.isAccepted;
-        default:
-          return true;
-      }
-    }).toList();
-
-    return filtered.take(_latestOrdersLimit).toList();
-  }
+  List<SavedOrder> _filterAndSortOrders(List<SavedOrder> orders) =>
+      filterLatestOrders(orders, query: _searchQuery, filter: _statusFilter);
 
   @override
   Widget build(BuildContext context) {
