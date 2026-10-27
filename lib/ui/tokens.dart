@@ -102,6 +102,7 @@ class AppSize {
   static const double barGap = 12;
   static const double fab = 40;
   static const double fabIcon = 22;
+  static const double fabRight = 20;
   static const double topBar = 44;
   static const double titleCollapse = 40;
   static const double progressHeight = 3;
@@ -109,8 +110,13 @@ class AppSize {
   static const double sheetHandleHeight = 5;
   static const double sheetMaxFraction = 0.9;
   static const double sheetFullFraction = 0.94;
+
   /// Scroll padding that keeps the last item clear of a floating bar.
   static const double barClearance = 96;
+  static const double maxContentWidth = 720;
+  static const double maxBarWidth = 520;
+  static const double sheetDismissFraction = 1 / 3;
+  static const double sheetFlingVelocity = 700;
   static const double stateIconBox = 56;
   static const double stateIcon = 28;
 }
@@ -167,7 +173,7 @@ class AppText {
     letterSpacing: -0.8,
   );
   static const TextStyle largeTitle = TextStyle(
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.9,
   );
@@ -261,6 +267,7 @@ class AppPalette {
   Color get glassBorder =>
       dark ? AppColors.glassBorderDark : AppColors.glassBorderLight;
   Color get error => dark ? AppColors.errorDark : AppColors.errorLight;
+  Color get onError => dark ? AppColors.ink : AppColors.textDark;
 
   /// Hero card and primary button fill; inverted text in dark.
   Color get hero => dark ? AppColors.surfaceDark : AppColors.ink;

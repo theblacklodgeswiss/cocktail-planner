@@ -8,6 +8,10 @@ import 'pressable.dart';
 
 /// One step of a wizard: back button, "n von m", thin progress bar, title,
 /// scrolling content and a bottom area that stays above the keyboard.
+/// Content is capped to [AppSize.maxContentWidth] and centered.
+///
+/// Callers should wrap the screen in a PopScope so the Android back button
+/// goes to the previous step instead of leaving the flow.
 class StepScaffold extends StatelessWidget {
   const StepScaffold({
     super.key,
@@ -38,96 +42,109 @@ class StepScaffold extends StatelessWidget {
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.s8,
-                AppSpace.s4,
-                AppSpace.s16,
-                0,
-              ),
-              child: Row(
-                children: [
-                  SizedBox.square(
-                    dimension: AppSize.minTap,
-                    child: onBack == null
-                        ? null
-                        : Pressable(
-                            minSize: AppSize.minTap,
-                            radius: AppRadius.pill,
-                            semanticLabel: 'ui.back'.tr(),
-                            onTap: onBack,
-                            child: Icon(Icons.arrow_back, color: p.text),
-                          ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    label,
-                    style: AppText.status.copyWith(color: p.textSecondary),
-                  ),
-                ],
-              ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppSize.maxContentWidth,
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
-              child: Semantics(
-                label: label,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  child: SizedBox(
-                    height: AppSize.progressHeight,
-                    child: ColoredBox(
-                      color: p.surface,
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(end: progress),
-                        duration: reduced ? Duration.zero : AppMotion.page,
-                        curve: AppMotion.easeOut,
-                        builder: (_, v, _) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            widthFactor: v,
-                            child: ColoredBox(color: p.primary),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.s8,
+                    AppSpace.s4,
+                    AppSpace.s16,
+                    0,
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox.square(
+                        dimension: AppSize.minTap,
+                        child: onBack == null
+                            ? null
+                            : Pressable(
+                                minSize: AppSize.minTap,
+                                radius: AppRadius.pill,
+                                semanticLabel: 'ui.back'.tr(),
+                                onTap: onBack,
+                                child: Icon(Icons.arrow_back, color: p.text),
+                              ),
+                      ),
+                      const Spacer(),
+                      // Announced once, by the progress bar below.
+                      ExcludeSemantics(
+                        child: Text(
+                          label,
+                          style: AppText.status.copyWith(
+                            color: p.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
+                  child: Semantics(
+                    label: label,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      child: SizedBox(
+                        height: AppSize.progressHeight,
+                        child: ColoredBox(
+                          color: p.surface,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(end: progress),
+                            duration: reduced ? Duration.zero : AppMotion.page,
+                            curve: AppMotion.easeOut,
+                            builder: (_, v, _) => Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: v,
+                                child: ColoredBox(color: p.primary),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.all(AppSpace.s16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        style: AppText.title.copyWith(color: p.text),
-                      ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.all(AppSpace.s16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            title,
+                            style: AppText.title.copyWith(color: p.text),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.s16),
+                        child,
+                      ],
                     ),
-                    const SizedBox(height: AppSpace.s16),
-                    child,
-                  ],
+                  ),
                 ),
-              ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpace.s16,
+                    AppSpace.s8,
+                    AppSpace.s16,
+                    bottomBarInset(context) + AppSpace.s12,
+                  ),
+                  child: bottom,
+                ),
+              ],
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpace.s16,
-                AppSpace.s8,
-                AppSpace.s16,
-                bottomBarInset(context) + AppSpace.s12,
-              ),
-              child: bottom,
-            ),
-          ],
+          ),
         ),
       ),
     );

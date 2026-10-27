@@ -13,7 +13,12 @@ double bottomBarInset(BuildContext context) {
 }
 
 /// Floating glass pill with a primary button (and an optional count badge).
-/// Place it at the bottom of a Stack; it lifts itself above the keyboard.
+///
+/// Usage contract: use it as `LargeTitleScaffold.bottomBar` or at the bottom
+/// of a Stack in a normal Scaffold. It adds the safe-area inset itself and,
+/// outside a resizing Scaffold, the keyboard inset too. Do not use it inside
+/// a sheet (sheets strip the insets for their content) or a StepScaffold
+/// (which has its own bottom area). Capped to [AppSize.maxBarWidth].
 class GlassCtaBar extends StatelessWidget {
   const GlassCtaBar({
     super.key,
@@ -36,30 +41,36 @@ class GlassCtaBar extends StatelessWidget {
         AppSize.barSide,
         bottomBarInset(context) + AppSize.barGap,
       ),
-      child: GlassSurface(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpace.s4),
-          child: Row(
-            children: [
-              if (badge != null)
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpace.s12,
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: AppSize.maxBarWidth),
+          child: GlassSurface(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpace.s4),
+              child: Row(
+                children: [
+                  if (badge != null)
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.s12,
+                        ),
+                        child: Text(
+                          badge!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.section.copyWith(color: p.text),
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      badge!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.section.copyWith(color: p.text),
-                    ),
+                  Expanded(
+                    flex: 2,
+                    child: PrimaryButton(label: label, onPressed: onPressed),
                   ),
-                ),
-              Expanded(
-                flex: 2,
-                child: PrimaryButton(label: label, onPressed: onPressed),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

@@ -89,7 +89,6 @@
     "pdf": "PDF",
     "close": "Close",
     "save_offer": "Save Offer",
-    "cancel": "Cancel",
     "add": "Add",
     "user_added": "User added!",
     "add_error": "Error adding user",
@@ -843,15 +842,16 @@
     "declined": "Declined"
   },
   "ui": {
-      "back": "Back",
-      "close": "Close",
-      "retry": "Retry",
-      "step_of": "{} of {}",
-      "loading": "Loading",
-      "tab_orders": "Orders",
-      "tab_inventory": "Inventory",
-      "tab_more": "More",
-      "cancel": "Cancel",
-      "add": "Add"
+    "back": "Back",
+    "close": "Close",
+    "retry": "Retry",
+    "step_of": "{} of {}",
+    "loading": "Loading",
+    "tab_orders": "Orders",
+    "tab_inventory": "Inventory",
+    "tab_more": "More",
+    "cancel": "Cancel",
+    "add": "Add",
+    "sheet": "Dialog"
   }
 }

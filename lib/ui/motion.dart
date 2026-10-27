@@ -5,6 +5,10 @@ class AppMotion {
 
   static const Curve easeOut = Cubic(0.23, 1, 0.32, 1);
 
+  /// Exit mirror of [easeOut]: fast first, then settling, so leaving feels as
+  /// lively as arriving (a plain reversed ease-out would start slow).
+  static final Curve easeOutExit = easeOut.flipped;
+
   static const Duration press = Duration(milliseconds: 120);
   static const Duration page = Duration(milliseconds: 280);
   static const Duration sheet = Duration(milliseconds: 300);

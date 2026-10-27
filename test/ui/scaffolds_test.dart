@@ -1,4 +1,8 @@
 import 'package:cocktail_planer/ui/app_theme.dart';
+import 'package:cocktail_planer/ui/motion.dart';
+import 'package:cocktail_planer/ui/page_transitions.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
+import 'package:cocktail_planer/ui/widgets/glass_surface.dart';
 import 'package:cocktail_planer/ui/widgets/app_sheet.dart';
 import 'package:cocktail_planer/ui/widgets/buttons.dart';
 import 'package:cocktail_planer/ui/widgets/floating_fab.dart';
@@ -8,8 +12,8 @@ import 'package:cocktail_planer/ui/widgets/staff_tab_bar.dart';
 import 'package:cocktail_planer/ui/widgets/states.dart';
 import 'package:cocktail_planer/ui/widgets/step_scaffold.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -106,34 +110,157 @@ void main() {
     expect(r.top, greaterThan(0));
   });
 
-  testWidgets('GlassCtaBar sits above the keyboard', (tester) async {
+  testWidgets(
+    'LargeTitleScaffold: CTA above the keyboard, field scrolls clear',
+    (tester) async {
+      phone(tester);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await pumpApp(
+        tester,
+        app(
+          LargeTitleScaffold(
+            title: 'Titel',
+            bottomBar: GlassCtaBar(label: 'Weiter', onPressed: () {}),
+            slivers: [
+              SliverList.builder(
+                itemCount: 20,
+                itemBuilder: (_, i) => SizedBox(height: 60, child: Text('r$i')),
+              ),
+              const SliverToBoxAdapter(child: TextField(key: Key('tf'))),
+            ],
+          ),
+        ),
+      );
+      final bar = tester.getRect(find.byType(GlassCtaBar));
+      expect(bar.bottom, lessThanOrEqualTo(500));
+      await tester.scrollUntilVisible(
+      find.byKey(const Key('tf')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.byKey(const Key('tf')));
+      await tester.pump(const Duration(milliseconds: 400));
+      final field = tester.getRect(find.byKey(const Key('tf')));
+      expect(field.bottom, lessThanOrEqualTo(bar.top));
+      expect(field.top, greaterThan(0));
+    },
+  );
+
+  testWidgets('LargeTitleScaffold FAB sits bottom-right above the bar', (
+    tester,
+  ) async {
     phone(tester);
-    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
     await pumpApp(
       tester,
       app(
-        Scaffold(
-          body: Stack(
-            children: [
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: GlassCtaBar(
-                  label: 'Weiter',
-                  badge: '3',
-                  onPressed: () {},
-                ),
+        LargeTitleScaffold(
+          title: 'Titel',
+          fab: FloatingFab(onPressed: () {}),
+          bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+          slivers: const [SliverToBoxAdapter(child: Text('x'))],
+        ),
+      ),
+    );
+    final fab = tester.getRect(find.byType(FloatingFab));
+    final bar = tester.getRect(find.byType(StaffTabBar));
+    expect(fab.center.dx, greaterThan(360 / 2));
+    expect(fab.right, lessThanOrEqualTo(360 - 14));
+    expect(fab.bottom, lessThanOrEqualTo(bar.top));
+    expect(fab.center.dy, greaterThan(800 / 2));
+  });
+
+  testWidgets(
+    'content is capped at 720 px and bars at 520 px on wide screens',
+    (tester) async {
+      phone(tester, w: 1200, h: 800);
+      await pumpApp(
+        tester,
+        app(
+          LargeTitleScaffold(
+            title: 'Titel',
+            bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Container(key: const Key('c'), height: 20),
               ),
             ],
           ),
         ),
-      ),
-    );
-    expect(
-      tester.getRect(find.byType(GlassCtaBar)).bottom,
-      lessThanOrEqualTo(500),
-    );
-    expect(find.text('3'), findsOneWidget);
-  });
+      );
+      final c = tester.getRect(find.byKey(const Key('c')));
+      expect(c.width, lessThanOrEqualTo(720));
+      expect(c.center.dx, closeTo(600, 1));
+      final bar = tester.getRect(find.byType(GlassSurface));
+      expect(bar.width, lessThanOrEqualTo(520));
+      expect(bar.center.dx, closeTo(600, 1));
+
+      await pumpApp(
+        tester,
+        app(
+          StepScaffold(
+            step: 1,
+            total: 3,
+            title: 'T',
+            bottom: Container(key: const Key('b'), height: 44),
+            child: Container(key: const Key('c'), height: 20),
+          ),
+        ),
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('c'))).width,
+        lessThanOrEqualTo(720),
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('b'))).width,
+        lessThanOrEqualTo(720),
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('b'))).center.dx,
+        closeTo(600, 1),
+      );
+
+      await pumpApp(
+        tester,
+        app(
+          Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: GlassCtaBar(label: 'Weiter', onPressed: () {}),
+            ),
+          ),
+        ),
+      );
+      expect(
+        tester.getRect(find.byType(GlassSurface)).width,
+        lessThanOrEqualTo(520),
+      );
+
+      await pumpApp(
+        tester,
+        app(
+          Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showAppSheet<void>(
+                  context,
+                  full: true,
+                  builder: (_) => const SizedBox.expand(key: Key('sb')),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        tester.getRect(find.byKey(const Key('sb'))).width,
+        lessThanOrEqualTo(720),
+      );
+    },
+  );
 
   testWidgets('StepScaffold back calls onBack', (tester) async {
     phone(tester);
@@ -301,9 +428,9 @@ void main() {
       ),
     );
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Bestand')),
+      tester.getSemantics(find.bySemanticsLabel('Inventur')),
       matchesSemantics(
-        label: 'Bestand',
+        label: 'Inventur',
         isButton: true,
         isSelected: true,
         hasSelectedState: true,
@@ -428,38 +555,292 @@ void main() {
     expect(n, 1);
   });
 
-  testWidgets('reduced-motion page transition is a fade', (tester) async {
-    phone(tester);
-    for (final reduced in [false, true]) {
-      await pumpApp(
-        tester,
-        app(
-          reduceMotion: reduced,
-          Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const Scaffold(body: Text('next')),
-                  ),
-                ),
-                child: const Text('go'),
-              ),
+  Widget pushApp({required bool reduced}) => app(
+    reduceMotion: reduced,
+    Builder(
+      builder: (context) => Scaffold(
+        body: TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('next')),
             ),
           ),
+          child: const Text('go'),
         ),
-      );
+      ),
+    ),
+  );
+
+  testWidgets('reduced-motion page transition fades instead of sliding', (
+    tester,
+  ) async {
+    phone(tester);
+    for (final reduced in [false, true]) {
+      await pumpApp(tester, pushApp(reduced: reduced));
       await tester.tap(find.text('go'));
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(
-        find.byType(CupertinoPageTransition),
-        reduced ? findsNothing : findsOneWidget,
+      final dx = tester.getTopLeft(find.text('next')).dx;
+      final fades = find.ancestor(
+        of: find.text('next'),
+        matching: find.byType(FadeTransition),
       );
+      if (reduced) {
+        expect(dx, 0, reason: 'no slide');
+        final opacity = tester
+            .widgetList<FadeTransition>(fades)
+            .map((f) => f.opacity.value)
+            .reduce((a, b) => a < b ? a : b);
+        expect(opacity, lessThan(1), reason: 'still fading in');
+      } else {
+        expect(dx, greaterThan(0), reason: 'slides');
+      }
       await tester.pumpAndSettle();
       expect(find.text('next'), findsOneWidget);
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('swipe-back still works with reduced motion', (tester) async {
+    phone(tester);
+    await pumpApp(tester, pushApp(reduced: true));
+    await tester.tap(find.text('go'));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(const Offset(2, 300), const Offset(300, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('next'), findsNothing);
+  });
+
+  test('page transition builder uses the app page duration', () {
+    expect(
+      const AppPageTransitionsBuilder().transitionDuration,
+      AppMotion.page,
+    );
+  });
+
+  // --- sheet contracts ---
+  Widget sheetHost(
+    Widget Function(BuildContext) builder, {
+    bool full = false,
+    bool? scrollable,
+    bool reduced = false,
+  }) => app(
+    reduceMotion: reduced,
+    Builder(
+      builder: (context) => Scaffold(
+        body: TextButton(
+          onPressed: () => showAppSheet<void>(
+            context,
+            full: full,
+            scrollable: scrollable,
+            builder: builder,
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> openSheet(WidgetTester tester) async {
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+  }
+
+  testWidgets('full sheet gives a ListView child bounded height', (
+    tester,
+  ) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      sheetHost(
+        full: true,
+        (_) =>
+            ListView(children: [for (var i = 0; i < 50; i++) Text('item $i')]),
+      ),
+    );
+    await openSheet(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('item 0'), findsOneWidget);
+    final list = tester.getRect(find.byType(ListView));
+    expect(list.height, greaterThan(400));
+    expect(list.bottom, lessThanOrEqualTo(800));
+  });
+
+  testWidgets('full sheet lets an Expanded Column pin its button', (
+    tester,
+  ) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      sheetHost(
+        full: true,
+        (_) => Column(
+          children: [
+            const Expanded(child: SizedBox.expand()),
+            PrimaryButton(label: 'Fertig', onPressed: () {}),
+          ],
+        ),
+      ),
+    );
+    await openSheet(tester);
+    expect(tester.takeException(), isNull);
+    expect(tester.getRect(find.byType(PrimaryButton)).bottom, greaterThan(700));
+  });
+
+  testWidgets('sheet strips the keyboard inset for its content', (
+    tester,
+  ) async {
+    phone(tester);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    double? inner;
+    await pumpApp(
+      tester,
+      sheetHost((c) {
+        inner = MediaQuery.viewInsetsOf(c).bottom;
+        return Column(
+          children: [
+            const TextField(key: Key('f')),
+            PrimaryButton(label: 'Speichern', onPressed: () {}),
+          ],
+        );
+      }),
+    );
+    await openSheet(tester);
+    expect(inner, 0);
+    expect(
+      tester.getRect(find.byType(PrimaryButton)).bottom,
+      lessThanOrEqualTo(500),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('f'))).bottom,
+      lessThanOrEqualTo(tester.getRect(find.byType(PrimaryButton)).top),
+    );
+  });
+
+  testWidgets('Escape closes a sheet', (tester) async {
+    phone(tester);
+    await pumpApp(tester, sheetHost((_) => const Text('S')));
+    await openSheet(tester);
+    expect(find.text('S'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('S'), findsNothing);
+  });
+
+  testWidgets('Navigator.pop from outside closes a sheet', (tester) async {
+    phone(tester);
+    await pumpApp(tester, sheetHost((_) => const Text('S')));
+    await openSheet(tester);
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('S'), findsNothing);
+  });
+
+  testWidgets('sheet announces itself as a route', (tester) async {
+    phone(tester);
+    final semantics = tester.ensureSemantics();
+    await pumpApp(tester, sheetHost((_) => const Text('S')));
+    await openSheet(tester);
+    expect(find.bySemanticsLabel('Dialog'), findsWidgets);
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'dragging the handle down past a third closes, less springs back',
+    (tester) async {
+      phone(tester);
+      await pumpApp(
+        tester,
+        sheetHost((_) => const SizedBox(height: 300, child: Text('S'))),
+      );
+      await openSheet(tester);
+      final top = tester.getTopLeft(find.text('S')).dy;
+      await tester.drag(
+        find.byKey(const Key('sheet-handle')),
+        const Offset(0, 20),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('S'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('S')).dy, closeTo(top, 0.5));
+
+      await tester.drag(
+        find.byKey(const Key('sheet-handle')),
+        const Offset(0, 200),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('S'), findsNothing);
+    },
+  );
+
+  testWidgets('handle drag under reduced motion restores without spring', (
+    tester,
+  ) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      sheetHost(
+        reduced: true,
+        (_) => const SizedBox(height: 300, child: Text('S')),
+      ),
+    );
+    await openSheet(tester);
+    final top = tester.getTopLeft(find.text('S')).dy;
+    await tester.drag(
+      find.byKey(const Key('sheet-handle')),
+      const Offset(0, 20),
+    );
+    await tester.pump();
+    expect(tester.getTopLeft(find.text('S')).dy, closeTo(top, 0.5));
+  });
+
+  testWidgets('states work inside SliverFillRemaining', (tester) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      app(
+        Scaffold(
+          body: CustomScrollView(
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: EmptyState(icon: Icons.inbox, title: 'Leer'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Leer'), findsOneWidget);
+  });
+
+  testWidgets('StepScaffold announces progress once', (tester) async {
+    phone(tester);
+    final semantics = tester.ensureSemantics();
+    await pumpApp(
+      tester,
+      app(
+        StepScaffold(
+          step: 2,
+          total: 5,
+          title: 'T',
+          bottom: const SizedBox(),
+          child: const SizedBox(),
+        ),
+      ),
+    );
+    expect(find.bySemanticsLabel('2 von 5'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  test('large title token is 24 px', () {
+    expect(AppText.largeTitle.fontSize, 24);
   });
 
   group('no overflow at 360 px, text 1.3', () {

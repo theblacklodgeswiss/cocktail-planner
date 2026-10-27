@@ -104,9 +104,7 @@ class PrimaryButton extends StatelessWidget {
       onPressed: onPressed,
       loading: loading,
       fill: disabled ? p.surface : (destructive ? p.error : p.primary),
-      foreground: destructive
-          ? Theme.of(context).colorScheme.onError
-          : p.onPrimary,
+      foreground: destructive ? p.onError : p.onPrimary,
     );
   }
 }

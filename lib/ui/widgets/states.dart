@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
@@ -103,7 +101,9 @@ class ErrorState extends StatelessWidget {
   }
 }
 
-/// Scrolls instead of overflowing at large text or in short spaces.
+/// Centers its content and scrolls instead of overflowing at large text or
+/// in short spaces. No LayoutBuilder, so it also works inside
+/// SliverFillRemaining(hasScrollBody: false).
 class _Centered extends StatelessWidget {
   const _Centered({required this.children});
 
@@ -111,20 +111,12 @@ class _Centered extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) => SingleChildScrollView(
+    return Center(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpace.s24),
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: c.hasBoundedHeight
-                ? math.max(0, c.maxHeight - 2 * AppSpace.s24)
-                : 0,
-            minWidth: math.max(0, c.maxWidth - 2 * AppSpace.s24),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: children,
-          ),
+          constraints: const BoxConstraints(maxWidth: AppSize.maxContentWidth),
+          child: Column(mainAxisSize: MainAxisSize.min, children: children),
         ),
       ),
     );
