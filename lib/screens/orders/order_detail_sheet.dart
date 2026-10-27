@@ -25,6 +25,7 @@ import '../inventory/inventory_rows.dart' show formatQuantity;
 import '../inventory/rest_entry_sheet.dart';
 import '../shopping_list/completion_deduction.dart';
 import '../shopping_list/stock_logic.dart';
+import 'detail/order_detail_logic.dart';
 import 'order_shopping_list_page.dart';
 import 'order_status_helpers.dart';
 import 'widgets/order_info_chip.dart';
@@ -861,12 +862,15 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   /// Check if offer has all required fields filled
-  bool _isOfferComplete() {
-    return widget.order.offerClientName.isNotEmpty &&
-        widget.order.offerClientContact.isNotEmpty &&
-        widget.order.offerEventTime.isNotEmpty &&
-        widget.order.offerEventTypes.isNotEmpty;
-  }
+  bool _isOfferComplete() => isOfferComplete(widget.order);
+
+  Set<OrderDetailAction> _actions() => availableActions(
+    _currentStatus,
+    offerComplete: _isOfferComplete(),
+    restRecorded: _restRecorded,
+    isEmployeeOrHigher: AuthService().isEmployeeOrHigher,
+    isSuperAdmin: AuthService().isSuperAdmin,
+  );
 
   /// Fetches the latest version of this order before opening its offer/
   /// invoice editor, so a change made elsewhere (e.g. by another staff
@@ -1219,7 +1223,8 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             _buildInfoCard(),
             const SizedBox(height: 16),
             if (widget.order.items.isNotEmpty) _buildShoppingListTile(),
-            if (AuthService().isSuperAdmin) _buildDeleteSection(),
+            if (_actions().contains(OrderDetailAction.delete))
+              _buildDeleteSection(),
           ],
         ),
       ),
@@ -1261,8 +1266,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
-                  if (_currentStatus == OrderStatus.accepted ||
-                      _currentStatus == OrderStatus.completed) ...[
+                  if (_actions().contains(OrderDetailAction.invoice)) ...[
                     const SizedBox(height: 8),
                     FilledButton.icon(
                       onPressed: _isOpeningInvoice ? null : _generateInvoice,
@@ -1299,8 +1303,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         : const Icon(Icons.description_outlined),
                     label: Text('orders.finalize_offer'.tr()),
                   ),
-                  if (_currentStatus == OrderStatus.accepted ||
-                      _currentStatus == OrderStatus.completed) ...[
+                  if (_actions().contains(OrderDetailAction.invoice)) ...[
                     const SizedBox(width: 8),
                     FilledButton.icon(
                       onPressed: _isOpeningInvoice ? null : _generateInvoice,
@@ -1478,7 +1481,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
   }
 
   Widget _buildStatusCard() {
-    final isComplete = _isOfferComplete();
+    final actions = _actions();
 
     return Card(
       color: statusColor(_currentStatus).withValues(alpha: 0.1),
@@ -1504,7 +1507,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 ),
               ],
             ),
-            if (_currentStatus == OrderStatus.declined) ...[
+            if (actions.contains(OrderDetailAction.editDeclineReason)) ...[
               const SizedBox(height: 8),
               InkWell(
                 onTap: _editDeclineReason,
@@ -1536,7 +1539,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
             ],
             const SizedBox(height: 12),
             // Show "Complete Offer" button if offer is incomplete and status is quote
-            if (!isComplete && _currentStatus == OrderStatus.quote) ...[
+            if (actions.contains(OrderDetailAction.completeOffer)) ...[
               Text(
                 'orders.offer_incomplete'.tr(),
                 style: Theme.of(
@@ -1563,9 +1566,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 ),
               ),
             ] else ...[
-              if (_currentStatus == OrderStatus.completed &&
-                  !_restRecorded &&
-                  AuthService().isEmployeeOrHigher) ...[
+              if (actions.contains(OrderDetailAction.recordRest)) ...[
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -1583,7 +1584,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  if (_currentStatus == OrderStatus.accepted)
+                  if (actions.contains(OrderDetailAction.complete))
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: _isUpdatingStatus
@@ -1605,9 +1606,9 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         ),
                       ),
                     ),
-                  if (_currentStatus == OrderStatus.accepted)
+                  if (actions.contains(OrderDetailAction.complete))
                     const SizedBox(width: 8),
-                  if (_currentStatus == OrderStatus.completed)
+                  if (actions.contains(OrderDetailAction.backToAccepted))
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _isUpdatingStatus
@@ -1626,14 +1627,14 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         ),
                       ),
                     ),
-                  if (_currentStatus != OrderStatus.accepted &&
-                      _currentStatus != OrderStatus.completed)
+                  if (actions.contains(OrderDetailAction.accept))
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           FilledButton.icon(
-                            onPressed: (widget.order.total > 0 && !_isUpdatingStatus)
+                            onPressed: (!acceptBlockedByTotal(widget.order.total) &&
+                                    !_isUpdatingStatus)
                                 ? () => _tryUpdateStatus(OrderStatus.accepted)
                                 : null,
                             icon: _isUpdatingStatus
@@ -1651,7 +1652,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                               backgroundColor: Colors.green,
                             ),
                           ),
-                          if (widget.order.total <= 0)
+                          if (acceptBlockedByTotal(widget.order.total))
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Text(
@@ -1664,12 +1665,10 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         ],
                       ),
                     ),
-                  if (_currentStatus != OrderStatus.accepted &&
-                      _currentStatus != OrderStatus.completed &&
-                      _currentStatus != OrderStatus.declined)
+                  if (actions.contains(OrderDetailAction.accept) &&
+                      actions.contains(OrderDetailAction.decline))
                     const SizedBox(width: 8),
-                  if (_currentStatus != OrderStatus.declined &&
-                      _currentStatus != OrderStatus.completed)
+                  if (actions.contains(OrderDetailAction.decline))
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _isUpdatingStatus
@@ -1688,8 +1687,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                         ),
                       ),
                     ),
-                  if (_currentStatus != OrderStatus.quote &&
-                      _currentStatus != OrderStatus.completed) ...[
+                  if (actions.contains(OrderDetailAction.backToQuote)) ...[
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
