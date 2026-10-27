@@ -10,10 +10,12 @@ import 'dart:async';
 import 'package:cocktail_planer/data/order_repository.dart';
 import 'package:cocktail_planer/models/additional_service.dart';
 import 'package:cocktail_planer/models/cocktail_data.dart';
+import 'package:cocktail_planer/models/offer.dart' show EventType;
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/models/recipe.dart';
 import 'package:cocktail_planer/screens/forms/modern_order_form_screen.dart';
 import 'package:cocktail_planer/screens/forms/order_form_services.dart';
+import 'package:cocktail_planer/screens/forms/order_form_state.dart';
 import 'package:cocktail_planer/state/app_state.dart';
 import 'package:cocktail_planer/widgets/order_setup_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -342,6 +344,114 @@ void main() {
     await tester.tap(find.text('OK').last);
     await sheet(tester);
   }
+
+  group('OrderFormState (pure)', () {
+    late OrderFormState form;
+    setUp(() => form = OrderFormState(distanceLookupPending: false));
+    tearDown(() => form.dispose());
+
+    test('totalSteps is 9', () {
+      expect(OrderFormState.totalSteps, 9);
+    });
+
+    test('canProceed: steps 0 and 4-8 are always open', () {
+      for (final step in [0, 4, 5, 6, 7, 8]) {
+        expect(form.canProceed(step), isTrue, reason: 'step $step');
+      }
+    });
+
+    test('canProceed(1): trimmed name AND phone', () {
+      expect(form.canProceed(1), isFalse);
+      form.nameController.text = 'Anna';
+      expect(form.canProceed(1), isFalse);
+      form.phoneController.text = '  ';
+      expect(form.canProceed(1), isFalse);
+      form.phoneController.text = '079';
+      expect(form.canProceed(1), isTrue);
+      form.nameController.text = ' ';
+      expect(form.canProceed(1), isFalse);
+    });
+
+    test('canProceed(2): date AND time AND trimmed address', () {
+      expect(form.canProceed(2), isFalse);
+      form.eventDate = DateTime(2027, 5, 1);
+      form.eventTime = const TimeOfDay(hour: 18, minute: 0);
+      expect(form.canProceed(2), isFalse);
+      form.addressController.text = ' ';
+      expect(form.canProceed(2), isFalse);
+      form.addressController.text = 'Basel';
+      expect(form.canProceed(2), isTrue);
+      form.eventTime = null;
+      expect(form.canProceed(2), isFalse);
+    });
+
+    test('canProceed(3): event type required', () {
+      expect(form.canProceed(3), isFalse);
+      form.selectedEventType = EventType.other;
+      expect(form.canProceed(3), isTrue);
+    });
+
+    test('firstInvalidStep: name -> 1, date -> 2, cocktails -> 5', () {
+      expect(form.firstInvalidStep(), (
+        step: 1,
+        messageKey: 'order_setup.required_name',
+      ));
+      form.nameController.text = 'Anna';
+      expect(form.firstInvalidStep(), (
+        step: 2,
+        messageKey: 'order_setup.required_date',
+      ));
+      form.eventDate = DateTime(2027, 5, 1);
+      expect(form.firstInvalidStep(), (
+        step: 5,
+        messageKey: 'order_setup.required_cocktails',
+      ));
+      form.selectedRecipes.add(mojito);
+      expect(form.firstInvalidStep(), isNull);
+    });
+
+    test('service type normalization and mocktail clearing', () {
+      expect(
+        OrderFormState.normalizeServiceType('cocktailservice'),
+        'cocktail_service',
+      );
+      expect(OrderFormState.normalizeServiceType('barservice'), 'bar_service');
+      expect(
+        OrderFormState.normalizeServiceType('mocktail_service'),
+        'mocktail_service',
+      );
+
+      form.toggleRecipeSelection(mojito);
+      form.toggleRecipeSelection(tequila);
+      form.shotQuantityController(tequila);
+      form.cocktailFilter = 'shots';
+      form.syncPopularityWithSelection();
+      form.selectServiceType('mocktail_service');
+      expect(form.selectedRecipes, [mojito]);
+      expect(form.shotQuantities, isEmpty);
+      expect(form.shotQuantityControllers, isEmpty);
+      expect(form.cocktailPopularity, {'Mojito': 50.0});
+      expect(form.cocktailFilter, 'all');
+    });
+
+    test('additional services split + flatten round-trip', () {
+      form.applyAdditionalServicesPrefill([
+        'photobooth:v3h',
+        'booth_360',
+        'other_services',
+        ':bad',
+      ]);
+      expect(form.selectedAdditionalServices, {'photobooth': 'v3h'});
+      expect(form.legacyAdditionalServiceIds, {'booth_360', ':bad'});
+      expect(form.otherServicesSelected, isTrue);
+      expect(form.additionalServicesList, [
+        'photobooth:v3h',
+        'booth_360',
+        ':bad',
+        'other_services',
+      ]);
+    });
+  });
 
   group('canProceed per step (mobile Weiter button)', () {
     testWidgets('step 0 (service type) always proceeds', (tester) async {
@@ -851,6 +961,42 @@ void main() {
       );
       expect(find.text('page /order-success'), findsNothing);
       await settle(tester);
+    });
+  });
+
+  group('popularity sync timing', () {
+    SavedOrder ghostPrefill() => prefillOrder(
+      name: 'Pop',
+      cocktails: const ['Mojito'],
+      cocktailPopularity: const {'Mojito': 80.0, 'Ghost': 10.0},
+    );
+
+    testWidgets('mobile syncs popularity on every build (all pages are '
+        'built eagerly), even when step 6 was never shown', (tester) async {
+      mobile(tester);
+      final h = Harness(url: 'http://localhost/order-form?step=8');
+      await pumpForm(tester, h.app(prefill: ghostPrefill()));
+      await settle(tester);
+      await tester.tap(find.text('Antrag einreichen').first);
+      await tester.pump();
+      await settle(tester);
+      expect(h.repo.saveCalls.single['cocktailPopularity'], {'Mojito': 80.0});
+    });
+
+    testWidgets('desktop only syncs popularity while step 6 is shown', (
+      tester,
+    ) async {
+      desktop(tester);
+      final h = Harness(url: 'http://localhost/order-form?step=8');
+      await pumpForm(tester, h.app(prefill: ghostPrefill()));
+      await settle(tester);
+      await tester.tap(find.text('Antrag einreichen'));
+      await tester.pump();
+      await settle(tester);
+      expect(h.repo.saveCalls.single['cocktailPopularity'], {
+        'Mojito': 80.0,
+        'Ghost': 10.0,
+      });
     });
   });
 
