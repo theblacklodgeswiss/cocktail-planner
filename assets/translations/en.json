@@ -415,7 +415,6 @@
   "orders": {
     "title": "Orders Overview",
     "shopping_list_title": "Shopping list",
-    "edit_shopping_list": "Edit shopping list",
     "source_shop": "Shop",
     "source_stock": "Stock",
     "source_location": "Location",

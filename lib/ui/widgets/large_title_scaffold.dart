@@ -4,19 +4,16 @@ import 'package:flutter/material.dart';
 
 import '../motion.dart';
 import '../tokens.dart';
-import 'glass_cta_bar.dart' show bottomBarInset;
 import 'glass_surface.dart';
-import 'staff_tab_bar.dart' show staffBarClearance;
 
 /// Page with a large title that collapses into a small title in a glass top
 /// bar once scrolled. Content is capped to [AppSize.maxContentWidth] and
 /// centered.
 ///
-/// [bottomBar] (tab bar / CTA) floats over the content at the bottom and
-/// [fab] sits right above it at the bottom right (the bar's height is part
-/// of the same column, so both can be set). The Scaffold resizes with the
-/// keyboard, so the bar rides on top of it and a focused field can scroll
-/// clear of it. Pass [controller] to drive the scroll position from outside
+/// [bottomBar] (tab bar / CTA) takes its own space under the scroll view, so
+/// a focused text field that Flutter scrolls into view always lands above
+/// it. [fab] floats over the content at the bottom right, above the bar.
+/// The Scaffold resizes with the keyboard, so the bar rides on top of it. Pass [controller] to drive the scroll position from outside
 /// (e.g. scroll to top when the active tab is tapped again).
 class LargeTitleScaffold extends StatefulWidget {
   const LargeTitleScaffold({
@@ -84,93 +81,54 @@ class _LargeTitleScaffoldState extends State<LargeTitleScaffold> {
     _threshold = AppSize.titleCollapse * scale;
     final fade = AppMotion.reduced(context) ? Duration.zero : AppMotion.press;
     final hasBar = widget.bottomBar != null;
-    final clearance = hasBar
-        ? staffBarClearance(context)
-        : AppSpace.s24 + MediaQuery.paddingOf(context).bottom;
+    // The bar takes its own space below the scroll view; only the safe area
+    // (no bar) and the FAB (which floats over the content) need clearance.
+    final hasFab = widget.fab != null;
+    final clearance =
+        AppSpace.s24 +
+        (hasBar ? 0 : MediaQuery.paddingOf(context).bottom) +
+        (hasFab ? AppSize.minTap + AppSpace.s16 : 0);
 
     return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, box) {
-          // Centered column of at most maxContentWidth.
-          final side = math.max(
-            0.0,
-            (box.maxWidth - AppSize.maxContentWidth) / 2,
-          );
-          Widget padded(Widget sliver) => SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: side),
-            sliver: sliver,
-          );
+      body: Column(
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // Centered column of at most maxContentWidth.
+                final side = math.max(
+                  0.0,
+                  (box.maxWidth - AppSize.maxContentWidth) / 2,
+                );
+                Widget padded(Widget sliver) => SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: side),
+                  sliver: sliver,
+                );
 
-          return Stack(
-            children: [
-              CustomScrollView(
-                controller: _controller,
-                slivers: [
-                  padded(
-                    SliverToBoxAdapter(
-                      child: SizedBox(height: top + AppSize.topBar),
-                    ),
-                  ),
-                  padded(
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpace.s16,
-                          0,
-                          AppSpace.s16,
-                          AppSpace.s12,
-                        ),
-                        child: Semantics(
-                          header: true,
-                          child: Text(
-                            widget.title,
-                            style: AppText.largeTitle.copyWith(color: p.text),
+                return Stack(
+                  children: [
+                    CustomScrollView(
+                      controller: _controller,
+                      slivers: [
+                        padded(
+                          SliverToBoxAdapter(
+                            child: SizedBox(height: top + AppSize.topBar),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  for (final s in widget.slivers) padded(s),
-                  padded(
-                    SliverToBoxAdapter(child: SizedBox(height: clearance)),
-                  ),
-                ],
-              ),
-              Positioned(
-                top: top,
-                left: AppSpace.s12 + side,
-                right: AppSpace.s12 + side,
-                height: AppSize.topBar,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: AnimatedSwitcher(
-                        duration: fade,
-                        child: _collapsed
-                            ? const GlassSurface(
-                                key: ValueKey('glass'),
-                                child: SizedBox.expand(),
-                              )
-                            : const SizedBox.shrink(key: ValueKey('clear')),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpace.s16,
-                            ),
-                            // The large title is the header; skip the echo.
-                            child: ExcludeSemantics(
-                              child: AnimatedOpacity(
-                                opacity: _collapsed ? 1 : 0,
-                                duration: fade,
+                        padded(
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpace.s16,
+                                0,
+                                AppSpace.s16,
+                                AppSpace.s12,
+                              ),
+                              child: Semantics(
+                                header: true,
                                 child: Text(
                                   widget.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppText.section.copyWith(
+                                  style: AppText.largeTitle.copyWith(
                                     color: p.text,
                                   ),
                                 ),
@@ -178,41 +136,80 @@ class _LargeTitleScaffoldState extends State<LargeTitleScaffold> {
                             ),
                           ),
                         ),
-                        ...widget.actions,
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (hasBar || widget.fab != null)
-                Positioned(
-                  left: side,
-                  right: side,
-                  bottom: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (widget.fab != null)
-                        Padding(
-                          padding: EdgeInsets.only(
-                            right: AppSize.fabRight,
-                            bottom: hasBar
-                                ? AppSpace.s8
-                                : bottomBarInset(context) + AppSpace.s16,
-                          ),
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: widget.fab,
+                        for (final s in widget.slivers) padded(s),
+                        padded(
+                          SliverToBoxAdapter(
+                            child: SizedBox(height: clearance),
                           ),
                         ),
-                      if (hasBar) widget.bottomBar!,
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
+                      ],
+                    ),
+                    Positioned(
+                      top: top,
+                      left: AppSpace.s12 + side,
+                      right: AppSpace.s12 + side,
+                      height: AppSize.topBar,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: AnimatedSwitcher(
+                              duration: fade,
+                              child: _collapsed
+                                  ? const GlassSurface(
+                                      key: ValueKey('glass'),
+                                      child: SizedBox.expand(),
+                                    )
+                                  : const SizedBox.shrink(
+                                      key: ValueKey('clear'),
+                                    ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpace.s16,
+                                  ),
+                                  // The large title is the header; skip the echo.
+                                  child: ExcludeSemantics(
+                                    child: AnimatedOpacity(
+                                      opacity: _collapsed ? 1 : 0,
+                                      duration: fade,
+                                      child: Text(
+                                        widget.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppText.section.copyWith(
+                                          color: p.text,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              ...widget.actions,
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (hasFab)
+                      Positioned(
+                        right: side + AppSize.fabRight,
+                        bottom: hasBar
+                            ? AppSpace.s8
+                            : MediaQuery.paddingOf(context).bottom +
+                                  AppSpace.s16,
+                        child: widget.fab!,
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+          ?widget.bottomBar,
+        ],
       ),
     );
   }

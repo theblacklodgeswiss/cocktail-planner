@@ -134,11 +134,11 @@ void main() {
       final bar = tester.getRect(find.byType(GlassCtaBar));
       expect(bar.bottom, lessThanOrEqualTo(500));
       await tester.scrollUntilVisible(
-      find.byKey(const Key('tf')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(find.byKey(const Key('tf')));
+        find.byKey(const Key('tf')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.byKey(const Key('tf')));
       await tester.pump(const Duration(milliseconds: 400));
       final field = tester.getRect(find.byKey(const Key('tf')));
       expect(field.bottom, lessThanOrEqualTo(bar.top));
@@ -797,6 +797,144 @@ void main() {
     );
     await tester.pump();
     expect(tester.getTopLeft(find.text('S')).dy, closeTo(top, 0.5));
+  });
+
+  testWidgets('tapped field stays above the CTA once the keyboard opens', (
+    tester,
+  ) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      app(
+        LargeTitleScaffold(
+          title: 'Titel',
+          bottomBar: GlassCtaBar(label: 'Weiter', onPressed: () {}),
+          slivers: [
+            SliverList.builder(
+              itemCount: 8,
+              itemBuilder: (_, i) => SizedBox(height: 60, child: Text('r$i')),
+            ),
+            const SliverToBoxAdapter(child: TextField(key: Key('tf'))),
+            SliverList.builder(
+              itemCount: 20,
+              itemBuilder: (_, i) => SizedBox(height: 60, child: Text('s$i')),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('tf')));
+    await tester.pump();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    final field = tester.getRect(find.byKey(const Key('tf')));
+    final bar = tester.getRect(find.byType(GlassCtaBar));
+    expect(bar.bottom, lessThanOrEqualTo(500));
+    expect(field.bottom, lessThanOrEqualTo(bar.top));
+    expect(field.top, greaterThan(0));
+  });
+
+  testWidgets('a blocked pop springs the dragged sheet back', (tester) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      sheetHost(
+        (_) => const PopScope(
+          canPop: false,
+          child: SizedBox(height: 300, child: Text('S')),
+        ),
+      ),
+    );
+    await openSheet(tester);
+    final top = tester.getTopLeft(find.text('S')).dy;
+    await tester.drag(
+      find.byKey(const Key('sheet-handle')),
+      const Offset(0, 200),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('S'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('S')).dy, closeTo(top, 0.5));
+  });
+
+  testWidgets('ending a drag after the sheet closed pops nothing else', (
+    tester,
+  ) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      app(
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (c) => Scaffold(
+                    body: TextButton(
+                      onPressed: () => showAppSheet<void>(
+                        c,
+                        builder: (_) =>
+                            const SizedBox(height: 300, child: Text('S')),
+                      ),
+                      child: const Text('open'),
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('page'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('page'));
+    await tester.pumpAndSettle();
+    await openSheet(tester);
+    final g = await tester.startGesture(
+      tester.getCenter(find.byKey(const Key('sheet-handle'))),
+    );
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(0, 30));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pump(const Duration(milliseconds: 16));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(find.text('S'), findsNothing);
+    expect(find.text('open'), findsOneWidget, reason: 'page below stays');
+  });
+
+  testWidgets('end spacer leaves room for the FAB above the bar', (
+    tester,
+  ) async {
+    phone(tester);
+    await pumpApp(
+      tester,
+      app(
+        LargeTitleScaffold(
+          title: 'Titel',
+          fab: FloatingFab(onPressed: () {}),
+          bottomBar: StaffTabBar(current: StaffTab.orders, onSelect: (_) {}),
+          slivers: [
+            SliverList.builder(
+              itemCount: 30,
+              itemBuilder: (_, i) => SizedBox(
+                key: i == 29 ? const Key('last') : null,
+                height: 60,
+                child: Text('r$i'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -5000));
+    await tester.pumpAndSettle();
+    final last = tester.getRect(find.byKey(const Key('last')));
+    expect(
+      last.bottom,
+      lessThanOrEqualTo(tester.getRect(find.byType(FloatingFab)).top),
+    );
   });
 
   testWidgets('states work inside SliverFillRemaining', (tester) async {

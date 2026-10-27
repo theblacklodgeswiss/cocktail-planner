@@ -13,9 +13,10 @@ import 'buttons.dart';
 ///
 /// [full] makes it nearly full height. [scrollable] (default: true for the
 /// compact sheet, false for [full]) wraps the content in a scroll view. When
-/// it is false the content gets tight, bounded constraints (the sheet height
-/// minus the handle), so it may hold its own ListView, an Expanded Column or
-/// a nested Scaffold.
+/// it is false a full sheet gives the content tight, bounded constraints
+/// (the sheet height minus the handle), so it may hold its own ListView, an
+/// Expanded Column or a nested Scaffold; a compact sheet gives it a loose,
+/// bounded height (at most 90% of the screen).
 ///
 /// The content's MediaQuery has the keyboard and bottom safe-area insets
 /// removed (the sheet applies them itself), so widgets inside must not add
@@ -196,18 +197,30 @@ class _SheetBodyState extends State<_SheetBody>
     setState(() => _drag = math.max(0, _drag + d.delta.dy));
   }
 
-  void _end(DragEndDetails d) {
-    final height = _card.currentContext?.size?.height ?? 0;
-    final fling = d.velocity.pixelsPerSecond.dy > AppSize.sheetFlingVelocity;
-    if (fling || _drag > height * AppSize.sheetDismissFraction) {
-      // Keep the offset: the route's exit slide continues from here.
-      Navigator.of(context).maybePop();
-    } else if (AppMotion.reduced(context)) {
+  void _springBack() {
+    if (AppMotion.reduced(context)) {
       setState(() => _drag = 0);
     } else {
       _from = _drag;
       _back.forward(from: 0);
     }
+  }
+
+  Future<void> _end(DragEndDetails d) async {
+    final height = _card.currentContext?.size?.height ?? 0;
+    final fling = d.velocity.pixelsPerSecond.dy > AppSize.sheetFlingVelocity;
+    if (!fling && _drag <= height * AppSize.sheetDismissFraction) {
+      return _springBack();
+    }
+    // The sheet may already be closing (barrier, Escape, code): popping now
+    // would take the page underneath with it.
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive || !route.isCurrent) return;
+    // Keep the offset while popping: the exit slide continues from here.
+    await Navigator.of(context).maybePop();
+    // A PopScope may veto the pop (maybePop still reports it as handled), so
+    // check whether the route is really leaving; if not, spring back.
+    if (mounted && route.isActive) _springBack();
   }
 
   @override

@@ -422,7 +422,6 @@
   "orders": {
     "title": "Bestellungsübersicht",
     "shopping_list_title": "Einkaufsliste",
-    "edit_shopping_list": "Einkaufsliste bearbeiten",
     "source_shop": "Laden",
     "source_stock": "Lager",
     "source_location": "Lagerort",
