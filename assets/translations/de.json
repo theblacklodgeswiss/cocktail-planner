@@ -73,6 +73,32 @@
     "generate_with_claude": "Mit Claude Einkaufsliste generieren",
     "back_to_home": "Zurück zur Startseite"
   },
+  "start": {
+    "kicker": "MOBILE COCKTAILBAR",
+    "title": "Deine Bar. Dein Abend.",
+    "subtitle": "Cocktails, Barkeeper und alles Drumherum für dein Event.",
+    "step_request": "Anfrage",
+    "step_request_desc": "Erzähl uns von deinem Event",
+    "step_offer": "Angebot",
+    "step_offer_desc": "Du bekommst dein persönliches Angebot",
+    "step_party": "Party",
+    "step_party_desc": "Wir mixen, du feierst",
+    "cta": "Anfrage starten",
+    "account": "Konto"
+  },
+  "login": {
+    "subtitle": "Plane deine Cocktailbar: Anfrage senden, Angebot erhalten, feiern.",
+    "google": "Mit Google anmelden",
+    "guest": "Als Gast fortfahren",
+    "guest_hint": "Als Gast kannst du sofort eine Anfrage senden. Mit Google siehst du deine Anfragen auf allen Geräten.",
+    "error_failed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
+    "error_guest": "Gast-Anmeldung fehlgeschlagen.",
+    "error_cancelled": "Anmeldung abgebrochen.",
+    "error_exists": "Ein Konto mit dieser E-Mail existiert bereits.",
+    "error_invalid": "Ungültige Anmeldedaten.",
+    "error_not_enabled": "Google-Anmeldung ist nicht aktiviert.",
+    "error_disabled": "Dieses Konto wurde deaktiviert."
+  },
   "customer": {
     "welcome_title": "Willkommen bei The Blacklodge",
     "welcome_message": "Erstelle eine neue Anfrage für deinen Event und erhalte ein maßgeschneidertes Angebot.",

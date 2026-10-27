@@ -119,6 +119,11 @@ class AppSize {
   static const double sheetFlingVelocity = 700;
   static const double stateIconBox = 56;
   static const double stateIcon = 28;
+  static const double badge = 72;
+  static const double badgeIcon = 36;
+  static const double glassButton = 40;
+  static const double glassButtonIcon = 20;
+  static const double stepDigit = 28;
 }
 
 /// Elevation shadows shared by cards and glass.
@@ -205,6 +210,12 @@ class AppText {
     fontWeight: FontWeight.w700,
     letterSpacing: -0.5,
   );
+  static const TextStyle display = TextStyle(
+    fontSize: 29,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -1,
+    height: 1.1,
+  );
   static const TextStyle heroMeta = TextStyle(fontSize: 10);
   static const TextStyle heroNumber = TextStyle(
     fontSize: 32,
@@ -278,6 +289,9 @@ class AppPalette {
   Color get onPrimary => dark ? AppColors.ink : AppColors.textDark;
 
   Color get gold => dark ? AppColors.goldOnBlack : AppColors.goldDotOnWhite;
+  /// Gold for text and digits on card surfaces.
+  Color get goldText => dark ? AppColors.goldOnBlack : AppColors.goldOnWhite;
+
   Color get statusDone =>
       dark ? AppColors.textTertiaryDark : AppColors.statusDone;
   Color get statusOffer =>

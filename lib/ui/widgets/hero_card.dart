@@ -11,6 +11,7 @@ class HeroCard extends StatelessWidget {
     this.kicker,
     required this.title,
     this.meta,
+    this.titleStyle = AppText.heroTitle,
     this.trailing,
     this.onTap,
   });
@@ -18,6 +19,9 @@ class HeroCard extends StatelessWidget {
   final String? kicker;
   final String title;
   final String? meta;
+
+  /// [AppText.display] for landing heroes.
+  final TextStyle titleStyle;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -76,7 +80,7 @@ class HeroCard extends StatelessWidget {
                           padding: const EdgeInsets.only(top: AppSpace.s4),
                           child: Text(
                             title,
-                            style: AppText.heroTitle.copyWith(color: p.onHero),
+                            style: titleStyle.copyWith(color: p.onHero),
                           ),
                         ),
                         if (meta != null)
