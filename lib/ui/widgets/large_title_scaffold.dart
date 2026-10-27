@@ -21,6 +21,7 @@ class LargeTitleScaffold extends StatefulWidget {
     required this.title,
     required this.slivers,
     this.actions = const [],
+    this.leading,
     this.bottomBar,
     this.fab,
     this.controller,
@@ -28,6 +29,10 @@ class LargeTitleScaffold extends StatefulWidget {
 
   final String title;
   final List<Widget> actions;
+
+  /// Shown at the start of the top bar, in the expanded and the collapsed
+  /// state (e.g. a back button). Keep it a 44 px tap target.
+  final Widget? leading;
   final Widget? bottomBar;
   final Widget? fab;
   final List<Widget> slivers;
@@ -166,6 +171,7 @@ class _LargeTitleScaffoldState extends State<LargeTitleScaffold> {
                           ),
                           Row(
                             children: [
+                              ?widget.leading,
                               Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(

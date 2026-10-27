@@ -4,6 +4,7 @@ import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/dashboard/widgets/my_request_detail_view.dart';
 import 'package:cocktail_planer/screens/dashboard/widgets/my_requests_list.dart';
 import 'package:cocktail_planer/ui/app_theme.dart';
+import 'package:cocktail_planer/ui/widgets/buttons.dart';
 import 'package:cocktail_planer/ui/widgets/large_title_scaffold.dart';
 import 'package:cocktail_planer/ui/widgets/states.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -12,10 +13,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget app(Widget home, {ThemeData? theme, double textScale = 1}) {
+Widget app(
+  Widget home, {
+  ThemeData? theme,
+  double textScale = 1,
+  String lang = 'de',
+  bool homeAtMyRequests = false,
+}) {
   final router = GoRouter(
+    initialLocation: homeAtMyRequests ? '/my-requests' : '/',
     routes: [
-      GoRoute(path: '/', builder: (_, _) => home),
+      GoRoute(
+        path: '/',
+        builder: (_, _) =>
+            homeAtMyRequests ? const Scaffold(body: Text('page home')) : home,
+      ),
+      if (homeAtMyRequests)
+        GoRoute(path: '/my-requests', builder: (_, _) => home),
       GoRoute(
         path: '/order-form',
         builder: (_, _) => const Scaffold(body: Text('page /order-form')),
@@ -26,7 +40,7 @@ Widget app(Widget home, {ThemeData? theme, double textScale = 1}) {
     supportedLocales: const [Locale('de'), Locale('en')],
     path: 'assets/translations',
     fallbackLocale: const Locale('de'),
-    startLocale: const Locale('de'),
+    startLocale: Locale(lang),
     child: Builder(
       builder: (context) => MaterialApp.router(
         theme: theme ?? AppTheme.light(),
@@ -72,6 +86,7 @@ SavedOrder order({
   currency: 'EUR',
   status: status,
   location: location,
+  serviceType: 'Bar',
   remarks: remarks,
   cocktails: const ['Mojito', 'Caipirinha'],
   shotSelections: const [ShotSelection(name: 'Jägermeister', quantity: 20)],
@@ -141,6 +156,82 @@ void main() {
     });
   });
 
+  group('MyRequestsList more', () {
+    testWidgets('renders all 4 requests it is given', (tester) async {
+      phone(tester);
+      await pumpApp(
+        tester,
+        app(
+          Scaffold(
+            body: MyRequestsList(
+              requests: [
+                for (var i = 0; i < 4; i++) order(id: '$i', name: 'Fest $i'),
+              ],
+              onTap: (_) {},
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(MyRequestCard), findsNWidgets(4));
+    });
+
+    testWidgets('card is at least 44 px tall', (tester) async {
+      phone(tester);
+      await pumpApp(
+        tester,
+        app(
+          Scaffold(
+            body: MyRequestsList(requests: [order()], onTap: (_) {}),
+          ),
+        ),
+      );
+      expect(
+        tester.getSize(find.byType(MyRequestCard)).height,
+        greaterThanOrEqualTo(44),
+      );
+    });
+
+    for (final lang in ['de', 'en']) {
+      testWidgets('guest plural with and without location ($lang)', (
+        tester,
+      ) async {
+        await pumpApp(tester, app(const SizedBox(), lang: lang));
+        String m(int n, String loc) => guestsMeta(n, loc);
+        final de = lang == 'de';
+        expect(m(1, 'Köln'), de ? '1 Gast · Köln' : '1 guest · Köln');
+        expect(m(2, 'Köln'), de ? '2 Gäste · Köln' : '2 guests · Köln');
+        expect(m(0, 'Köln'), de ? '0 Gäste · Köln' : '0 guests · Köln');
+        expect(m(1, ''), de ? '1 Gast' : '1 guest');
+        expect(m(80, ' '), de ? '80 Gäste' : '80 guests');
+        expect(m(0, ''), de ? '0 Gäste' : '0 guests');
+      });
+    }
+  });
+
+  group('MyRequestsPage', () {
+    testWidgets('back button goes to /', (tester) async {
+      phone(tester);
+      await pumpApp(
+        tester,
+        app(
+          MyRequestsPage(
+            signedIn: false,
+            streamFactory: () => const Stream.empty(),
+            onOpen: (_) {},
+          ),
+          homeAtMyRequests: true,
+        ),
+      );
+      expect(
+        find.text('Melde dich an, um deine Anfragen zu sehen'),
+        findsOneWidget,
+      );
+      await tester.tap(find.bySemanticsLabel('Zurück'));
+      await tester.pumpAndSettle();
+      expect(find.text('page home'), findsOneWidget);
+    });
+  });
+
   group('MyRequestsContent', () {
     testWidgets('empty shows EmptyState with CTA to the order form', (
       tester,
@@ -188,9 +279,7 @@ void main() {
       expect(find.text('Hochzeit Müller'), findsOneWidget);
     });
 
-    testWidgets('lists all requests (no max-3 cut) and opens one', (
-      tester,
-    ) async {
+    testWidgets('renders all 4 requests and opens one', (tester) async {
       phone(tester);
       SavedOrder? opened;
       await pumpApp(
@@ -204,7 +293,9 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Fest 0'), findsOneWidget);
+      for (var i = 0; i < 4; i++) {
+        expect(find.text('Fest $i'), findsOneWidget);
+      }
       await tester.tap(find.text('Fest 0'));
       expect(opened?.id, '0');
     });
@@ -247,6 +338,10 @@ void main() {
         find.text('Wir melden uns mit einem persönlichen Angebot'),
         findsNothing,
       );
+      expect(
+        tester.getSize(find.byType(PrimaryButton)).height,
+        greaterThanOrEqualTo(44),
+      );
       await tester.tap(find.text('Bestätigung als PDF'));
       expect(pdf, 1);
     });
@@ -271,6 +366,8 @@ void main() {
       expect(find.text('Caipirinha'), findsOneWidget);
       expect(find.text('Jägermeister (20)'), findsOneWidget);
       expect(find.text('Ohne Nüsse'), findsOneWidget);
+      expect(find.text('Service'), findsOneWidget);
+      expect(find.text('Bar'), findsOneWidget);
       expect(find.text('Angenommen'), findsOneWidget);
     });
   });

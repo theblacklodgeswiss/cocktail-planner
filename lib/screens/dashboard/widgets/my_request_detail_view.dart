@@ -93,9 +93,10 @@ class MyRequestDetailView extends StatelessWidget {
         gap(
           _SectionCard(
             title: 'dashboard.request_guests'.tr(),
-            lines: [
-              '${request.personCount}',
-              if (request.serviceType.isNotEmpty) request.serviceType,
+            lines: ['${request.personCount}'],
+            groups: [
+              if (request.serviceType.isNotEmpty)
+                ('dashboard.request_service_type'.tr(), [request.serviceType]),
             ],
           ),
         ),

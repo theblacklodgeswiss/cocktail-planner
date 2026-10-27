@@ -7,28 +7,31 @@ import '../../../ui/tokens.dart';
 import '../../../ui/widgets/buttons.dart';
 import '../../../ui/widgets/date_tile.dart';
 import '../../../ui/widgets/floating_card.dart';
+import '../../../ui/widgets/glass_icon_button.dart';
+import '../../../ui/widgets/large_title_scaffold.dart';
 import '../../../ui/widgets/states.dart';
 import '../../../ui/widgets/status_dot.dart';
 
 /// Customer-facing status kind: completed is already folded into accepted by
-/// [SavedOrder.customerStatus].
+/// [SavedOrder.customerStatus], so only three states can occur.
 StatusKind customerStatusKind(SavedOrder request) =>
     switch (request.customerStatus) {
       OrderStatus.quote => StatusKind.offer,
-      OrderStatus.accepted => StatusKind.accepted,
-      OrderStatus.completed => StatusKind.completed,
       OrderStatus.declined => StatusKind.declined,
+      _ => StatusKind.accepted,
     };
 
-/// "80 Gäste · Köln", without the separator when there is no location.
-String requestMeta(SavedOrder request) {
-  final location = request.location.trim();
-  return location.isEmpty
-      ? 'dashboard.request_meta_no_location'.tr(
-          args: ['${request.personCount}'],
-        )
-      : 'dashboard.request_meta'.tr(args: ['${request.personCount}', location]);
+/// "80 Gäste · Köln" (plural aware), without the separator when there is no
+/// location.
+String guestsMeta(int count, String location) {
+  final loc = location.trim();
+  return loc.isEmpty
+      ? 'dashboard.request_meta_no_location'.plural(count)
+      : 'dashboard.request_meta'.plural(count, args: ['$count', loc]);
 }
+
+String requestMeta(SavedOrder request) =>
+    guestsMeta(request.personCount, request.location);
 
 /// Customer-facing list of the signed-in user's own submitted requests.
 /// Deliberately does not show total price or article count (see design
@@ -184,6 +187,49 @@ class _MyRequestsContentState extends State<MyRequestsContent> {
           ),
         );
       },
+    );
+  }
+}
+
+/// The full "Meine Anfragen" page. Guests ([signedIn] false) only see the
+/// sign-in hint; the back button always returns to '/'.
+class MyRequestsPage extends StatelessWidget {
+  const MyRequestsPage({
+    super.key,
+    required this.signedIn,
+    required this.streamFactory,
+    required this.onOpen,
+  });
+
+  final bool signedIn;
+  final Stream<List<SavedOrder>> Function() streamFactory;
+  final void Function(SavedOrder request) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return LargeTitleScaffold(
+      title: 'dashboard.my_requests_title'.tr(),
+      leading: GlassIconButton(
+        icon: Icons.arrow_back,
+        semanticLabel: 'ui.back'.tr(),
+        onPressed: () => context.go('/'),
+      ),
+      slivers: [
+        if (!signedIn)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                'dashboard.sign_in_to_see_requests'.tr(),
+                textAlign: TextAlign.center,
+                style: AppText.body.copyWith(color: p.textSecondary),
+              ),
+            ),
+          )
+        else
+          MyRequestsContent(streamFactory: streamFactory, onOpen: onOpen),
+      ],
     );
   }
 }

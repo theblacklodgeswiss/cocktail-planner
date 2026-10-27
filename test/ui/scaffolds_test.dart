@@ -538,6 +538,71 @@ void main() {
     expect(find.byType(FloatingFab), findsOneWidget);
   });
 
+  for (final scale in [1.0, 1.3]) {
+    testWidgets(
+      'LargeTitleScaffold leading: expanded and collapsed, scale $scale',
+      (tester) async {
+        phone(tester);
+        var taps = 0;
+        await pumpApp(
+          tester,
+          app(
+            textScale: scale,
+            LargeTitleScaffold(
+              title: 'Meine Anfragen',
+              leading: SizedBox(
+                key: const ValueKey('lead'),
+                width: 44,
+                height: 44,
+                child: GestureDetector(onTap: () => taps++),
+              ),
+              actions: [
+                SizedBox(
+                  key: const ValueKey('act'),
+                  width: 44,
+                  height: 44,
+                  child: GestureDetector(onTap: () {}),
+                ),
+              ],
+              slivers: [
+                SliverList.builder(
+                  itemCount: 40,
+                  itemBuilder: (_, i) =>
+                      SizedBox(height: 60, child: Text('row $i')),
+                ),
+              ],
+            ),
+          ),
+        );
+        Finder lead() => find.byKey(const ValueKey('lead'));
+        expect(lead(), findsOneWidget);
+        expect(tester.getSize(lead()).height, greaterThanOrEqualTo(44));
+        final leadLeft = tester.getTopLeft(lead()).dx;
+        expect(leadLeft, lessThan(40));
+        expect(
+          tester.getTopLeft(find.byKey(const ValueKey('act'))).dx,
+          greaterThan(360 - 80),
+        );
+        await tester.tap(lead());
+        expect(taps, 1);
+
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(lead(), findsOneWidget);
+        expect(tester.getTopLeft(lead()).dx, leadLeft);
+        final title = tester.getRect(find.text('Meine Anfragen').last);
+        expect(title.left, greaterThanOrEqualTo(tester.getRect(lead()).right));
+        expect(
+          title.right,
+          lessThanOrEqualTo(
+            tester.getTopLeft(find.byKey(const ValueKey('act'))).dx,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('FloatingFab is a 44 px tap target and fires', (tester) async {
     phone(tester);
     var n = 0;

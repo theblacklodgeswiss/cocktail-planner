@@ -131,6 +131,39 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('landing shows exactly 3 requests plus Alle anzeigen', (
+      tester,
+    ) async {
+      phone(tester, h: 1600);
+      await pumpApp(
+        tester,
+        app(
+          CustomerStart(
+            signedIn: true,
+            onOpenRequest: (_) {},
+            orders: Stream<List<SavedOrder>>.value([
+              for (var i = 0; i < 5; i++)
+                SavedOrder(
+                  id: '$i',
+                  name: 'Fest $i',
+                  date: DateTime(2026, 11, 14),
+                  items: const [],
+                  total: 0,
+                  personCount: 10,
+                  drinkerType: 'normal',
+                  currency: 'EUR',
+                  status: OrderStatus.quote,
+                ),
+            ]),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(MyRequestCard), findsNWidgets(3));
+      expect(find.text('Alle anzeigen'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     for (final dark in [false, true]) {
       for (final signedIn in [false, true]) {
         testWidgets(
