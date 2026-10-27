@@ -9,11 +9,14 @@
 // OrderDetailController, whose handler bodies were moved verbatim.
 import 'dart:async';
 
+import 'package:cocktail_planer/models/employee.dart';
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_controller.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_logic.dart';
+import 'package:cocktail_planer/screens/orders/detail/order_detail_view.dart';
 import 'package:cocktail_planer/screens/orders/order_status_helpers.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
+import 'package:cocktail_planer/utils/currency.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -625,6 +628,290 @@ void main() {
       fakes.staff = false;
       expect(c.actions, contains(OrderDetailAction.delete));
       expect(c.actions, isNot(contains(OrderDetailAction.recordRest)));
+    });
+  });
+
+  group('OrderDetailView (sheet with fakes)', () {
+    late DetailFakes fakes;
+    late List<(String, Object?)> pushed;
+
+    setUp(() {
+      fakes = DetailFakes();
+      pushed = [];
+    });
+
+    Future<void> pumpSheet(
+      WidgetTester tester,
+      SavedOrder order, {
+      double width = 1000,
+    }) async {
+      tester.view.physicalSize = Size(width, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await pumpDetailApp(
+        tester,
+        detailApp(
+          Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    builder: (_) => OrderDetailView(
+                      order: order,
+                      colorScheme: Theme.of(context).colorScheme,
+                      currency: Currency.fromCode(order.currency),
+                      services: fakes.services,
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+          pushed: pushed,
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    bool shown(String key) => find.text(key.tr()).evaluate().isNotEmpty;
+
+    bool enabled(WidgetTester tester, String key) {
+      final button = find.ancestor(
+        of: find.text(key.tr()),
+        matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+      );
+      return tester.widget<ButtonStyleButton>(button.first).enabled;
+    }
+
+    const statusKeys = [
+      'orders.accept',
+      'orders.decline',
+      'orders.complete',
+      'orders.back_to_accepted',
+      'orders.status_quote',
+      'rest.record',
+      'orders.complete_offer',
+      'orders.invoice',
+      'orders.delete_order',
+    ];
+
+    Set<String> visible() => {
+      for (final k in statusKeys)
+        if (shown(k)) k,
+    };
+
+    testWidgets('quote: finalize, accept, decline', (tester) async {
+      await pumpSheet(tester, detailOrder());
+      expect(shown('orders.finalize_offer'), isTrue);
+      expect(visible(), {'orders.accept', 'orders.decline'});
+      expect(enabled(tester, 'orders.accept'), isTrue);
+    });
+
+    testWidgets('narrow (< 700 px): vertical header, same actions', (
+      tester,
+    ) async {
+      await pumpSheet(
+        tester,
+        detailOrder(status: OrderStatus.accepted),
+        width: 420,
+      );
+      expect(tester.takeException(), isNull);
+      expect(shown('orders.finalize_offer'), isTrue);
+      expect(shown('orders.regenerate_with_claude'), isTrue);
+      expect(visible(), {
+        'orders.invoice',
+        'orders.complete',
+        'orders.decline',
+        'orders.status_quote',
+      });
+    });
+
+    testWidgets('quote with total 0: accept disabled with hint', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder(total: 0));
+      expect(enabled(tester, 'orders.accept'), isFalse);
+      expect(find.text('Erst Einkaufsliste erstellen'), findsOneWidget);
+    });
+
+    testWidgets('quote with incomplete offer: only "Angebot öffnen"', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder(offerComplete: false));
+      expect(visible(), {'orders.complete_offer'});
+      expect(find.text('orders.offer_incomplete'.tr()), findsOneWidget);
+    });
+
+    testWidgets('accepted: invoice, complete, decline, back to quote', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      expect(visible(), {
+        'orders.invoice',
+        'orders.complete',
+        'orders.decline',
+        'orders.status_quote',
+      });
+    });
+
+    testWidgets('declined: reason row, accept, back to quote', (tester) async {
+      await pumpSheet(tester, detailOrder(status: OrderStatus.declined));
+      expect(visible(), {'orders.accept', 'orders.status_quote'});
+      expect(find.text('orders.decline_reason_add'.tr()), findsOneWidget);
+    });
+
+    testWidgets('completed: invoice, record rest, back to accepted', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder(status: OrderStatus.completed));
+      expect(visible(), {
+        'orders.invoice',
+        'rest.record',
+        'orders.back_to_accepted',
+      });
+    });
+
+    testWidgets('completed for a non-staff role: no "Rest erfassen"', (
+      tester,
+    ) async {
+      fakes.staff = false;
+      await pumpSheet(tester, detailOrder(status: OrderStatus.completed));
+      expect(visible(), {'orders.invoice', 'orders.back_to_accepted'});
+    });
+
+    testWidgets('super admin sees delete; deleting closes the sheet', (
+      tester,
+    ) async {
+      fakes.superAdmin = true;
+      await pumpSheet(tester, detailOrder());
+      expect(shown('orders.delete_order'), isTrue);
+      await tester.tap(find.text('orders.delete_order'.tr()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('common.delete'.tr()));
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['delete:o1']);
+      expect(find.byType(OrderDetailView), findsNothing);
+      expect(find.text('orders.deleted'.tr()), findsOneWidget);
+    });
+
+    testWidgets('complete through the UI updates the status card', (
+      tester,
+    ) async {
+      fakes.plan = const OrderDeductionPlan(restRecorded: false);
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      await tester.tap(find.text('orders.complete'.tr()));
+      await tester.pumpAndSettle();
+      // Confirm dialog: its FilledButton has the same label.
+      await tester.tap(find.text('orders.complete'.tr()).last);
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed', 'rest']);
+      expect(
+        find.text(
+          '${'orders.status'.tr()}: ${statusLabel(OrderStatus.completed)}',
+        ),
+        findsOneWidget,
+      );
+      // Rest saved by the fake sheet -> "Rest erfassen" gone.
+      expect(visible(), {'orders.invoice', 'orders.back_to_accepted'});
+    });
+
+    testWidgets('status buttons are disabled while an update runs', (
+      tester,
+    ) async {
+      fakes.deductCompleter = Completer();
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      await tester.tap(find.text('orders.complete'.tr()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('orders.complete'.tr()).last);
+      await tester.pump();
+      expect(enabled(tester, 'orders.complete'), isFalse);
+      expect(enabled(tester, 'orders.decline'), isFalse);
+      expect(enabled(tester, 'orders.status_quote'), isFalse);
+      fakes.deductCompleter!.complete(
+        const OrderDeductionPlan(restRecorded: true),
+      );
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
+      expect(enabled(tester, 'orders.back_to_accepted'), isTrue);
+    });
+
+    testWidgets('decline reason row edits the reason in place', (tester) async {
+      fakes.declineReasonAnswer = (_) => 'Zu teuer';
+      await pumpSheet(tester, detailOrder(status: OrderStatus.declined));
+      await tester.tap(find.text('orders.decline_reason_add'.tr()));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('${'orders.decline_reason'.tr()}: Zu teuer'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('finalize offer opens /create-offer with the order', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder());
+      await tester.tap(find.text('orders.finalize_offer'.tr()));
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['getOrderById:o1']);
+      expect(pushed.single.$1, '/create-offer');
+      expect((pushed.single.$2! as SavedOrder).id, 'o1');
+      expect(find.byType(OrderDetailView), findsNothing);
+    });
+
+    testWidgets('invoice opens /create-invoice with the fresh order', (
+      tester,
+    ) async {
+      fakes.repo.fresh = detailOrder(status: OrderStatus.accepted, total: 7);
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      await tester.tap(find.text('orders.invoice'.tr()));
+      await tester.pumpAndSettle();
+      expect(pushed.single.$1, '/create-invoice');
+      expect((pushed.single.$2! as SavedOrder).total, 7);
+    });
+
+    testWidgets('form details only for form orders; tile only with items', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder());
+      expect(find.text('orders.form_details'.tr()), findsNothing);
+      expect(find.byType(ListTile), findsNothing);
+    });
+
+    testWidgets('form order with items shows details and the list tile', (
+      tester,
+    ) async {
+      await pumpSheet(
+        tester,
+        detailOrder(
+          source: OrderSource.form,
+          items: const [
+            {'name': 'Rum', 'quantity': 1, 'price': 10},
+          ],
+        ),
+      );
+      expect(find.text('orders.form_details'.tr()), findsOneWidget);
+      expect(find.byType(ListTile), findsOneWidget);
+      expect(
+        find.textContaining('1 ${'orders.articles'.tr()}'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('employee chips come from watchEmployees and save', (
+      tester,
+    ) async {
+      fakes.employees = const [Employee(id: 'e1', name: 'Mario')];
+      await pumpSheet(tester, detailOrder());
+      await tester.tap(find.widgetWithText(FilterChip, 'Mario'));
+      await tester.pumpAndSettle();
+      expect(fakes.repo.assignCalls, [
+        ['Mario'],
+      ]);
     });
   });
 }
