@@ -63,7 +63,12 @@
     "requests_empty_body": "Sobald du eine Anfrage stellst, erscheint sie hier.",
     "requests_load_error": "Anfragen konnten nicht geladen werden.",
     "open_order": "Zum Auftrag",
-    "confirmation_failed": "Auftragsbestätigung konnte nicht geöffnet werden."
+    "confirmation_failed": "Auftragsbestätigung konnte nicht geöffnet werden.",
+    "stat_open": "Offen",
+    "stat_accepted": "Angenommen",
+    "stat_this_week": "Diese Woche",
+    "upcoming": "Nächste Termine",
+    "no_upcoming": "Keine anstehenden Termine"
   },
   "dialog": {
     "title": "Cocktails auswählen",
@@ -447,7 +452,7 @@
     "ms_login_failed": "Microsoft-Anmeldung fehlgeschlagen."
   },
   "orders": {
-    "title": "Bestellungsübersicht",
+    "title": "Aufträge",
     "shopping_list_title": "Einkaufsliste",
     "source_shop": "Laden",
     "source_stock": "Lager",
@@ -606,7 +611,17 @@
     "no_suggestions": "Keine Vorschläge verfügbar",
     "no_material_suggestions": "Keine Materialvorschläge verfügbar",
     "apply_suggestions": "Übernehmen",
-    "apply_to_shopping_list": "Zur Einkaufsliste hinzufügen"
+    "apply_to_shopping_list": "Zur Einkaufsliste hinzufügen",
+    "next_appointment": "NÄCHSTER TERMIN",
+    "countdown_today": "Heute",
+    "countdown_days": {"zero": "Heute", "one": "{} Tag", "other": "{} Tage"},
+    "countdown_unit": {"one": "Tag", "other": "Tage"},
+    "filter_all": "Alle",
+    "archive": "Archiv",
+    "empty_body": "Tippe auf +, um einen Auftrag anzulegen.",
+    "no_results": "Keine Ergebnisse",
+    "load_error": "Aufträge konnten nicht geladen werden.",
+    "search_close": "Suche schließen"
   },
   "share": {
     "loading": "Dokument wird geladen...",
@@ -996,5 +1011,19 @@
     "summary_drinks": "Getränke ({})",
     "summary_popularity": "{}% Beliebtheit",
     "edit": "Ändern"
+  },
+  "months": {
+    "1": "Januar",
+    "2": "Februar",
+    "3": "März",
+    "4": "April",
+    "5": "Mai",
+    "6": "Juni",
+    "7": "Juli",
+    "8": "August",
+    "9": "September",
+    "10": "Oktober",
+    "11": "November",
+    "12": "Dezember"
   }
 }

@@ -63,7 +63,12 @@
     "requests_empty_body": "Once you submit a request, it will show up here.",
     "requests_load_error": "Could not load your requests.",
     "open_order": "Go to order",
-    "confirmation_failed": "Could not open the order confirmation."
+    "confirmation_failed": "Could not open the order confirmation.",
+    "stat_open": "Open",
+    "stat_accepted": "Accepted",
+    "stat_this_week": "This week",
+    "upcoming": "Upcoming events",
+    "no_upcoming": "No upcoming events"
   },
   "dialog": {
     "title": "Select Cocktails",
@@ -444,7 +449,7 @@
     "ms_login_failed": "Microsoft sign-in failed."
   },
   "orders": {
-    "title": "Orders Overview",
+    "title": "Orders",
     "shopping_list_title": "Shopping list",
     "source_shop": "Shop",
     "source_stock": "Stock",
@@ -601,7 +606,17 @@
     "no_suggestions": "No suggestions available",
     "no_material_suggestions": "No material suggestions available",
     "apply_suggestions": "Apply",
-    "apply_to_shopping_list": "Add to shopping list"
+    "apply_to_shopping_list": "Add to shopping list",
+    "next_appointment": "NEXT EVENT",
+    "countdown_today": "Today",
+    "countdown_days": {"zero": "Today", "one": "{} day", "other": "{} days"},
+    "countdown_unit": {"one": "day", "other": "days"},
+    "filter_all": "All",
+    "archive": "Archive",
+    "empty_body": "Tap + to create an order.",
+    "no_results": "No results",
+    "load_error": "Orders could not be loaded.",
+    "search_close": "Close search"
   },
   "share": {
     "loading": "Loading document...",
@@ -991,5 +1006,19 @@
     "summary_drinks": "Drinks ({})",
     "summary_popularity": "{}% popularity",
     "edit": "Edit"
+  },
+  "months": {
+    "1": "January",
+    "2": "February",
+    "3": "March",
+    "4": "April",
+    "5": "May",
+    "6": "June",
+    "7": "July",
+    "8": "August",
+    "9": "September",
+    "10": "October",
+    "11": "November",
+    "12": "December"
   }
 }

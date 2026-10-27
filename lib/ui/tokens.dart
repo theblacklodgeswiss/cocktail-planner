@@ -136,6 +136,9 @@ class AppSize {
   static const double serviceTileExtent = 220;
   static const double serviceTileAspect = 0.85;
   static const double placeholderIcon = 32;
+
+  // Order lists
+  static const double metaIcon = 14;
 }
 
 /// Elevation shadows shared by cards and glass.

@@ -4,8 +4,9 @@ import '../../models/order.dart';
 /// dashboard). Moved unchanged out of the screens so they can be tested;
 /// see test/screens/orders_logic_test.dart.
 
-/// Status filter for orders
-enum OrderStatusFilter { all, quotes, accepted, declined }
+/// Status filter (pills) of the orders overview. Declined orders only show
+/// under [all].
+enum OrderStatusFilter { all, quotes, accepted, completed }
 
 /// Number of latest orders shown on the main overview before the user has
 /// to open the full year-by-year archive.
@@ -19,6 +20,10 @@ OrderStatusFilter statusFilterFromQuery(String? status) {
     case 'offer':
     case 'quote':
       return OrderStatusFilter.quotes;
+    case 'completed':
+      return OrderStatusFilter.completed;
+    case 'all':
+      return OrderStatusFilter.all;
   }
   return OrderStatusFilter.quotes;
 }
@@ -52,7 +57,9 @@ List<SavedOrder> filterLatestOrders(
         return o.status == OrderStatus.quote;
       case OrderStatusFilter.accepted:
         return o.isAccepted;
-      default:
+      case OrderStatusFilter.completed:
+        return o.status == OrderStatus.completed;
+      case OrderStatusFilter.all:
         return true;
     }
   }).toList();
@@ -164,6 +171,7 @@ class ListCounts {
     required this.all,
     required this.quotes,
     required this.accepted,
+    required this.completed,
   });
 
   final int all;
@@ -171,10 +179,107 @@ class ListCounts {
 
   /// [SavedOrder.isAccepted], so completed orders are included.
   final int accepted;
+  final int completed;
+
+  int of(OrderStatusFilter filter) => switch (filter) {
+    OrderStatusFilter.all => all,
+    OrderStatusFilter.quotes => quotes,
+    OrderStatusFilter.accepted => accepted,
+    OrderStatusFilter.completed => completed,
+  };
 }
 
 ListCounts listCounts(List<SavedOrder> orders) => ListCounts(
   all: orders.length,
   quotes: orders.where((o) => o.status == OrderStatus.quote).length,
   accepted: orders.where((o) => o.isAccepted).length,
+  completed: orders.where((o) => o.status == OrderStatus.completed).length,
 );
+
+// ---------------------------------------------------------------------------
+// Appointments (redesign)
+// ---------------------------------------------------------------------------
+
+DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
+
+final _timePattern = RegExp(r'(\d{1,2})[:.](\d{2})');
+
+/// Event start: the event day plus [SavedOrder.effectiveEventTime] when it
+/// holds a time like "18:00" or "9.30"; otherwise the start of the day.
+DateTime eventStart(SavedOrder o) {
+  final day = _day(o.date);
+  final m = _timePattern.firstMatch(o.effectiveEventTime);
+  if (m == null) return day;
+  final h = int.parse(m.group(1)!);
+  final min = int.parse(m.group(2)!);
+  if (h > 23 || min > 59) return day;
+  return day.add(Duration(hours: h, minutes: min));
+}
+
+/// Accepted orders ([SavedOrder.isAccepted], so completed ones too) whose
+/// event day is today or later, soonest first (by day, then time; ties keep
+/// the input order).
+List<SavedOrder> upcomingAppointments(List<SavedOrder> orders, DateTime now) {
+  final today = _day(now);
+  final upcoming = [
+    for (final o in orders)
+      if (o.isAccepted && !_day(o.date).isBefore(today)) o,
+  ];
+  // List.sort is not stable; sort indices to keep ties in input order.
+  final indexed = [for (var i = 0; i < upcoming.length; i++) i];
+  indexed.sort((a, b) {
+    final c = eventStart(upcoming[a]).compareTo(eventStart(upcoming[b]));
+    return c != 0 ? c : a.compareTo(b);
+  });
+  return [for (final i in indexed) upcoming[i]];
+}
+
+/// The next accepted appointment from today on, or null.
+SavedOrder? nextAppointment(List<SavedOrder> orders, DateTime now) {
+  final upcoming = upcomingAppointments(orders, now);
+  return upcoming.isEmpty ? null : upcoming.first;
+}
+
+/// Whole calendar days from [now] until [date] (0 = today).
+int daysUntil(DateTime date, DateTime now) {
+  final a = DateTime.utc(date.year, date.month, date.day);
+  final b = DateTime.utc(now.year, now.month, now.day);
+  return a.difference(b).inDays;
+}
+
+/// Accepted orders (total > 0, like the dashboard counts) whose event falls
+/// in the week (Monday to Sunday) of [now].
+int acceptedThisWeek(List<SavedOrder> orders, DateTime now) {
+  final today = _day(now);
+  final monday = today.subtract(Duration(days: today.weekday - 1));
+  final nextMonday = DateTime(monday.year, monday.month, monday.day + 7);
+  return orders.where((o) {
+    if (o.total <= 0 || !o.isAccepted) return false;
+    final d = _day(o.date);
+    return !d.isBefore(monday) && d.isBefore(nextMonday);
+  }).length;
+}
+
+/// Orders of one event month.
+class MonthGroup {
+  const MonthGroup(this.year, this.month, this.orders);
+
+  final int year;
+  final int month;
+  final List<SavedOrder> orders;
+}
+
+/// Groups [orders] by event month without re-sorting: orders keep their
+/// input order inside a month, and months appear in the order of their
+/// first order. With the overview's createdAt-descending stream the newest
+/// created order's month comes first.
+List<MonthGroup> groupByMonth(List<SavedOrder> orders) {
+  final groups = <int, List<SavedOrder>>{};
+  for (final o in orders) {
+    groups.putIfAbsent(o.date.year * 100 + o.date.month, () => []).add(o);
+  }
+  return [
+    for (final e in groups.entries)
+      MonthGroup(e.key ~/ 100, e.key % 100, e.value),
+  ];
+}
