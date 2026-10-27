@@ -5,12 +5,14 @@ import 'package:cocktail_planer/services/auth_service.dart';
 import 'package:cocktail_planer/services/microsoft_graph_service.dart';
 import 'package:cocktail_planer/models/app_role.dart';
 import 'package:cocktail_planer/utils/currency.dart';
+import 'package:cocktail_planer/ui/widgets/staff_scaffold.dart';
+import 'package:cocktail_planer/ui/widgets/staff_tab_bar.dart';
 import 'package:cocktail_planer/widgets/role_protected_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import 'form_sync.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/orders_table.dart';
 import 'widgets/summary_card.dart';
@@ -22,7 +24,15 @@ enum OrderStatusFilter { all, quotes, accepted, declined }
 class OrdersOverviewScreen extends StatefulWidget {
   final String? initialStatus;
 
-  const OrdersOverviewScreen({super.key, this.initialStatus});
+  /// False on the staff home (`/`), where "back to home" would lead to the
+  /// same page.
+  final bool showBack;
+
+  const OrdersOverviewScreen({
+    super.key,
+    this.initialStatus,
+    this.showBack = true,
+  });
 
   @override
   State<OrdersOverviewScreen> createState() => _OrdersOverviewScreenState();
@@ -33,7 +43,6 @@ class OrdersOverviewScreen extends StatefulWidget {
 const _latestOrdersLimit = 10;
 
 class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
-  bool _isSyncing = false;
   bool _firestoreReady = false;
   String _searchQuery = '';
   OrderStatusFilter _statusFilter = OrderStatusFilter.quotes;
@@ -119,143 +128,11 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     return filtered.take(_latestOrdersLimit).toList();
   }
 
-  static const _excelFileName = 'Cocktail- & Barservice Anftragformular.xlsx';
-
-  Future<void> _loginAndSync() async {
-    final account = await microsoftGraphService.login();
-    if (!mounted) return;
-    if (account != null) {
-      setState(() {});
-      _syncForms();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.sync_login_required'.tr())),
-      );
-    }
-  }
-
-  Future<void> _syncForms() async {
-    if (!microsoftGraphService.isLoggedIn) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('orders.sync_login_required'.tr()),
-          content: const Text(
-            'Bitte melde dich mit dem Microsoft-Konto an, um Formulare zu synchronisieren.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Abbrechen'),
-            ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.login),
-              label: const Text('Mit Microsoft anmelden'),
-              onPressed: () {
-                Navigator.pop(ctx);
-                _loginAndSync();
-              },
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSyncing = true);
-
-    try {
-      // Read Excel data from OneDrive
-      final rows = await microsoftGraphService.readExcelFromOneDrive(
-        oneDrivePath: _excelFileName,
-        startRow: 2, // Skip header row
-      );
-
-      if (!mounted) return;
-
-      if (rows == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.sync_failed'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      // Pass rows to repository for syncing
-      final count = await orderRepository.syncFormSubmissions(rows: rows);
-      if (!mounted) return;
-
-      if (count == -1) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.sync_failed'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } else if (count == 0) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('orders.sync_no_new'.tr())));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.sync_success'.tr(args: [count.toString()])),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-      }
-    }
-  }
-
-  Future<void> _resetAndSyncForms() async {
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('orders.reset_sync_title'.tr()),
-        content: Text('orders.reset_sync_message'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('orders.reset_sync_confirm'.tr()),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isSyncing = true);
-
-    try {
-      // Delete all form submissions first
-      final deletedCount = await orderRepository.deleteAllFormSubmissions();
-      debugPrint('Deleted $deletedCount old form submissions');
-
-      // Now sync fresh
-      await _syncForms();
-    } finally {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return RoleProtectedScreen(
       minimumRole: AppRole.employee,
-      child: _buildContent(context),
+      child: StaffFrame(tab: StaffTab.orders, child: _buildContent(context)),
     );
   }
 
@@ -265,10 +142,13 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('orders.title'.tr()),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
+        automaticallyImplyLeading: false,
+        leading: widget.showBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.go('/'),
+              )
+            : null,
         actions: [
           IconButton(
             icon: _searchQuery.isNotEmpty
@@ -284,93 +164,91 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
               onPressed: () => context.push('/dashboard'),
             ),
           if (microsoftGraphService.isSupported)
-            _isSyncing
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : PopupMenuButton<String>(
-                    icon: const Icon(Icons.sync),
-                    tooltip: 'orders.sync_forms_tooltip'.tr(),
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'sync':
-                          _syncForms();
-                          break;
-                        case 'reset_sync':
-                          _resetAndSyncForms();
-                          break;
-                        case 'onedrive':
-                          launchUrl(
-                            Uri.parse(
-                              'https://1drv.ms/x/c/80c90daf53662538/IQAw81_OoMv4QpDZTEsq13cvAf3yftB-9O812MAPGRy6mfs?e=FfusWZ',
-                            ),
-                            mode: LaunchMode.externalApplication,
-                          );
-                          break;
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      // Info hint – non-interactive
-                      PopupMenuItem(
-                        enabled: false,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: Colors.amber.shade700,
-                            ),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Text(
-                                'Excel muss zuerst im Browser geöffnet werden (mit dem Microsoft Blacklodge-Konto), damit die neuesten Anträge ins OneDrive geladen werden. Dann hier synchronisieren.',
-                                style: TextStyle(fontSize: 12, height: 1.4),
+            ListenableBuilder(
+              listenable: formSync,
+              builder: (context, _) => formSync.isSyncing
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : PopupMenuButton<String>(
+                      icon: const Icon(Icons.sync),
+                      tooltip: 'orders.sync_forms_tooltip'.tr(),
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'sync':
+                            formSync.sync(context);
+                            break;
+                          case 'reset_sync':
+                            formSync.resetAndSync(context);
+                            break;
+                          case 'onedrive':
+                            formSync.openOneDriveForm();
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        // Info hint – non-interactive
+                        PopupMenuItem(
+                          enabled: false,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: Colors.amber.shade700,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Excel muss zuerst im Browser geöffnet werden (mit dem Microsoft Blacklodge-Konto), damit die neuesten Anträge ins OneDrive geladen werden. Dann hier synchronisieren.',
+                                  style: TextStyle(fontSize: 12, height: 1.4),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: 'onedrive',
-                        child: ListTile(
-                          leading: const Icon(Icons.table_chart_outlined),
-                          title: const Text('Formular OneDrive'),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
+                        const PopupMenuDivider(),
+                        PopupMenuItem(
+                          value: 'onedrive',
+                          child: ListTile(
+                            leading: const Icon(Icons.table_chart_outlined),
+                            title: const Text('Formular OneDrive'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
-                      const PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: 'sync',
-                        child: ListTile(
-                          leading: const Icon(Icons.sync),
-                          title: Text('orders.sync_forms'.tr()),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
+                        const PopupMenuDivider(),
+                        PopupMenuItem(
+                          value: 'sync',
+                          child: ListTile(
+                            leading: const Icon(Icons.sync),
+                            title: Text('orders.sync_forms'.tr()),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'reset_sync',
-                        child: ListTile(
-                          leading: const Icon(Icons.refresh),
-                          title: Text('orders.reset_sync'.tr()),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
+                        PopupMenuItem(
+                          value: 'reset_sync',
+                          child: ListTile(
+                            leading: const Icon(Icons.refresh),
+                            title: Text('orders.reset_sync'.tr()),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+            ),
         ],
       ),
       body: StreamBuilder<List<SavedOrder>>(

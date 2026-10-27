@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import '../../data/order_repository.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
+import '../staff/staff_home.dart';
 import 'customer_start.dart';
+import 'home_switch.dart';
 import 'widgets/my_request_detail_sheet.dart';
 
-/// Home screen shown to all users. Staff gets their own landing in a later
-/// step; until then everyone sees the customer start.
+/// Home screen at `/`. Employees and up get the staff home (orders list with
+/// the staff bar); customers, guests and users whose role is still resolving
+/// get the customer start. Switches when the role resolves later.
 class CustomerLandingScreen extends StatefulWidget {
   const CustomerLandingScreen({super.key});
 
@@ -20,8 +23,12 @@ class _CustomerLandingScreenState extends State<CustomerLandingScreen> {
   String? _uid;
   Stream<List<SavedOrder>>? _orders;
 
-  @override
-  Widget build(BuildContext context) {
+  // Created once; HomeSwitch drops repeated equal values.
+  late final Stream<bool> _staffChanges = authService.roleChanges.map(
+    (_) => authService.isEmployeeOrHigher,
+  );
+
+  Widget _customer(BuildContext context) {
     final signedIn = authService.isSignedIn;
     final uid = signedIn ? authService.currentUser!.uid : null;
     if (uid != _uid) {
@@ -32,6 +39,16 @@ class _CustomerLandingScreenState extends State<CustomerLandingScreen> {
       signedIn: signedIn,
       onOpenRequest: (request) => showMyRequestDetails(context, request),
       orders: _orders,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HomeSwitch(
+      initialStaff: authService.roleResolved && authService.isEmployeeOrHigher,
+      staffChanges: _staffChanges,
+      staff: (_) => const StaffHome(),
+      customer: _customer,
     );
   }
 }

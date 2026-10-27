@@ -7,6 +7,8 @@ import '../../data/stock_repository.dart';
 import '../../models/app_role.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
+import '../../ui/widgets/staff_scaffold.dart';
+import '../../ui/widgets/staff_tab_bar.dart';
 import '../../widgets/role_protected_screen.dart';
 import 'excel_import_dialog.dart';
 import 'inventory_rows.dart';
@@ -21,7 +23,7 @@ class InventoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const RoleProtectedScreen(
       minimumRole: AppRole.employee,
-      child: _InventoryView(),
+      child: StaffFrame(tab: StaffTab.inventory, child: _InventoryView()),
     );
   }
 }
