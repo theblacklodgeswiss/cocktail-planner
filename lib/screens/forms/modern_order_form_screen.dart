@@ -9,20 +9,20 @@ import '../../models/additional_service.dart';
 import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../state/app_state.dart';
+import '../../ui/motion.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/step_scaffold.dart';
 import '../../widgets/order_setup_dialog.dart';
 import 'order_form_navigation.dart';
 import 'order_form_services.dart';
 import 'order_form_shopping_list.dart';
 import 'order_form_state.dart';
-import 'steps/additional_services_step.dart';
-import 'steps/bar_drinks_step.dart';
-import 'steps/cocktails_step.dart';
+import 'step_mapping.dart';
 import 'steps/contact_step.dart';
-import 'steps/event_step.dart';
-import 'steps/overview_step.dart';
-import 'steps/popularity_step.dart';
-import 'steps/preferences_step.dart';
-import 'steps/service_type_step.dart';
+import 'steps/drinks_step.dart';
+import 'steps/extras_step.dart';
+import 'steps/occasion_step.dart';
+import 'steps/schedule_step.dart';
 
 export 'order_form_state.dart' show resolveShotPrefillQuantity;
 
@@ -34,8 +34,9 @@ class OrderFormResult {
   OrderFormResult({required this.setupData, required this.selectedRecipes});
 }
 
-/// Modern multi-step order form inspired by Roamy app design.
-/// Features card-based UI, smooth transitions, and touch-optimized controls.
+/// The five-step order wizard (see `step_mapping.dart` for the steps and
+/// how old nine-step `?step=n` links are read). Each step is a
+/// [StepScaffold]; Android back goes to the previous step.
 /// Pass [prefill] to pre-populate all fields from an existing form order.
 class ModernOrderFormScreen extends StatefulWidget {
   final void Function(OrderFormResult result)? onSubmit;
@@ -58,7 +59,7 @@ class ModernOrderFormScreen extends StatefulWidget {
 }
 
 class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
-  final PageController _pageController = PageController();
+  final ScrollController _scrollController = ScrollController();
   static const int _totalSteps = OrderFormState.totalSteps;
 
   /// All form data (controllers, selections, derived values).
@@ -150,17 +151,16 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         setState(() {});
       }
     });
-    // Read step from URL query parameter
+    // Read step from URL query parameter (old 5..8 links are mapped).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uri = widget.services.currentUri();
       final stepParam = uri.queryParameters['step'];
       if (stepParam != null) {
-        final step = int.tryParse(stepParam) ?? 0;
-        if (step >= 0 && step < _totalSteps) {
+        final step = resolveStepParam(stepParam);
+        if (step != null) {
           setState(() => _form.currentStep = step);
-          if (_pageController.hasClients) {
-            _pageController.jumpToPage(step);
-          }
+          // A legacy index is rewritten to its new one.
+          if ('$step' != stepParam) _updateUrlWithoutNavigation(step);
         }
       } else {
         // No step parameter, set to 0 and update URL
@@ -181,6 +181,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         return data;
       });
     }
+    // A failed load is shown (with retry) by the drinks step; mark the
+    // error as handled so it is not reported as uncaught before that step
+    // is opened.
+    _form.dataFuture!.then<void>((_) {}, onError: (Object _) {});
   }
 
   void _applyPrefill() {
@@ -203,12 +207,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final uri = widget.services.currentUri();
     final stepParam = uri.queryParameters['step'];
     if (stepParam != null) {
-      final step = int.tryParse(stepParam) ?? 0;
-      if (step >= 0 && step < _totalSteps && step != _form.currentStep) {
+      final step = resolveStepParam(stepParam);
+      if (step != null && step != _form.currentStep) {
         setState(() => _form.currentStep = step);
-        if (_pageController.hasClients) {
-          _pageController.jumpToPage(step);
-        }
+        _scrollToTop();
       }
     }
   }
@@ -217,7 +219,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   void dispose() {
     _distanceLookupDebounce?.cancel();
     _serviceCatalogSubscription?.cancel();
-    _pageController.dispose();
+    _scrollController.dispose();
     _form.dispose();
     super.dispose();
   }
@@ -231,42 +233,71 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     widget.services.updateUrl(newUrl.toString());
   }
 
+  void _scrollToTop() {
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
+
+  /// Shows [step] (content, progress, bottom bar) and mirrors it in the URL.
+  void _goToStep(int step) {
+    setState(() => _form.currentStep = step);
+    // Update URL without affecting navigation stack
+    _updateUrlWithoutNavigation(step);
+    _scrollToTop();
+  }
+
   void _nextStep() {
-    HapticFeedback.lightImpact();
-    if (_form.currentStep < _totalSteps - 1) {
-      final nextStep = _form.currentStep + 1;
-      setState(() => _form.currentStep = nextStep);
-      // Update URL without affecting navigation stack
-      _updateUrlWithoutNavigation(nextStep);
-      // Animate PageView on mobile layout
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          nextStep,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
-    } else {
+    final step = _form.currentStep;
+    if (step >= _totalSteps - 1) {
       unawaited(_submitForm());
+      return;
     }
+    if (!_form.canProceed(step)) {
+      // Never a silent no-op: explain at the fields what is missing.
+      _revealMissing(step, _form.firstMissingField(step));
+      return;
+    }
+    HapticFeedback.lightImpact();
+    _goToStep(step + 1);
   }
 
   void _previousStep() {
-    HapticFeedback.lightImpact();
     if (_form.currentStep > 0) {
-      final prevStep = _form.currentStep - 1;
-      setState(() => _form.currentStep = prevStep);
-      // Update URL without affecting navigation stack
-      _updateUrlWithoutNavigation(prevStep);
-      // Animate PageView on mobile layout
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          prevStep,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
+      HapticFeedback.lightImpact();
+      _goToStep(_form.currentStep - 1);
+    }
+  }
+
+  /// Back arrow: previous step, or leave the wizard from step 0.
+  void _onBack() {
+    if (_form.currentStep > 0) {
+      _previousStep();
+    } else if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/dashboard');
+    }
+  }
+
+  /// Turns on the hints of [step] and brings [field] into view (text
+  /// fields also get focus, which opens the keyboard).
+  void _revealMissing(int step, FormFieldId? field) {
+    _form.update(() => _form.attemptedSteps.add(step));
+    if (field == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = _form.focusNodeOf(field);
+      if (node == null) FocusManager.instance.primaryFocus?.unfocus();
+      final anchor = _form.fieldKeys[field]?.currentContext;
+      if (anchor != null) {
+        Scrollable.ensureVisible(
+          anchor,
+          alignment: 0.2,
+          duration: AppMotion.reduced(context) ? Duration.zero : AppMotion.page,
+          curve: AppMotion.easeOut,
         );
       }
-    }
+      node?.requestFocus();
+    });
   }
 
   Future<void> _submitForm() async {
@@ -274,12 +305,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     // Validate required fields
     final invalid = _form.firstInvalidStep();
     if (invalid != null) {
-      _form.currentStep = invalid.step; // Jump to the faulty step
-      _updateUrlWithoutNavigation(invalid.step);
+      // Jump to the faulty step (content included) and point at the field.
+      _goToStep(invalid.step);
+      _revealMissing(
+        invalid.step,
+        FormFieldId.values.firstWhere(
+          (f) => f.messageKey == invalid.messageKey,
+        ),
+      );
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(invalid.messageKey.tr())));
-      setState(() {}); // Update UI to show correct step
       return;
     }
 
@@ -421,226 +457,112 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('order_form.save_error'.tr()),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }
     }
   }
 
-  /// Desktop stepper tap: jump to [step] without validation.
-  void _selectStep(int step) {
-    setState(() => _form.currentStep = step);
-    // Update URL without affecting navigation stack
-    _updateUrlWithoutNavigation(step);
-  }
-
   Future<void> _generateShoppingListWithGemini() =>
       generateShoppingListWithClaude(context, _form);
 
-  Widget _buildDesktopActionButtons() => OrderFormDesktopActions(
-    form: _form,
-    isEmployeeOrHigher: _isAdminUser,
-    onNext: _nextStep,
-    onBack: _previousStep,
-  );
+  void _retryCocktailData() => setState(_loadCocktailData);
 
-  ServiceTypeStep _serviceTypeStep() => ServiceTypeStep(
-    form: _form,
-    desktopActions: _buildDesktopActionButtons,
-  );
+  String _titleOf(int step) => switch (step) {
+    0 => 'order_wizard.title_occasion'.tr(),
+    1 => 'order_wizard.title_schedule'.tr(),
+    2 => 'order_wizard.title_contact'.tr(),
+    3 => 'order_wizard.title_drinks'.tr(),
+    _ => 'order_wizard.title_extras'.tr(),
+  };
 
-  ContactStep _contactStep() =>
-      ContactStep(form: _form, desktopActions: _buildDesktopActionButtons);
-
-  EventStep _eventStep() =>
-      EventStep(form: _form, desktopActions: _buildDesktopActionButtons);
-
-  PreferencesStep _preferencesStep() => PreferencesStep(
-    form: _form,
-    isEmployeeOrHigher: widget.services.isEmployeeOrHigher(),
-    desktopActions: _buildDesktopActionButtons,
-  );
-
-  BarDrinksStep _barDrinksStep() =>
-      BarDrinksStep(form: _form, desktopActions: _buildDesktopActionButtons);
-
-  CocktailsStep _cocktailsStep() =>
-      CocktailsStep(form: _form, desktopActions: _buildDesktopActionButtons);
-
-  PopularityStep _popularityStep() =>
-      PopularityStep(form: _form, desktopActions: _buildDesktopActionButtons);
-
-  AdditionalServicesStep _additionalServicesStep() => AdditionalServicesStep(
-    form: _form,
-    desktopActions: _buildDesktopActionButtons,
-  );
-
-  OverviewStep _overviewStep() => OverviewStep(
-    form: _form,
-    isEmployeeOrHigher: _isAdminUser,
-    onGenerateShoppingList: _generateShoppingListWithGemini,
-    desktopActions: _buildDesktopActionButtons,
-  );
+  Widget _stepContent(int step) => switch (step) {
+    0 => OccasionStep(form: _form),
+    1 => ScheduleStep(form: _form, isEmployeeOrHigher: _isAdminUser),
+    2 => ContactStep(form: _form),
+    3 => DrinksStep(form: _form, onRetry: _retryCocktailData),
+    _ => ExtrasStep(
+      form: _form,
+      isEmployeeOrHigher: _isAdminUser,
+      onEditStep: _goToStep,
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
-    // The step builders used to run on this State's context and read
-    // MediaQuery (width checks) and the EasyLocalization locale here, which
-    // made this screen depend on both: every resize, rotation, keyboard
-    // inset or locale change re-ran didChangeDependencies, re-reading the
-    // URL's `?step=` (this is how browser back/forward re-syncs). The step
-    // widgets now read them on their own context, so keep the dependencies
-    // explicitly.
+    // The step widgets read MediaQuery and the EasyLocalization locale on
+    // their own contexts. This screen keeps depending on both explicitly:
+    // every resize, rotation, keyboard inset or locale change re-runs
+    // didChangeDependencies, which re-reads the URL's `?step=` (this is how
+    // browser back/forward re-syncs).
     MediaQuery.of(context);
     context.locale;
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        title: Text('order_setup.title'.tr()),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_form.currentStep > 0) {
-              _previousStep();
-            } else if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/dashboard');
-            }
-          },
-        ),
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Desktop/Tablet Layout (≥ 600px width)
-          if (constraints.maxWidth >= 600) {
-            return _buildDesktopLayout();
-          }
-          // Mobile Layout (< 600px width)
-          return _buildMobileLayout();
-        },
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout() {
-    // The former inline step builders ran for all nine pages on every
-    // build; the popularity page's build-time sync (fill 50 %, drop stale
-    // entries - only while recipes are selected) therefore ran on every
-    // mobile rebuild. PageView now builds pages lazily, so replay it here.
-    if (_form.selectedRecipes.isNotEmpty) {
-      _form.syncPopularityWithSelection();
-    }
-    return Column(
-      children: [
-        // Progress Indicator
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: List.generate(
-              _totalSteps,
-              (index) => Expanded(
-                child: Container(
-                  height: 4,
-                  margin: EdgeInsets.only(
-                    right: index < _totalSteps - 1 ? 8 : 0,
-                  ),
-                  decoration: BoxDecoration(
-                    color: index <= _form.currentStep
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        // Page View
-        Expanded(
-          child: PageView(
-            controller: _pageController,
-            onPageChanged: (index) => setState(() => _form.currentStep = index),
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _serviceTypeStep(),
-              _contactStep(),
-              _eventStep(),
-              _preferencesStep(),
-              _barDrinksStep(),
-              _cocktailsStep(),
-              _popularityStep(),
-              _additionalServicesStep(),
-              _overviewStep(),
-            ],
-          ),
-        ),
-        // Navigation Buttons
-        OrderFormMobileFooter(
+    final step = _form.currentStep;
+    return PopScope(
+      // Android back walks the steps; only step 0 leaves the wizard.
+      canPop: step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _previousStep();
+      },
+      child: StepScaffold(
+        step: step + 1,
+        total: _totalSteps,
+        title: _titleOf(step),
+        onBack: _onBack,
+        controller: _scrollController,
+        bottom: OrderFormBottomBar(
           form: _form,
           isEmployeeOrHigher: _isAdminUser,
           onNext: _nextStep,
-          onBack: _previousStep,
           onGenerateShoppingList: _generateShoppingListWithGemini,
         ),
-      ],
+        child: _StepEntrance(key: ValueKey(step), child: _stepContent(step)),
+      ),
     );
   }
+}
 
-  Widget _buildDesktopLayout() {
-    return Row(
-      children: [
-        // Left Side: Vertical Stepper
-        OrderFormStepperSidebar(form: _form, onStepSelected: _selectStep),
-        // Right Side: Content
-        Expanded(
-          child: SingleChildScrollView(
-            child: _form.currentStep >= 5
-                ? Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: _buildCurrentStepContent(),
-                  )
-                : Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 700),
-                      child: Padding(
-                        padding: const EdgeInsets.all(48),
-                        child: _buildCurrentStepContent(),
-                      ),
-                    ),
-                  ),
-          ),
-        ),
-      ],
-    );
+/// Fades (and, unless reduced motion is on, slightly slides) a step's
+/// content in when it appears. Only the new step is in the tree, so field
+/// anchors and focus nodes are never mounted twice.
+class _StepEntrance extends StatefulWidget {
+  const _StepEntrance({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_StepEntrance> createState() => _StepEntranceState();
+}
+
+class _StepEntranceState extends State<_StepEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.page,
+  )..forward();
+  late final CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.easeOut,
+  );
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
   }
 
-  Widget _buildCurrentStepContent() {
-    switch (_form.currentStep) {
-      case 0:
-        return _serviceTypeStep();
-      case 1:
-        return _contactStep();
-      case 2:
-        return _eventStep();
-      case 3:
-        return _preferencesStep();
-      case 4:
-        return _barDrinksStep();
-      case 5:
-        return _cocktailsStep();
-      case 6:
-        return _popularityStep();
-      case 7:
-        return _additionalServicesStep();
-      case 8:
-        return _overviewStep();
-      default:
-        return Container();
-    }
+  @override
+  Widget build(BuildContext context) {
+    final faded = FadeTransition(opacity: _curve, child: widget.child);
+    if (AppMotion.reduced(context)) return faded;
+    return SlideTransition(
+      position: Tween(
+        begin: const Offset(0.04, 0),
+        end: Offset.zero,
+      ).animate(_curve),
+      child: faded,
+    );
   }
 }

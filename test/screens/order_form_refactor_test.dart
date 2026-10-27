@@ -1,279 +1,25 @@
-// Characterization tests for ModernOrderFormScreen (Task 8 safety net).
+// Characterization tests for ModernOrderFormScreen.
 //
-// These tests pin the CURRENT behavior of the 9-step order wizard - written
-// and run against the monolithic screen before it was split into step
-// widgets, then re-run unchanged afterwards. They pump the real screen with
-// fakes injected through `OrderFormServices` (no Firebase, no network, no
-// browser URL).
+// Written in Task 8 against the nine-step wizard; Task 9 regrouped the
+// wizard into five steps. The interactions were rewritten for the new
+// steps, but the saveOrder / updateOrder golden maps and the staff
+// contracts are unchanged, except where a deliberate behavior change says
+// so (see the "popularity sync" group).
 import 'dart:async';
 
-import 'package:cocktail_planer/data/order_repository.dart';
-import 'package:cocktail_planer/models/additional_service.dart';
-import 'package:cocktail_planer/models/cocktail_data.dart';
 import 'package:cocktail_planer/models/offer.dart' show EventType;
 import 'package:cocktail_planer/models/order.dart';
-import 'package:cocktail_planer/models/recipe.dart';
-import 'package:cocktail_planer/screens/forms/modern_order_form_screen.dart';
-import 'package:cocktail_planer/screens/forms/order_form_services.dart';
 import 'package:cocktail_planer/screens/forms/order_form_state.dart';
+import 'package:cocktail_planer/screens/forms/step_mapping.dart';
 import 'package:cocktail_planer/state/app_state.dart';
+import 'package:cocktail_planer/ui/widgets/buttons.dart';
 import 'package:cocktail_planer/widgets/order_setup_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class FakeOrderRepository extends OrderRepository {
-  final List<Map<String, dynamic>> saveCalls = [];
-  final List<(String, Map<String, dynamic>)> updateCalls = [];
-  String? saveResult = 'new-order-id';
-
-  @override
-  Future<String?> saveOrder({
-    required String name,
-    required DateTime date,
-    required List<Map<String, dynamic>> items,
-    required double total,
-    required String currency,
-    int personCount = 0,
-    String drinkerType = 'normal',
-    String status = 'quote',
-    List<String> cocktails = const [],
-    List<String> shots = const [],
-    List<Map<String, dynamic>> shotQuantities = const [],
-    String bar = '',
-    int distanceKm = 0,
-    double thekeCost = 0,
-    String phone = '',
-    String location = '',
-    String eventTime = '',
-    String serviceType = 'cocktail_barservice',
-    Map<String, double> cocktailPopularity = const {},
-    List<String> barDrinks = const [],
-    List<String> alcoholPurchase = const [],
-    List<String> additionalServices = const [],
-    String remarks = '',
-    String eventType = '',
-  }) async {
-    saveCalls.add({
-      'name': name,
-      'date': date,
-      'items': items,
-      'total': total,
-      'currency': currency,
-      'personCount': personCount,
-      'drinkerType': drinkerType,
-      'status': status,
-      'cocktails': cocktails,
-      'shots': shots,
-      'shotQuantities': shotQuantities,
-      'bar': bar,
-      'distanceKm': distanceKm,
-      'thekeCost': thekeCost,
-      'phone': phone,
-      'location': location,
-      'eventTime': eventTime,
-      'serviceType': serviceType,
-      'cocktailPopularity': Map<String, double>.from(cocktailPopularity),
-      'barDrinks': barDrinks,
-      'alcoholPurchase': alcoholPurchase,
-      'additionalServices': additionalServices,
-      'remarks': remarks,
-      'eventType': eventType,
-    });
-    return saveResult;
-  }
-
-  @override
-  Future<bool> updateOrder(String orderId, Map<String, dynamic> data) async {
-    updateCalls.add((orderId, data));
-    return true;
-  }
-}
-
-const mojito = Recipe(id: 'r1', name: 'Mojito', ingredients: ['Rum']);
-const caipirinha = Recipe(
-  id: 'r2',
-  name: 'Caipirinha',
-  ingredients: ['Cachaça'],
-);
-const tequila = Recipe(
-  id: 'r3',
-  name: 'Tequila',
-  ingredients: ['Tequila'],
-  type: 'shot',
-);
-
-const photobooth = AdditionalService(
-  id: 'photobooth',
-  name: 'Fotobox',
-  variants: [ServiceVariant(id: 'v3h', name: '3 Stunden', price: 300)],
-);
-
-/// Test harness: fakes + recorded side effects for one pumped form.
-class Harness {
-  Harness({
-    this.isStaff = false,
-    String url = 'http://localhost/order-form',
-    Map<String, Completer<int?>>? distanceCompleters,
-  }) : _url = url,
-       _distanceCompleters = distanceCompleters;
-
-  final bool isStaff;
-  String _url;
-
-  /// Simulates the browser URL changing (e.g. back/forward).
-  set url(String value) => _url = value;
-  final Map<String, Completer<int?>>? _distanceCompleters;
-  final repo = FakeOrderRepository();
-  final urls = <String>[];
-  final distanceRequests = <String>[];
-  final submitted = <OrderFormResult>[];
-  Object? shoppingListExtra;
-
-  OrderFormServices get services => OrderFormServices(
-    isEmployeeOrHigher: () => isStaff,
-    resolveRole: () async {},
-    loadCocktailData: () async => const CocktailData(
-      materials: [],
-      recipes: [mojito, caipirinha, tequila],
-    ),
-    watchAdditionalServices: () => Stream.value(const [photobooth]),
-    distanceKmFromAddress: (address) {
-      distanceRequests.add(address);
-      final completers = _distanceCompleters;
-      if (completers != null) return completers[address]!.future;
-      return Future.value(42);
-    },
-    currentUri: () => Uri.parse(_url),
-    updateUrl: urls.add,
-    orderRepository: repo,
-  );
-
-  Widget app({SavedOrder? prefill, bool withOnSubmit = false}) {
-    final router = GoRouter(
-      initialLocation: '/order-form',
-      routes: [
-        GoRoute(
-          path: '/order-form',
-          builder: (_, _) => ModernOrderFormScreen(
-            prefill: prefill,
-            services: services,
-            onSubmit: withOnSubmit ? submitted.add : null,
-          ),
-        ),
-        GoRoute(
-          path: '/shopping-list',
-          builder: (_, state) {
-            shoppingListExtra = state.extra;
-            return const Scaffold(body: Text('page /shopping-list'));
-          },
-        ),
-        GoRoute(
-          path: '/order-success',
-          builder: (_, _) => const Scaffold(body: Text('page /order-success')),
-        ),
-        GoRoute(
-          path: '/dashboard',
-          builder: (_, _) => const Scaffold(body: Text('page /dashboard')),
-        ),
-      ],
-    );
-    return EasyLocalization(
-      supportedLocales: const [Locale('de'), Locale('en')],
-      path: 'assets/translations',
-      fallbackLocale: const Locale('de'),
-      startLocale: const Locale('de'),
-      child: Builder(
-        builder: (context) => MaterialApp.router(
-          routerConfig: router,
-          localizationsDelegates: context.localizationDelegates,
-          supportedLocales: context.supportedLocales,
-          locale: context.locale,
-          // The test font (Ahem) renders every glyph as a full square, so
-          // German labels overflow fixed-width rows that fit in real fonts.
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(0.5)),
-            child: child!,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-SavedOrder prefillOrder({
-  String id = 'order-1',
-  String name = '',
-  String phone = '',
-  String location = '',
-  String eventTime = '',
-  String offerEventTime = '',
-  String eventType = '',
-  String serviceType = '',
-  int personCount = 0,
-  int distanceKm = 0,
-  String currency = '',
-  String drinkerType = '',
-  List<String> cocktails = const [],
-  List<String> requestedCocktails = const [],
-  List<String> shots = const [],
-  List<ShotSelection> shotSelections = const [],
-  List<String> barDrinks = const [],
-  List<String> alcoholPurchase = const [],
-  List<String> additionalServices = const [],
-  Map<String, double> cocktailPopularity = const {},
-  String remarks = '',
-  String guestCountRange = '',
-  List<Map<String, dynamic>> items = const [],
-}) => SavedOrder(
-  id: id,
-  name: name,
-  date: DateTime(2027, 5, 1),
-  items: items,
-  total: 0,
-  personCount: personCount,
-  drinkerType: drinkerType,
-  currency: currency,
-  status: OrderStatus.quote,
-  phone: phone,
-  location: location,
-  eventTime: eventTime,
-  offerEventTime: offerEventTime,
-  eventType: eventType,
-  serviceType: serviceType,
-  distanceKm: distanceKm,
-  cocktails: cocktails,
-  requestedCocktails: requestedCocktails,
-  shots: shots,
-  shotSelections: shotSelections,
-  barDrinks: barDrinks,
-  alcoholPurchase: alcoholPurchase,
-  additionalServices: additionalServices,
-  cocktailPopularity: cocktailPopularity,
-  remarks: remarks,
-  guestCountRange: guestCountRange,
-);
-
-/// A prefill that satisfies every `_canProceed` gate.
-SavedOrder completePrefill({
-  List<String> cocktails = const ['Mojito'],
-  List<String> shots = const ['Tequila'],
-  String serviceType = 'cocktail_barservice',
-}) => prefillOrder(
-  name: 'Max Prefill',
-  phone: '079 000 00 00',
-  location: 'Basel',
-  eventTime: '19:30',
-  eventType: 'birthday',
-  serviceType: serviceType,
-  cocktails: cocktails,
-  shots: shots,
-  shotSelections: const [ShotSelection(name: 'Tequila', quantity: 4)],
-);
+import 'order_form_test_harness.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -290,123 +36,66 @@ void main() {
     appState.cocktailPopularity.clear();
   });
 
-  void mobile(WidgetTester tester) {
-    tester.view.physicalSize = const Size(500, 2600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-  }
-
-  void desktop(WidgetTester tester) {
-    tester.view.physicalSize = const Size(1400, 2600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-  }
-
-  Future<void> pumpForm(WidgetTester tester, Widget app) async {
-    await tester.runAsync(() async {
-      await tester.pumpWidget(app);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    });
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-  }
-
-  /// Lets a page animation (300 ms) and any pending debounce (800 ms) finish.
-  Future<void> settle(WidgetTester tester) async {
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pump(const Duration(milliseconds: 900));
-    await tester.pump();
-  }
-
-  Finder mobileNext() => find.widgetWithText(FilledButton, 'Weiter');
-
-  bool enabled(WidgetTester tester, Finder finder) =>
-      tester.widget<ButtonStyleButton>(finder).onPressed != null;
-
-  Future<void> tapNext(WidgetTester tester) async {
-    await tester.tap(mobileNext().first);
-    await settle(tester);
-  }
-
-  /// Runs a modal bottom sheet's open/close animation to completion.
-  Future<void> sheet(WidgetTester tester) async {
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
-  }
-
-  Future<void> pickTime(WidgetTester tester) async {
-    await tester.tap(find.text('Uhrzeit auswählen'));
-    await sheet(tester);
-    await tester.tap(find.text('OK').last);
-    await sheet(tester);
-  }
-
-  Future<void> pickDate(WidgetTester tester) async {
-    await tester.tap(find.text('Datum auswählen'));
-    await sheet(tester);
-    await tester.tap(find.text('OK').last);
-    await sheet(tester);
-  }
-
   group('OrderFormState (pure)', () {
     late OrderFormState form;
     setUp(() => form = OrderFormState(distanceLookupPending: false));
     tearDown(() => form.dispose());
 
-    test('totalSteps is 9', () {
-      expect(OrderFormState.totalSteps, 9);
+    test('totalSteps is 5', () {
+      expect(OrderFormState.totalSteps, 5);
+      expect(kFormSteps, 5);
     });
 
-    test('canProceed: steps 0 and 4-8 are always open', () {
-      for (final step in [0, 4, 5, 6, 7, 8]) {
+    test('canProceed: steps 3 and 4 are always open', () {
+      for (final step in [3, 4]) {
         expect(form.canProceed(step), isTrue, reason: 'step $step');
       }
     });
 
-    test('canProceed(1): trimmed name AND phone', () {
-      expect(form.canProceed(1), isFalse);
-      form.nameController.text = 'Anna';
-      expect(form.canProceed(1), isFalse);
-      form.phoneController.text = '  ';
-      expect(form.canProceed(1), isFalse);
-      form.phoneController.text = '079';
-      expect(form.canProceed(1), isTrue);
-      form.nameController.text = ' ';
-      expect(form.canProceed(1), isFalse);
+    test('canProceed(0): event type required (old step 3 rule)', () {
+      expect(form.canProceed(0), isFalse);
+      form.selectedEventType = EventType.other;
+      expect(form.canProceed(0), isTrue);
     });
 
-    test('canProceed(2): date AND time AND trimmed address', () {
-      expect(form.canProceed(2), isFalse);
+    test('canProceed(1): date AND time AND trimmed address (old step 2)', () {
+      expect(form.canProceed(1), isFalse);
       form.eventDate = DateTime(2027, 5, 1);
       form.eventTime = const TimeOfDay(hour: 18, minute: 0);
-      expect(form.canProceed(2), isFalse);
+      expect(form.canProceed(1), isFalse);
       form.addressController.text = ' ';
-      expect(form.canProceed(2), isFalse);
+      expect(form.canProceed(1), isFalse);
       form.addressController.text = 'Basel';
-      expect(form.canProceed(2), isTrue);
+      expect(form.canProceed(1), isTrue);
       form.eventTime = null;
+      expect(form.canProceed(1), isFalse);
+    });
+
+    test('canProceed(2): trimmed name AND phone (old step 1)', () {
+      expect(form.canProceed(2), isFalse);
+      form.nameController.text = 'Anna';
+      expect(form.canProceed(2), isFalse);
+      form.phoneController.text = '  ';
+      expect(form.canProceed(2), isFalse);
+      form.phoneController.text = '079';
+      expect(form.canProceed(2), isTrue);
+      form.nameController.text = ' ';
       expect(form.canProceed(2), isFalse);
     });
 
-    test('canProceed(3): event type required', () {
-      expect(form.canProceed(3), isFalse);
-      form.selectedEventType = EventType.other;
-      expect(form.canProceed(3), isTrue);
-    });
-
-    test('firstInvalidStep: name -> 1, date -> 2, cocktails -> 5', () {
+    test('firstInvalidStep: name -> 2, date -> 1, cocktails -> 3', () {
       expect(form.firstInvalidStep(), (
-        step: 1,
+        step: 2,
         messageKey: 'order_setup.required_name',
       ));
       form.nameController.text = 'Anna';
       expect(form.firstInvalidStep(), (
-        step: 2,
+        step: 1,
         messageKey: 'order_setup.required_date',
       ));
       form.eventDate = DateTime(2027, 5, 1);
       expect(form.firstInvalidStep(), (
-        step: 5,
+        step: 3,
         messageKey: 'order_setup.required_cocktails',
       ));
       form.selectedRecipes.add(mojito);
@@ -428,7 +117,6 @@ void main() {
       form.toggleRecipeSelection(tequila);
       form.shotQuantityController(tequila);
       form.cocktailFilter = 'shots';
-      form.syncPopularityWithSelection();
       form.selectServiceType('mocktail_service');
       expect(form.selectedRecipes, [mojito]);
       expect(form.shotQuantities, isEmpty);
@@ -456,210 +144,85 @@ void main() {
     });
   });
 
-  group('canProceed per step (mobile Weiter button)', () {
-    testWidgets('step 0 (service type) always proceeds', (tester) async {
-      mobile(tester);
-      final h = Harness();
-      await pumpForm(tester, h.app());
-      expect(find.text('Welchen Service benötigst du?'), findsOneWidget);
-      expect(enabled(tester, mobileNext()), isTrue);
-      await settle(tester);
-    });
-
-    testWidgets('step 1 requires trimmed name AND phone', (tester) async {
-      mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=1');
-      await pumpForm(tester, h.app());
-      await settle(tester);
-      expect(find.text('Deine Kontaktdaten'), findsOneWidget);
-      expect(enabled(tester, mobileNext()), isFalse);
-
-      final fields = find.byType(TextField);
-      await tester.enterText(fields.at(0), 'Anna');
-      await tester.pump();
-      expect(enabled(tester, mobileNext()), isFalse, reason: 'phone missing');
-
-      await tester.enterText(fields.at(1), '   ');
-      await tester.pump();
-      expect(enabled(tester, mobileNext()), isFalse, reason: 'blank phone');
-
-      await tester.enterText(fields.at(1), '079');
-      await tester.pump();
-      expect(enabled(tester, mobileNext()), isTrue);
-
-      await tester.enterText(fields.at(0), '  ');
-      await tester.pump();
-      expect(enabled(tester, mobileNext()), isFalse, reason: 'blank name');
-    });
-
-    testWidgets('step 2 requires date AND time AND address', (tester) async {
-      mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=2');
-      await pumpForm(tester, h.app());
-      await settle(tester);
-      expect(find.text('Event-Details'), findsWidgets);
-      expect(enabled(tester, mobileNext()), isFalse);
-
-      await tester.enterText(find.byType(TextField).first, 'Basel');
-      await settle(tester);
-      expect(enabled(tester, mobileNext()), isFalse, reason: 'no date/time');
-
-      await pickDate(tester);
-      expect(enabled(tester, mobileNext()), isFalse, reason: 'no time');
-
-      await pickTime(tester);
-      expect(find.text('18:00'), findsOneWidget);
-      expect(enabled(tester, mobileNext()), isTrue);
-
-      await tester.enterText(find.byType(TextField).first, ' ');
-      await settle(tester);
-      expect(enabled(tester, mobileNext()), isFalse, reason: 'blank address');
-    });
-
-    testWidgets('step 3 requires an event type (single-select toggle)', (
-      tester,
-    ) async {
-      mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=3');
-      await pumpForm(tester, h.app());
-      await settle(tester);
-      expect(find.text('Deine Präferenzen'), findsOneWidget);
-      expect(enabled(tester, mobileNext()), isFalse);
-
-      await tester.tap(find.text('Hochzeitsfeier'));
-      await tester.pump();
-      expect(enabled(tester, mobileNext()), isTrue);
-
-      // Tapping the selected chip again deselects it.
-      await tester.tap(find.text('Hochzeitsfeier'));
-      await tester.pump();
-      expect(enabled(tester, mobileNext()), isFalse);
-    });
-
-    for (final step in [4, 5, 6, 7]) {
-      testWidgets('step $step always proceeds, even with nothing selected', (
-        tester,
-      ) async {
-        mobile(tester);
-        final h = Harness(url: 'http://localhost/order-form?step=$step');
-        await pumpForm(tester, h.app());
-        await settle(tester);
-        expect(enabled(tester, mobileNext()), isTrue);
-      });
-    }
-
-    testWidgets('step 8 shows the submit button instead of Weiter', (
-      tester,
-    ) async {
-      mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=8');
-      await pumpForm(tester, h.app());
-      await settle(tester);
-      expect(find.text('Anfrageübersicht'), findsOneWidget);
-      expect(mobileNext(), findsNothing);
-      // Bottom bar + the overview's own action row both render it.
-      expect(find.text('Antrag einreichen'), findsNWidgets(2));
-    });
-  });
-
   group('submit validation jumps to the faulty step', () {
-    testWidgets('missing name -> step 1 (desktop shows step 1 content)', (
+    testWidgets('missing name -> step 2 (desktop shows step 2 content)', (
       tester,
     ) async {
       desktop(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=8');
+      final h = Harness(url: stepUrl(4));
       await pumpForm(tester, h.app());
       await settle(tester);
       expect(find.text('Anfrageübersicht'), findsOneWidget);
 
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
-      expect(find.text('Name ist erforderlich'), findsOneWidget);
-      expect(find.text('Deine Kontaktdaten'), findsWidgets);
-      expect(h.urls.last, 'http://localhost/order-form?step=1');
+      expect(find.text('Name ist erforderlich'), findsWidgets);
+      expect(find.text(stepTitles[2]), findsOneWidget);
+      expect(h.urls.last, stepUrl(2));
       expect(h.repo.saveCalls, isEmpty);
       await settle(tester);
     });
 
-    testWidgets('name but no date -> step 2', (tester) async {
+    testWidgets('name but no date -> step 1', (tester) async {
       desktop(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=1');
+      final h = Harness(url: stepUrl(2));
       await pumpForm(tester, h.app());
       await settle(tester);
       await tester.enterText(find.byType(TextField).at(0), 'Anna');
+      await tester.enterText(find.byType(TextField).at(1), '079');
       await tester.pump();
-      // Desktop stepper allows jumping freely to the overview.
-      await tester.tap(find.text('Zusammenfassung'));
-      await tester.pump();
+      await tapNext(tester);
+      await tapNext(tester);
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
-      expect(find.text('Datum ist erforderlich'), findsOneWidget);
-      expect(h.urls.last, 'http://localhost/order-form?step=2');
+      expect(find.text('Datum ist erforderlich'), findsWidgets);
+      expect(h.urls.last, stepUrl(1));
       expect(find.text('Datum auswählen'), findsOneWidget);
       await settle(tester);
     });
 
-    testWidgets('name + date but no cocktails -> step 5', (tester) async {
+    testWidgets('name + date but no cocktails -> step 3', (tester) async {
       desktop(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=8');
+      final h = Harness(url: stepUrl(4));
       await pumpForm(tester, h.app(prefill: prefillOrder(name: 'Anna')));
       await settle(tester);
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
-      expect(
-        find.text('Bitte wähle mindestens einen Cocktail'),
-        findsOneWidget,
-      );
-      expect(h.urls.last, 'http://localhost/order-form?step=5');
+      expect(find.text('Bitte wähle mindestens einen Cocktail'), findsWidgets);
+      expect(h.urls.last, stepUrl(3));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('Cocktail-Auswahl'), findsWidgets);
+      expect(find.text(stepTitles[3]), findsOneWidget);
       await settle(tester);
     });
-
-    testWidgets(
-      'mobile: jump updates step/footer but NOT the PageView page (quirk)',
-      (tester) async {
-        mobile(tester);
-        final h = Harness(url: 'http://localhost/order-form?step=8');
-        await pumpForm(tester, h.app());
-        await settle(tester);
-        await tester.tap(find.text('Antrag einreichen').first);
-        await tester.pump();
-        expect(find.text('Name ist erforderlich'), findsOneWidget);
-        expect(h.urls.last, 'http://localhost/order-form?step=1');
-        // Footer now belongs to step 1 (Weiter disabled: name/phone empty)...
-        expect(enabled(tester, mobileNext()), isFalse);
-        // ...while the PageView still shows the overview page.
-        expect(find.text('Anfrageübersicht'), findsOneWidget);
-        await settle(tester);
-      },
-    );
   });
 
   group('URL step sync', () {
-    testWidgets('?step=3 opens step 3 (mobile)', (tester) async {
+    testWidgets('?step=2 opens step 2 (mobile) without rewriting', (
+      tester,
+    ) async {
       mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=3');
+      final h = Harness(url: stepUrl(2));
       await pumpForm(tester, h.app());
       await settle(tester);
-      expect(find.text('Deine Präferenzen'), findsOneWidget);
+      expect(find.text(stepTitles[2]), findsOneWidget);
       expect(h.urls, isEmpty, reason: 'step param present -> no URL rewrite');
     });
 
-    testWidgets('?step=3 opens step 3 (desktop)', (tester) async {
+    testWidgets('?step=2 opens step 2 (desktop)', (tester) async {
       desktop(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=3');
+      final h = Harness(url: stepUrl(2));
       await pumpForm(tester, h.app());
       await settle(tester);
-      expect(find.text('Deine Präferenzen'), findsWidgets);
+      expect(find.text(stepTitles[2]), findsOneWidget);
     });
 
     testWidgets('out-of-range ?step=9 stays on step 0', (tester) async {
       mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=9');
+      final h = Harness(url: stepUrl(9));
       await pumpForm(tester, h.app());
       await settle(tester);
-      expect(find.text('Welchen Service benötigst du?'), findsOneWidget);
+      expect(find.text(stepTitles[0]), findsOneWidget);
+      expect(h.urls, isEmpty);
     });
 
     testWidgets('no step param -> URL rewritten to step=0; Weiter/Zurück '
@@ -668,17 +231,19 @@ void main() {
       final h = Harness();
       await pumpForm(tester, h.app());
       await settle(tester);
-      expect(h.urls, ['http://localhost/order-form?step=0']);
+      expect(h.urls, [stepUrl(0)]);
+      await tester.tap(find.text('Hochzeitsfeier'));
+      await tester.pump();
       await tapNext(tester);
-      expect(find.text('Deine Kontaktdaten'), findsOneWidget);
-      expect(h.urls.last, 'http://localhost/order-form?step=1');
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Zurück'));
+      expect(find.text(stepTitles[1]), findsOneWidget);
+      expect(h.urls.last, stepUrl(1));
+      await tester.tap(find.byIcon(Icons.arrow_back));
       await settle(tester);
-      expect(find.text('Welchen Service benötigst du?'), findsOneWidget);
-      expect(h.urls.last, 'http://localhost/order-form?step=0');
+      expect(find.text(stepTitles[0]), findsOneWidget);
+      expect(h.urls.last, stepUrl(0));
     });
 
-    testWidgets('AppBar back on step 0 goes to /dashboard when it cannot pop', (
+    testWidgets('back arrow on step 0 goes to /dashboard when it cannot pop', (
       tester,
     ) async {
       mobile(tester);
@@ -694,29 +259,23 @@ void main() {
   group('distance auto-calculation (guest)', () {
     testWidgets('debounced 800 ms, shows calculating, then km', (tester) async {
       mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=2');
+      final h = Harness(url: stepUrl(1));
       await pumpForm(tester, h.app());
       await settle(tester);
       await tester.enterText(find.byType(TextField).first, 'Bern');
       await tester.pump(const Duration(milliseconds: 700));
       expect(h.distanceRequests, isEmpty);
+      expect(find.text('wird berechnet…'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 200));
       expect(h.distanceRequests, ['Bern']);
       await tester.pump();
-      // Go to preferences (step 3) via the desktop-free path: date+time.
-      await pickDate(tester);
-      await pickTime(tester);
-      await tapNext(tester);
       expect(find.text('42 km'), findsOneWidget);
     });
 
     testWidgets('stale lookup result is discarded', (tester) async {
       mobile(tester);
       final completers = {'Alt': Completer<int?>(), 'Neu': Completer<int?>()};
-      final h = Harness(
-        url: 'http://localhost/order-form?step=2',
-        distanceCompleters: completers,
-      );
+      final h = Harness(url: stepUrl(1), distanceCompleters: completers);
       await pumpForm(tester, h.app());
       await settle(tester);
       await tester.enterText(find.byType(TextField).first, 'Alt');
@@ -728,9 +287,6 @@ void main() {
       await tester.pump();
       completers['Alt']!.complete(99);
       await tester.pump();
-      await pickDate(tester);
-      await pickTime(tester);
-      await tapNext(tester);
       expect(find.text('7 km'), findsOneWidget);
     });
 
@@ -738,19 +294,14 @@ void main() {
       tester,
     ) async {
       mobile(tester);
-      final h = Harness(
-        isStaff: true,
-        url: 'http://localhost/order-form?step=2',
-      );
+      final h = Harness(isStaff: true, url: stepUrl(1));
       await pumpForm(tester, h.app());
       await settle(tester);
       await tester.enterText(find.byType(TextField).first, 'Bern');
       await settle(tester);
       expect(h.distanceRequests, isEmpty);
-      await pickDate(tester);
-      await pickTime(tester);
-      await tapNext(tester);
       expect(find.text('10 km'), findsOneWidget);
+      // Guest count + distance.
       expect(find.byType(Slider), findsNWidgets(2));
     });
   });
@@ -766,56 +317,51 @@ void main() {
       await pumpForm(tester, h.app(prefill: prefillOrder()));
       await settle(tester);
 
-      // Step 0: service type (default stays cocktail_barservice).
+      // Step 0: service type (default stays cocktail_barservice), drinker
+      // type, event type.
       await tester.tap(find.text('Cocktail- & Barservice'));
+      await tester.tap(find.text('Viel'));
+      await tester.tap(find.text('Hochzeitsfeier'));
       await tester.pump();
       await tapNext(tester);
 
-      // Step 1: contact.
-      await tester.enterText(find.byType(TextField).at(0), ' Anna Muster ');
-      await tester.enterText(find.byType(TextField).at(1), '+41 79 123 45 67');
-      await tester.pump();
-      await tapNext(tester);
-
-      // Step 2: event details.
+      // Step 1: time, address (distance lookup), currency.
       await pickTime(tester);
       await tester.enterText(
         find.byType(TextField).first,
         'Bahnhofstrasse 1, Basel',
       );
       await settle(tester);
-      await tapNext(tester);
-
-      // Step 3: preferences.
       expect(find.text('42 km'), findsOneWidget);
-      await tester.tap(find.text('Viel'));
       await tester.tap(find.text('EUR'));
-      await tester.tap(find.text('Hochzeitsfeier'));
       await tester.pump();
       await tapNext(tester);
 
-      // Step 4: bar drinks + alcohol.
+      // Step 2: contact + remarks.
+      await tester.enterText(find.byType(TextField).at(0), ' Anna Muster ');
+      await tester.enterText(find.byType(TextField).at(1), '+41 79 123 45 67');
+      await tester.enterText(find.byType(TextField).at(2), ' Bitte pünktlich ');
+      await tester.pump();
+      await tapNext(tester);
+
+      // Step 3: cocktails + a shot with quantity 3 (stepper), bar drinks
+      // and alcohol. Popularity is never opened (defaults to 50 % each).
+      await tester.tap(find.text('Mojito'));
+      await tester.pump();
+      await tester.tap(find.text('Tequila'));
+      await tester.pump();
+      expect(find.text('Weiter · 2 Drinks'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
       await tester.tap(find.text('Gin & Mischgetränke'));
       await tester.tap(find.text('Gin Bulldog 0.7L - 35,-'));
       await tester.pump();
       await tapNext(tester);
 
-      // Step 5: cocktails + a shot with quantity 3.
-      await tester.tap(find.text('Mojito'));
-      await tester.pump();
-      await tester.tap(find.text('Tequila'));
-      await tester.pump();
-      expect(find.text('2 Cocktails ausgewählt'), findsOneWidget);
-      // Search field is first, the shot quantity field last.
-      await tester.enterText(find.byType(TextField).last, '3');
-      await tester.pump();
-      await tapNext(tester);
-
-      // Step 6: popularity (defaults to 50 % each).
-      expect(find.text('50%'), findsNWidgets(2));
-      await tapNext(tester);
-
-      // Step 7: additional services (variant picker) + other + remarks.
+      // Step 4: additional services (variant picker) + other, overview,
+      // submit.
       await tester.tap(find.text('Fotobox'));
       await sheet(tester);
       await tester.tap(find.text('3 Stunden'));
@@ -825,14 +371,9 @@ void main() {
       expect(find.text('3 Stunden (300 EUR)'), findsOneWidget);
       await tester.tap(find.text('Sonstiges'));
       await tester.pump();
-      await tester.enterText(find.byType(TextField).last, ' Bitte pünktlich ');
-      await tester.pump();
-      await tapNext(tester);
-
-      // Step 8: overview + submit.
       expect(find.text('Anfrageübersicht'), findsOneWidget);
       expect(find.text('Anna Muster'), findsOneWidget);
-      await tester.tap(find.text('Antrag einreichen').first);
+      await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
       await settle(tester);
 
@@ -908,11 +449,11 @@ void main() {
       // Step 0: switch to mocktails -> shots removed.
       await tester.tap(find.text('Nur Mocktailservice'));
       await tester.pump();
-      for (var i = 0; i < 8; i++) {
+      for (var i = 0; i < 4; i++) {
         await tapNext(tester);
       }
       expect(find.text('Anfrageübersicht'), findsOneWidget);
-      await tester.tap(find.text('Antrag einreichen').first);
+      await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
       await settle(tester);
 
@@ -949,11 +490,11 @@ void main() {
       tester,
     ) async {
       mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=8');
+      final h = Harness(url: stepUrl(4));
       h.repo.saveResult = null;
       await pumpForm(tester, h.app(prefill: completePrefill()));
       await settle(tester);
-      await tester.tap(find.text('Antrag einreichen').first);
+      await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
       await tester.pump();
       expect(
@@ -967,96 +508,79 @@ void main() {
     });
   });
 
-  group('popularity sync timing', () {
+  group('popularity sync (deliberate change: uniform on all layouts)', () {
     SavedOrder ghostPrefill() => prefillOrder(
       name: 'Pop',
       cocktails: const ['Mojito'],
       cocktailPopularity: const {'Mojito': 80.0, 'Ghost': 10.0},
     );
 
-    testWidgets('mobile syncs popularity on every build (all pages are '
-        'built eagerly), even when step 6 was never shown', (tester) async {
-      mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=8');
-      await pumpForm(tester, h.app(prefill: ghostPrefill()));
-      await settle(tester);
-      await tester.tap(find.text('Antrag einreichen').first);
-      await tester.pump();
-      await settle(tester);
-      expect(h.repo.saveCalls.single['cocktailPopularity'], {'Mojito': 80.0});
-    });
-
-    testWidgets('desktop only syncs popularity while step 6 is shown', (
-      tester,
-    ) async {
-      desktop(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=8');
-      await pumpForm(tester, h.app(prefill: ghostPrefill()));
-      await settle(tester);
-      await tester.tap(find.text('Antrag einreichen'));
-      await tester.pump();
-      await settle(tester);
-      expect(h.repo.saveCalls.single['cocktailPopularity'], {
-        'Mojito': 80.0,
-        'Ghost': 10.0,
+    // Before Task 9 mobile pruned "Ghost" on every rebuild while desktop
+    // only did so while the popularity step was shown (and kept it here).
+    // Now the values follow the selection when it changes (prefill
+    // preselection included), on every layout.
+    for (final (name, layout) in [('mobile', mobile), ('desktop', desktop)]) {
+      testWidgets('$name prunes stale entries without showing popularity', (
+        tester,
+      ) async {
+        layout(tester);
+        final h = Harness(url: stepUrl(4));
+        await pumpForm(tester, h.app(prefill: ghostPrefill()));
+        await settle(tester);
+        await tester.tap(find.text('Antrag einreichen'));
+        await tester.pump();
+        await settle(tester);
+        expect(h.repo.saveCalls.single['cocktailPopularity'], {'Mojito': 80.0});
       });
-    });
+    }
   });
 
   group('staff branch', () {
-    testWidgets('no prefill: syncs appState and goes to /shopping-list', (
+    testWidgets('no prefill: one submit, Claude button, validation applies', (
       tester,
     ) async {
       mobile(tester);
-      final h = Harness(
-        isStaff: true,
-        url: 'http://localhost/order-form?step=8',
-      );
-      // A prefill would switch to the update branch, so fill via URL steps.
+      final h = Harness(isStaff: true, url: stepUrl(4));
       await pumpForm(tester, h.app());
       await settle(tester);
       expect(find.text('Auftragsübersicht'), findsOneWidget);
       expect(find.text('Mit Claude Einkaufsliste generieren'), findsOneWidget);
-      expect(find.text('Einkaufsliste generieren'), findsNWidgets(2));
+      expect(find.text('Einkaufsliste generieren'), findsOneWidget);
 
       // Missing name -> validation applies to staff too.
-      await tester.tap(find.text('Einkaufsliste generieren').first);
+      await tester.tap(find.text('Einkaufsliste generieren'));
       await tester.pump();
-      expect(find.text('Name ist erforderlich'), findsOneWidget);
+      expect(find.text('Name ist erforderlich'), findsWidgets);
+      expect(find.text(stepTitles[2]), findsOneWidget);
       await settle(tester);
     });
 
-    /// Desktop: name/phone, date+time, one cocktail, popularity, overview.
-    Future<void> fillStaffDesktop(WidgetTester tester) async {
+    /// Date/time/address, name/phone, one cocktail, then the overview. The
+    /// sidebar that let staff skip steps (and the address) is gone, so the
+    /// address is now filled in (setup.address below).
+    Future<void> fillStaff(WidgetTester tester) async {
+      await pickDate(tester);
+      await pickTime(tester);
+      await tester.enterText(find.byType(TextField).first, 'Zug');
+      await tester.pump();
+      await tapNext(tester);
       await tester.enterText(find.byType(TextField).at(0), 'Staff Event');
       await tester.enterText(find.byType(TextField).at(1), '044');
       await tester.pump();
-      await tester.tap(find.text('Event-Details').last);
-      await tester.pump();
-      await pickDate(tester);
-      await pickTime(tester);
-      await tester.tap(find.text('Cocktails').last);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tapNext(tester);
       await tester.tap(find.text('Mojito'));
       await tester.pump();
-      await tester.tap(find.text('Beliebtheit'));
-      await tester.pump();
-      await tester.tap(find.text('Zusammenfassung'));
-      await tester.pump();
+      await tapNext(tester);
     }
 
     testWidgets('no prefill, valid: appState + /shopping-list with setupData', (
       tester,
     ) async {
       desktop(tester);
-      final h = Harness(
-        isStaff: true,
-        url: 'http://localhost/order-form?step=1',
-      );
+      final h = Harness(isStaff: true, url: stepUrl(1));
       await pumpForm(tester, h.app());
       await settle(tester);
-      await fillStaffDesktop(tester);
+      await fillStaff(tester);
       await tester.tap(find.text('Einkaufsliste generieren'));
       await tester.pump();
       await settle(tester);
@@ -1070,7 +594,7 @@ void main() {
       expect(setup.orderName, 'Staff Event');
       expect(setup.phoneNumber, '044');
       expect(setup.eventTime, const TimeOfDay(hour: 18, minute: 0));
-      expect(setup.address, isNull);
+      expect(setup.address, 'Zug');
       expect(setup.personCount, 100);
       expect(setup.distanceKm, 10);
       expect(setup.currency, 'CHF');
@@ -1084,13 +608,10 @@ void main() {
 
     testWidgets('onSubmit callback replaces navigation', (tester) async {
       desktop(tester);
-      final h = Harness(
-        isStaff: true,
-        url: 'http://localhost/order-form?step=1',
-      );
+      final h = Harness(isStaff: true, url: stepUrl(1));
       await pumpForm(tester, h.app(withOnSubmit: true));
       await settle(tester);
-      await fillStaffDesktop(tester);
+      await fillStaff(tester);
       await tester.tap(find.text('Einkaufsliste generieren'));
       await tester.pump();
       await settle(tester);
@@ -1108,10 +629,7 @@ void main() {
       'prefill: updateOrder golden + setLinkedOrder + /shopping-list',
       (tester) async {
         mobile(tester);
-        final h = Harness(
-          isStaff: true,
-          url: 'http://localhost/order-form?step=8',
-        );
+        final h = Harness(isStaff: true, url: stepUrl(4));
         await pumpForm(
           tester,
           h.app(
@@ -1142,7 +660,7 @@ void main() {
         );
         await settle(tester);
         expect(h.distanceRequests, isEmpty);
-        await tester.tap(find.text('Einkaufsliste generieren').first);
+        await tester.tap(find.text('Einkaufsliste generieren'));
         await tester.pump();
         await settle(tester);
 
@@ -1197,16 +715,16 @@ void main() {
     // screen's MediaQuery (size, keyboard inset) or locale changes.
     testWidgets('window resize jumps to the URL step (mobile)', (tester) async {
       mobile(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=3');
+      final h = Harness(url: stepUrl(3));
       await pumpForm(tester, h.app(prefill: completePrefill()));
       await settle(tester);
-      expect(find.text('Deine Präferenzen'), findsOneWidget);
-      h.url = 'http://localhost/order-form?step=1';
+      expect(find.text(stepTitles[3]), findsOneWidget);
+      h.url = stepUrl(1);
       tester.view.physicalSize = const Size(520, 2600);
       await tester.pump();
       await settle(tester);
-      expect(find.text('Deine Kontaktdaten'), findsOneWidget);
-      expect(find.text('Deine Präferenzen'), findsNothing);
+      expect(find.text(stepTitles[1]), findsOneWidget);
+      expect(find.text(stepTitles[3]), findsNothing);
     });
 
     testWidgets('keyboard inset change jumps to the URL step (mobile)', (
@@ -1214,29 +732,41 @@ void main() {
     ) async {
       mobile(tester);
       addTearDown(tester.view.resetViewInsets);
-      final h = Harness(url: 'http://localhost/order-form?step=3');
+      final h = Harness(url: stepUrl(3));
       await pumpForm(tester, h.app(prefill: completePrefill()));
       await settle(tester);
-      h.url = 'http://localhost/order-form?step=1';
+      h.url = stepUrl(1);
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
       await tester.pump();
       await settle(tester);
-      expect(find.text('Deine Kontaktdaten'), findsOneWidget);
+      expect(find.text(stepTitles[1]), findsOneWidget);
     });
 
     testWidgets('window resize jumps to the URL step (desktop)', (
       tester,
     ) async {
       desktop(tester);
-      final h = Harness(url: 'http://localhost/order-form?step=3');
+      final h = Harness(url: stepUrl(3));
       await pumpForm(tester, h.app(prefill: completePrefill()));
       await settle(tester);
-      h.url = 'http://localhost/order-form?step=1';
+      h.url = stepUrl(1);
       tester.view.physicalSize = const Size(1300, 2600);
       await tester.pump();
       await settle(tester);
-      expect(find.text('Deine Kontaktdaten'), findsWidgets);
-      expect(find.text('Deine Präferenzen'), findsNothing);
+      expect(find.text(stepTitles[1]), findsOneWidget);
+      expect(find.text(stepTitles[3]), findsNothing);
+    });
+
+    testWidgets('a legacy index re-syncs through the mapping', (tester) async {
+      mobile(tester);
+      final h = Harness(url: stepUrl(0));
+      await pumpForm(tester, h.app(prefill: completePrefill()));
+      await settle(tester);
+      h.url = stepUrl(7); // old additional services -> new 4
+      tester.view.physicalSize = const Size(520, 2600);
+      await tester.pump();
+      await settle(tester);
+      expect(find.text(stepTitles[4]), findsOneWidget);
     });
   });
 
@@ -1248,44 +778,35 @@ void main() {
       final h = Harness();
       await pumpForm(tester, h.app(prefill: prefillOrder()));
       await settle(tester);
-      Future<void> next() async {
-        await tester.tap(find.text('Weiter'));
-        await settle(tester);
-      }
 
       await tester.tap(find.text('Nur Cocktailservice'));
+      await tester.tap(find.text('Hochzeitsfeier'));
       await tester.pump();
-      await next();
-      await tester.enterText(find.byType(TextField).at(0), 'Desk Gast');
-      await tester.enterText(find.byType(TextField).at(1), '061 111');
-      await tester.pump();
-      await next();
+      await tapNext(tester);
       await pickTime(tester);
       await tester.enterText(find.byType(TextField).first, 'Riehen');
       await settle(tester);
-      await next();
-      await tester.tap(find.text('Hochzeitsfeier'));
+      await tapNext(tester);
+      await tester.enterText(find.byType(TextField).at(0), 'Desk Gast');
+      await tester.enterText(find.byType(TextField).at(1), '061 111');
       await tester.pump();
-      await next();
-      // Step 4 shows the "not required" view for cocktail_service, which
-      // has no action row: continue via the stepper sidebar.
-      expect(find.text('Weiter'), findsNothing);
-      await tester.tap(find.text('Cocktails').last);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tapNext(tester);
+      // Cocktail service: no bar drinks section.
+      expect(find.text('Gin & Mischgetränke'), findsNothing);
       await tester.tap(find.text('Caipirinha'));
       await tester.pump();
       await tester.tap(find.text('Tequila'));
       await tester.pump();
-      await next();
-      // Drag Caipirinha's slider to the far right.
-      final slider = find.byType(Slider).first;
-      await tester.drag(slider, const Offset(2000, 0));
+      // Open the optional popularity section and drag Caipirinha's slider
+      // to the far right.
+      await tester.tap(find.text('Beliebtheit anpassen'));
+      await tester.pump();
+      await tester.drag(find.byType(Slider).first, const Offset(2000, 0));
       await tester.pump();
       expect(find.text('100%'), findsOneWidget);
-      await next();
-      await next();
+      await tapNext(tester);
       expect(find.text('Anfrageübersicht'), findsOneWidget);
+      expect(find.byType(PrimaryButton), findsOneWidget);
       await tester.tap(find.text('Antrag einreichen'));
       await tester.pump();
       await settle(tester);
@@ -1319,41 +840,6 @@ void main() {
         'eventType': 'wedding',
       });
       expect(find.text('page /order-success'), findsOneWidget);
-    });
-  });
-
-  group('desktop stepper', () {
-    testWidgets('step summaries reflect the form state', (tester) async {
-      desktop(tester);
-      final h = Harness();
-      await pumpForm(
-        tester,
-        h.app(
-          prefill: prefillOrder(
-            name: 'Lea',
-            personCount: 120,
-            barDrinks: ['shots'],
-            additionalServices: ['other_services'],
-            cocktails: ['Mojito'],
-          ),
-        ),
-      );
-      await settle(tester);
-      expect(find.text('Cocktail & Bar'), findsOneWidget);
-      expect(find.text('Lea'), findsOneWidget);
-      expect(find.text('01.05.2027'), findsOneWidget);
-      expect(find.text('120 Personen'), findsOneWidget);
-      expect(find.text('1 ausgewählt'), findsNWidgets(2));
-      expect(find.text('1 Cocktails'), findsOneWidget);
-      expect(find.text('1 konfiguriert'), findsOneWidget);
-      expect(find.text('Alles prüfen & abschließen'), findsOneWidget);
-
-      // Tapping a stepper item jumps there and rewrites the URL.
-      await tester.tap(find.text('Präferenzen'));
-      await tester.pump();
-      expect(find.text('Deine Präferenzen'), findsWidgets);
-      expect(h.urls.last, 'http://localhost/order-form?step=3');
-      await settle(tester);
     });
   });
 }

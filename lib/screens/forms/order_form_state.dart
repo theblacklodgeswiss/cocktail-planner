@@ -1,4 +1,3 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/additional_service.dart';
@@ -8,6 +7,10 @@ import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../utils/currency.dart';
 import '../../widgets/order_setup_dialog.dart';
+import 'order_form_fields.dart';
+import 'step_mapping.dart';
+
+export 'order_form_fields.dart';
 
 /// Resolves the per-flavor quantity to seed for a shot during prefill: uses
 /// the matching entry's quantity from [shotSelections] if the customer
@@ -41,9 +44,20 @@ typedef OrderFormValidationError = ({int step, String messageKey});
 /// [selectServiceType], [toggleRecipeSelection]) only mutate and are meant
 /// to be called inside [update] (or a `setState` of the screen).
 class OrderFormState extends ChangeNotifier {
-  OrderFormState({required this.distanceLookupPending});
+  OrderFormState({required this.distanceLookupPending}) {
+    for (final entry in _textFocus.entries) {
+      final node = entry.value;
+      // Focus listeners only fire on changes, so losing focus means the
+      // user was in the field and left it: from now on its hint may show.
+      node.addListener(() {
+        if (!node.hasFocus && touchedFields.add(entry.key)) {
+          notifyListeners();
+        }
+      });
+    }
+  }
 
-  static const int totalSteps = 9;
+  static const int totalSteps = kFormSteps;
 
   int currentStep = 0;
 
@@ -99,41 +113,92 @@ class OrderFormState extends ChangeNotifier {
   List<AdditionalService> serviceCatalog = [];
   final TextEditingController remarksController = TextEditingController();
 
+  // Keyboard focus of the text fields (owned here so "Weiter" can focus
+  // the first missing one).
+  final FocusNode nameFocus = FocusNode(debugLabel: 'name');
+  final FocusNode phoneFocus = FocusNode(debugLabel: 'phone');
+  final FocusNode addressFocus = FocusNode(debugLabel: 'address');
+  final FocusNode remarksFocus = FocusNode(debugLabel: 'remarks');
+
+  late final Map<FormFieldId, FocusNode> _textFocus = {
+    FormFieldId.name: nameFocus,
+    FormFieldId.phone: phoneFocus,
+    FormFieldId.address: addressFocus,
+  };
+
+  /// Anchors of every field, for scrolling the first missing one into view.
+  final Map<FormFieldId, GlobalKey> fieldKeys = {
+    for (final field in FormFieldId.values)
+      field: GlobalKey(debugLabel: field.name),
+  };
+
+  /// Text fields the user focused and then left.
+  final Set<FormFieldId> touchedFields = {};
+
+  /// Steps on which the user tried to continue (or submit) while invalid.
+  final Set<int> attemptedSteps = {};
+
+  /// Whether the optional "Beliebtheit anpassen" section is open.
+  bool popularityExpanded = false;
+
   /// Applies [fn] and rebuilds the form (the former `setState(fn)`).
   void update(VoidCallback fn) {
     fn();
     notifyListeners();
   }
 
-  /// Whether the "Weiter" button is enabled on [step].
-  bool canProceed(int step) {
-    if (step == 1) {
-      return nameController.text.trim().isNotEmpty &&
-          phoneController.text.trim().isNotEmpty;
+  /// The data rule of every field: true when [field] has no usable value.
+  bool isMissing(FormFieldId field) => switch (field) {
+    FormFieldId.eventType => selectedEventType == null,
+    FormFieldId.eventDate => eventDate == null,
+    FormFieldId.eventTime => eventTime == null,
+    FormFieldId.address => addressController.text.trim().isEmpty,
+    FormFieldId.name => nameController.text.trim().isEmpty,
+    FormFieldId.phone => phoneController.text.trim().isEmpty,
+    FormFieldId.cocktails => selectedRecipes.isEmpty,
+  };
+
+  /// Whether "Weiter" may leave [step]: every field of
+  /// [requiredFieldsOf] is filled (step 0: event type; 1: date, time,
+  /// address; 2: name, phone; 3 and 4: always).
+  bool canProceed(int step) =>
+      requiredFieldsOf(step).every((field) => !isMissing(field));
+
+  /// The first missing required field of [step] in screen order, or null.
+  FormFieldId? firstMissingField(int step) {
+    for (final field in requiredFieldsOf(step)) {
+      if (isMissing(field)) return field;
     }
-    if (step == 2) {
-      return eventDate != null &&
-          eventTime != null &&
-          addressController.text.trim().isNotEmpty;
-    }
-    if (step == 3) {
-      return selectedEventType != null;
-    }
-    return true;
+    return null;
   }
 
   /// The submit-time validation: the first missing required value, in the
   /// order name -> date -> cocktails, or null when the form can be sent.
   OrderFormValidationError? firstInvalidStep() {
-    if (nameController.text.trim().isEmpty) {
-      return (step: 1, messageKey: 'order_setup.required_name');
-    } else if (eventDate == null) {
-      return (step: 2, messageKey: 'order_setup.required_date');
-    } else if (selectedRecipes.isEmpty) {
-      return (step: 5, messageKey: 'order_setup.required_cocktails');
+    for (final field in const [
+      FormFieldId.name,
+      FormFieldId.eventDate,
+      FormFieldId.cocktails,
+    ]) {
+      if (isMissing(field)) {
+        return (step: field.step, messageKey: field.messageKey);
+      }
     }
     return null;
   }
+
+  /// The hint to show at [field] right now: only once the user tried to
+  /// continue on its step or left the field, never on a pristine form.
+  String? visibleHint(FormFieldId field) {
+    if (!attemptedSteps.contains(field.step) &&
+        !touchedFields.contains(field)) {
+      return null;
+    }
+    return fieldError(this, field);
+  }
+
+  /// The text-field focus node of [field] (null for pickers and chips).
+  FocusNode? focusNodeOf(FormFieldId field) => _textFocus[field];
 
   static String normalizeServiceType(String serviceType) {
     return switch (serviceType) {
@@ -253,6 +318,7 @@ class OrderFormState extends ChangeNotifier {
         );
       }
     }
+    syncPopularityWithSelection();
   }
 
   /// Flattens the split selection state back into the `List<String>` shape
@@ -278,9 +344,7 @@ class OrderFormState extends ChangeNotifier {
         controller.dispose();
       }
       shotQuantityControllers.clear();
-      cocktailPopularity.removeWhere(
-        (name, _) => !selectedRecipes.any((recipe) => recipe.name == name),
-      );
+      syncPopularityWithSelection();
       if (cocktailFilter == 'shots') {
         cocktailFilter = 'all';
       }
@@ -288,8 +352,8 @@ class OrderFormState extends ChangeNotifier {
   }
 
   /// Toggles [recipe]; a newly selected shot starts at quantity 1, a
-  /// deselected one drops its quantity and controller. Call inside
-  /// [update].
+  /// deselected one drops its quantity and controller. Popularity follows
+  /// the selection right away. Call inside [update].
   void toggleRecipeSelection(Recipe recipe) {
     final isSelected = selectedRecipes.any((r) => r.id == recipe.id);
     if (isSelected) {
@@ -302,6 +366,7 @@ class OrderFormState extends ChangeNotifier {
       selectedRecipes.add(recipe);
       if (recipe.isShot) shotQuantities[recipe.name] = 1;
     }
+    syncPopularityWithSelection();
   }
 
   /// Sets [recipe]'s shot quantity, clamped to at least 1. Call inside
@@ -321,8 +386,9 @@ class OrderFormState extends ChangeNotifier {
   }
 
   /// Initializes missing popularity entries with 50 % and drops entries of
-  /// recipes no longer selected. Runs while the popularity step builds
-  /// (without notifying), as it always did.
+  /// recipes no longer selected. Runs (without notifying) whenever the
+  /// selection changes - toggling, the mocktail switch and the prefill
+  /// preselection - so the values never depend on which step was shown.
   void syncPopularityWithSelection() {
     // Initialize missing entries with 50%
     for (final recipe in selectedRecipes) {
@@ -365,63 +431,25 @@ class OrderFormState extends ChangeNotifier {
     );
   }
 
-  /// Summary line of [step] in the desktop stepper.
-  String stepTitle(int step) {
-    switch (step) {
-      case 0:
-        return serviceType == 'cocktail_barservice'
-            ? 'Cocktail & Bar'
-            : serviceType == 'cocktail_service'
-            ? 'Nur Cocktail'
-            : serviceType == 'mocktail_service'
-            ? 'Nur Mocktails'
-            : 'Nur Bar';
-      case 1:
-        return nameController.text.trim().isEmpty
-            ? 'Nicht ausgefüllt'
-            : nameController.text.trim();
-      case 2:
-        return eventDate != null
-            ? DateFormat('dd.MM.yyyy').format(eventDate!)
-            : 'Nicht ausgefüllt';
-      case 3:
-        return '$personCount Personen';
-      case 4:
-        if (serviceType == 'cocktail_barservice' ||
-            serviceType == 'bar_service') {
-          final total = selectedBarDrinks.length + selectedAlcoholItems.length;
-          return total == 0 ? 'Keine ausgewählt' : '$total ausgewählt';
-        }
-        return 'Übersprungen';
-      case 5:
-        return selectedRecipes.isEmpty
-            ? 'Keine ausgewählt'
-            : serviceType == 'mocktail_service'
-            ? '${selectedRecipes.length} Mocktails'
-            : '${selectedRecipes.length} Cocktails';
-      case 6:
-        return selectedRecipes.isEmpty
-            ? 'Keine Cocktails'
-            : '${selectedRecipes.length} konfiguriert';
-      case 7:
-        final count7 = additionalServicesList.length;
-        return count7 == 0 ? 'Keine' : '$count7 ausgewählt';
-      case 8:
-        return 'Alles prüfen & abschließen';
-      default:
-        return '';
-    }
-  }
-
   @override
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
     addressController.dispose();
     remarksController.dispose();
+    for (final node in [nameFocus, phoneFocus, addressFocus, remarksFocus]) {
+      node.dispose();
+    }
     for (final controller in shotQuantityControllers.values) {
       controller.dispose();
     }
     super.dispose();
   }
 }
+
+/// The translation key of the hint for [field] when its value is missing,
+/// else null. The rule itself is [OrderFormState.isMissing] (the same one
+/// [OrderFormState.canProceed] uses); visibility is
+/// [OrderFormState.visibleHint].
+String? fieldError(OrderFormState form, FormFieldId field) =>
+    form.isMissing(field) ? field.messageKey : null;
