@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/order_repository.dart';
-import '../../models/order.dart';
 import '../../services/auth_service.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/glass_icon_button.dart';
+import '../../ui/widgets/large_title_scaffold.dart';
 import 'widgets/my_request_detail_sheet.dart';
 import 'widgets/my_requests_list.dart';
 
@@ -13,38 +15,36 @@ class MyRequestsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('dashboard.my_requests_title'.tr()),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+    final p = AppPalette.of(context);
+    return LargeTitleScaffold(
+      title: 'dashboard.my_requests_title'.tr(),
+      actions: [
+        GlassIconButton(
+          icon: Icons.arrow_back,
+          semanticLabel: 'ui.back'.tr(),
           onPressed: () => context.go('/'),
         ),
-      ),
-      body: !authService.isSignedIn
-          ? Center(child: Text('dashboard.sign_in_to_see_requests'.tr()))
-          : StreamBuilder<List<SavedOrder>>(
-              stream: orderRepository.watchOrdersForOwner(authService.currentUser!.uid),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final requests = snapshot.data ?? [];
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 700),
-                      child: MyRequestsList(
-                        requests: requests,
-                        onTap: (request) => showMyRequestDetails(context, request),
-                      ),
-                    ),
-                  ),
-                );
-              },
+      ],
+      slivers: [
+        if (!authService.isSignedIn)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                'dashboard.sign_in_to_see_requests'.tr(),
+                textAlign: TextAlign.center,
+                style: AppText.body.copyWith(color: p.textSecondary),
+              ),
             ),
+          )
+        else
+          MyRequestsContent(
+            streamFactory: () => orderRepository.watchOrdersForOwner(
+              authService.currentUser!.uid,
+            ),
+            onOpen: (request) => showMyRequestDetails(context, request),
+          ),
+      ],
     );
   }
 }
