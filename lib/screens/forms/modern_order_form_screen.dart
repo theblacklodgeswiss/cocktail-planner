@@ -18,23 +18,9 @@ import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
 import 'order_form_services.dart';
+import 'order_form_state.dart';
 
-/// Resolves the per-flavor quantity to seed for a shot during prefill: uses
-/// the matching entry's quantity from [shotSelections] if the customer
-/// requested a specific quantity for [recipeName], otherwise defaults to 1
-/// (matching the default applied when a shot is freshly selected by staff).
-/// Extracted as a pure, directly-testable function - see
-/// test/click_interactions_test.dart for the regression test covering the
-/// bug where this quantity was silently dropped on prefill.
-int resolveShotPrefillQuantity(
-  List<ShotSelection> shotSelections,
-  String recipeName,
-) {
-  final matchingSelection = shotSelections
-      .cast<ShotSelection?>()
-      .firstWhere((s) => s!.name == recipeName, orElse: () => null);
-  return matchingSelection?.quantity ?? 1;
-}
+export 'order_form_state.dart' show resolveShotPrefillQuantity;
 
 /// Result from the modern order form containing both setup data and selected recipes
 class OrderFormResult {
@@ -69,61 +55,13 @@ class ModernOrderFormScreen extends StatefulWidget {
 
 class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   final PageController _pageController = PageController();
-  int _currentStep = 0;
-  final int _totalSteps = 9;
+  static const int _totalSteps = OrderFormState.totalSteps;
 
-  /// Guards the final-step submit button against a double-tap and drives
-  /// its loading spinner while the (async) submit work - a Firestore write
-  /// - is in flight. Intermediate "Weiter" taps go through the same
-  /// `_nextStep`/button but only do a synchronous `setState`, so they are
-  /// unaffected by this flag.
-  bool _isSubmitting = false;
+  /// All form data (controllers, selections, derived values).
+  late final OrderFormState _form;
 
-  Future<CocktailData>? _dataFuture;
-
-  /// Resolved prefill order (from widget.prefill or appState.pendingFormOrder).
-  SavedOrder? _prefillOrder;
-
-  // Form data
-  String _serviceType = 'cocktail_barservice';
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  DateTime? _eventDate;
-  TimeOfDay? _eventTime;
-  final TextEditingController _addressController = TextEditingController();
-  int _personCount = 100;
-  int _distanceKm = 10;
-  // Guests start with a "pending" lookup so `_buildDistanceDisplay()` shows
-  // a "calculating..." state instead of the fabricated default `_distanceKm`
-  // value above. Cleared to false as soon as a lookup attempt for the
-  // current address resolves (success or definitive failure - see the
-  // debounced listener in `initState`). Employees/admins never see that
-  // display, but this starts false for them anyway so the flag's meaning
-  // stays simple and role-independent.
-  late bool _distanceLookupPending;
-  String _currency = defaultCurrency.code;
-  String _drinkerType = 'normal';
-  EventType? _selectedEventType;
-  final List<Recipe> _selectedRecipes = [];
-  final Map<String, double> _cocktailPopularity = {};
-  final Map<String, int> _shotQuantities = {};
-  final Map<String, TextEditingController> _shotQuantityControllers = {};
-  String _searchQuery = '';
-  String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
-  final Set<String> _selectedBarDrinks = {};
-  final Set<String> _selectedAlcoholItems = {};
-  // Catalog services the customer picked a variant for: serviceId -> variantId.
-  final Map<String, String> _selectedAdditionalServices = {};
-  // "Sonstiges" ("Other") stays a plain flag, not a catalog service - see
-  // the design spec section 5.
-  bool _otherServicesSelected = false;
-  // Legacy bare-string service IDs (e.g. 'booth_360') carried over from an
-  // order created before the catalog existed - preserved untouched on
-  // prefill/save, but not editable through the new tile grid.
-  final Set<String> _legacyAdditionalServiceIds = {};
-  List<AdditionalService> _serviceCatalog = [];
   StreamSubscription<List<AdditionalService>>? _serviceCatalogSubscription;
-  final TextEditingController _remarksController = TextEditingController();
+
   Timer? _distanceLookupDebounce;
   // Trimmed address text as of the last time the debounce/lookup logic
   // below actually ran. `TextEditingController.addListener` fires on ANY
@@ -136,23 +74,25 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   @override
   void initState() {
     super.initState();
-    _distanceLookupPending = !widget.services.isEmployeeOrHigher();
-    _nameController.addListener(() => setState(() {}));
-    _phoneController.addListener(() => setState(() {}));
-    _addressController.addListener(() {
+    _form = OrderFormState(
+      distanceLookupPending: !widget.services.isEmployeeOrHigher(),
+    );
+    _form.nameController.addListener(() => setState(() {}));
+    _form.phoneController.addListener(() => setState(() {}));
+    _form.addressController.addListener(() {
       setState(() {});
       // Guests get their distance computed automatically from the address
       // they type; an employee's manually-set value must never be silently
       // overwritten by a background lookup.
       if (!widget.services.isEmployeeOrHigher()) {
-        final trimmedAddress = _addressController.text.trim();
+        final trimmedAddress = _form.addressController.text.trim();
         // Skip the debounce/pending-reset/reschedule entirely when the
         // text hasn't actually changed (a cursor move, tapping back into
         // the field, etc. still notifies listeners but isn't an edit).
         if (trimmedAddress == _lastLookupAddress) return;
         _lastLookupAddress = trimmedAddress;
         _distanceLookupDebounce?.cancel();
-        setState(() => _distanceLookupPending = true);
+        setState(() => _form.distanceLookupPending = true);
         _distanceLookupDebounce = Timer(const Duration(milliseconds: 800), () {
           // Capture the address this lookup is for at the moment it starts.
           // Cancelling `_distanceLookupDebounce` above only prevents a *new*
@@ -162,7 +102,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           // network call returns, its (now stale) result must not overwrite
           // whatever the newer lookup found, even if the older call happens
           // to resolve later (e.g. a slower round trip).
-          final requestedAddress = _addressController.text.trim();
+          final requestedAddress = _form.addressController.text.trim();
           widget.services
               .distanceKmFromAddress(requestedAddress)
               .then((result) {
@@ -173,7 +113,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             // (firing this listener) before the async role check resolves,
             // so this Timer can be scheduled as a "guest" lookup and only
             // fire well after the session is known to be employee-or-higher
-            // and the correct prefilled `_distanceKm` is already showing.
+            // and the correct prefilled `_form.distanceKm` is already showing.
             // Also discard the result if the address has since changed
             // (see `requestedAddress` above) - it no longer corresponds to
             // what's in the field. Only one Timer is ever pending at a time
@@ -181,22 +121,22 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             // these guards are sufficient without extra request-id tracking.
             if (!mounted ||
                 widget.services.isEmployeeOrHigher() ||
-                _addressController.text.trim() != requestedAddress) {
+                _form.addressController.text.trim() != requestedAddress) {
               return;
             }
             setState(() {
-              if (result != null) _distanceKm = result;
-              _distanceLookupPending = false;
+              if (result != null) _form.distanceKm = result;
+              _form.distanceLookupPending = false;
             });
           });
         });
       }
     });
-    _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
+    _applyPrefill(); // must run before _loadCocktailData so _form.prefillOrder is set
     _loadCocktailData();
     _serviceCatalogSubscription =
         widget.services.watchAdditionalServices().listen((services) {
-      if (mounted) setState(() => _serviceCatalog = services);
+      if (mounted) setState(() => _form.serviceCatalog = services);
     });
     widget.services.resolveRole().then((_) {
       if (mounted) {
@@ -210,7 +150,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       if (stepParam != null) {
         final step = int.tryParse(stepParam) ?? 0;
         if (step >= 0 && step < _totalSteps) {
-          setState(() => _currentStep = step);
+          setState(() => _form.currentStep = step);
           if (_pageController.hasClients) {
             _pageController.jumpToPage(step);
           }
@@ -223,148 +163,27 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   void _loadCocktailData() {
-    _dataFuture = widget.services.loadCocktailData();
+    _form.dataFuture = widget.services.loadCocktailData();
     // After data loads, pre-select cocktails from prefill
-    final prefillOrder = _prefillOrder;
+    final prefillOrder = _form.prefillOrder;
     if (prefillOrder != null) {
-      _dataFuture = _dataFuture!.then((data) {
-        final order = prefillOrder;
-        final cocktailNames = order.cocktails.isNotEmpty
-            ? order.cocktails
-            : order.requestedCocktails;
+      _form.dataFuture = _form.dataFuture!.then((data) {
         if (mounted) {
-          setState(() {
-            for (final name in cocktailNames) {
-              final clean = name.contains('(')
-                  ? name.substring(0, name.indexOf('(')).trim()
-                  : name;
-              final recipe = data.recipes.cast<Recipe?>().firstWhere(
-                (r) => r!.name.toLowerCase() == clean.toLowerCase(),
-                orElse: () => null,
-              );
-              if (recipe != null &&
-                  !_selectedRecipes.any((r) => r.name == recipe.name)) {
-                _selectedRecipes.add(recipe);
-              }
-            }
-            for (final name in order.shots) {
-              final recipe = data.recipes.cast<Recipe?>().firstWhere(
-                (r) => r!.name == name,
-                orElse: () => null,
-              );
-              if (recipe != null &&
-                  !_selectedRecipes.any((r) => r.name == recipe.name)) {
-                _selectedRecipes.add(recipe);
-                _shotQuantities[recipe.name] = resolveShotPrefillQuantity(
-                  order.shotSelections,
-                  recipe.name,
-                );
-              }
-            }
-          });
+          setState(() => _form.preselectRecipes(data, prefillOrder));
         }
         return data;
       });
     }
   }
 
-  String _normalizeServiceType(String serviceType) {
-    return switch (serviceType) {
-      'cocktailservice' => 'cocktail_service',
-      'barservice' => 'bar_service',
-      _ => serviceType,
-    };
-  }
-
   void _applyPrefill() {
     // widget.prefill for programmatic use; appState.pendingFormOrder for push-navigation (avoids GoRouter extra being lost on web)
     final order = widget.prefill ?? appState.pendingFormOrder;
     if (order == null) return;
-    _prefillOrder = order;
+    _form.prefillOrder = order;
     appState.clearPendingFormOrder();
-    _nameController.text = order.name;
-    _phoneController.text = order.phone;
-    _addressController.text = order.location;
-    _remarksController.text = order.remarks;
-    _eventDate = order.date;
-    _personCount = order.personCount > 0 ? order.personCount : _personCount;
-    _currency = order.currency.isNotEmpty ? order.currency : _currency;
-    _drinkerType = order.drinkerType.isNotEmpty
-        ? order.drinkerType
-        : _drinkerType;
-    _selectedEventType = order.eventType.isNotEmpty
-        ? EventType.values.where((e) => e.name == order.eventType).firstOrNull
-        : _selectedEventType;
-    _selectedBarDrinks
-      ..clear()
-      ..addAll(order.barDrinks);
-    _selectedAlcoholItems
-      ..clear()
-      ..addAll(order.alcoholPurchase);
-    _applyAdditionalServicesPrefill(order.additionalServices);
-    _cocktailPopularity
-      ..clear()
-      ..addAll(order.cocktailPopularity);
-    if (order.serviceType.isNotEmpty) {
-      _serviceType = _normalizeServiceType(order.serviceType);
-    }
-    if (order.distanceKm > 0) _distanceKm = order.distanceKm;
-    // Parse event time
-    final timeStr = order.offerEventTime.isNotEmpty
-        ? order.offerEventTime
-        : order.eventTime;
-    if (timeStr.isNotEmpty) {
-      try {
-        final parts = timeStr.split(':');
-        if (parts.length == 2) {
-          _eventTime = TimeOfDay(
-            hour: int.parse(parts[0]),
-            minute: int.parse(parts[1]),
-          );
-        }
-      } catch (_) {}
-    }
+    _form.applyPrefill(order);
   }
-
-  /// Parses a prefilled order's `additionalServices` values into this
-  /// screen's split selection state: composite `"serviceId:variantId"`
-  /// strings go into [_selectedAdditionalServices], the `'other_services'`
-  /// flag into [_otherServicesSelected], and anything else (a legacy bare
-  /// service ID from before the catalog existed) into
-  /// [_legacyAdditionalServiceIds] so it round-trips unchanged on save even
-  /// though the new tile grid can't display or edit it.
-  void _applyAdditionalServicesPrefill(List<String> values) {
-    _selectedAdditionalServices.clear();
-    _legacyAdditionalServiceIds.clear();
-    _otherServicesSelected = false;
-    for (final value in values) {
-      if (value == 'other_services') {
-        _otherServicesSelected = true;
-        continue;
-      }
-      final separatorIndex = value.indexOf(':');
-      if (separatorIndex > 0) {
-        final serviceId = value.substring(0, separatorIndex);
-        final variantId = value.substring(separatorIndex + 1);
-        if (serviceId.isNotEmpty && variantId.isNotEmpty) {
-          _selectedAdditionalServices[serviceId] = variantId;
-          continue;
-        }
-      }
-      _legacyAdditionalServiceIds.add(value);
-    }
-  }
-
-  /// Flattens the split selection state back into the `List<String>` shape
-  /// the `additionalServices` order field has always had - composite
-  /// `"serviceId:variantId"` strings for catalog picks, preserved legacy
-  /// bare IDs, and `'other_services'` when that flag is set.
-  List<String> get _additionalServicesList => [
-        for (final entry in _selectedAdditionalServices.entries)
-          '${entry.key}:${entry.value}',
-        ..._legacyAdditionalServiceIds,
-        if (_otherServicesSelected) 'other_services',
-      ];
 
   bool get _isAdminUser => widget.services.isEmployeeOrHigher();
 
@@ -376,8 +195,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final stepParam = uri.queryParameters['step'];
     if (stepParam != null) {
       final step = int.tryParse(stepParam) ?? 0;
-      if (step >= 0 && step < _totalSteps && step != _currentStep) {
-        setState(() => _currentStep = step);
+      if (step >= 0 && step < _totalSteps && step != _form.currentStep) {
+        setState(() => _form.currentStep = step);
         if (_pageController.hasClients) {
           _pageController.jumpToPage(step);
         }
@@ -390,13 +209,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _distanceLookupDebounce?.cancel();
     _serviceCatalogSubscription?.cancel();
     _pageController.dispose();
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    _remarksController.dispose();
-    for (final controller in _shotQuantityControllers.values) {
-      controller.dispose();
-    }
+    _form.dispose();
     super.dispose();
   }
 
@@ -415,7 +228,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final maxDate = now.add(const Duration(days: 730));
 
     // Use Cupertino Picker everywhere with proper mouse/touch support
-    DateTime selectedDate = _eventDate ?? now;
+    DateTime selectedDate = _form.eventDate ?? now;
 
     return showModalBottomSheet<DateTime>(
       context: context,
@@ -494,7 +307,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   // Show time picker (Cupertino style with mouse wheel support on Web)
   Future<TimeOfDay?> _showCupertinoTimePicker() async {
-    final initialTime = _eventTime ?? const TimeOfDay(hour: 18, minute: 0);
+    final initialTime = _form.eventTime ?? const TimeOfDay(hour: 18, minute: 0);
 
     // Use Cupertino Picker everywhere with proper mouse/touch support
     DateTime selectedDateTime = DateTime(
@@ -585,27 +398,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
-  bool get _canProceed {
-    if (_currentStep == 1) {
-      return _nameController.text.trim().isNotEmpty &&
-          _phoneController.text.trim().isNotEmpty;
-    }
-    if (_currentStep == 2) {
-      return _eventDate != null &&
-          _eventTime != null &&
-          _addressController.text.trim().isNotEmpty;
-    }
-    if (_currentStep == 3) {
-      return _selectedEventType != null;
-    }
-    return true;
-  }
+  bool get _canProceed => _form.canProceed(_form.currentStep);
 
   void _nextStep() {
     HapticFeedback.lightImpact();
-    if (_currentStep < _totalSteps - 1) {
-      final nextStep = _currentStep + 1;
-      setState(() => _currentStep = nextStep);
+    if (_form.currentStep < _totalSteps - 1) {
+      final nextStep = _form.currentStep + 1;
+      setState(() => _form.currentStep = nextStep);
       // Update URL without affecting navigation stack
       _updateUrlWithoutNavigation(nextStep);
       // Animate PageView on mobile layout
@@ -623,9 +422,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   void _previousStep() {
     HapticFeedback.lightImpact();
-    if (_currentStep > 0) {
-      final prevStep = _currentStep - 1;
-      setState(() => _currentStep = prevStep);
+    if (_form.currentStep > 0) {
+      final prevStep = _form.currentStep - 1;
+      setState(() => _form.currentStep = prevStep);
       // Update URL without affecting navigation stack
       _updateUrlWithoutNavigation(prevStep);
       // Animate PageView on mobile layout
@@ -640,66 +439,26 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Future<void> _submitForm() async {
-    if (_isSubmitting) return;
+    if (_form.isSubmitting) return;
     // Validate required fields
-    String? errorMessage;
-
-    if (_nameController.text.trim().isEmpty) {
-      errorMessage = 'order_setup.required_name'.tr();
-      _currentStep = 1; // Jump to Basic Info step
-      _updateUrlWithoutNavigation(1);
-    } else if (_eventDate == null) {
-      errorMessage = 'order_setup.required_date'.tr();
-      _currentStep = 2; // Jump to Event Details step
-      _updateUrlWithoutNavigation(2);
-    } else if (_selectedRecipes.isEmpty) {
-      errorMessage = 'order_setup.required_cocktails'.tr();
-      _currentStep = 5; // Jump to Cocktail Selection step
-      _updateUrlWithoutNavigation(5);
-    }
-
-    if (errorMessage != null) {
+    final invalid = _form.firstInvalidStep();
+    if (invalid != null) {
+      _form.currentStep = invalid.step; // Jump to the faulty step
+      _updateUrlWithoutNavigation(invalid.step);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage)));
+      ).showSnackBar(SnackBar(content: Text(invalid.messageKey.tr())));
       setState(() {}); // Update UI to show correct step
       return;
     }
 
-    setState(() => _isSubmitting = true);
+    setState(() => _form.isSubmitting = true);
 
-    final setupData = OrderSetupData(
-      orderName: _nameController.text.trim(),
-      phoneNumber: _phoneController.text.trim().isEmpty
-          ? null
-          : _phoneController.text.trim(),
-      eventDate: _eventDate,
-      eventTime: _eventTime,
-      address: _addressController.text.trim().isEmpty
-          ? null
-          : _addressController.text.trim(),
-      personCount: _personCount,
-      distanceKm: _distanceKm,
-      currency: _currency,
-      drinkerType: _drinkerType,
-      serviceType: _serviceType,
-      barDrinks: _selectedBarDrinks.isEmpty
-          ? null
-          : _selectedBarDrinks.toList(),
-      alcoholPurchase: _selectedAlcoholItems.isEmpty
-          ? null
-          : _selectedAlcoholItems.toList(),
-      additionalServices: _additionalServicesList.isEmpty
-          ? null
-          : _additionalServicesList,
-      remarks: _remarksController.text.trim().isEmpty
-          ? null
-          : _remarksController.text.trim(),
-    );
+    final setupData = _form.buildSetupData();
 
     final result = OrderFormResult(
       setupData: setupData,
-      selectedRecipes: _selectedRecipes,
+      selectedRecipes: _form.selectedRecipes,
     );
 
     // Employees and admins get the staff flow (pricing, shopping list);
@@ -710,13 +469,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       if (!isEmployeeOrHigher) {
         // Customer flow: Save as pending order and show thank you dialog
         await _savePendingOrderAndShowThanks(setupData);
-      } else if (_prefillOrder != null) {
+      } else if (_form.prefillOrder != null) {
         // Admin prefill flow: update existing form order with new data, then go to shopping list
         await _updateFormOrderAndNavigate(setupData);
       } else {
         // Admin flow: Sync selected recipes + popularity to global state and navigate
-        appState.setSelectedRecipes(_selectedRecipes);
-        for (final entry in _cocktailPopularity.entries) {
+        appState.setSelectedRecipes(_form.selectedRecipes);
+        for (final entry in _form.cocktailPopularity.entries) {
           appState.setCocktailPopularity(entry.key, entry.value);
         }
         if (widget.onSubmit != null) {
@@ -726,17 +485,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         }
       }
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _form.isSubmitting = false);
     }
   }
 
   Future<void> _updateFormOrderAndNavigate(OrderSetupData setupData) async {
-    final order = _prefillOrder!;
-    final cocktailNames = _selectedRecipes
+    final order = _form.prefillOrder!;
+    final cocktailNames = _form.selectedRecipes
         .where((r) => !r.isShot)
         .map((r) => r.name)
         .toList();
-    final shotNames = _selectedRecipes
+    final shotNames = _form.selectedRecipes
         .where((r) => r.isShot)
         .map((r) => r.name)
         .toList();
@@ -755,12 +514,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       'serviceType': setupData.serviceType,
       'cocktails': cocktailNames,
       'shots': shotNames,
-      'shotQuantities': _shotQuantities.entries
+      'shotQuantities': _form.shotQuantities.entries
           .map((e) => {'name': e.key, 'quantity': e.value})
           .toList(),
       'eventTime': eventTimeStr,
       'offerEventTime': eventTimeStr,
-      'eventType': _selectedEventType?.name ?? '',
+      'eventType': _form.selectedEventType?.name ?? '',
       'offerClientName': setupData.orderName,
       'offerClientContact': setupData.phoneNumber ?? '',
     });
@@ -770,8 +529,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       requestedCocktails: order.requestedCocktails,
       savedItems: order.items,
     );
-    appState.setSelectedRecipes(_selectedRecipes);
-    for (final entry in _cocktailPopularity.entries) {
+    appState.setSelectedRecipes(_form.selectedRecipes);
+    for (final entry in _form.cocktailPopularity.entries) {
       appState.setCocktailPopularity(entry.key, entry.value);
     }
     if (mounted) {
@@ -791,15 +550,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         personCount: setupData.personCount,
         drinkerType: setupData.drinkerType,
         status: 'quote',
-        cocktails: _selectedRecipes
+        cocktails: _form.selectedRecipes
             .where((r) => !r.isShot)
             .map((r) => r.name)
             .toList(),
-        shots: _selectedRecipes
+        shots: _form.selectedRecipes
             .where((r) => r.isShot)
             .map((r) => r.name)
             .toList(),
-        shotQuantities: _shotQuantities.entries
+        shotQuantities: _form.shotQuantities.entries
             .map((e) => {'name': e.key, 'quantity': e.value})
             .toList(),
         serviceType: setupData.serviceType,
@@ -813,8 +572,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         alcoholPurchase: setupData.alcoholPurchase ?? [],
         additionalServices: setupData.additionalServices ?? [],
         remarks: setupData.remarks ?? '',
-        cocktailPopularity: _cocktailPopularity,
-        eventType: _selectedEventType?.name ?? '',
+        cocktailPopularity: _form.cocktailPopularity,
+        eventType: _form.selectedEventType?.name ?? '',
       );
 
       if (orderId == null) {
@@ -850,7 +609,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            if (_currentStep > 0) {
+            if (_form.currentStep > 0) {
               _previousStep();
             } else if (context.canPop()) {
               context.pop();
@@ -889,7 +648,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     right: index < _totalSteps - 1 ? 8 : 0,
                   ),
                   decoration: BoxDecoration(
-                    color: index <= _currentStep
+                    color: index <= _form.currentStep
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(2),
@@ -903,7 +662,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         Expanded(
           child: PageView(
             controller: _pageController,
-            onPageChanged: (index) => setState(() => _currentStep = index),
+            onPageChanged: (index) => setState(() => _form.currentStep = index),
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildServiceTypeStep(),
@@ -922,7 +681,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: _currentStep == _totalSteps - 1
+            child: _form.currentStep == _totalSteps - 1
                 ? _isAdminUser
                       ? Column(
                           mainAxisSize: MainAxisSize.min,
@@ -949,8 +708,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton.icon(
-                                onPressed: _isSubmitting ? null : _nextStep,
-                                icon: _isSubmitting
+                                onPressed: _form.isSubmitting ? null : _nextStep,
+                                icon: _form.isSubmitting
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
@@ -976,8 +735,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       : SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: _isSubmitting ? null : _nextStep,
-                            icon: _isSubmitting
+                            onPressed: _form.isSubmitting ? null : _nextStep,
+                            icon: _form.isSubmitting
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
@@ -999,7 +758,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 : Row(
                     children: [
                       Expanded(
-                        child: _currentStep > 0
+                        child: _form.currentStep > 0
                             ? OutlinedButton(
                                 onPressed: _previousStep,
                                 style: OutlinedButton.styleFrom(
@@ -1130,7 +889,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         // Right Side: Content
         Expanded(
           child: SingleChildScrollView(
-            child: _currentStep >= 5
+            child: _form.currentStep >= 5
                 ? Padding(
                     padding: const EdgeInsets.all(32),
                     child: _buildCurrentStepContent(),
@@ -1156,8 +915,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     String title,
     String subtitle,
   ) {
-    final isActive = _currentStep == step;
-    final isCompleted = _currentStep > step;
+    final isActive = _form.currentStep == step;
+    final isCompleted = _form.currentStep > step;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1169,7 +928,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         child: InkWell(
           onTap: () {
             HapticFeedback.selectionClick();
-            setState(() => _currentStep = step);
+            setState(() => _form.currentStep = step);
             // Update URL without affecting navigation stack
             _updateUrlWithoutNavigation(step);
           },
@@ -1210,7 +969,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _getStepTitle(step),
+                        _form.stepTitle(step),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: isActive
                               ? FontWeight.w600
@@ -1233,56 +992,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     );
   }
 
-  String _getStepTitle(int step) {
-    switch (step) {
-      case 0:
-        return _serviceType == 'cocktail_barservice'
-            ? 'Cocktail & Bar'
-            : _serviceType == 'cocktail_service'
-            ? 'Nur Cocktail'
-            : _serviceType == 'mocktail_service'
-            ? 'Nur Mocktails'
-            : 'Nur Bar';
-      case 1:
-        return _nameController.text.trim().isEmpty
-            ? 'Nicht ausgefüllt'
-            : _nameController.text.trim();
-      case 2:
-        return _eventDate != null
-            ? DateFormat('dd.MM.yyyy').format(_eventDate!)
-            : 'Nicht ausgefüllt';
-      case 3:
-        return '$_personCount Personen';
-      case 4:
-        if (_serviceType == 'cocktail_barservice' ||
-            _serviceType == 'bar_service') {
-          final total =
-              _selectedBarDrinks.length + _selectedAlcoholItems.length;
-          return total == 0 ? 'Keine ausgewählt' : '$total ausgewählt';
-        }
-        return 'Übersprungen';
-      case 5:
-        return _selectedRecipes.isEmpty
-            ? 'Keine ausgewählt'
-            : _serviceType == 'mocktail_service'
-            ? '${_selectedRecipes.length} Mocktails'
-            : '${_selectedRecipes.length} Cocktails';
-      case 6:
-        return _selectedRecipes.isEmpty
-            ? 'Keine Cocktails'
-            : '${_selectedRecipes.length} konfiguriert';
-      case 7:
-        final count7 = _additionalServicesList.length;
-        return count7 == 0 ? 'Keine' : '$count7 ausgewählt';
-      case 8:
-        return 'Alles prüfen & abschließen';
-      default:
-        return '';
-    }
-  }
-
   Widget _buildCurrentStepContent() {
-    switch (_currentStep) {
+    switch (_form.currentStep) {
       case 0:
         return _buildServiceTypeStep();
       case 1:
@@ -1368,7 +1079,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     String title,
     String description,
   ) {
-    final isSelected = _serviceType == value;
+    final isSelected = _form.serviceType == value;
     return Card(
       elevation: isSelected ? 8 : 0,
       color: Theme.of(context).colorScheme.surfaceContainer,
@@ -1384,24 +1095,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       child: InkWell(
         onTap: () {
           HapticFeedback.selectionClick();
-          setState(() {
-            _serviceType = value;
-            if (value == 'mocktail_service') {
-              _selectedRecipes.removeWhere((recipe) => recipe.isShot);
-              _shotQuantities.clear();
-              for (final controller in _shotQuantityControllers.values) {
-                controller.dispose();
-              }
-              _shotQuantityControllers.clear();
-              _cocktailPopularity.removeWhere(
-                (name, _) =>
-                    !_selectedRecipes.any((recipe) => recipe.name == name),
-              );
-              if (_cocktailFilter == 'shots') {
-                _cocktailFilter = 'all';
-              }
-            }
-          });
+          setState(() => _form.selectServiceType(value));
         },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
@@ -1479,7 +1173,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ),
           const SizedBox(height: 32),
           TextField(
-            controller: _nameController,
+            controller: _form.nameController,
             decoration: InputDecoration(
               labelText: 'order_setup.order_name_label'.tr(),
               hintText: 'order_setup.order_name_hint'.tr(),
@@ -1493,7 +1187,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ),
           const SizedBox(height: 20),
           TextField(
-            controller: _phoneController,
+            controller: _form.phoneController,
             decoration: InputDecoration(
               labelText: '${'order_setup.phone_label'.tr()} *',
               hintText: 'order_setup.phone_hint'.tr(),
@@ -1538,7 +1232,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           _buildDateTimePicker(),
           const SizedBox(height: 20),
           TextField(
-            controller: _addressController,
+            controller: _form.addressController,
             decoration: InputDecoration(
               labelText: 'order_setup.address_label'.tr(),
               hintText: 'order_setup.address_hint'.tr(),
@@ -1576,7 +1270,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               final date = await _showCupertinoDatePicker();
               if (date != null) {
                 HapticFeedback.selectionClick();
-                setState(() => _eventDate = date);
+                setState(() => _form.eventDate = date);
               }
             },
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -1599,10 +1293,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _eventDate != null
+                          _form.eventDate != null
                               ? DateFormat(
                                   'EEEE, dd. MMMM yyyy',
-                                ).format(_eventDate!)
+                                ).format(_form.eventDate!)
                               : 'order_setup.event_date_hint'.tr(),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w500),
@@ -1625,7 +1319,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               final time = await _showCupertinoTimePicker();
               if (time != null) {
                 HapticFeedback.selectionClick();
-                setState(() => _eventTime = time);
+                setState(() => _form.eventTime = time);
               }
             },
             borderRadius: const BorderRadius.vertical(
@@ -1650,8 +1344,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _eventTime != null
-                              ? _eventTime!.format(context)
+                          _form.eventTime != null
+                              ? _form.eventTime!.format(context)
                               : 'order_setup.event_time_hint'.tr(),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w500),
@@ -1689,9 +1383,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ),
           ),
           const SizedBox(height: 32),
-          if (_prefillOrder != null &&
-              (_prefillOrder!.location.isNotEmpty ||
-                  _prefillOrder!.guestCountRange.isNotEmpty)) ...[
+          if (_form.prefillOrder != null &&
+              (_form.prefillOrder!.location.isNotEmpty ||
+                  _form.prefillOrder!.guestCountRange.isNotEmpty)) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1709,13 +1403,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_prefillOrder!.location.isNotEmpty) ...[
+                  if (_form.prefillOrder!.location.isNotEmpty) ...[
                     InkWell(
                       borderRadius: BorderRadius.circular(8),
                       onTap: () {
                         final origin = Uri.encodeComponent('Allschwil, 4123');
                         final dest = Uri.encodeComponent(
-                          _prefillOrder!.location,
+                          _form.prefillOrder!.location,
                         );
                         launchUrl(
                           Uri.parse(
@@ -1735,7 +1429,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              _prefillOrder!.location,
+                              _form.prefillOrder!.location,
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(
                                     color: Theme.of(
@@ -1754,10 +1448,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       ),
                     ),
                   ],
-                  if (_prefillOrder!.location.isNotEmpty &&
-                      _prefillOrder!.guestCountRange.isNotEmpty)
+                  if (_form.prefillOrder!.location.isNotEmpty &&
+                      _form.prefillOrder!.guestCountRange.isNotEmpty)
                     const SizedBox(height: 8),
-                  if (_prefillOrder!.guestCountRange.isNotEmpty) ...[
+                  if (_form.prefillOrder!.guestCountRange.isNotEmpty) ...[
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1769,7 +1463,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Formular: ${_prefillOrder!.guestCountRange} Personen → Mittelwert: $_personCount',
+                            'Formular: ${_form.prefillOrder!.guestCountRange} Personen → Mittelwert: ${_form.personCount}',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: Theme.of(
@@ -1826,7 +1520,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '$_personCount',
+                '${_form.personCount}',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -1837,14 +1531,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         ),
         const SizedBox(height: 16),
         Slider(
-          value: _personCount.toDouble(),
+          value: _form.personCount.toDouble(),
           min: 50,
           max: 1000,
           divisions: 19,
-          label: '$_personCount',
+          label: '${_form.personCount}',
           onChanged: (value) {
             HapticFeedback.selectionClick();
-            setState(() => _personCount = value.round());
+            setState(() => _form.personCount = value.round());
           },
         ),
         Row(
@@ -1878,7 +1572,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '$_distanceKm km',
+                '${_form.distanceKm} km',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onSecondaryContainer,
@@ -1889,14 +1583,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         ),
         const SizedBox(height: 16),
         Slider(
-          value: _distanceKm.toDouble(),
+          value: _form.distanceKm.toDouble(),
           min: 0,
           max: 1000,
           divisions: 50,
-          label: '$_distanceKm km',
+          label: '${_form.distanceKm} km',
           onChanged: (value) {
             HapticFeedback.selectionClick();
-            setState(() => _distanceKm = value.round());
+            setState(() => _form.distanceKm = value.round());
           },
         ),
         Row(
@@ -1913,7 +1607,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   /// Read-only distance row shown to guest customers in place of the
   /// staff-only slider. The value is computed automatically from the
   /// address they entered earlier in the form (see the debounced listener
-  /// on `_addressController` in `initState`).
+  /// on `_form.addressController` in `initState`).
   Widget _buildDistanceDisplay() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1942,9 +1636,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            _distanceLookupPending
+            _form.distanceLookupPending
                 ? 'order_setup.distance_calculating'.tr()
-                : '$_distanceKm km',
+                : '${_form.distanceKm} km',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
               color: Theme.of(context).colorScheme.onSecondaryContainer,
@@ -1975,10 +1669,10 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 ),
               )
               .toList(growable: false),
-          selected: {_currency},
+          selected: {_form.currency},
           onSelectionChanged: (values) {
             HapticFeedback.selectionClick();
-            setState(() => _currency = values.first);
+            setState(() => _form.currency = values.first);
           },
           style: ButtonStyle(
             visualDensity: VisualDensity.comfortable,
@@ -2038,7 +1732,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildEventTypeChip(EventType type, IconData icon, String label) {
-    final isSelected = _selectedEventType == type;
+    final isSelected = _form.selectedEventType == type;
     return FilterChip(
       selected: isSelected,
       label: Row(
@@ -2051,7 +1745,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           // Single-select: tapping the already-selected chip deselects it,
           // tapping another one replaces the selection - an event has one
           // occasion, unlike the admin offer screen's multi-select.
-          _selectedEventType = isSelected ? null : type;
+          _form.selectedEventType = isSelected ? null : type;
         });
       },
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2095,7 +1789,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildDrinkerChip(String value, IconData icon, String label) {
-    final isSelected = _drinkerType == value;
+    final isSelected = _form.drinkerType == value;
     return FilterChip(
       selected: isSelected,
       label: Row(
@@ -2104,7 +1798,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       ),
       onSelected: (_) {
         HapticFeedback.selectionClick();
-        setState(() => _drinkerType = value);
+        setState(() => _form.drinkerType = value);
       },
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
@@ -2144,7 +1838,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildBarDrinkCheckbox(String value, String label) {
-    final isSelected = _selectedBarDrinks.contains(value);
+    final isSelected = _form.selectedBarDrinks.contains(value);
     return FilterChip(
       selected: isSelected,
       label: Text(label),
@@ -2152,9 +1846,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         HapticFeedback.selectionClick();
         setState(() {
           if (selected) {
-            _selectedBarDrinks.add(value);
+            _form.selectedBarDrinks.add(value);
           } else {
-            _selectedBarDrinks.remove(value);
+            _form.selectedBarDrinks.remove(value);
           }
         });
       },
@@ -2218,7 +1912,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildAlcoholCheckbox(String value, String label) {
-    final isSelected = _selectedAlcoholItems.contains(value);
+    final isSelected = _form.selectedAlcoholItems.contains(value);
     return FilterChip(
       selected: isSelected,
       label: Text(label),
@@ -2226,9 +1920,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         HapticFeedback.selectionClick();
         setState(() {
           if (selected) {
-            _selectedAlcoholItems.add(value);
+            _form.selectedAlcoholItems.add(value);
           } else {
-            _selectedAlcoholItems.remove(value);
+            _form.selectedAlcoholItems.remove(value);
           }
         });
       },
@@ -2238,8 +1932,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   Widget _buildBarAlcoholStep() {
     // Skip this step if service type doesn't include bar service
-    if (_serviceType != 'cocktail_barservice' &&
-        _serviceType != 'bar_service') {
+    if (_form.serviceType != 'cocktail_barservice' &&
+        _form.serviceType != 'bar_service') {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -2300,7 +1994,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   Widget _buildCocktailSelectionStep() {
     return FutureBuilder<CocktailData>(
-      future: _dataFuture,
+      future: _form.dataFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -2321,7 +2015,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         }
 
         final recipes = snapshot.data?.recipes ?? [];
-        final isMocktailService = _serviceType == 'mocktail_service';
+        final isMocktailService = _form.serviceType == 'mocktail_service';
         final selectedLabelSingular = isMocktailService
             ? 'Mocktail'
             : 'Cocktail';
@@ -2358,7 +2052,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                   filled: true,
                 ),
                 onChanged: (value) {
-                  setState(() => _searchQuery = value.toLowerCase());
+                  setState(() => _form.searchQuery = value.toLowerCase());
                 },
               ),
               const SizedBox(height: 16),
@@ -2366,36 +2060,36 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               Row(
                 children: [
                   FilterChip(
-                    selected: _cocktailFilter == 'all',
+                    selected: _form.cocktailFilter == 'all',
                     label: Text('Alle'),
                     onSelected: (_) {
                       HapticFeedback.selectionClick();
-                      setState(() => _cocktailFilter = 'all');
+                      setState(() => _form.cocktailFilter = 'all');
                     },
                   ),
                   const SizedBox(width: 8),
                   FilterChip(
-                    selected: _cocktailFilter == 'cocktails',
+                    selected: _form.cocktailFilter == 'cocktails',
                     label: Text(isMocktailService ? 'Mocktails' : 'Cocktails'),
                     onSelected: (_) {
                       HapticFeedback.selectionClick();
-                      setState(() => _cocktailFilter = 'cocktails');
+                      setState(() => _form.cocktailFilter = 'cocktails');
                     },
                   ),
                   if (!isMocktailService) ...[
                     const SizedBox(width: 8),
                     FilterChip(
-                      selected: _cocktailFilter == 'shots',
+                      selected: _form.cocktailFilter == 'shots',
                       label: Text('Shots'),
                       onSelected: (_) {
                         HapticFeedback.selectionClick();
-                        setState(() => _cocktailFilter = 'shots');
+                        setState(() => _form.cocktailFilter = 'shots');
                       },
                     ),
                   ],
                 ],
               ),
-              if (_selectedRecipes.isNotEmpty) ...[
+              if (_form.selectedRecipes.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -2414,7 +2108,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '${_selectedRecipes.length} ${_selectedRecipes.length == 1 ? selectedLabelSingular : selectedLabelPlural} ausgewählt',
+                        '${_form.selectedRecipes.length} ${_form.selectedRecipes.length == 1 ? selectedLabelSingular : selectedLabelPlural} ausgewählt',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: Theme.of(
                             context,
@@ -2442,19 +2136,19 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   Widget _buildCocktailList(List<Recipe> recipes) {
     final filtered = recipes.where((recipe) {
       // Suchfilter
-      if (_searchQuery.isNotEmpty &&
-          !recipe.name.toLowerCase().contains(_searchQuery)) {
+      if (_form.searchQuery.isNotEmpty &&
+          !recipe.name.toLowerCase().contains(_form.searchQuery)) {
         return false;
       }
       // Mocktail-Service: keine Shots anzeigen
-      if (_serviceType == 'mocktail_service' && recipe.isShot) {
+      if (_form.serviceType == 'mocktail_service' && recipe.isShot) {
         return false;
       }
       // Typ-Filter
-      if (_cocktailFilter == 'cocktails' && recipe.isShot) {
+      if (_form.cocktailFilter == 'cocktails' && recipe.isShot) {
         return false;
       }
-      if (_cocktailFilter == 'shots' && !recipe.isShot) {
+      if (_form.cocktailFilter == 'shots' && !recipe.isShot) {
         return false;
       }
       return true;
@@ -2523,33 +2217,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   void _toggleRecipeSelection(Recipe recipe) {
-    setState(() {
-      final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
-      if (isSelected) {
-        _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-        if (recipe.isShot) {
-          _shotQuantities.remove(recipe.name);
-          _shotQuantityControllers.remove(recipe.name)?.dispose();
-        }
-      } else {
-        _selectedRecipes.add(recipe);
-        if (recipe.isShot) _shotQuantities[recipe.name] = 1;
-      }
-    });
+    setState(() => _form.toggleRecipeSelection(recipe));
   }
 
   void _setShotQuantity(Recipe recipe, int quantity) {
-    final clamped = quantity < 1 ? 1 : quantity;
-    setState(() => _shotQuantities[recipe.name] = clamped);
-  }
-
-  TextEditingController _shotQuantityController(Recipe recipe) {
-    return _shotQuantityControllers.putIfAbsent(
-      recipe.name,
-      () => TextEditingController(
-        text: '${_shotQuantities[recipe.name] ?? 1}',
-      ),
-    );
+    setState(() => _form.setShotQuantity(recipe, quantity));
   }
 
   void _showDistanceInfo() {
@@ -2585,9 +2257,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildShotQuantityStepper(Recipe recipe) {
-    final controller = _shotQuantityController(recipe);
+    final controller = _form.shotQuantityController(recipe);
     return Semantics(
-      label: '${recipe.name}: ${_shotQuantities[recipe.name] ?? 1}',
+      label: '${recipe.name}: ${_form.shotQuantities[recipe.name] ?? 1}',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2619,7 +2291,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 }
               },
               onEditingComplete: () {
-                final resolved = _shotQuantities[recipe.name] ?? 1;
+                final resolved = _form.shotQuantities[recipe.name] ?? 1;
                 controller.text = '$resolved';
                 FocusScope.of(context).unfocus();
               },
@@ -2631,7 +2303,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildCocktailCard(Recipe recipe) {
-    final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
+    final isSelected = _form.selectedRecipes.any((r) => r.id == recipe.id);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth >= 600;
 
@@ -2831,7 +2503,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ),
           ),
           const SizedBox(height: 32),
-          if (_serviceCatalog.isEmpty)
+          if (_form.serviceCatalog.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
@@ -2851,23 +2523,23 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
-              itemCount: _serviceCatalog.length,
+              itemCount: _form.serviceCatalog.length,
               itemBuilder: (context, index) =>
-                  _buildServiceTile(_serviceCatalog[index]),
+                  _buildServiceTile(_form.serviceCatalog[index]),
             ),
-          if (_legacyAdditionalServiceIds.isNotEmpty) ...[
+          if (_form.legacyAdditionalServiceIds.isNotEmpty) ...[
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _legacyAdditionalServiceIds
+              children: _form.legacyAdditionalServiceIds
                   .map(
                     (value) => Chip(
                       label: Text(
                         formatOrderAdditionalServiceLabel(
                           value,
                           isEnglish: context.locale.languageCode == 'en',
-                          currencyCode: _currency,
+                          currencyCode: _form.currency,
                         ),
                       ),
                     ),
@@ -2881,14 +2553,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             runSpacing: 8,
             children: [
               FilterChip(
-                selected: _otherServicesSelected,
+                selected: _form.otherServicesSelected,
                 label: Text(
                   context.locale.languageCode == 'en' ? 'Other' : 'Sonstiges',
                 ),
                 showCheckmark: true,
                 onSelected: (selected) {
                   HapticFeedback.selectionClick();
-                  setState(() => _otherServicesSelected = selected);
+                  setState(() => _form.otherServicesSelected = selected);
                 },
               ),
             ],
@@ -2909,7 +2581,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: _remarksController,
+            controller: _form.remarksController,
             maxLines: 4,
             decoration: InputDecoration(
               hintText: 'order_setup.remarks_hint'.tr(),
@@ -2932,7 +2604,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   /// for it - a check badge plus the chosen variant's name/price. Tapping
   /// opens [_showServiceVariantPicker].
   Widget _buildServiceTile(AdditionalService service) {
-    final selectedVariantId = _selectedAdditionalServices[service.id];
+    final selectedVariantId = _form.selectedAdditionalServices[service.id];
     final selectedVariant = selectedVariantId != null
         ? service.variantById(selectedVariantId)
         : null;
@@ -3026,17 +2698,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   String _formatVariantSummary(ServiceVariant variant) {
     final isEnglish = context.locale.languageCode == 'en';
     final priceLabel = variant.price != null
-        ? '${variant.price!.toStringAsFixed(0)} $_currency'
+        ? '${variant.price!.toStringAsFixed(0)} ${_form.currency}'
         : (isEnglish ? 'price on request' : 'Preis auf Anfrage');
     return '${variant.name} ($priceLabel)';
   }
 
   /// Opens a single-select bottom sheet listing [service]'s variants; the
   /// customer picks at most one. Confirming updates
-  /// [_selectedAdditionalServices] and closes the sheet.
+  /// [_form.selectedAdditionalServices] and closes the sheet.
   Future<void> _showServiceVariantPicker(AdditionalService service) async {
     if (service.variants.isEmpty) return;
-    var selectedVariantId = _selectedAdditionalServices[service.id];
+    var selectedVariantId = _form.selectedAdditionalServices[service.id];
     final isEnglish = context.locale.languageCode == 'en';
 
     final confirmed = await showModalBottomSheet<bool>(
@@ -3068,7 +2740,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                     title: Text(variant.name),
                     subtitle: Text(
                       variant.price != null
-                          ? '${variant.price!.toStringAsFixed(0)} $_currency'
+                          ? '${variant.price!.toStringAsFixed(0)} ${_form.currency}'
                           : (isEnglish
                               ? 'Price on request'
                               : 'Preis auf Anfrage'),
@@ -3080,7 +2752,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    if (_selectedAdditionalServices.containsKey(service.id))
+                    if (_form.selectedAdditionalServices.containsKey(service.id))
                       TextButton(
                         onPressed: () {
                           setSheetState(() => selectedVariantId = null);
@@ -3107,15 +2779,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     HapticFeedback.selectionClick();
     setState(() {
       if (selectedVariantId == null) {
-        _selectedAdditionalServices.remove(service.id);
+        _form.selectedAdditionalServices.remove(service.id);
       } else {
-        _selectedAdditionalServices[service.id] = selectedVariantId!;
+        _form.selectedAdditionalServices[service.id] = selectedVariantId!;
       }
     });
   }
 
   Widget _buildCocktailPopularityStep() {
-    if (_selectedRecipes.isEmpty) {
+    if (_form.selectedRecipes.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(48),
@@ -3143,14 +2815,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       );
     }
 
-    // Initialize missing entries with 50%
-    for (final recipe in _selectedRecipes) {
-      _cocktailPopularity.putIfAbsent(recipe.name, () => 50.0);
-    }
-    // Remove stale entries
-    _cocktailPopularity.removeWhere(
-      (name, _) => !_selectedRecipes.any((r) => r.name == name),
-    );
+    _form.syncPopularityWithSelection();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -3171,8 +2836,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             ),
           ),
           const SizedBox(height: 32),
-          ..._selectedRecipes.map((recipe) {
-            final popularity = _cocktailPopularity[recipe.name] ?? 50.0;
+          ..._form.selectedRecipes.map((recipe) {
+            final popularity = _form.cocktailPopularity[recipe.name] ?? 50.0;
             return Card(
               margin: const EdgeInsets.only(bottom: 16),
               elevation: 0,
@@ -3227,7 +2892,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                       divisions: 20,
                       onChanged: (val) {
                         HapticFeedback.selectionClick();
-                        setState(() => _cocktailPopularity[recipe.name] = val);
+                        setState(() => _form.cocktailPopularity[recipe.name] = val);
                       },
                     ),
                     Row(
@@ -3322,35 +2987,35 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       );
     }
 
-    final serviceLabel = _serviceType == 'cocktail_barservice'
+    final serviceLabel = _form.serviceType == 'cocktail_barservice'
         ? (isEnglish ? 'Cocktail & bar' : 'Cocktail & Bar')
-        : _serviceType == 'cocktail_service'
+        : _form.serviceType == 'cocktail_service'
         ? (isEnglish ? 'Cocktails only' : 'Nur Cocktails')
-        : _serviceType == 'mocktail_service'
+        : _form.serviceType == 'mocktail_service'
         ? (isEnglish ? 'Mocktails only' : 'Nur Mocktails')
         : (isEnglish ? 'Bar only' : 'Nur Bar');
 
-    final drinkerLabel = _drinkerType == 'light'
+    final drinkerLabel = _form.drinkerType == 'light'
         ? (isEnglish ? 'Light drinkers' : 'Leichte Trinker')
-        : _drinkerType == 'heavy'
+        : _form.drinkerType == 'heavy'
         ? (isEnglish ? 'Heavy drinkers' : 'Starke Trinker')
         : 'Normal';
 
     final barDrinkLabels = formatOrderBarDrinkLabels(
-      _selectedBarDrinks,
+      _form.selectedBarDrinks,
       isEnglish: isEnglish,
     );
     final alcoholLabels = formatOrderAlcoholLabels(
-      _selectedAlcoholItems,
+      _form.selectedAlcoholItems,
       isEnglish: isEnglish,
     );
-    final additionalServiceLabels = _additionalServicesList
+    final additionalServiceLabels = _form.additionalServicesList
         .map(
           (value) => resolveAdditionalServiceLabel(
             value,
-            catalog: _serviceCatalog,
+            catalog: _form.serviceCatalog,
             isEnglish: isEnglish,
-            currencyCode: _currency,
+            currencyCode: _form.currency,
           ),
         )
         .toList(growable: false);
@@ -3386,41 +3051,41 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           section('Kontakt', [
             _OverviewRow(
               'Name',
-              _nameController.text.trim().isEmpty
+              _form.nameController.text.trim().isEmpty
                   ? '–'
-                  : _nameController.text.trim(),
+                  : _form.nameController.text.trim(),
             ),
             _OverviewRow(
               'Telefon',
-              _phoneController.text.trim().isEmpty
+              _form.phoneController.text.trim().isEmpty
                   ? '–'
-                  : _phoneController.text.trim(),
+                  : _form.phoneController.text.trim(),
             ),
           ]),
           section('Event-Details', [
-            _OverviewRow('Datum', formatDate(_eventDate)),
-            _OverviewRow('Uhrzeit', formatTime(_eventTime)),
+            _OverviewRow('Datum', formatDate(_form.eventDate)),
+            _OverviewRow('Uhrzeit', formatTime(_form.eventTime)),
             _OverviewRow(
               'Ort',
-              _addressController.text.trim().isEmpty
+              _form.addressController.text.trim().isEmpty
                   ? '–'
-                  : _addressController.text.trim(),
+                  : _form.addressController.text.trim(),
             ),
           ]),
           section('Präferenzen', [
-            _OverviewRow('Personen', '$_personCount'),
-            _OverviewRow('Entfernung', '$_distanceKm km'),
-            _OverviewRow('Währung', _currency),
+            _OverviewRow('Personen', '${_form.personCount}'),
+            _OverviewRow('Entfernung', '${_form.distanceKm} km'),
+            _OverviewRow('Währung', _form.currency),
             _OverviewRow('Trinkverhalten', drinkerLabel),
           ]),
-          if (_selectedRecipes.isNotEmpty)
-            section('Cocktails (${_selectedRecipes.length})', [
-              ..._selectedRecipes.map((r) {
-                final pop = (_cocktailPopularity[r.name] ?? 50).round();
+          if (_form.selectedRecipes.isNotEmpty)
+            section('Cocktails (${_form.selectedRecipes.length})', [
+              ..._form.selectedRecipes.map((r) {
+                final pop = (_form.cocktailPopularity[r.name] ?? 50).round();
                 return _OverviewRow(r.name, '$pop% Beliebtheit');
               }),
             ]),
-          if (_selectedBarDrinks.isNotEmpty || _selectedAlcoholItems.isNotEmpty)
+          if (_form.selectedBarDrinks.isNotEmpty || _form.selectedAlcoholItems.isNotEmpty)
             section('Bardrinks & Alkohol', [
               if (barDrinkLabels.isNotEmpty)
                 _OverviewRow('Bardrinks', barDrinkLabels.join(', ')),
@@ -3432,9 +3097,9 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
                 (label) => _OverviewRow('Service', label),
               ),
             ]),
-          if (_remarksController.text.trim().isNotEmpty)
+          if (_form.remarksController.text.trim().isNotEmpty)
             section('Bemerkungen', [
-              _OverviewRow('Hinweis', _remarksController.text.trim()),
+              _OverviewRow('Hinweis', _form.remarksController.text.trim()),
             ]),
           const SizedBox(height: 8),
           if (MediaQuery.of(context).size.width >= 600 && _isAdminUser) ...[
@@ -3467,14 +3132,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       );
       return;
     }
-    if (_selectedRecipes.isEmpty) {
+    if (_form.selectedRecipes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Bitte zuerst Cocktails auswählen.')),
       );
       return;
     }
 
-    final cocktailData = await _dataFuture;
+    final cocktailData = await _form.dataFuture;
     if (cocktailData == null || !mounted) return;
 
     showDialog(
@@ -3505,19 +3170,19 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           )
           .toList();
 
-      final recipeIngredients = _selectedRecipes
+      final recipeIngredients = _form.selectedRecipes
           .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
           .toList();
 
       final suggestion = await claudeService.generateMaterialSuggestions(
-        guestCount: _personCount,
+        guestCount: _form.personCount,
         guestRange: '',
-        requestedCocktails: _selectedRecipes.map((r) => r.name).toList(),
-        eventType: _drinkerType,
-        drinkerType: _drinkerType,
+        requestedCocktails: _form.selectedRecipes.map((r) => r.name).toList(),
+        eventType: _form.drinkerType,
+        drinkerType: _form.drinkerType,
         availableMaterials: materials,
         recipeIngredients: recipeIngredients,
-        cocktailPopularity: _cocktailPopularity,
+        cocktailPopularity: _form.cocktailPopularity,
       );
 
       if (mounted) Navigator.pop(context);
@@ -3542,12 +3207,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           context: context,
           builder: (_) => GeminiMaterialReviewDialog(
             suggestion: suggestion,
-            personCount: _personCount,
-            cocktailNames: _selectedRecipes.map((r) => r.name).toList(),
+            personCount: _form.personCount,
+            cocktailNames: _form.selectedRecipes.map((r) => r.name).toList(),
             onConfirm: (confirmedSuggestions, explanation) {
               // Sync recipes & popularity to global state
-              appState.setSelectedRecipes(_selectedRecipes);
-              for (final entry in _cocktailPopularity.entries) {
+              appState.setSelectedRecipes(_form.selectedRecipes);
+              for (final entry in _form.cocktailPopularity.entries) {
                 appState.setCocktailPopularity(entry.key, entry.value);
               }
               appState.setMaterialSuggestions(
@@ -3556,34 +3221,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
               );
 
               // Build setup data and navigate to shopping list
-              final setupData = OrderSetupData(
-                orderName: _nameController.text.trim(),
-                phoneNumber: _phoneController.text.trim().isEmpty
-                    ? null
-                    : _phoneController.text.trim(),
-                eventDate: _eventDate,
-                eventTime: _eventTime,
-                address: _addressController.text.trim().isEmpty
-                    ? null
-                    : _addressController.text.trim(),
-                personCount: _personCount,
-                distanceKm: _distanceKm,
-                currency: _currency,
-                drinkerType: _drinkerType,
-                serviceType: _serviceType,
-                barDrinks: _selectedBarDrinks.isEmpty
-                    ? null
-                    : _selectedBarDrinks.toList(),
-                alcoholPurchase: _selectedAlcoholItems.isEmpty
-                    ? null
-                    : _selectedAlcoholItems.toList(),
-                additionalServices: _additionalServicesList.isEmpty
-                    ? null
-                    : _additionalServicesList,
-                remarks: _remarksController.text.trim().isEmpty
-                    ? null
-                    : _remarksController.text.trim(),
-              );
+              final setupData = _form.buildSetupData();
               context.go('/shopping-list', extra: setupData);
             },
           ),
@@ -3603,14 +3241,14 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   Widget _buildDesktopActionButtons() {
-    if (_currentStep == _totalSteps - 1 && !_isAdminUser) {
+    if (_form.currentStep == _totalSteps - 1 && !_isAdminUser) {
       return Padding(
         padding: const EdgeInsets.only(top: 16),
         child: Align(
           alignment: Alignment.centerRight,
           child: FilledButton.icon(
-            onPressed: _isSubmitting ? null : _nextStep,
-            icon: _isSubmitting
+            onPressed: _form.isSubmitting ? null : _nextStep,
+            icon: _form.isSubmitting
                 ? const SizedBox(
                     width: 16,
                     height: 16,
@@ -3635,7 +3273,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          if (_currentStep > 0)
+          if (_form.currentStep > 0)
             OutlinedButton.icon(
               onPressed: _previousStep,
               icon: const Icon(Icons.arrow_back),
@@ -3653,20 +3291,20 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           else
             const SizedBox.shrink(),
           FilledButton.icon(
-            onPressed: (_canProceed && !_isSubmitting) ? _nextStep : null,
-            icon: (_currentStep == _totalSteps - 1 && _isSubmitting)
+            onPressed: (_canProceed && !_form.isSubmitting) ? _nextStep : null,
+            icon: (_form.currentStep == _totalSteps - 1 && _form.isSubmitting)
                 ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Icon(
-                    _currentStep < _totalSteps - 1
+                    _form.currentStep < _totalSteps - 1
                         ? Icons.arrow_forward
                         : Icons.shopping_cart,
                   ),
             label: Text(
-              _currentStep < _totalSteps - 1
+              _form.currentStep < _totalSteps - 1
                   ? 'common.next'.tr()
                   : 'dashboard.generate_list'.tr(),
             ),
