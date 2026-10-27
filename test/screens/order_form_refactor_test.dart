@@ -121,7 +121,10 @@ class Harness {
        _distanceCompleters = distanceCompleters;
 
   final bool isStaff;
-  final String _url;
+  String _url;
+
+  /// Simulates the browser URL changing (e.g. back/forward).
+  set url(String value) => _url = value;
   final Map<String, Completer<int?>>? _distanceCompleters;
   final repo = FakeOrderRepository();
   final urls = <String>[];
@@ -1187,6 +1190,136 @@ void main() {
         expect(setup.address, 'Zürich');
       },
     );
+  });
+
+  group('URL step re-sync on dependency changes', () {
+    // didChangeDependencies re-reads `?step=`; it fires whenever the
+    // screen's MediaQuery (size, keyboard inset) or locale changes.
+    testWidgets('window resize jumps to the URL step (mobile)', (tester) async {
+      mobile(tester);
+      final h = Harness(url: 'http://localhost/order-form?step=3');
+      await pumpForm(tester, h.app(prefill: completePrefill()));
+      await settle(tester);
+      expect(find.text('Deine Präferenzen'), findsOneWidget);
+      h.url = 'http://localhost/order-form?step=1';
+      tester.view.physicalSize = const Size(520, 2600);
+      await tester.pump();
+      await settle(tester);
+      expect(find.text('Deine Kontaktdaten'), findsOneWidget);
+      expect(find.text('Deine Präferenzen'), findsNothing);
+    });
+
+    testWidgets('keyboard inset change jumps to the URL step (mobile)', (
+      tester,
+    ) async {
+      mobile(tester);
+      addTearDown(tester.view.resetViewInsets);
+      final h = Harness(url: 'http://localhost/order-form?step=3');
+      await pumpForm(tester, h.app(prefill: completePrefill()));
+      await settle(tester);
+      h.url = 'http://localhost/order-form?step=1';
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pump();
+      await settle(tester);
+      expect(find.text('Deine Kontaktdaten'), findsOneWidget);
+    });
+
+    testWidgets('window resize jumps to the URL step (desktop)', (
+      tester,
+    ) async {
+      desktop(tester);
+      final h = Harness(url: 'http://localhost/order-form?step=3');
+      await pumpForm(tester, h.app(prefill: completePrefill()));
+      await settle(tester);
+      h.url = 'http://localhost/order-form?step=1';
+      tester.view.physicalSize = const Size(1300, 2600);
+      await tester.pump();
+      await settle(tester);
+      expect(find.text('Deine Kontaktdaten'), findsWidgets);
+      expect(find.text('Deine Präferenzen'), findsNothing);
+    });
+  });
+
+  group('golden saveOrder (guest, desktop)', () {
+    testWidgets('desktop walkthrough with a non-default popularity', (
+      tester,
+    ) async {
+      desktop(tester);
+      final h = Harness();
+      await pumpForm(tester, h.app(prefill: prefillOrder()));
+      await settle(tester);
+      Future<void> next() async {
+        await tester.tap(find.text('Weiter'));
+        await settle(tester);
+      }
+
+      await tester.tap(find.text('Nur Cocktailservice'));
+      await tester.pump();
+      await next();
+      await tester.enterText(find.byType(TextField).at(0), 'Desk Gast');
+      await tester.enterText(find.byType(TextField).at(1), '061 111');
+      await tester.pump();
+      await next();
+      await pickTime(tester);
+      await tester.enterText(find.byType(TextField).first, 'Riehen');
+      await settle(tester);
+      await next();
+      await tester.tap(find.text('Hochzeitsfeier'));
+      await tester.pump();
+      await next();
+      // Step 4 shows the "not required" view for cocktail_service, which
+      // has no action row: continue via the stepper sidebar.
+      expect(find.text('Weiter'), findsNothing);
+      await tester.tap(find.text('Cocktails').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.text('Caipirinha'));
+      await tester.pump();
+      await tester.tap(find.text('Tequila'));
+      await tester.pump();
+      await next();
+      // Drag Caipirinha's slider to the far right.
+      final slider = find.byType(Slider).first;
+      await tester.drag(slider, const Offset(2000, 0));
+      await tester.pump();
+      expect(find.text('100%'), findsOneWidget);
+      await next();
+      await next();
+      expect(find.text('Anfrageübersicht'), findsOneWidget);
+      await tester.tap(find.text('Antrag einreichen'));
+      await tester.pump();
+      await settle(tester);
+
+      expect(h.repo.saveCalls.single, {
+        'name': 'Desk Gast',
+        'date': DateTime(2027, 5, 1),
+        'items': <Map<String, dynamic>>[],
+        'total': 0.0,
+        'currency': 'CHF',
+        'personCount': 100,
+        'drinkerType': 'normal',
+        'status': 'quote',
+        'cocktails': ['Caipirinha'],
+        'shots': ['Tequila'],
+        'shotQuantities': [
+          {'name': 'Tequila', 'quantity': 1},
+        ],
+        'bar': '',
+        'distanceKm': 42,
+        'thekeCost': 0.0,
+        'phone': '061 111',
+        'location': 'Riehen',
+        'eventTime': '18:00',
+        'serviceType': 'cocktail_service',
+        'cocktailPopularity': {'Caipirinha': 100.0, 'Tequila': 50.0},
+        'barDrinks': <String>[],
+        'alcoholPurchase': <String>[],
+        'additionalServices': <String>[],
+        'remarks': '',
+        'eventType': 'wedding',
+      });
+      expect(find.text('page /order-success'), findsOneWidget);
+    });
   });
 
   group('desktop stepper', () {

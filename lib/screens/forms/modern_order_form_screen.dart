@@ -485,6 +485,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The step builders used to run on this State's context and read
+    // MediaQuery (width checks) and the EasyLocalization locale here, which
+    // made this screen depend on both: every resize, rotation, keyboard
+    // inset or locale change re-ran didChangeDependencies, re-reading the
+    // URL's `?step=` (this is how browser back/forward re-syncs). The step
+    // widgets now read them on their own context, so keep the dependencies
+    // explicitly.
+    MediaQuery.of(context);
+    context.locale;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       appBar: AppBar(
