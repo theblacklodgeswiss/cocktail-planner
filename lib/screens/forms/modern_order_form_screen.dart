@@ -6,23 +6,18 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
-import '../../utils/url_utils.dart';
-import '../../data/additional_service_repository.dart';
-import '../../data/cocktail_repository.dart';
-import '../../data/order_repository.dart';
 import '../../models/additional_service.dart';
 import '../../models/cocktail_data.dart';
 import '../../models/offer.dart' show EventType;
 import '../../models/order.dart';
 import '../../models/recipe.dart';
 import '../../widgets/order_setup_dialog.dart';
-import '../../services/auth_service.dart';
-import '../../services/distance_calculator.dart';
 import '../../state/app_state.dart';
 import '../../services/claude_service.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../widgets/gemini_material_review_dialog.dart';
+import 'order_form_services.dart';
 
 /// Resolves the per-flavor quantity to seed for a shot during prefill: uses
 /// the matching entry's quantity from [shotSelections] if the customer
@@ -56,7 +51,17 @@ class ModernOrderFormScreen extends StatefulWidget {
   final void Function(OrderFormResult result)? onSubmit;
   final SavedOrder? prefill;
 
-  const ModernOrderFormScreen({super.key, this.onSubmit, this.prefill});
+  /// External collaborators (auth role, repositories, distance lookup,
+  /// browser URL). Defaults to the app's global singletons; tests inject
+  /// fakes.
+  final OrderFormServices services;
+
+  const ModernOrderFormScreen({
+    super.key,
+    this.onSubmit,
+    this.prefill,
+    this.services = const OrderFormServices(),
+  });
 
   @override
   State<ModernOrderFormScreen> createState() => _ModernOrderFormScreenState();
@@ -95,7 +100,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   // debounced listener in `initState`). Employees/admins never see that
   // display, but this starts false for them anyway so the flag's meaning
   // stays simple and role-independent.
-  bool _distanceLookupPending = !authService.isEmployeeOrHigher;
+  late bool _distanceLookupPending;
   String _currency = defaultCurrency.code;
   String _drinkerType = 'normal';
   EventType? _selectedEventType;
@@ -131,6 +136,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   @override
   void initState() {
     super.initState();
+    _distanceLookupPending = !widget.services.isEmployeeOrHigher();
     _nameController.addListener(() => setState(() {}));
     _phoneController.addListener(() => setState(() {}));
     _addressController.addListener(() {
@@ -138,7 +144,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       // Guests get their distance computed automatically from the address
       // they type; an employee's manually-set value must never be silently
       // overwritten by a background lookup.
-      if (!authService.isEmployeeOrHigher) {
+      if (!widget.services.isEmployeeOrHigher()) {
         final trimmedAddress = _addressController.text.trim();
         // Skip the debounce/pending-reset/reschedule entirely when the
         // text hasn't actually changed (a cursor move, tapping back into
@@ -157,7 +163,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           // whatever the newer lookup found, even if the older call happens
           // to resolve later (e.g. a slower round trip).
           final requestedAddress = _addressController.text.trim();
-          distanceCalculator
+          widget.services
               .distanceKmFromAddress(requestedAddress)
               .then((result) {
             // Re-check mounted/role state HERE, right before applying the
@@ -174,7 +180,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             // (a new address change cancels the previous one above), so
             // these guards are sufficient without extra request-id tracking.
             if (!mounted ||
-                authService.isEmployeeOrHigher ||
+                widget.services.isEmployeeOrHigher() ||
                 _addressController.text.trim() != requestedAddress) {
               return;
             }
@@ -189,17 +195,17 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
     _loadCocktailData();
     _serviceCatalogSubscription =
-        additionalServiceRepository.watchServices().listen((services) {
+        widget.services.watchAdditionalServices().listen((services) {
       if (mounted) setState(() => _serviceCatalog = services);
     });
-    authService.checkIsAdmin().then((_) {
+    widget.services.resolveRole().then((_) {
       if (mounted) {
         setState(() {});
       }
     });
     // Read step from URL query parameter
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final uri = Uri.base;
+      final uri = widget.services.currentUri();
       final stepParam = uri.queryParameters['step'];
       if (stepParam != null) {
         final step = int.tryParse(stepParam) ?? 0;
@@ -217,7 +223,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   void _loadCocktailData() {
-    _dataFuture = cocktailRepository.load();
+    _dataFuture = widget.services.loadCocktailData();
     // After data loads, pre-select cocktails from prefill
     final prefillOrder = _prefillOrder;
     if (prefillOrder != null) {
@@ -360,13 +366,13 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         if (_otherServicesSelected) 'other_services',
       ];
 
-  bool get _isAdminUser => authService.isEmployeeOrHigher;
+  bool get _isAdminUser => widget.services.isEmployeeOrHigher();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Sync step from URL when navigating back/forward
-    final uri = Uri.base;
+    final uri = widget.services.currentUri();
     final stepParam = uri.queryParameters['step'];
     if (stepParam != null) {
       final step = int.tryParse(stepParam) ?? 0;
@@ -396,11 +402,11 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
   // Update browser URL without affecting GoRouter's navigation stack
   void _updateUrlWithoutNavigation(int step) {
-    final currentUrl = Uri.base;
+    final currentUrl = widget.services.currentUri();
     final newUrl = currentUrl.replace(
       queryParameters: {'step': step.toString()},
     );
-    updateBrowserUrl(newUrl.toString());
+    widget.services.updateUrl(newUrl.toString());
   }
 
   // Show date picker (Cupertino style with mouse wheel support on Web)
@@ -698,7 +704,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
 
     // Employees and admins get the staff flow (pricing, shopping list);
     // everyone else gets the customer request flow.
-    final isEmployeeOrHigher = authService.isEmployeeOrHigher;
+    final isEmployeeOrHigher = widget.services.isEmployeeOrHigher();
 
     try {
       if (!isEmployeeOrHigher) {
@@ -737,7 +743,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     final eventTimeStr = setupData.eventTime != null
         ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}'
         : '';
-    await orderRepository.updateOrder(order.id, {
+    await widget.services.orders.updateOrder(order.id, {
       'name': setupData.orderName,
       'date': (setupData.eventDate ?? order.date).toIso8601String(),
       'phone': setupData.phoneNumber ?? '',
@@ -776,7 +782,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   Future<void> _savePendingOrderAndShowThanks(OrderSetupData setupData) async {
     try {
       // Save pending order (total = 0) using repository method
-      final orderId = await orderRepository.saveOrder(
+      final orderId = await widget.services.orders.saveOrder(
         name: setupData.orderName,
         date: setupData.eventDate ?? DateTime.now(),
         items: [], // Empty items for pending order
@@ -1782,7 +1788,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           ],
           _buildPersonCountSlider(),
           const SizedBox(height: 32),
-          authService.isEmployeeOrHigher
+          widget.services.isEmployeeOrHigher()
               ? _buildDistanceSlider()
               : _buildDistanceDisplay(),
           const SizedBox(height: 32),
