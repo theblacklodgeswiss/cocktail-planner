@@ -9,6 +9,7 @@ import 'package:cocktail_planer/models/cocktail_data.dart';
 import 'package:cocktail_planer/models/employee.dart';
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_controller.dart';
+import 'package:cocktail_planer/screens/orders/detail/dialogs.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_services.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -148,7 +149,7 @@ class DetailFakes {
         const CocktailData(materials: [], recipes: []),
     triggerMicrosoftIntegration: (c) async => log.add('microsoft'),
     askDeclineReason: declineReasonAnswer == null
-        ? const OrderDetailServices().askDeclineReason
+        ? (context, initial) => showDeclineReasonDialog(context, initial: initial)
         : (context, initial) async {
             reasonPrompts.add(initial);
             return declineReasonAnswer!(initial);

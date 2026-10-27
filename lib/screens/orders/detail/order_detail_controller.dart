@@ -37,7 +37,7 @@ class OrderDetailController extends ChangeNotifier {
   OrderDetailController({
     required this.order,
     required this.host,
-    this.services = const OrderDetailServices(),
+    required this.services,
   }) : currentStatus = order.status,
        declineReason = order.declineReason,
        assignedEmployees = List.from(order.assignedEmployees),

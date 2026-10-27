@@ -33,17 +33,14 @@ Future<String?> _defaultAskDeclineReason(
   String initial,
 ) => showDeclineReasonDialog(context, initial: initial);
 
-/// Without a browser there is no Microsoft integration: same as
-/// `microsoftGraphService.isSupported == false` (returns right away).
-Future<void> _noMicrosoftIntegration(OrderDetailController controller) async {}
-
 /// The external collaborators of the order detail sheet, bundled so tests
 /// can pump the sheet without Firebase or the browser-only Microsoft code.
 ///
 /// Every default delegates lazily to the same global singleton the sheet has
 /// always used. The one exception is [triggerMicrosoftIntegration]: its real
-/// implementation imports `dart:js_interop`, so `showOrderDetails` (the only
-/// production entry point) passes it in explicitly.
+/// implementation imports `dart:js_interop`, so it is required: there is no
+/// silent no-op default. `showOrderDetails` (the only production entry
+/// point) passes the real one, tests pass a fake.
 class OrderDetailServices {
   const OrderDetailServices({
     this.isSuperAdmin = _defaultIsSuperAdmin,
@@ -52,7 +49,7 @@ class OrderDetailServices {
     this.showRestEntry = _defaultShowRestEntry,
     this.watchEmployees = _defaultWatchEmployees,
     this.loadCocktailData = _defaultLoadCocktailData,
-    this.triggerMicrosoftIntegration = _noMicrosoftIntegration,
+    required this.triggerMicrosoftIntegration,
     this.askDeclineReason = _defaultAskDeclineReason,
     OrderRepository? orderRepository,
   }) : _orderRepository = orderRepository;

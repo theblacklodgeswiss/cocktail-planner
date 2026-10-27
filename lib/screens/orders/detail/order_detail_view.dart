@@ -23,7 +23,7 @@ class OrderDetailView extends StatefulWidget {
     required this.order,
     required this.colorScheme,
     required this.currency,
-    this.services = const OrderDetailServices(),
+    required this.services,
   });
 
   final SavedOrder order;
