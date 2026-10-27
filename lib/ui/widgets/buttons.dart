@@ -12,6 +12,7 @@ class _ButtonBase extends StatelessWidget {
     required this.fill,
     required this.foreground,
     this.border,
+    this.dimmed = false,
   });
 
   final String label;
@@ -20,12 +21,15 @@ class _ButtonBase extends StatelessWidget {
   final Color? fill;
   final Color foreground;
   final Color? border;
+  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
     final enabled = onPressed != null && !loading;
-    final fg = onPressed == null && !loading ? p.disabled : foreground;
+    final fg = (onPressed == null || dimmed) && !loading
+        ? p.disabled
+        : foreground;
 
     final content = Row(
       mainAxisSize: MainAxisSize.min,
@@ -86,6 +90,7 @@ class PrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.loading = false,
     this.destructive = false,
+    this.dimmed = false,
   });
 
   final String label;
@@ -95,14 +100,19 @@ class PrimaryButton extends StatelessWidget {
   /// Error-colored fill for irreversible actions.
   final bool destructive;
 
+  /// Looks disabled but stays tappable, e.g. a "Weiter" that explains the
+  /// missing fields on tap instead of silently ignoring it.
+  final bool dimmed;
+
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    final disabled = onPressed == null && !loading;
+    final disabled = (onPressed == null || dimmed) && !loading;
     return _ButtonBase(
       label: label,
       onPressed: onPressed,
       loading: loading,
+      dimmed: dimmed,
       fill: disabled ? p.surface : (destructive ? p.error : p.primary),
       foreground: destructive ? p.onError : p.onPrimary,
     );

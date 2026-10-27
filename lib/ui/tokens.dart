@@ -124,6 +124,17 @@ class AppSize {
   static const double glassButton = 40;
   static const double glassButtonIcon = 20;
   static const double stepDigit = 28;
+
+  // Order wizard
+  static const double rowIcon = 20;
+  static const double checkMark = 22;
+  static const double checkGlyph = 14;
+  static const double optionIconBox = 40;
+  static const double quantityField = 48;
+  static const double pickerHeight = 216;
+  static const double serviceTileExtent = 220;
+  static const double serviceTileAspect = 0.85;
+  static const double placeholderIcon = 32;
 }
 
 /// Elevation shadows shared by cards and glass.

@@ -21,6 +21,7 @@ class StepScaffold extends StatelessWidget {
     required this.child,
     required this.bottom,
     this.onBack,
+    this.controller,
   });
 
   final int step;
@@ -29,6 +30,10 @@ class StepScaffold extends StatelessWidget {
   final Widget child;
   final Widget bottom;
   final VoidCallback? onBack;
+
+  /// Optional controller of the content scroll view (e.g. to jump back to
+  /// the top when the step changes).
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +119,7 @@ class StepScaffold extends StatelessWidget {
                 ),
                 Expanded(
                   child: SingleChildScrollView(
+                    controller: controller,
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.all(AppSpace.s16),
