@@ -15,7 +15,7 @@ import '../../../state/app_state.dart';
 import '../../../widgets/cocktail_popularity_dialog.dart';
 import '../../../widgets/gemini_material_review_dialog.dart';
 import '../../../widgets/order_setup_dialog.dart';
-import 'dialogs.dart';
+import 'sheets.dart';
 import 'order_detail_controller.dart';
 
 /// Shopping-list handlers of the order detail sheet: edit, PDF exports,
@@ -269,7 +269,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
     var resetExistingShoppingList = false;
 
     if (order.hasShoppingList) {
-      final confirmedReset = await showClaudeResetConfirmDialog(context);
+      final confirmedReset = await showClaudeResetConfirmSheet(context);
 
       if (confirmedReset != true) {
         update(() => isGeneratingList = false);

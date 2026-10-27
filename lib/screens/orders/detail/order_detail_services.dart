@@ -10,7 +10,7 @@ import '../../../models/order.dart';
 import '../../../services/auth_service.dart';
 import '../../inventory/rest_entry_sheet.dart';
 import '../../shopping_list/completion_deduction.dart';
-import 'dialogs.dart';
+import 'sheets.dart';
 import 'order_detail_controller.dart';
 
 bool _defaultIsSuperAdmin() => AuthService().isSuperAdmin;
@@ -31,7 +31,7 @@ Future<CocktailData> _defaultLoadCocktailData() => cocktailRepository.load();
 Future<String?> _defaultAskDeclineReason(
   BuildContext context,
   String initial,
-) => showDeclineReasonDialog(context, initial: initial);
+) => showDeclineReasonSheet(context, initial: initial);
 
 /// The external collaborators of the order detail sheet, bundled so tests
 /// can pump the sheet without Firebase or the browser-only Microsoft code.
@@ -78,7 +78,7 @@ class OrderDetailServices {
   final Future<void> Function(OrderDetailController controller)
   triggerMicrosoftIntegration;
 
-  /// The decline-reason dialog (`showDeclineReasonDialog`): the trimmed
+  /// The decline-reason dialog (`showDeclineReasonSheet`): the trimmed
   /// reason, or null when cancelled.
   final Future<String?> Function(BuildContext context, String initial)
   askDeclineReason;

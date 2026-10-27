@@ -377,7 +377,7 @@ void main() {
         await pumpHost(tester, detailOrder(status: s));
         await c.updateStatus(OrderStatus.completed);
         await tester.pumpAndSettle();
-        expect(find.byType(AlertDialog), findsNothing, reason: s.name);
+        expect(find.text('ui.cancel'.tr()), findsNothing, reason: s.name);
         expect(fakes.log, isEmpty, reason: s.name);
         expect(c.currentStatus, s);
       }
@@ -426,7 +426,7 @@ void main() {
       await c.updateStatus(OrderStatus.completed);
       await c.updateStatus(OrderStatus.declined);
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('ui.cancel'.tr()), findsNothing);
       expect(fakes.log, ['deduct:o1']);
 
       fakes.deductCompleter!.complete(
@@ -442,7 +442,7 @@ void main() {
       await pumpHost(tester, detailOrder(total: 0));
       await c.updateStatus(OrderStatus.accepted);
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('ui.cancel'.tr()), findsNothing);
       expect(
         find.textContaining('Kein Angebot annehmen ohne Einkaufsliste'),
         findsOneWidget,
@@ -487,7 +487,7 @@ void main() {
       await pumpHost(tester, detailOrder(offerComplete: false));
       c.tryUpdateStatus(OrderStatus.accepted);
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('ui.cancel'.tr()), findsNothing);
       expect(find.text('orders.offer_incomplete'.tr()), findsOneWidget);
       expect(fakes.log, isEmpty);
     });
@@ -614,7 +614,7 @@ void main() {
       expect(fakes.log, ['delete:o1']);
       expect(find.text('orders.delete_failed'.tr()), findsOneWidget);
       await tapText(tester, 'common.cancel');
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('ui.cancel'.tr()), findsNothing);
       expect(find.text('host page'), findsOneWidget);
     });
 
