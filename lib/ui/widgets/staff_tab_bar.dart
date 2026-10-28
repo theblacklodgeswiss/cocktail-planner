@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../motion.dart';
 import '../tokens.dart';
-import 'glass_cta_bar.dart' show bottomBarInset;
 import 'glass_surface.dart';
 import 'pressable.dart';
 
@@ -21,13 +20,23 @@ double _tabScale(BuildContext context) => math.min(
 double staffTabBarHeight(BuildContext context) =>
     AppSize.tabBarHeight * _tabScale(context);
 
-/// Vertical space the floating bar covers at the bottom of the screen: pill,
-/// gap and safe area. The keyboard is not counted: the bar sits in a
-/// resizing Scaffold's body and hides while the keyboard is open.
+/// Distance of the bar's bottom edge from the screen edge: the safe area
+/// plus a small gap, but never less than [AppSize.tabBarBottom] (Flutter web
+/// reports no safe area, so the floor keeps it off the home indicator).
+double staffTabBarBottom(BuildContext context) => math.max(
+  AppSize.tabBarBottom,
+  MediaQuery.paddingOf(context).bottom + AppSpace.s8,
+);
+
+/// Vertical space the floating bar covers at the bottom of the screen: pill
+/// and bottom margin (incl. safe area). The keyboard is not counted: the bar
+/// hides while the keyboard is open.
 double staffTabBarExtent(BuildContext context) =>
-    staffTabBarHeight(context) +
-    AppSize.barGap +
-    MediaQuery.paddingOf(context).bottom;
+    staffTabBarHeight(context) + staffTabBarBottom(context);
+
+/// Bottom offset of the round "+" button: [AppSize.fabGap] above the bar.
+double staffFabBottom(BuildContext context) =>
+    staffTabBarExtent(context) + AppSize.fabGap;
 
 /// Space a scroll view needs at its end so its last item can be scrolled
 /// above the floating staff bar. `LargeTitleScaffold.tabBar` and
@@ -75,8 +84,9 @@ class HideOnKeyboard extends StatelessWidget {
   }
 }
 
-/// Floating Liquid Glass pill with icon-over-label tabs. The active tab is
-/// a brighter glass lens that slides between the tabs.
+/// Floating Liquid Glass capsule with icon-over-label tabs. The active tab
+/// is a dark capsule ("lens", near-black in both modes, white icon and label)
+/// that fills almost the whole bar height and slides between the tabs.
 ///
 /// Usage contract: use it as `LargeTitleScaffold.tabBar` (floats over the
 /// content) or at the bottom of a Stack, never inside a sheet. It adds the
@@ -110,10 +120,10 @@ class StaffTabBar extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        AppSize.barSide,
+        AppSize.tabBarSide,
         0,
-        AppSize.barSide,
-        bottomBarInset(context) + AppSize.barGap,
+        AppSize.tabBarSide,
+        staffTabBarBottom(context),
       ),
       child: Center(
         heightFactor: 1,
@@ -136,16 +146,12 @@ class StaffTabBar extends StatelessWidget {
                         widthFactor: 1 / tabs.length,
                         heightFactor: 1,
                         child: Padding(
-                          padding: const EdgeInsets.all(AppSpace.s4),
+                          padding: const EdgeInsets.all(AppSize.tabLensInset),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
-                              color: solid ? p.surface : p.lens,
+                              color: p.tabLens,
                               borderRadius: BorderRadius.circular(
                                 AppRadius.pill,
-                              ),
-                              border: Border.all(
-                                color: solid ? p.border : p.lensBorder,
-                                width: AppSize.hairline,
                               ),
                               boxShadow: solid ? null : AppShadow.lens,
                             ),
@@ -195,7 +201,7 @@ class _Tab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    final color = selected ? p.text : p.textSecondary;
+    final color = selected ? p.onTabLens : p.text;
     return Pressable(
       minSize: AppSize.minTap,
       radius: AppRadius.pill,
@@ -218,7 +224,7 @@ class _Tab extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppText.tab.copyWith(
                     color: color,
-                    fontWeight: selected ? FontWeight.w700 : null,
+                    fontWeight: selected ? FontWeight.w600 : null,
                   ),
                 ),
               ],

@@ -6,7 +6,7 @@ import '../motion.dart';
 import '../tokens.dart';
 import 'glass_surface.dart';
 import 'staff_tab_bar.dart'
-    show HideOnKeyboard, keyboardOpen, staffBarClearance, staffTabBarExtent;
+    show HideOnKeyboard, keyboardOpen, staffBarClearance, staffFabBottom;
 
 /// Page with a large title that collapses into a small title in a glass top
 /// bar once scrolled. Content is capped to [AppSize.maxContentWidth] and
@@ -116,7 +116,7 @@ class _LargeTitleScaffoldState extends State<LargeTitleScaffold> {
                   (hasBar ? 0 : MediaQuery.paddingOf(context).bottom)) +
         (showFab ? AppSize.liquidFab + AppSpace.s16 : 0);
     final fabBottom = widget.tabBar != null
-        ? staffTabBarExtent(context) + AppSpace.s8
+        ? staffFabBottom(context)
         : hasBar
         ? AppSpace.s8
         : MediaQuery.paddingOf(context).bottom + AppSpace.s16;

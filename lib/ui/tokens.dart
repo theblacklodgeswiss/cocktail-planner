@@ -77,6 +77,10 @@ class AppColors {
   static const Color shadowLiquid = Color(0x2E000000);
   static const Color shadowLiquidNear = Color(0x14000000);
   static const Color shadowLens = Color(0x1F000000);
+
+  /// Active tab of the staff bar: a dark capsule in both modes.
+  static const Color tabLensLight = Color(0xFF1D1D1F);
+  static const Color tabLensDark = Color(0xFF050505);
   static const Color border = Color(0x14000000);
   static const Color borderDark = Color(0x1FFFFFFF);
 
@@ -116,8 +120,23 @@ class AppSize {
   static const double glassShadowBleed = 80;
   static const double minTileTextScale = 1.0;
   static const double maxTileTextScale = 1.15;
-  static const double tabBarHeight = 56;
-  static const double tabIcon = 20;
+  static const double tabBarHeight = 64;
+  static const double tabIcon = 22;
+
+  /// Gap between the bar's rim and its active-tab lens.
+  static const double tabLensInset = 6;
+
+  /// Side margin of the staff tab bar (about 5% of a phone width).
+  static const double tabBarSide = 20;
+
+  /// Minimum distance of the staff tab bar's bottom edge from the screen
+  /// edge. Flutter web always reports a zero safe area (the engine never
+  /// reads env(safe-area-inset-*)), so this floor alone keeps the bar clear
+  /// of the iOS home indicator in Safari and the installed PWA.
+  static const double tabBarBottom = 28;
+
+  /// Gap between the staff tab bar and the "+" button above it.
+  static const double fabGap = 12;
   static const double tabIconGap = 2;
 
   /// Largest text scale inside the tab bar (labels stay >= 10 px, bar fits).
@@ -246,8 +265,8 @@ class AppText {
     letterSpacing: -0.9,
   );
   static const TextStyle tab = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.w600,
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
   );
   static const TextStyle section = TextStyle(
     fontSize: 15,
@@ -347,6 +366,11 @@ class AppPalette {
       dark ? AppColors.liquidBorderDark : AppColors.liquidBorderLight;
   Color get liquidHighlight =>
       dark ? AppColors.liquidHighlightDark : AppColors.liquidHighlightLight;
+
+  /// Active-tab capsule of the staff bar and the text/icons on it.
+  Color get tabLens => dark ? AppColors.tabLensDark : AppColors.tabLensLight;
+  Color get onTabLens => AppColors.textDark;
+
   Color get lens => dark ? AppColors.lensDark : AppColors.lensLight;
   Color get lensBorder =>
       dark ? AppColors.lensBorderDark : AppColors.lensBorderLight;
@@ -362,6 +386,7 @@ class AppPalette {
   Color get onPrimary => dark ? AppColors.ink : AppColors.textDark;
 
   Color get gold => dark ? AppColors.goldOnBlack : AppColors.goldDotOnWhite;
+
   /// Gold for text and digits on card surfaces.
   Color get goldText => dark ? AppColors.goldOnBlack : AppColors.goldOnWhite;
 
