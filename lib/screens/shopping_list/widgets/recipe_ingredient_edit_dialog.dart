@@ -2,9 +2,14 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/material_item.dart';
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/app_sheet.dart';
+import '../../../ui/widgets/buttons.dart';
+import '../../../ui/widgets/pressable.dart';
+import '../../../ui/widgets/states.dart';
 
-/// Dialog for editing recipe ingredients.
-/// Shows current ingredients and allows adding/removing from available materials.
+/// Sheet for editing recipe ingredients: shows the current ingredients and
+/// allows adding/removing from the available materials.
 class RecipeIngredientEditDialog extends StatefulWidget {
   const RecipeIngredientEditDialog({
     super.key,
@@ -17,16 +22,18 @@ class RecipeIngredientEditDialog extends StatefulWidget {
   final List<String> currentIngredients;
   final List<MaterialItem> availableMaterials;
 
-  /// Shows the dialog and returns the updated ingredient list, or null if cancelled.
+  /// Shows the sheet and returns the updated ingredient list, or null if
+  /// cancelled.
   static Future<List<String>?> show({
     required BuildContext context,
     required String recipeName,
     required List<String> currentIngredients,
     required List<MaterialItem> availableMaterials,
   }) {
-    return showDialog<List<String>>(
-      context: context,
-      builder: (context) => RecipeIngredientEditDialog(
+    return showAppSheet<List<String>>(
+      context,
+      full: true,
+      builder: (_) => RecipeIngredientEditDialog(
         recipeName: recipeName,
         currentIngredients: currentIngredients,
         availableMaterials: availableMaterials,
@@ -81,103 +88,62 @@ class _RecipeIngredientEditDialogState
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isShot = widget.recipeName.toLowerCase().contains('shot');
-
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context, colorScheme, isShot),
-            const Divider(height: 1),
-            Flexible(
-              child: _showAddSection
-                  ? _buildAddSection(context, colorScheme)
-                  : _buildIngredientsList(context, colorScheme),
-            ),
-            const Divider(height: 1),
-            _buildActions(context),
-          ],
+    final p = AppPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.recipeName,
+          style: AppText.heroTitle.copyWith(color: p.text),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(
-      BuildContext context, ColorScheme colorScheme, bool isShot) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isShot
-                  ? Colors.orange.withValues(alpha: 0.15)
-                  : Colors.green.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              isShot ? Icons.wine_bar : Icons.local_bar,
-              color: isShot ? Colors.orange : Colors.green,
-              size: 22,
-            ),
+        Text(
+          '${_ingredients.length} ${'shopping.ingredients'.tr()}',
+          style: AppText.body.copyWith(color: p.textSecondary),
+        ),
+        const SizedBox(height: AppSpace.s12),
+        Expanded(
+          child: _showAddSection
+              ? _buildAddSection(context, p)
+              : _buildIngredientsList(context, p),
+        ),
+        const SizedBox(height: AppSpace.s12),
+        if (!_showAddSection) ...[
+          SecondaryButton(
+            label: 'shopping.add_ingredient'.tr(),
+            onPressed: () => setState(() => _showAddSection = true),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.recipeName,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                Text(
-                  '${_ingredients.length} ${'shopping.ingredients'.tr()}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.outline,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
+          const SizedBox(height: AppSpace.s8),
         ],
-      ),
-    );
-  }
-
-  Widget _buildIngredientsList(BuildContext context, ColorScheme colorScheme) {
-    if (_ingredients.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        Row(
           children: [
-            Icon(Icons.info_outline, size: 48, color: colorScheme.outline),
-            const SizedBox(height: 16),
-            Text(
-              'shopping.no_ingredients'.tr(),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.outline,
-                  ),
+            Expanded(
+              child: SecondaryButton(
+                label: 'common.cancel'.tr(),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            const SizedBox(width: AppSpace.s12),
+            Expanded(
+              child: PrimaryButton(
+                label: 'common.save'.tr(),
+                onPressed: () => Navigator.of(context).pop(_ingredients),
+              ),
             ),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildIngredientsList(BuildContext context, AppPalette p) {
+    if (_ingredients.isEmpty) {
+      return EmptyState(
+        icon: Icons.info_outline,
+        title: 'shopping.no_ingredients'.tr(),
       );
     }
 
     return ListView.builder(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _ingredients.length,
       itemBuilder: (context, index) {
         final ingredient = _ingredients[index];
@@ -185,111 +151,125 @@ class _RecipeIngredientEditDialogState
             .where((m) => m.name == ingredient)
             .firstOrNull;
 
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: colorScheme.primaryContainer,
-            child: Text(
-              '${index + 1}',
-              style: TextStyle(
-                color: colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
+        return Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ingredient,
+                      style: AppText.button.copyWith(color: p.text),
+                    ),
+                    Text(
+                      material != null
+                          ? '${material.unit} • '
+                                '${material.price.toStringAsFixed(2)} '
+                                '${material.currency}'
+                          : 'shopping.not_in_inventory'.tr(),
+                      style: AppText.body.copyWith(
+                        color: material != null ? p.textSecondary : p.error,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          title: Text(ingredient),
-          subtitle: material != null
-              ? Text(
-                  '${material.unit} • ${material.price.toStringAsFixed(2)} ${material.currency}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                )
-              : Text(
-                  'shopping.not_in_inventory'.tr(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.red,
-                      ),
+            Pressable(
+              minSize: AppSize.minTap,
+              radius: AppRadius.pill,
+              semanticLabel:
+                  '${'shopping_ui.remove_ingredient'.tr()}: $ingredient',
+              onTap: () => _removeIngredient(ingredient),
+              child: SizedBox.square(
+                dimension: AppSize.minTap,
+                child: Icon(
+                  Icons.remove_circle_outline,
+                  size: AppSize.rowIcon,
+                  color: p.error,
                 ),
-          trailing: IconButton(
-            icon: const Icon(Icons.remove_circle_outline),
-            color: Colors.red,
-            onPressed: () => _removeIngredient(ingredient),
-          ),
+              ),
+            ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildAddSection(BuildContext context, ColorScheme colorScheme) {
+  Widget _buildAddSection(BuildContext context, AppPalette p) {
     final availableItems = _availableToAdd;
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: 'shopping.search_ingredient'.tr(),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {
-                    _showAddSection = false;
-                  });
-                },
-              ),
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: 'shopping.search_ingredient'.tr(),
+            suffixIcon: Pressable(
+              minSize: AppSize.minTap,
+              radius: AppRadius.pill,
+              semanticLabel: 'common.close'.tr(),
+              onTap: () {
+                _searchController.clear();
+                setState(() {
+                  _showAddSection = false;
+                });
+              },
+              child: const Icon(Icons.close),
             ),
-            onChanged: (_) => setState(() {}),
-            autofocus: true,
           ),
+          onChanged: (_) => setState(() {}),
+          autofocus: true,
         ),
-        Flexible(
+        const SizedBox(height: AppSpace.s8),
+        Expanded(
           child: ListView.builder(
-            shrinkWrap: true,
             itemCount: availableItems.length,
             itemBuilder: (context, index) {
               final material = availableItems[index];
-              return ListTile(
-                leading: Icon(Icons.add_circle_outline, color: Colors.green),
-                title: Text(material.name),
-                subtitle: Text(
-                  '${material.unit} • ${material.price.toStringAsFixed(2)} ${material.currency}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+              return Pressable(
+                minSize: AppSize.minTap,
                 onTap: () => _addIngredient(material.name),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        size: AppSize.rowIcon,
+                        color: p.text,
+                      ),
+                      const SizedBox(width: AppSpace.s12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              material.name,
+                              style: AppText.button.copyWith(color: p.text),
+                            ),
+                            Text(
+                              '${material.unit} • '
+                              '${material.price.toStringAsFixed(2)} '
+                              '${material.currency}',
+                              style: AppText.body.copyWith(
+                                color: p.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildActions(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          if (!_showAddSection)
-            TextButton.icon(
-              onPressed: () => setState(() => _showAddSection = true),
-              icon: const Icon(Icons.add),
-              label: Text('shopping.add_ingredient'.tr()),
-            ),
-          const Spacer(),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('common.cancel'.tr()),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(_ingredients),
-            child: Text('common.save'.tr()),
-          ),
-        ],
-      ),
     );
   }
 }
