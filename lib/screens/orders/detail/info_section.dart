@@ -31,37 +31,33 @@ class OrderInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpace.s8,
+            runSpacing: AppSpace.s4,
             children: [
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Pressable(
-                    minSize: AppSize.minTap,
-                    onTap: controller.editDate,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        DateTile(controller.currentDate),
-                        const SizedBox(width: AppSpace.s8),
-                        Flexible(
-                          child: Text(
-                            formatDate(controller.currentDate),
-                            style: AppText.body.copyWith(color: p.text),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpace.s4),
-                        Icon(
-                          Icons.edit_outlined,
-                          size: AppSize.metaIcon,
-                          color: p.textSecondary,
-                        ),
-                      ],
+              Pressable(
+                minSize: AppSize.minTap,
+                onTap: controller.editDate,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DateTile(controller.currentDate),
+                    const SizedBox(width: AppSpace.s8),
+                    Text(
+                      formatDate(controller.currentDate),
+                      style: AppText.body.copyWith(color: p.text),
                     ),
-                  ),
+                    const SizedBox(width: AppSpace.s4),
+                    Icon(
+                      Icons.edit_outlined,
+                      size: AppSize.metaIcon,
+                      color: p.textSecondary,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: AppSpace.s8),
               Text(
                 currency.format(order.total),
                 style: AppText.number.copyWith(color: p.text),

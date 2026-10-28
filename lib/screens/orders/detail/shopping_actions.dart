@@ -15,6 +15,7 @@ import '../../../state/app_state.dart';
 import '../../../widgets/cocktail_popularity_dialog.dart';
 import '../../../widgets/gemini_material_review_dialog.dart';
 import '../../../widgets/order_setup_dialog.dart';
+import '../../../ui/tokens.dart';
 import 'sheets.dart';
 import 'order_detail_controller.dart';
 
@@ -145,7 +146,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Fehler beim Erstellen der PDF: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }
@@ -170,7 +171,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Fehler beim Erstellen der PDF: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }
@@ -411,7 +412,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
               content: Text(
                 suggestion.errorMessage ?? 'orders.claude_error'.tr(),
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: AppPalette.of(context).error,
               duration: const Duration(seconds: 6),
             ),
           );
@@ -458,7 +459,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('orders.claude_error'.tr()),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }

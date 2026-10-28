@@ -160,7 +160,12 @@ class DetailFakes {
 
 /// Wraps [home] in EasyLocalization + a GoRouter that records the editor
 /// routes the sheet pushes.
-Widget detailApp(Widget home, {List<(String, Object?)>? pushed}) {
+Widget detailApp(
+  Widget home, {
+  List<(String, Object?)>? pushed,
+  double textScale = 0.5,
+  ThemeData? theme,
+}) {
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (_, _) => home),
@@ -187,13 +192,14 @@ Widget detailApp(Widget home, {List<(String, Object?)>? pushed}) {
     child: Builder(
       builder: (context) => MaterialApp.router(
         routerConfig: router,
+        theme: theme,
         localizationsDelegates: context.localizationDelegates,
         supportedLocales: context.supportedLocales,
         locale: context.locale,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
-          ).copyWith(textScaler: const TextScaler.linear(0.5)),
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
       ),
