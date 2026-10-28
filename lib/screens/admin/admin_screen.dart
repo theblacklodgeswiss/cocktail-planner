@@ -1,10 +1,33 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../ui/widgets/pill_filter.dart';
 import '../../widgets/admin_protected_screen.dart';
 import 'materials_tab.dart';
 import 'recipes_tab.dart';
+
+enum AdminTab { materials, fixed, recipes }
+
+/// Tab pills of the admin screen (materials / fixed values / recipes).
+class AdminTabPills extends StatelessWidget {
+  const AdminTabPills({super.key, required this.current, required this.onChanged});
+
+  final AdminTab current;
+  final ValueChanged<AdminTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return PillFilter<AdminTab>(
+      value: current,
+      onChanged: onChanged,
+      options: [
+        PillOption(AdminTab.materials, 'admin.tab_materials'.tr()),
+        PillOption(AdminTab.fixed, 'admin.tab_fixed'.tr()),
+        PillOption(AdminTab.recipes, 'admin.tab_recipes'.tr()),
+      ],
+    );
+  }
+}
 
 /// Admin screen for managing inventory (materials, fixed values, recipes).
 class AdminScreen extends StatefulWidget {
@@ -14,55 +37,32 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
+class _AdminScreenState extends State<AdminScreen> {
+  AdminTab _tab = AdminTab.materials;
 
   @override
   Widget build(BuildContext context) {
-    return AdminProtectedScreen(
-      child: _buildContent(context),
+    final pills = AdminTabPills(
+      current: _tab,
+      onChanged: (t) => setState(() => _tab = t),
     );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+    return AdminProtectedScreen(
+      child: switch (_tab) {
+        AdminTab.materials => MaterialsTab(
+          key: const ValueKey('materials'),
+          isFixedValue: false,
+          header: pills,
         ),
-        title: Text('admin.title'.tr()),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: [
-            Tab(icon: const Icon(Icons.inventory), text: 'admin.tab_materials'.tr()),
-            Tab(icon: const Icon(Icons.build), text: 'admin.tab_fixed'.tr()),
-            Tab(icon: const Icon(Icons.local_bar), text: 'admin.tab_recipes'.tr()),
-          ],
+        AdminTab.fixed => MaterialsTab(
+          key: const ValueKey('fixed'),
+          isFixedValue: true,
+          header: pills,
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          MaterialsTab(isFixedValue: false),
-          MaterialsTab(isFixedValue: true),
-          RecipesTab(),
-        ],
-      ),
+        AdminTab.recipes => RecipesTab(
+          key: const ValueKey('recipes'),
+          header: pills,
+        ),
+      },
     );
   }
 }
