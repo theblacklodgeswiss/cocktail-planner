@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cocktail_planer/screens/dashboard/home_switch.dart';
 import 'package:cocktail_planer/screens/more/more_view.dart';
 import 'package:cocktail_planer/ui/app_theme.dart';
-import 'package:cocktail_planer/ui/widgets/glass_surface.dart';
 import 'package:cocktail_planer/ui/widgets/staff_scaffold.dart';
 import 'package:cocktail_planer/ui/widgets/staff_tab_bar.dart';
 import 'package:cocktail_planer/ui/widgets/states.dart';
@@ -30,22 +29,32 @@ const _pages = [
 
 /// Real German translations behind a GoRouter, wired like lib/app.dart.
 /// Every staff destination is a stand-in page that shows its path.
-GoRouter router(Widget home) => GoRouter(
+///
+/// The home sits in a [StaffShell] (the bar and the "+" navigate like the
+/// app's shell); [chrome] false shows it without the bar, like for customers.
+GoRouter router(
+  Widget home, {
+  StaffTab tab = StaffTab.more,
+  bool chrome = true,
+}) => GoRouter(
   routes: [
-    GoRoute(path: '/', builder: (_, _) => home),
+    GoRoute(
+      path: '/',
+      builder: (context, _) => StaffShell(
+        current: tab,
+        showChrome: chrome,
+        onSwitch: (t) => context.go(staffTabRoutes[t]!),
+        onNewOrder: () => context.push(staffNewOrderRoute),
+        child: home,
+      ),
+    ),
     for (final path in _pages)
       GoRoute(
         path: path,
-        builder: (_, state) {
-          lastExtra = state.extra;
-          return Scaffold(body: Text('page $path'));
-        },
+        builder: (_, state) => Scaffold(body: Text('page $path')),
       ),
   ],
 );
-
-/// `extra` of the last stand-in page built.
-Object? lastExtra;
 
 Widget app(GoRouter r, {ThemeData? theme, double textScale = 1}) {
   return EasyLocalization(
@@ -115,10 +124,7 @@ MoreView more({
 /// Text of a home that stands in for the customer start.
 const _customer = Text('customer start');
 
-Widget _staffHome() => const StaffFrame(
-  tab: StaffTab.orders,
-  child: Scaffold(body: Text('orders list')),
-);
+Widget _staffHome() => const Scaffold(body: Text('orders list'));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -128,8 +134,9 @@ void main() {
     await EasyLocalization.ensureInitialized();
   });
 
+  // The bar on `/` belongs to the shell (see staff_shell_test.dart).
   group('HomeSwitch on /', () {
-    testWidgets('customer sees the customer start and no bar', (tester) async {
+    testWidgets('customer sees the customer start', (tester) async {
       phone(tester);
       await pumpApp(
         tester,
@@ -141,15 +148,15 @@ void main() {
               staff: (_) => _staffHome(),
               customer: (_) => const Scaffold(body: _customer),
             ),
+            chrome: false,
           ),
         ),
       );
       expect(find.text('customer start'), findsOneWidget);
-      expect(find.byType(StaffTabBar), findsNothing);
       expect(find.text('orders list'), findsNothing);
     });
 
-    testWidgets('staff sees the orders home and the bar', (tester) async {
+    testWidgets('staff sees the orders home', (tester) async {
       phone(tester);
       await pumpApp(
         tester,
@@ -161,11 +168,11 @@ void main() {
               staff: (_) => _staffHome(),
               customer: (_) => const Scaffold(body: _customer),
             ),
+            chrome: false,
           ),
         ),
       );
       expect(find.text('orders list'), findsOneWidget);
-      expect(find.byType(StaffTabBar), findsOneWidget);
       expect(find.text('customer start'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -190,6 +197,7 @@ void main() {
                 return const Scaffold(body: _customer);
               },
             ),
+            chrome: false,
           ),
         ),
       );
@@ -199,7 +207,6 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('orders list'), findsOneWidget);
-      expect(find.byType(StaffTabBar), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // Repeated resolves of the same role do not flip back.
@@ -214,267 +221,6 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('customer start'), findsOneWidget);
-      expect(find.byType(StaffTabBar), findsNothing);
-    });
-  });
-
-  group('StaffScaffold', () {
-    Widget page({ScrollController? controller}) => StaffScaffold(
-      tab: StaffTab.orders,
-      title: 'Aufträge',
-      controller: controller,
-      slivers: [
-        SliverList.list(
-          children: [
-            for (var i = 0; i < 60; i++)
-              SizedBox(height: 40, child: Text('row $i')),
-          ],
-        ),
-      ],
-    );
-
-    testWidgets('+ FAB pushes /order-form', (tester) async {
-      phone(tester);
-      final r = router(page());
-      await pumpApp(tester, app(r));
-      await tester.tap(find.bySemanticsLabel('Neuer Auftrag'));
-      await tester.pumpAndSettle();
-      expect(find.text('page /order-form'), findsOneWidget);
-      expect(r.canPop(), isTrue, reason: 'the form is pushed');
-    });
-
-    testWidgets('tapping the active tab scrolls to top, no navigation', (
-      tester,
-    ) async {
-      phone(tester);
-      final controller = ScrollController();
-      addTearDown(controller.dispose);
-      final r = router(page(controller: controller));
-      await pumpApp(tester, app(r));
-      controller.jumpTo(800);
-      await tester.pump();
-      expect(controller.offset, 800);
-
-      await tester.tap(find.bySemanticsLabel('Aufträge').last);
-      await tester.pumpAndSettle();
-      expect(controller.offset, 0);
-      expect(r.state.matchedLocation, '/');
-    });
-
-    testWidgets('another tab navigates with go (no back stack)', (
-      tester,
-    ) async {
-      phone(tester);
-      final r = router(page());
-      await pumpApp(tester, app(r));
-      await tester.tap(find.bySemanticsLabel('Inventur'));
-      await tester.pumpAndSettle();
-      expect(find.text('page /inventory'), findsOneWidget);
-      expect(r.canPop(), isFalse);
-      // Marks tab navigation, so the page hides its "back to home" arrow.
-      expect(lastExtra, staffTabExtra);
-    });
-
-    testWidgets('Mehr tab goes to /more', (tester) async {
-      phone(tester);
-      final r = router(page());
-      await pumpApp(tester, app(r));
-      await tester.tap(find.bySemanticsLabel('Mehr'));
-      await tester.pumpAndSettle();
-      expect(find.text('page /more'), findsOneWidget);
-    });
-
-    test('tab routes keep the existing paths', () {
-      expect(staffTabRoutes, {
-        StaffTab.orders: '/orders',
-        StaffTab.inventory: '/inventory',
-        StaffTab.more: '/more',
-      });
-    });
-  });
-
-  group('StaffFrame (legacy screens)', () {
-    testWidgets('shows the bar and the + FAB around a Material page', (
-      tester,
-    ) async {
-      phone(tester);
-      final r = router(
-        const StaffFrame(
-          tab: StaffTab.inventory,
-          child: Scaffold(body: Text('inventory table')),
-        ),
-      );
-      await pumpApp(tester, app(r));
-      expect(find.text('inventory table'), findsOneWidget);
-      expect(find.byType(StaffTabBar), findsOneWidget);
-      final bar = tester.getRect(find.byType(StaffTabBar));
-      expect(bar.bottom, lessThanOrEqualTo(640));
-
-      await tester.tap(find.bySemanticsLabel('Neuer Auftrag'));
-      await tester.pumpAndSettle();
-      expect(find.text('page /order-form'), findsOneWidget);
-    });
-
-    testWidgets('last row scrolls clear of the + button', (tester) async {
-      phone(tester);
-      final r = router(
-        StaffFrame(
-          tab: StaffTab.orders,
-          child: Scaffold(
-            body: Builder(
-              builder: (context) => SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  16 + staffFrameContentClearance(context),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < 40; i++)
-                      SizedBox(
-                        height: 40,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Text('row $i'),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await pumpApp(tester, app(r));
-      final scrollable = tester.state<ScrollableState>(
-        find.byType(Scrollable).first,
-      );
-      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
-      await tester.pump();
-      final last = tester.getRect(find.text('row 39'));
-      final fab = tester.getRect(find.bySemanticsLabel('Neuer Auftrag'));
-      expect(last.bottom, lessThanOrEqualTo(fab.top));
-    });
-
-    Widget framedList() => StaffFrame(
-      tab: StaffTab.inventory,
-      child: Scaffold(
-        body: Builder(
-          builder: (context) => SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: staffFrameContentClearance(context),
-            ),
-            child: Column(
-              children: [
-                const TextField(key: Key('tf')),
-                for (var i = 0; i < 40; i++)
-                  SizedBox(
-                    key: ValueKey('row $i'),
-                    height: 40,
-                    child: Text('row $i'),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    Rect barRect(WidgetTester tester) => tester.getRect(
-      find.descendant(
-        of: find.byType(StaffTabBar),
-        matching: find.byType(GlassSurface),
-      ),
-    );
-
-    testWidgets('bar floats over the page; the page fills the screen', (
-      tester,
-    ) async {
-      phone(tester);
-      await pumpApp(tester, app(router(framedList())));
-      final bar = barRect(tester);
-      // The page's Scaffold reaches the bottom edge: content runs under the
-      // glass instead of stopping above it.
-      expect(tester.getRect(find.byType(Scaffold).last).bottom, 640);
-      final rows = [
-        for (var i = 0; i < 40; i++)
-          tester.getRect(find.byKey(ValueKey('row $i'))),
-      ];
-      expect(rows.where((r) => r.overlaps(bar)), isNotEmpty);
-      // The page gets the bar + "+" clearance as its bottom padding.
-      final padding = MediaQuery.paddingOf(
-        tester.element(find.byKey(const ValueKey('row 0'))),
-      ).bottom;
-      expect(padding, greaterThanOrEqualTo(640 - bar.top));
-      final fab = tester.getRect(find.bySemanticsLabel('Neuer Auftrag'));
-      expect(fab.bottom, lessThanOrEqualTo(bar.top));
-
-      final scrollable = tester.state<ScrollableState>(
-        find.byType(Scrollable).first,
-      );
-      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
-      await tester.pump();
-      final last = tester.getRect(find.byKey(const ValueKey('row 39')));
-      expect(last.bottom, lessThanOrEqualTo(bar.top));
-      expect(last.bottom, lessThanOrEqualTo(fab.top));
-    });
-
-    testWidgets('keyboard hides bar and +, drops the padding', (tester) async {
-      phone(tester);
-      await pumpApp(tester, app(router(framedList())));
-      await tester.tap(find.byKey(const Key('tf')));
-      await tester.pump();
-      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-      addTearDown(tester.view.resetViewInsets);
-      await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('Inventur').hitTestable(), findsNothing);
-      expect(
-        find.bySemanticsLabel('Neuer Auftrag').hitTestable(),
-        findsNothing,
-      );
-      expect(
-        MediaQuery.paddingOf(
-          tester.element(find.byKey(const ValueKey('row 0'))),
-        ).bottom,
-        0,
-      );
-      final field = tester.getRect(find.byKey(const Key('tf')));
-      expect(field.bottom, lessThanOrEqualTo(640 - 300));
-
-      tester.view.viewInsets = FakeViewPadding.zero;
-      await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('Inventur').hitTestable(), findsOneWidget);
-    });
-
-    testWidgets('active tab scrolls the page to top', (tester) async {
-      phone(tester);
-      final r = router(
-        StaffFrame(
-          tab: StaffTab.orders,
-          child: Scaffold(
-            body: SingleChildScrollView(
-              child: Column(
-                children: [
-                  for (var i = 0; i < 60; i++)
-                    SizedBox(height: 40, child: Text('row $i')),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-      await pumpApp(tester, app(r));
-      final scrollable = tester.state<ScrollableState>(
-        find.byType(Scrollable).first,
-      );
-      scrollable.position.jumpTo(600);
-      await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Aufträge').last);
-      await tester.pumpAndSettle();
-      expect(scrollable.position.pixels, 0);
-      expect(r.state.matchedLocation, '/');
     });
   });
 

@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../data/admin_repository.dart';
 import '../../data/load_error.dart';
@@ -9,7 +8,6 @@ import '../../models/app_role.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../ui/widgets/staff_scaffold.dart';
-import '../../ui/widgets/staff_tab_bar.dart';
 import '../../ui/widgets/states.dart';
 import '../../widgets/role_protected_screen.dart';
 import 'excel_import_dialog.dart';
@@ -20,28 +18,19 @@ import 'inventory_view.dart';
 /// usable on a phone (columns: article, Auftrag/Investition per location,
 /// total, note).
 class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key, this.showBack = true});
-
-  /// False when opened from the staff bar (the back arrow would only lead
-  /// to another tab).
-  final bool showBack;
+  const InventoryScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return RoleProtectedScreen(
       minimumRole: AppRole.employee,
-      child: StaffFrame(
-        tab: StaffTab.inventory,
-        child: _InventoryPage(showBack: showBack),
-      ),
+      child: const _InventoryPage(),
     );
   }
 }
 
 class _InventoryPage extends StatelessWidget {
-  const _InventoryPage({required this.showBack});
-
-  final bool showBack;
+  const _InventoryPage();
 
   static String _originLabel(StockOrigin o) => o == StockOrigin.order
       ? 'rest.origin_order'.tr()
@@ -60,13 +49,6 @@ class _InventoryPage extends StatelessWidget {
       appBar: AppBar(
         title: Text('inventory.title'.tr()),
         automaticallyImplyLeading: false,
-        leading: showBack
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () =>
-                    context.canPop() ? context.pop() : context.go('/'),
-              )
-            : null,
         actions: [
           if (authService.isAdmin)
             IconButton(
@@ -87,7 +69,7 @@ class _InventoryPage extends StatelessWidget {
         loadCatalog: _loadCatalog,
         originLabel: _originLabel,
         // Room to scroll the last row clear of the bar and the "+" button.
-        endPadding: staffFrameContentClearance(context),
+        endPadding: staffContentClearance(context),
         onArticleTap: (row, locations) => _showHistory(context, row, locations),
         onCellTap: (row, location, origin) =>
             _showQuantityDialog(context, row, location, origin),
