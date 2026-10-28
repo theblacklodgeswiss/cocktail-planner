@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/order.dart';
+import '../../../ui/tokens.dart';
 import '../../../utils/currency.dart';
+import 'detail_header.dart';
 import 'form_details_section.dart';
-import 'header_actions.dart';
 import 'info_section.dart';
 import 'order_detail_controller.dart';
-import 'order_detail_logic.dart';
 import 'order_detail_services.dart';
 import 'shopping_section.dart';
-import 'status_actions.dart';
 
-/// The order detail sheet: a draggable sheet (0.9, 0.5-0.95) with the
-/// header actions, status card, form details (form orders), info card,
-/// shopping-list tile (orders with items) and delete (super admin).
+/// The order detail sheet content (shown in a full `showAppSheet`): header
+/// with name, status, date, the one primary action and the "..." menu, then
+/// the decline reason, form details (form orders), info, shopping-list box
+/// and shopping-list tile as floating cards.
 ///
 /// VM-testable: the browser-only Microsoft integration comes in through
 /// [services]; `showOrderDetails` passes the real one.
@@ -21,13 +21,11 @@ class OrderDetailView extends StatefulWidget {
   const OrderDetailView({
     super.key,
     required this.order,
-    required this.colorScheme,
     required this.currency,
     required this.services,
   });
 
   final SavedOrder order;
-  final ColorScheme colorScheme;
   final Currency currency;
   final OrderDetailServices services;
 
@@ -63,48 +61,33 @@ class _OrderDetailViewState extends State<OrderDetailView>
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) => Scaffold(
-        appBar: _buildAppBar(),
-        body: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.all(16),
-          children: [
-            OrderHeaderActions(controller: _c),
-            const SizedBox(height: 8),
-            OrderStatusCard(controller: _c),
-            const SizedBox(height: 16),
-            if (widget.order.isFromForm) ...[
-              FormDetailsCard(controller: _c, colorScheme: widget.colorScheme),
-              const SizedBox(height: 16),
+    const gap = SizedBox(height: AppSpace.s12);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OrderDetailHeader(controller: _c),
+        Expanded(
+          child: ListView(
+            children: [
+              if (_c.currentStatus == OrderStatus.declined) ...[
+                DeclineReasonCard(controller: _c),
+                gap,
+              ],
+              if (widget.order.isFromForm) ...[
+                FormDetailsCard(controller: _c),
+                gap,
+              ],
+              OrderInfoCard(controller: _c, currency: widget.currency),
+              gap,
+              ShoppingListSection(controller: _c),
+              if (widget.order.items.isNotEmpty) ...[
+                gap,
+                ShoppingListTile(controller: _c, currency: widget.currency),
+              ],
             ],
-            OrderInfoCard(
-              controller: _c,
-              colorScheme: widget.colorScheme,
-              currency: widget.currency,
-            ),
-            const SizedBox(height: 16),
-            if (widget.order.items.isNotEmpty)
-              ShoppingListTile(controller: _c, currency: widget.currency),
-            if (_c.actions.contains(OrderDetailAction.delete))
-              DeleteOrderSection(controller: _c),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      title: Text(widget.order.name),
-      leading: IconButton(
-        icon: const Icon(Icons.close),
-        onPressed: () => Navigator.pop(context),
-      ),
+      ],
     );
   }
 }

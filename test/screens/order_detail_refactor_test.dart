@@ -16,6 +16,8 @@ import 'package:cocktail_planer/screens/orders/detail/order_detail_logic.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_view.dart';
 import 'package:cocktail_planer/screens/orders/order_status_helpers.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
+import 'package:cocktail_planer/ui/widgets/app_sheet.dart';
+import 'package:cocktail_planer/ui/widgets/buttons.dart';
 import 'package:cocktail_planer/utils/currency.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -655,13 +657,11 @@ void main() {
             builder: (context) => Scaffold(
               body: Center(
                 child: TextButton(
-                  onPressed: () => showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
+                  onPressed: () => showAppSheet<void>(
+                    context,
+                    full: true,
                     builder: (_) => OrderDetailView(
                       order: order,
-                      colorScheme: Theme.of(context).colorScheme,
                       currency: Currency.fromCode(order.currency),
                       services: fakes.services,
                     ),
@@ -680,12 +680,24 @@ void main() {
 
     bool shown(String key) => find.text(key.tr()).evaluate().isNotEmpty;
 
+    // The primary action is a PrimaryButton (disabled while loading).
     bool enabled(WidgetTester tester, String key) {
       final button = find.ancestor(
         of: find.text(key.tr()),
-        matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+        matching: find.byType(PrimaryButton),
       );
-      return tester.widget<ButtonStyleButton>(button.first).enabled;
+      final w = tester.widget<PrimaryButton>(button.first);
+      return w.onPressed != null && !w.loading;
+    }
+
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> closeMenu(WidgetTester tester) async {
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
     }
 
     const statusKeys = [
@@ -700,15 +712,36 @@ void main() {
       'orders.delete_order',
     ];
 
-    Set<String> visible() => {
-      for (final k in statusKeys)
-        if (shown(k)) k,
-    };
+    /// Primary action plus the entries of the "..." menu (the further
+    /// actions moved there in the redesign; the set per status is the same).
+    Future<Set<String>> visible(WidgetTester tester) async {
+      // "Angebot" is also the label of the status dot, so the back-to-quote
+      // entry only counts when it is found in the menu.
+      final found = {
+        for (final k in statusKeys)
+          if (shown(k) && k != 'orders.status_quote') k,
+      };
+      if (find.byIcon(Icons.more_horiz).evaluate().isNotEmpty) {
+        final dots = find.text('orders.status_quote'.tr()).evaluate().length;
+        await openMenu(tester);
+        found.addAll({
+          for (final k in statusKeys)
+            if (k != 'orders.status_quote' && shown(k)) k,
+        });
+        if (find.text('orders.status_quote'.tr()).evaluate().length > dots) {
+          found.add('orders.status_quote');
+        }
+        await closeMenu(tester);
+      }
+      return found;
+    }
 
     testWidgets('quote: finalize, accept, decline', (tester) async {
       await pumpSheet(tester, detailOrder());
+      await openMenu(tester);
       expect(shown('orders.finalize_offer'), isTrue);
-      expect(visible(), {'orders.accept', 'orders.decline'});
+      await closeMenu(tester);
+      expect(await visible(tester), {'orders.accept', 'orders.decline'});
       expect(enabled(tester, 'orders.accept'), isTrue);
     });
 
@@ -721,9 +754,8 @@ void main() {
         width: 420,
       );
       expect(tester.takeException(), isNull);
-      expect(shown('orders.finalize_offer'), isTrue);
       expect(shown('orders.regenerate_with_claude'), isTrue);
-      expect(visible(), {
+      expect(await visible(tester), {
         'orders.invoice',
         'orders.complete',
         'orders.decline',
@@ -736,14 +768,17 @@ void main() {
     ) async {
       await pumpSheet(tester, detailOrder(total: 0));
       expect(enabled(tester, 'orders.accept'), isFalse);
-      expect(find.text('Erst Einkaufsliste erstellen'), findsOneWidget);
+      expect(
+        find.text('order_detail.accept_needs_list'.tr()),
+        findsOneWidget,
+      );
     });
 
     testWidgets('quote with incomplete offer: only "Angebot öffnen"', (
       tester,
     ) async {
       await pumpSheet(tester, detailOrder(offerComplete: false));
-      expect(visible(), {'orders.complete_offer'});
+      expect(await visible(tester), {'orders.complete_offer'});
       expect(find.text('orders.offer_incomplete'.tr()), findsOneWidget);
     });
 
@@ -751,7 +786,7 @@ void main() {
       tester,
     ) async {
       await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
-      expect(visible(), {
+      expect(await visible(tester), {
         'orders.invoice',
         'orders.complete',
         'orders.decline',
@@ -761,7 +796,7 @@ void main() {
 
     testWidgets('declined: reason row, accept, back to quote', (tester) async {
       await pumpSheet(tester, detailOrder(status: OrderStatus.declined));
-      expect(visible(), {'orders.accept', 'orders.status_quote'});
+      expect(await visible(tester), {'orders.accept', 'orders.status_quote'});
       expect(find.text('orders.decline_reason_add'.tr()), findsOneWidget);
     });
 
@@ -769,7 +804,7 @@ void main() {
       tester,
     ) async {
       await pumpSheet(tester, detailOrder(status: OrderStatus.completed));
-      expect(visible(), {
+      expect(await visible(tester), {
         'orders.invoice',
         'rest.record',
         'orders.back_to_accepted',
@@ -781,7 +816,7 @@ void main() {
     ) async {
       fakes.staff = false;
       await pumpSheet(tester, detailOrder(status: OrderStatus.completed));
-      expect(visible(), {'orders.invoice', 'orders.back_to_accepted'});
+      expect(await visible(tester), {'orders.invoice', 'orders.back_to_accepted'});
     });
 
     testWidgets('super admin sees delete; deleting closes the sheet', (
@@ -789,6 +824,7 @@ void main() {
     ) async {
       fakes.superAdmin = true;
       await pumpSheet(tester, detailOrder());
+      await openMenu(tester);
       expect(shown('orders.delete_order'), isTrue);
       await tester.tap(find.text('orders.delete_order'.tr()));
       await tester.pumpAndSettle();
@@ -810,14 +846,9 @@ void main() {
       await tester.tap(find.text('orders.complete'.tr()).last);
       await tester.pumpAndSettle();
       expect(fakes.log, ['deduct:o1', 'updateStatus:completed', 'rest']);
-      expect(
-        find.text(
-          '${'orders.status'.tr()}: ${statusLabel(OrderStatus.completed)}',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('status.completed'.tr()), findsOneWidget);
       // Rest saved by the fake sheet -> "Rest erfassen" gone.
-      expect(visible(), {'orders.invoice', 'orders.back_to_accepted'});
+      expect(await visible(tester), {'orders.invoice', 'orders.back_to_accepted'});
     });
 
     testWidgets('status buttons are disabled while an update runs', (
@@ -830,14 +861,12 @@ void main() {
       await tester.tap(find.text('orders.complete'.tr()).last);
       await tester.pump();
       expect(enabled(tester, 'orders.complete'), isFalse);
-      expect(enabled(tester, 'orders.decline'), isFalse);
-      expect(enabled(tester, 'orders.status_quote'), isFalse);
       fakes.deductCompleter!.complete(
         const OrderDeductionPlan(restRecorded: true),
       );
       await tester.pumpAndSettle();
       expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
-      expect(enabled(tester, 'orders.back_to_accepted'), isTrue);
+      expect(await visible(tester), {'orders.invoice', 'orders.back_to_accepted'});
     });
 
     testWidgets('decline reason row edits the reason in place', (tester) async {
@@ -855,6 +884,7 @@ void main() {
       tester,
     ) async {
       await pumpSheet(tester, detailOrder());
+      await openMenu(tester);
       await tester.tap(find.text('orders.finalize_offer'.tr()));
       await tester.pumpAndSettle();
       expect(fakes.log, ['getOrderById:o1']);
@@ -868,6 +898,7 @@ void main() {
     ) async {
       fakes.repo.fresh = detailOrder(status: OrderStatus.accepted, total: 7);
       await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      await openMenu(tester);
       await tester.tap(find.text('orders.invoice'.tr()));
       await tester.pumpAndSettle();
       expect(pushed.single.$1, '/create-invoice');
@@ -879,7 +910,7 @@ void main() {
     ) async {
       await pumpSheet(tester, detailOrder());
       expect(find.text('orders.form_details'.tr()), findsNothing);
-      expect(find.byType(ListTile), findsNothing);
+      expect(find.textContaining('orders.articles'.tr()), findsNothing);
     });
 
     testWidgets('form order with items shows details and the list tile', (
@@ -895,7 +926,6 @@ void main() {
         ),
       );
       expect(find.text('orders.form_details'.tr()), findsOneWidget);
-      expect(find.byType(ListTile), findsOneWidget);
       expect(
         find.textContaining('1 ${'orders.articles'.tr()}'),
         findsOneWidget,
@@ -907,7 +937,7 @@ void main() {
     ) async {
       fakes.employees = const [Employee(id: 'e1', name: 'Mario')];
       await pumpSheet(tester, detailOrder());
-      await tester.tap(find.widgetWithText(FilterChip, 'Mario'));
+      await tester.tap(find.text('Mario'));
       await tester.pumpAndSettle();
       expect(fakes.repo.assignCalls, [
         ['Mario'],

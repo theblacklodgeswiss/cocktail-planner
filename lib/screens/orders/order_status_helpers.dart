@@ -1,5 +1,4 @@
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/material.dart';
 
 import '../../models/order.dart';
 
@@ -26,32 +25,6 @@ String statusLabel(OrderStatus status) {
       return 'orders.status_completed'.tr();
     case OrderStatus.declined:
       return 'orders.status_declined'.tr();
-  }
-}
-
-Color statusColor(OrderStatus status) {
-  switch (status) {
-    case OrderStatus.quote:
-      return Colors.orange;
-    case OrderStatus.accepted:
-      return Colors.green;
-    case OrderStatus.completed:
-      return Colors.teal;
-    case OrderStatus.declined:
-      return Colors.red;
-  }
-}
-
-IconData statusIcon(OrderStatus status) {
-  switch (status) {
-    case OrderStatus.quote:
-      return Icons.hourglass_empty;
-    case OrderStatus.accepted:
-      return Icons.check_circle;
-    case OrderStatus.completed:
-      return Icons.verified;
-    case OrderStatus.declined:
-      return Icons.cancel;
   }
 }
 
