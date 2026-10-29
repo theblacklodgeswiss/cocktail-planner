@@ -283,6 +283,21 @@
     "search_ingredient": "Zutat suchen...",
     "add_ingredient": "Zutat hinzufügen"
   },
+  "shopping_ui": {
+    "ingredients_count": "{} Zutaten",
+    "positions_count": "{} Positionen",
+    "edit_ingredients": "Zutaten bearbeiten",
+    "remove_ingredient": "Zutat entfernen",
+    "summary_title": "Zusammenfassung",
+    "summary_count": "{} Artikel ausgewählt",
+    "total_label": "Gesamtbetrag",
+    "selected_articles": "Ausgewählte Artikel",
+    "none_selected": "Keine Artikel ausgewählt",
+    "none_selected_hint": "Gehe zurück und wähle Artikel aus",
+    "quantity": "Menge",
+    "source_row": "Herkunft",
+    "no_items": "Keine Artikel in der Einkaufsliste"
+  },
   "offer": {
     "title": "Angebot erstellen",
     "editor": "Bearbeiter",

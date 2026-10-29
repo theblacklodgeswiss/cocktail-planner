@@ -280,6 +280,21 @@
     "search_ingredient": "Search ingredient...",
     "add_ingredient": "Add ingredient"
   },
+  "shopping_ui": {
+    "ingredients_count": "{} ingredients",
+    "positions_count": "{} items",
+    "edit_ingredients": "Edit ingredients",
+    "remove_ingredient": "Remove ingredient",
+    "summary_title": "Summary",
+    "summary_count": "{} items selected",
+    "total_label": "Total amount",
+    "selected_articles": "Selected items",
+    "none_selected": "No items selected",
+    "none_selected_hint": "Go back and select items",
+    "quantity": "Quantity",
+    "source_row": "Source",
+    "no_items": "No items in the shopping list"
+  },
   "offer": {
     "title": "Create Offer",
     "editor": "Editor",
