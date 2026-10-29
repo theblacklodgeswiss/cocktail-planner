@@ -942,7 +942,20 @@
     "take_title": "Take out: {name}",
     "count_origin_change": "{origin} {old} → {new}",
     "count_below_investment": "The count is below the investment stock: please add \"Investition\"",
-    "count_duplicate": "This article appears twice at this location. Please keep only one line."
+    "count_duplicate": "This article appears twice at this location. Please keep only one line.",
+    "ai_switch": "AI interpretation",
+    "ai_switch_hint": "Claude checks the text against the current stock",
+    "ai_working": "Interpreting…",
+    "ai_header": "Suggested by Claude – please check",
+    "ai_badge": "AI suggestion",
+    "ai_fallback": "Interpreted without AI",
+    "ai_use_rules": "Use rule-based recognition",
+    "ai_use_ai": "Use AI suggestion",
+    "ai_note": "Claude: {note}",
+    "flag_high": "Unusually high quantity",
+    "flag_not_unique": "Article not unique",
+    "flag_no_stock": "No stock yet",
+    "flag_below_investment": "Below investment stock"
   },
   "stock": {
     "location_prompt_title": "Your storage location",

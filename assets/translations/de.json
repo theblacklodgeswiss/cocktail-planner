@@ -947,7 +947,20 @@
     "take_title": "Entnehmen: {name}",
     "count_origin_change": "{origin} {old} → {new}",
     "count_below_investment": "Zählung ist kleiner als der Investitions-Bestand: bitte \"Investition\" dazusagen",
-    "count_duplicate": "Dieser Artikel ist an diesem Lagerort doppelt. Bitte nur eine Zeile behalten."
+    "count_duplicate": "Dieser Artikel ist an diesem Lagerort doppelt. Bitte nur eine Zeile behalten.",
+    "ai_switch": "KI-Auswertung",
+    "ai_switch_hint": "Claude prüft den Text gegen den aktuellen Bestand",
+    "ai_working": "Wird ausgewertet…",
+    "ai_header": "Von Claude vorgeschlagen – bitte prüfen",
+    "ai_badge": "KI-Vorschlag",
+    "ai_fallback": "Ohne KI ausgewertet",
+    "ai_use_rules": "Regel-Erkennung nutzen",
+    "ai_use_ai": "KI-Vorschlag nutzen",
+    "ai_note": "Claude: {note}",
+    "flag_high": "Ungewöhnlich hohe Menge",
+    "flag_not_unique": "Artikel nicht eindeutig",
+    "flag_no_stock": "Noch kein Bestand",
+    "flag_below_investment": "Unter Investitions-Bestand"
   },
   "stock": {
     "location_prompt_title": "Dein Lagerort",

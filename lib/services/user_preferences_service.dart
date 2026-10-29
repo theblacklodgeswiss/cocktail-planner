@@ -23,6 +23,7 @@ class UserPreferences {
 class UserPreferencesService extends ChangeNotifier {
   static const _themeModeKey = 'themeMode';
   static const _localeKey = 'locale';
+  static const _stockAiKey = 'stockAiEnabled';
 
   UserPreferences _preferences = const UserPreferences();
   SharedPreferences? _prefs;
@@ -30,6 +31,11 @@ class UserPreferencesService extends ChangeNotifier {
   UserPreferences get preferences => _preferences;
   ThemeMode get themeMode => _preferences.themeMode;
   Locale? get locale => _preferences.locale;
+
+  bool _stockAiEnabled = true;
+
+  /// Claude interprets the stock capture text ("KI-Auswertung"). Default on.
+  bool get stockAiEnabled => _stockAiEnabled;
 
   /// Initialize and load saved preferences.
   Future<void> initialize() async {
@@ -52,6 +58,7 @@ class UserPreferencesService extends ChangeNotifier {
     final locale = localeCode != null ? Locale(localeCode) : null;
 
     _preferences = UserPreferences(themeMode: themeMode, locale: locale);
+    _stockAiEnabled = prefs.getBool(_stockAiKey) ?? true;
     notifyListeners();
   }
 
@@ -73,6 +80,13 @@ class UserPreferencesService extends ChangeNotifier {
     } else {
       await _prefs?.remove(_localeKey);
     }
+    notifyListeners();
+  }
+
+  /// Switch the stock capture's Claude interpretation on or off.
+  Future<void> setStockAiEnabled(bool enabled) async {
+    _stockAiEnabled = enabled;
+    await _prefs?.setBool(_stockAiKey, enabled);
     notifyListeners();
   }
 }
