@@ -433,6 +433,7 @@ class _SearchPill extends StatelessWidget {
         hintText: 'inventory.search'.tr(),
         hintStyle: AppText.body.copyWith(color: p.textSecondary),
         isDense: true,
+        constraints: const BoxConstraints(minHeight: AppSize.minTap),
         filled: true,
         fillColor: p.card,
         prefixIcon: Icon(
