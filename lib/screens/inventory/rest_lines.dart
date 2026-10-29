@@ -15,6 +15,8 @@ class RestLine {
     this.chosenMaterialId,
     this.chosenMaterialName,
     this.locationUnresolved = false,
+    this.fromAi = false,
+    this.aiNote,
     bool? originExplicit,
     String? id,
   }) : originExplicit = originExplicit ?? parsed.originHint != null,
@@ -42,6 +44,13 @@ class RestLine {
 
   /// The spoken location hint matched no known location.
   bool locationUnresolved;
+
+  /// Suggested by Claude (shown with a "KI-Vorschlag" badge).
+  final bool fromAi;
+
+  /// Claude's hint when the statement does not fit the current stock. Info
+  /// only, never a blocker.
+  final String? aiNote;
 }
 
 /// Turns parsed lines into confirmation lines. Only a confident catalog match
