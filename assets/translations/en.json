@@ -291,7 +291,6 @@
     "selected_articles": "Selected items",
     "none_selected": "No items selected",
     "none_selected_hint": "Go back and select items",
-    "pdf_error": "Error creating the PDF: {}",
     "quantity": "Quantity",
     "source_row": "Source",
     "no_items": "No items in the shopping list"

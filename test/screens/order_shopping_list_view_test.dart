@@ -109,10 +109,7 @@ void main() {
 
   testWidgets('switching to Lager selects the own location', (tester) async {
     final calls = <(int, ItemSource)>[];
-    await pumpApp(
-      tester,
-      app(view(onSetSource: (i, s) => calls.add((i, s)))),
-    );
+    await pumpApp(tester, app(view(onSetSource: (i, s) => calls.add((i, s)))));
     await tester.tap(find.byKey(const Key('source-switch-0')));
     await tester.pump();
     expect(calls, hasLength(1));

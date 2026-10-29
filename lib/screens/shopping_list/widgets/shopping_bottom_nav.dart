@@ -14,7 +14,6 @@ class ShoppingBottomNav extends StatelessWidget {
     required this.onBack,
     required this.onNext,
     this.onSave,
-    this.onDownload,
     this.isSaving = false,
   });
 
@@ -26,9 +25,6 @@ class ShoppingBottomNav extends StatelessWidget {
   /// Save action of the last step; null disables it (nothing selected).
   final VoidCallback? onSave;
 
-  /// Optional secondary action of the last step (shopping list PDF).
-  final VoidCallback? onDownload;
-
   /// Shows a spinner on the save button and blocks further taps.
   final bool isSaving;
 
@@ -37,7 +33,7 @@ class ShoppingBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final row = Row(
+    return Row(
       children: [
         if (!_isFirstPage) ...[
           Expanded(
@@ -57,15 +53,6 @@ class ShoppingBottomNav extends StatelessWidget {
                 )
               : PrimaryButton(label: 'common.next'.tr(), onPressed: onNext),
         ),
-      ],
-    );
-    if (!_isLastPage || onDownload == null) return row;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextAction(label: 'shopping.download_list'.tr(), onPressed: onDownload),
-        row,
       ],
     );
   }

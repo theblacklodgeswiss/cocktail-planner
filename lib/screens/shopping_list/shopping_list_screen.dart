@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/cocktail_repository.dart';
 import '../../data/order_repository.dart';
@@ -9,14 +10,13 @@ import '../../models/material_item.dart';
 import '../../models/recipe.dart';
 import '../../services/pdf_generator.dart'; // for OrderItem class
 import '../../state/app_state.dart';
+import '../../ui/widgets/states.dart';
+import '../../ui/widgets/step_scaffold.dart';
 import '../../utils/currency.dart';
 import 'shopping_list_dialogs.dart';
 import 'shopping_list_logic.dart';
 import 'stock_logic.dart';
 import 'widgets/widgets.dart';
-import 'package:go_router/go_router.dart';
-import '../../ui/widgets/states.dart';
-import '../../ui/widgets/step_scaffold.dart';
 
 /// Shopping list screen with wizard-style navigation.
 class ShoppingListScreen extends StatefulWidget {
@@ -464,48 +464,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     }
   }
 
-  Future<void> _downloadShoppingList(
-    List<MaterialItem> allItems,
-    double total,
-    Map<String, int> aggregatedQuantities,
-    Set<String> aggregatedSelected,
-  ) async {
-    final selectedOrderItems = ShoppingListLogic.getSelectedOrderItems(
-      allItems,
-      aggregatedQuantities,
-      aggregatedSelected,
-    );
-
-    if (selectedOrderItems.isEmpty) {
-      _showError('shopping.no_selection'.tr());
-      return;
-    }
-
-    try {
-      // Generate and download the shopping list PDF directly
-      await PdfGenerator.generateAndDownload(
-        orderName: _orderName,
-        orderDate: _eventDate ?? DateTime.now(),
-        items: selectedOrderItems,
-        grandTotal: total,
-        currency: _currency.code,
-        personCount: _personCount,
-        drinkerType: _drinkerType,
-        serviceType: _serviceType,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('shopping.download_list'.tr())));
-      }
-    } catch (e) {
-      if (mounted) {
-        _showError('shopping_ui.pdf_error'.tr(args: ['$e']));
-      }
-    }
-  }
-
   Future<void> _saveAndGeneratePdf(
     List<OrderItem> selectedOrderItems,
     double total,
@@ -883,14 +841,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           isSaving: _isSavingOrder,
           onBack: () => _goToPage(page - 1),
           onNext: () => _goToPage(page + 1),
-          onDownload: selectedItems.isNotEmpty
-              ? () => _downloadShoppingList(
-                  allItems,
-                  total,
-                  mergedQuantities,
-                  aggregatedSelected,
-                )
-              : null,
           onSave: selectedItems.isNotEmpty
               ? () => _export(
                   allItems,

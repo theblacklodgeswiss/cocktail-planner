@@ -53,7 +53,9 @@ class ShoppingItemCard extends StatelessWidget {
                     _Badge(count: totalSelected),
                     const SizedBox(width: AppSpace.s12),
                   ],
-                  Expanded(child: _Info(item: item, currency: currency)),
+                  Expanded(
+                    child: _Info(item: item, currency: currency),
+                  ),
                 ],
               ),
               if (cocktails.length > 1) ...[

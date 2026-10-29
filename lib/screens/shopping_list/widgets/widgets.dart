@@ -4,6 +4,6 @@ export 'cocktail_page.dart';
 export 'quantity_stepper.dart';
 export 'shopping_bottom_nav.dart';
 export 'shopping_empty_state.dart';
-export 'shopping_header.dart';
 export 'shopping_item_card.dart';
+export 'shopping_total_line.dart';
 export 'summary_page.dart';

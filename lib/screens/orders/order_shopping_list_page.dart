@@ -9,8 +9,8 @@ import '../../models/order.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../utils/currency.dart';
-import 'order_shopping_list_view.dart';
 import '../shopping_list/stock_logic.dart';
+import 'order_shopping_list_view.dart';
 
 /// Read-only overview of an order's shopping list. Pops with `true` when
 /// the user taps "Bearbeiten", so the caller can start the existing

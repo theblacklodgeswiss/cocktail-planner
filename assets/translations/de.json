@@ -294,7 +294,6 @@
     "selected_articles": "Ausgewählte Artikel",
     "none_selected": "Keine Artikel ausgewählt",
     "none_selected_hint": "Gehe zurück und wähle Artikel aus",
-    "pdf_error": "Fehler beim Erstellen der PDF: {}",
     "quantity": "Menge",
     "source_row": "Herkunft",
     "no_items": "Keine Artikel in der Einkaufsliste"

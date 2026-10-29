@@ -173,10 +173,15 @@ void main() {
           keyboard: 300,
         ),
       );
-      await tester.tap(find.byKey(const Key('quantity-field')).first);
+      final field = find.byKey(const Key('quantity-field')).first;
+      await tester.ensureVisible(field);
       await tester.pump();
-      await tester.enterText(find.byKey(const Key('quantity-field')).first, '3');
+      await tester.tap(field);
       await tester.pump();
+      await tester.enterText(field, '3');
+      await tester.pump();
+      // The focused field sits above the keyboard (640 - 300).
+      expect(tester.getRect(field).bottom, lessThanOrEqualTo(340));
       expect(tester.takeException(), isNull);
     });
   }

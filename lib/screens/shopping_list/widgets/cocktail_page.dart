@@ -69,8 +69,7 @@ class CocktailPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpace.s8),
-        for (final item in items)
-          _card(item),
+        for (final item in items) _card(item),
       ],
     );
   }
