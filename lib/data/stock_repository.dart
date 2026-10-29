@@ -319,6 +319,45 @@ class StockRepository {
     });
   }
 
+  /// Sets the note of an article on all its stock entries (an empty note
+  /// removes it). Without any entry yet, the note goes onto a new entry with
+  /// quantity 0 at [fallbackLocationId] ("Auftrag"). Notes are not logged as
+  /// movements (no quantity change).
+  Future<void> setArticleNote({
+    required String materialId,
+    required String materialName,
+    required String note,
+    required String fallbackLocationId,
+  }) async {
+    final trimmed = note.trim();
+    final snap = await _stock.where('materialId', isEqualTo: materialId).get();
+    final batch = firestoreService.firestore.batch();
+    if (snap.docs.isEmpty) {
+      if (trimmed.isEmpty) return;
+      batch.set(
+        _stock.doc(
+          StockEntry.buildId(materialId, fallbackLocationId, StockOrigin.order),
+        ),
+        stockEntryFields(
+          materialId: materialId,
+          materialName: materialName,
+          locationId: fallbackLocationId,
+          origin: StockOrigin.order,
+          quantity: 0,
+          note: trimmed,
+        ),
+        SetOptions(merge: true),
+      );
+    } else {
+      for (final d in snap.docs) {
+        batch.update(d.reference, {
+          'note': trimmed.isEmpty ? FieldValue.delete() : trimmed,
+        });
+      }
+    }
+    await batch.commit();
+  }
+
   Stream<List<StockMovement>> watchMovements({String? materialId}) {
     Query<Map<String, dynamic>> query = _movements;
     if (materialId != null) {

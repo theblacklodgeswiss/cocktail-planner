@@ -70,7 +70,7 @@ InventoryView view(FakeStreams f, {Duration? timeout}) => InventoryView(
   loadCatalog: f.loadCatalog,
   originLabel: (o) => o.name,
   onArticleTap: (_, _) {},
-  onCellTap: (_, _, _) {},
+  onCapture: () {},
   onManageLocations: () {},
   timeout: timeout ?? inventoryLoadTimeout,
 );
@@ -100,22 +100,22 @@ void main() {
     expect(find.byType(LoadingState), findsOneWidget);
     f.stock.last.add([_entry]);
     await tester.pump();
-    expect(find.byType(InventoryCard), findsWidgets);
+    expect(find.byType(InventoryListRow), findsWidgets);
   });
 
-  testWidgets('cards, even before the locations arrive', (tester) async {
+  testWidgets('rows, even before the locations arrive', (tester) async {
     final f = FakeStreams();
     addTearDown(f.close);
     await pumpApp(tester, app(view(f)));
     f.stock.last.add([_entry]);
     await tester.pump();
-    expect(find.byType(InventoryCard), findsWidgets);
+    expect(find.byType(InventoryListRow), findsWidgets);
     expect(find.text('Rum'), findsOneWidget);
     expect(find.text('Keller'), findsNothing);
 
     f.locations.last.add([_loc]);
     await tester.pump();
-    expect(find.text('Keller'), findsWidgets);
+    expect(find.text('Keller 3'), findsOneWidget);
     expect(find.text('3'), findsWidgets);
     expect(f.catalogCalls, 1, reason: 'catalog is loaded once, on start');
   });
@@ -178,7 +178,7 @@ void main() {
     f.stock.last.add([_entry]);
     f.locations.last.add([_loc]);
     await tester.pump();
-    expect(find.byType(InventoryCard), findsWidgets);
+    expect(find.byType(InventoryListRow), findsWidgets);
   });
 
   testWidgets('timeout -> error with retry', (tester) async {
@@ -195,6 +195,10 @@ void main() {
     expect(find.byType(LoadingState), findsOneWidget);
     f.stock.last.add([_entry]);
     await tester.pump(const Duration(seconds: 3));
-    expect(find.byType(InventoryCard), findsWidgets, reason: 'no late timeout');
+    expect(
+      find.byType(InventoryListRow),
+      findsWidgets,
+      reason: 'no late timeout',
+    );
   });
 }

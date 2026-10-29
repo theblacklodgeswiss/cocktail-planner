@@ -130,7 +130,7 @@ Widget _inventory({required bool empty, required bool dark}) => _host(
           const InventoryCatalog([(id: 'm9', name: 'Grenadine')]),
       originLabel: (o) => o.name,
       onArticleTap: (_, _) {},
-      onCellTap: (_, _, _) {},
+      onCapture: () {},
       onManageLocations: () {},
       timeout: inventoryLoadTimeout,
     ),

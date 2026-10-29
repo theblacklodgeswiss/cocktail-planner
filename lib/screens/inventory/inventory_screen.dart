@@ -11,16 +11,18 @@ import '../../ui/tokens.dart';
 import '../../ui/widgets/app_sheet.dart';
 import '../../ui/widgets/buttons.dart';
 import '../../ui/widgets/glass_icon_button.dart';
-import '../../ui/widgets/pill_filter.dart';
 import '../../ui/widgets/states.dart';
 import '../../widgets/role_protected_screen.dart';
 import 'excel_import_dialog.dart';
+import 'inventory_article_editor.dart';
 import 'inventory_rows.dart';
 import 'inventory_view.dart';
+import 'rest_entry_sheet.dart';
 
 /// Inventory tab (`/inventory`, inside the staff shell): wires
 /// [InventoryView] to the stock repository and the article catalog, and
-/// opens the correction, history and locations sheets.
+/// opens the stock capture, the article editor (with history and take-out)
+/// and the locations sheet.
 class InventoryScreen extends StatelessWidget {
   const InventoryScreen({super.key});
 
@@ -52,26 +54,79 @@ class InventoryScreen extends StatelessWidget {
             ? () => showExcelImportDialog(context)
             : null,
         onManageLocations: () => _showLocations(context),
-        onArticleTap: (row, locations) => _showHistory(context, row, locations),
-        onCellTap: (row, location, origin) =>
-            _showQuantity(context, row, location, origin),
+        onCapture: () => showStockCaptureSheet(context),
+        onArticleTap: (row, locations) => _showEditor(context, row, locations),
       ),
     );
   }
 
-  Future<void> _showQuantity(
+  /// The "Artikel" sheet: quantities per location and origin, note,
+  /// history and take-out.
+  Future<void> _showEditor(
     BuildContext context,
     InventoryRow row,
-    StorageLocation location,
-    StockOrigin origin,
+    List<StorageLocation> locations,
   ) {
     return showAppSheet<void>(
       context,
-      builder: (_) => _QuantitySheet(
+      builder: (_) => InventoryArticleEditor(
         row: row,
-        location: location,
-        origin: origin,
-        originLabel: _originLabel(origin),
+        locations: locations,
+        originLabel: _originLabel,
+        onSave: (changes, note) => _save(row, locations, changes, note),
+        onHistory: () => _showHistory(context, row, locations),
+        onTake: () => _showTake(context, row, locations),
+      ),
+    );
+  }
+
+  /// Same calls as the former correction dialog: one setQuantity per
+  /// changed value (logged as a correction), then the note.
+  static Future<void> _save(
+    InventoryRow row,
+    List<StorageLocation> locations,
+    List<QuantityChange> changes,
+    String? note,
+  ) async {
+    for (final c in changes) {
+      await stockRepository.setQuantity(
+        materialId: row.materialId,
+        materialName: row.materialName,
+        locationId: c.locationId,
+        origin: c.origin,
+        quantity: c.quantity,
+      );
+    }
+    if (note != null && locations.isNotEmpty) {
+      await stockRepository.setArticleNote(
+        materialId: row.materialId,
+        materialName: row.materialName,
+        note: note,
+        fallbackLocationId: locations.first.id,
+      );
+    }
+  }
+
+  Future<void> _showTake(
+    BuildContext context,
+    InventoryRow row,
+    List<StorageLocation> locations,
+  ) {
+    if (locations.isEmpty) return Future.value();
+    return showAppSheet<void>(
+      context,
+      builder: (_) => InventoryTakeSheet(
+        row: row,
+        locations: locations,
+        originLabel: _originLabel,
+        onTake: (locationId, origin, amount) => stockRepository.applyMovement(
+          materialId: row.materialId,
+          materialName: row.materialName,
+          locationId: locationId,
+          origin: origin,
+          delta: -amount,
+          reason: 'take',
+        ),
       ),
     );
   }
@@ -94,192 +149,6 @@ class InventoryScreen extends StatelessWidget {
 
   Future<void> _showLocations(BuildContext context) {
     return showAppSheet<void>(context, builder: (_) => const _LocationsSheet());
-  }
-}
-
-/// Text field look of the inventory sheets (rounded, filled).
-InputDecoration _fieldDecoration(
-  BuildContext context, {
-  required String label,
-  String? error,
-  String? helper,
-}) {
-  final p = AppPalette.of(context);
-  OutlineInputBorder border(Color c) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(AppRadius.control),
-    borderSide: BorderSide(color: c),
-  );
-  return InputDecoration(
-    labelText: label,
-    errorText: error,
-    helperText: helper,
-    helperMaxLines: 2,
-    errorMaxLines: 2,
-    filled: true,
-    fillColor: p.surface,
-    border: border(p.border),
-    enabledBorder: border(p.border),
-    focusedBorder: border(p.text),
-  );
-}
-
-/// Title of an inventory sheet.
-class _SheetTitle extends StatelessWidget {
-  const _SheetTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    header: true,
-    child: Text(
-      text,
-      style: AppText.heroTitle.copyWith(color: AppPalette.of(context).text),
-    ),
-  );
-}
-
-class _QuantitySheet extends StatefulWidget {
-  const _QuantitySheet({
-    required this.row,
-    required this.location,
-    required this.origin,
-    required this.originLabel,
-  });
-
-  final InventoryRow row;
-  final StorageLocation location;
-  final StockOrigin origin;
-  final String originLabel;
-
-  @override
-  State<_QuantitySheet> createState() => _QuantitySheetState();
-}
-
-class _QuantitySheetState extends State<_QuantitySheet> {
-  late final double _current =
-      widget.row.perLocation[widget.location.id]?[widget.origin] ?? 0;
-  late final TextEditingController _controller = TextEditingController(
-    text: formatQuantity(_current),
-  );
-  bool _take = false;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final value = parseQuantity(_controller.text, allowZero: !_take);
-    if (value == null) {
-      setState(() => _error = 'inventory.quantity_invalid'.tr());
-      return;
-    }
-    if (_take && value > _current + 1e-9) {
-      setState(
-        () => _error = 'inventory.only_available'.tr(
-          namedArgs: {'quantity': formatQuantity(_current)},
-        ),
-      );
-      return;
-    }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      if (_take) {
-        await stockRepository.applyMovement(
-          materialId: widget.row.materialId,
-          materialName: widget.row.materialName,
-          locationId: widget.location.id,
-          origin: widget.origin,
-          delta: -value,
-          reason: 'take',
-        );
-      } else {
-        await stockRepository.setQuantity(
-          materialId: widget.row.materialId,
-          materialName: widget.row.materialName,
-          locationId: widget.location.id,
-          origin: widget.origin,
-          quantity: value,
-        );
-      }
-      if (mounted) Navigator.of(context).pop();
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = 'inventory.save_failed'.tr();
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = AppPalette.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SheetTitle(widget.row.materialName),
-        const SizedBox(height: AppSpace.s4),
-        Text(
-          'inventory_list.current'.tr(
-            namedArgs: {
-              'location': widget.location.name,
-              'origin': widget.originLabel,
-              'quantity': formatQuantity(_current),
-            },
-          ),
-          style: AppText.body.copyWith(color: p.textSecondary),
-        ),
-        const SizedBox(height: AppSpace.s16),
-        PillFilter<bool>(
-          value: _take,
-          onChanged: (take) => setState(() {
-            _take = take;
-            _controller.text = _take ? '' : formatQuantity(_current);
-            _error = null;
-          }),
-          options: [
-            PillOption(false, 'inventory.correct'.tr()),
-            PillOption(true, 'inventory.take'.tr()),
-          ],
-        ),
-        const SizedBox(height: AppSpace.s12),
-        TextField(
-          controller: _controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onSubmitted: (_) => _saving ? null : _save(),
-          style: AppText.section.copyWith(color: p.text),
-          decoration: _fieldDecoration(
-            context,
-            label: _take
-                ? 'inventory.take_amount'.tr()
-                : 'inventory.new_quantity'.tr(),
-            error: _error,
-          ),
-        ),
-        const SizedBox(height: AppSpace.s24),
-        PrimaryButton(
-          label: 'common.save'.tr(),
-          loading: _saving,
-          onPressed: _save,
-        ),
-        const SizedBox(height: AppSpace.s8),
-        TextAction(
-          label: 'common.cancel'.tr(),
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-        ),
-      ],
-    );
   }
 }
 
@@ -322,7 +191,7 @@ class _HistorySheetState extends State<_HistorySheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SheetTitle('${'inventory.history'.tr()}: ${row.materialName}'),
+        InventorySheetTitle('${'inventory.history'.tr()}: ${row.materialName}'),
         const SizedBox(height: AppSpace.s12),
         Expanded(
           child: StreamBuilder<List<StockMovement>>(
@@ -482,7 +351,7 @@ class _LocationsSheetState extends State<_LocationsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _SheetTitle('inventory.manage_locations'.tr()),
+            InventorySheetTitle('inventory.manage_locations'.tr()),
             const SizedBox(height: AppSpace.s12),
             for (final l in locations)
               ConstrainedBox(
@@ -582,7 +451,7 @@ class _NameSheetState extends State<_NameSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SheetTitle('stock.location_name'.tr()),
+        InventorySheetTitle('stock.location_name'.tr()),
         const SizedBox(height: AppSpace.s16),
         TextField(
           controller: _controller,
@@ -590,7 +459,7 @@ class _NameSheetState extends State<_NameSheet> {
           textCapitalization: TextCapitalization.words,
           onSubmitted: (_) => _submit(),
           style: AppText.section.copyWith(color: p.text),
-          decoration: _fieldDecoration(
+          decoration: inventoryFieldDecoration(
             context,
             label: 'stock.location_name'.tr(),
             error: _error,
@@ -603,7 +472,7 @@ class _NameSheetState extends State<_NameSheet> {
             keyboardType: TextInputType.emailAddress,
             onSubmitted: (_) => _submit(),
             style: AppText.section.copyWith(color: p.text),
-            decoration: _fieldDecoration(
+            decoration: inventoryFieldDecoration(
               context,
               label: 'inventory.owner_email'.tr(),
               helper: 'inventory.owner_hint'.tr(),

@@ -32,11 +32,20 @@ class InventoryCatalog {
 
 typedef CatalogLoader = Future<InventoryCatalog> Function();
 
-/// "Alle" or "Mit Bestand".
-enum InventoryFilter { all, inStock }
+/// "Alle", "Mit Bestand" or "Leer".
+enum InventoryFilter { all, inStock, empty }
+
+/// Stock of [r] at [locationId] (null: all locations).
+double inventoryAmount(InventoryRow r, String? locationId) {
+  if (locationId == null) return r.total;
+  final cell = r.perLocation[locationId];
+  if (cell == null) return 0;
+  return cell.values.fold(0.0, (a, b) => a + b);
+}
 
 /// Rows shown for [filter], [locationId] (null: all locations) and [query].
-/// With a location chosen, "Mit Bestand" looks at that location only.
+/// With a location chosen, "Mit Bestand" and "Leer" look at that location
+/// only.
 List<InventoryRow> filterInventoryRows(
   List<InventoryRow> rows, {
   required InventoryFilter filter,
@@ -44,25 +53,107 @@ List<InventoryRow> filterInventoryRows(
   String query = '',
 }) {
   final q = query.trim().toLowerCase();
-  double amount(InventoryRow r) {
-    if (locationId == null) return r.total;
-    final cell = r.perLocation[locationId];
-    if (cell == null) return 0;
-    return cell.values.fold(0.0, (a, b) => a + b);
-  }
-
+  bool keep(InventoryRow r) => switch (filter) {
+    InventoryFilter.all => true,
+    InventoryFilter.inStock => inventoryAmount(r, locationId) > 0,
+    InventoryFilter.empty => inventoryAmount(r, locationId) <= 0,
+  };
   return [
     for (final r in rows)
-      if ((q.isEmpty || r.materialName.toLowerCase().contains(q)) &&
-          (filter == InventoryFilter.all || amount(r) > 0))
-        r,
+      if ((q.isEmpty || r.materialName.toLowerCase().contains(q)) && keep(r)) r,
   ];
 }
 
-/// The inventory tab: every catalog article (with 0 where nothing is
-/// stocked) plus stock of articles no longer in the catalog, as one card per
-/// article with the per-location quantities. Filters "Alle | Mit Bestand",
-/// one pill per location and a search field.
+/// "Mit Bestand" as soon as any article has stock, else "Alle".
+InventoryFilter defaultInventoryFilter(List<InventoryRow> rows) =>
+    rows.any((r) => r.total > 0)
+    ? InventoryFilter.inStock
+    : InventoryFilter.all;
+
+/// Grey second line of a row: only the non-zero parts, per location
+/// ("Biri 2 · Mario 1,5") or, with [locationId], per origin ("Auftrag 2 ·
+/// Investition 1"). Null when there is no stock (the row says "Kein
+/// Bestand").
+String? inventoryRowSubtitle(
+  InventoryRow row, {
+  required List<StorageLocation> locations,
+  String? locationId,
+  required String Function(StockOrigin origin) originLabel,
+}) {
+  final parts = <String>[];
+  if (locationId != null) {
+    final cell = row.perLocation[locationId] ?? const {};
+    for (final o in StockOrigin.values) {
+      final q = cell[o] ?? 0;
+      if (q > 0) parts.add('${originLabel(o)} ${formatQuantity(q)}');
+    }
+  } else {
+    final names = {for (final l in locations) l.id: l.name};
+    // Known locations in their order, then stock at unknown ones.
+    final ids = [
+      for (final l in locations) l.id,
+      for (final id in row.perLocation.keys)
+        if (!names.containsKey(id)) id,
+    ];
+    for (final id in ids) {
+      final cell = row.perLocation[id];
+      if (cell == null) continue;
+      final q = cell.values.fold(0.0, (a, b) => a + b);
+      if (q > 0) parts.add('${names[id] ?? id} ${formatQuantity(q)}');
+    }
+  }
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+/// Section letter of an article name: its first letter, upper case, or "#"
+/// for anything else (digits, symbols).
+String inventoryLetter(String name) {
+  final t = name.trim();
+  if (t.isEmpty) return '#';
+  final c = t.substring(0, 1).toUpperCase();
+  return RegExp(r'[A-ZÄÖÜ]').hasMatch(c) ? c : '#';
+}
+
+/// One entry of the grouped list: a letter header or an article row with
+/// its position in the letter group (for the rounded corners).
+sealed class InventoryListItem {
+  const InventoryListItem();
+}
+
+class InventoryLetterItem extends InventoryListItem {
+  const InventoryLetterItem(this.letter);
+  final String letter;
+}
+
+class InventoryRowItem extends InventoryListItem {
+  const InventoryRowItem(this.row, {required this.first, required this.last});
+  final InventoryRow row;
+  final bool first;
+  final bool last;
+}
+
+/// Flattens sorted [rows] into letter headers and rows, for a lazy list.
+List<InventoryListItem> groupInventoryRows(List<InventoryRow> rows) {
+  final items = <InventoryListItem>[];
+  for (var i = 0; i < rows.length; i++) {
+    final letter = inventoryLetter(rows[i].materialName);
+    final first = i == 0 || inventoryLetter(rows[i - 1].materialName) != letter;
+    final last =
+        i == rows.length - 1 ||
+        inventoryLetter(rows[i + 1].materialName) != letter;
+    if (first) items.add(InventoryLetterItem(letter));
+    items.add(InventoryRowItem(rows[i], first: first, last: last));
+  }
+  return items;
+}
+
+/// The inventory tab: a prominent "Bestand erfassen" action (voice or text
+/// capture), then every catalog article (with 0 where nothing is stocked)
+/// plus stock of articles no longer in the catalog as a dense, lazily built
+/// list: one row per article (name, the non-zero breakdown, total), grouped
+/// by letter. Search, a summary line, the pills "Alle | Mit Bestand | Leer"
+/// (default "Mit Bestand" once anything is stocked) and one pill per
+/// location. Tapping a row calls [onArticleTap] (the article editor).
 ///
 /// Stock and locations come from the given stream factories (loading, error
 /// with the technical cause and a retry that re-subscribes). The catalog is
@@ -77,7 +168,7 @@ class InventoryView extends StatefulWidget {
     required this.watchLocations,
     required this.loadCatalog,
     required this.onArticleTap,
-    required this.onCellTap,
+    required this.onCapture,
     required this.originLabel,
     required this.onManageLocations,
     this.onImport,
@@ -89,12 +180,9 @@ class InventoryView extends StatefulWidget {
   final CatalogLoader loadCatalog;
   final void Function(InventoryRow row, List<StorageLocation> locations)
   onArticleTap;
-  final void Function(
-    InventoryRow row,
-    StorageLocation location,
-    StockOrigin origin,
-  )
-  onCellTap;
+
+  /// Opens the stock capture (voice or text).
+  final VoidCallback onCapture;
   final String Function(StockOrigin origin) originLabel;
   final VoidCallback onManageLocations;
 
@@ -120,7 +208,8 @@ class _InventoryViewState extends State<InventoryView> {
   Object? _catalogError;
   int _catalogRun = 0;
 
-  InventoryFilter _filter = InventoryFilter.all;
+  /// Null until the user picks one: then [defaultInventoryFilter] applies.
+  InventoryFilter? _filter;
   String? _locationId;
 
   // Rows are only rebuilt when an input changes, not on every rebuild.
@@ -262,10 +351,25 @@ class _InventoryViewState extends State<InventoryView> {
       _locationId = null;
     }
     final all = _allRows(entries, locations);
+    const side = EdgeInsets.symmetric(horizontal: AppSpace.s16);
+    final capture = SliverPadding(
+      padding: side.copyWith(bottom: AppSpace.s12),
+      sliver: SliverToBoxAdapter(
+        child: PrimaryButton(
+          key: const ValueKey('inventory-capture'),
+          icon: Icons.mic_none,
+          label: 'inventory_list.capture'.tr(),
+          caption: 'inventory_list.capture_caption'.tr(),
+          expand: true,
+          onPressed: widget.onCapture,
+        ),
+      ),
+    );
 
     // Nothing in the catalog and no stock: the inventory has not started.
     if (all.isEmpty && _catalog != null) {
       return [
+        capture,
         SliverFillRemaining(
           hasScrollBody: false,
           child: EmptyState(
@@ -285,24 +389,25 @@ class _InventoryViewState extends State<InventoryView> {
       ];
     }
 
+    final p = AppPalette.of(context);
     final query = _search.text;
+    final filter = _filter ?? defaultInventoryFilter(all);
+    // A search looks through all articles, whatever the stock pill says.
     final rows = filterInventoryRows(
       all,
-      filter: _filter,
+      filter: query.trim().isEmpty ? filter : InventoryFilter.all,
       locationId: _locationId,
       query: query,
     );
-    final shown = _locationId == null
-        ? locations
-        : [
-            for (final l in locations)
-              if (l.id == _locationId) l,
-          ];
-    const side = EdgeInsets.symmetric(horizontal: AppSpace.s16);
+    final stocked = all
+        .where((r) => inventoryAmount(r, _locationId) > 0)
+        .length;
+    final items = groupInventoryRows(rows);
 
     return [
+      capture,
       SliverPadding(
-        padding: side.copyWith(bottom: AppSpace.s8),
+        padding: side.copyWith(bottom: AppSpace.s4),
         sliver: SliverToBoxAdapter(
           child: _SearchPill(
             controller: _search,
@@ -311,16 +416,31 @@ class _InventoryViewState extends State<InventoryView> {
         ),
       ),
       SliverPadding(
+        padding: side.copyWith(bottom: AppSpace.s4),
+        sliver: SliverToBoxAdapter(
+          child: Text(
+            'inventory_list.summary'.tr(
+              namedArgs: {'count': '${all.length}', 'stocked': '$stocked'},
+            ),
+            style: AppText.caption.copyWith(color: p.textSecondary),
+          ),
+        ),
+      ),
+      SliverPadding(
         padding: side,
         sliver: SliverToBoxAdapter(
           child: PillFilter<InventoryFilter>(
-            value: _filter,
+            value: filter,
             onChanged: (f) => setState(() => _filter = f),
             options: [
               PillOption(InventoryFilter.all, 'inventory_list.filter_all'.tr()),
               PillOption(
                 InventoryFilter.inStock,
                 'inventory_list.filter_in_stock'.tr(),
+              ),
+              PillOption(
+                InventoryFilter.empty,
+                'inventory_list.filter_empty'.tr(),
               ),
             ],
           ),
@@ -363,9 +483,7 @@ class _InventoryViewState extends State<InventoryView> {
               'inventory_list.catalog_skipped'.tr(
                 namedArgs: {'count': '$_skipped'},
               ),
-              style: AppText.caption.copyWith(
-                color: AppPalette.of(context).textSecondary,
-              ),
+              style: AppText.caption.copyWith(color: p.textSecondary),
             ),
           ),
         ),
@@ -394,16 +512,26 @@ class _InventoryViewState extends State<InventoryView> {
       else
         SliverPadding(
           padding: side,
-          sliver: SliverList.separated(
-            itemCount: rows.length,
-            separatorBuilder: (_, _) => const SizedBox(height: AppSpace.s8),
-            itemBuilder: (context, i) => InventoryCard(
-              row: rows[i],
-              locations: shown,
-              originLabel: widget.originLabel,
-              onOpen: () => widget.onArticleTap(rows[i], locations),
-              onCellTap: (l, o) => widget.onCellTap(rows[i], l, o),
-            ),
+          sliver: SliverList.builder(
+            itemCount: items.length,
+            itemBuilder: (context, i) => switch (items[i]) {
+              InventoryLetterItem(:final letter) => _LetterHeader(letter),
+              InventoryRowItem(:final row, :final first, :final last) =>
+                InventoryListRow(
+                  key: ValueKey('inventory-row ${row.materialId}'),
+                  row: row,
+                  amount: inventoryAmount(row, _locationId),
+                  subtitle: inventoryRowSubtitle(
+                    row,
+                    locations: locations,
+                    locationId: _locationId,
+                    originLabel: widget.originLabel,
+                  ),
+                  first: first,
+                  last: last,
+                  onTap: () => widget.onArticleTap(row, locations),
+                ),
+            },
           ),
         ),
     ];
@@ -433,7 +561,8 @@ class _SearchPill extends StatelessWidget {
         hintText: 'inventory.search'.tr(),
         hintStyle: AppText.body.copyWith(color: p.textSecondary),
         isDense: true,
-        constraints: const BoxConstraints(minHeight: AppSize.minTap),
+        constraints: const BoxConstraints.tightFor(height: AppSize.minTap),
+        contentPadding: EdgeInsets.zero,
         filled: true,
         fillColor: p.card,
         prefixIcon: Icon(
@@ -556,175 +685,145 @@ class _NoLocations extends StatelessWidget {
   }
 }
 
-/// One article: name and total (tap: history), then per location the
-/// quantities "Auftrag" and "Investition" (tap: correct or take out).
-class InventoryCard extends StatelessWidget {
-  const InventoryCard({
+/// Letter above a group of rows ("A", "B", ...).
+class _LetterHeader extends StatelessWidget {
+  const _LetterHeader(this.letter);
+
+  final String letter;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      AppSpace.s4,
+      AppSpace.s12,
+      AppSpace.s4,
+      AppSpace.s4,
+    ),
+    child: Semantics(
+      header: true,
+      child: Text(
+        letter,
+        style: AppText.kicker.copyWith(
+          color: AppPalette.of(context).textSecondary,
+        ),
+      ),
+    ),
+  );
+}
+
+/// One article as a compact row inside its rounded letter group: name and
+/// the non-zero breakdown ([subtitle], "Kein Bestand" when null) on the
+/// left, the bold [amount] and a chevron on the right. Tap: [onTap].
+class InventoryListRow extends StatelessWidget {
+  const InventoryListRow({
     super.key,
     required this.row,
-    required this.locations,
-    required this.originLabel,
-    required this.onOpen,
-    required this.onCellTap,
+    required this.amount,
+    required this.subtitle,
+    required this.onTap,
+    this.first = true,
+    this.last = true,
   });
 
   final InventoryRow row;
-  final List<StorageLocation> locations;
-  final String Function(StockOrigin origin) originLabel;
-  final VoidCallback onOpen;
-  final void Function(StorageLocation location, StockOrigin origin) onCellTap;
+  final double amount;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  /// Position in the letter group: rounds the top / bottom corners.
+  final bool first;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    final note = row.note;
-    return FloatingCard(
+    const r = Radius.circular(AppRadius.card);
+    final empty = amount <= 0;
+    final secondLine = subtitle ?? 'inventory_list.no_stock'.tr();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.vertical(
+          top: first ? r : Radius.zero,
+          bottom: last ? r : Radius.zero,
+        ),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Pressable(
-            onTap: onOpen,
-            radius: AppRadius.tile,
-            semanticLabel: 'inventory_list.open_history'.tr(
+            onTap: onTap,
+            expand: true,
+            radius: first || last ? AppRadius.card : AppRadius.tile,
+            semanticLabel: 'inventory_list.open_article'.tr(
               namedArgs: {
                 'name': row.materialName,
-                'quantity': formatQuantity(row.total),
+                'quantity': formatQuantity(amount),
               },
             ),
             child: ExcludeSemantics(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: AppSize.minTap),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            row.materialName,
-                            style: AppText.section.copyWith(color: p.text),
-                          ),
-                          if (note != null)
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpace.s16,
+                    vertical: AppSpace.s8,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              note,
-                              maxLines: 2,
+                              row.materialName,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppText.caption.copyWith(
-                                color: p.textSecondary,
+                              style: AppText.section.copyWith(
+                                color: empty ? p.textSecondary : p.text,
                               ),
                             ),
-                        ],
+                            Text(
+                              secondLine,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.caption.copyWith(
+                                color: empty ? p.disabled : p.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpace.s8),
-                    Text(
-                      formatQuantity(row.total),
-                      style: AppText.title.copyWith(
-                        color: row.total > 0 ? p.text : p.textSecondary,
+                      const SizedBox(width: AppSpace.s8),
+                      Text(
+                        formatQuantity(amount),
+                        style: AppText.number.copyWith(
+                          color: empty ? p.disabled : p.text,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: AppSpace.s4),
+                      Icon(
+                        Icons.chevron_right,
+                        size: AppSize.rowIcon,
+                        color: p.textSecondary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-          for (final l in locations) ...[
-            const SizedBox(height: AppSpace.s8),
-            Text(
-              l.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.caption.copyWith(color: p.textSecondary),
+          if (!last)
+            Padding(
+              padding: const EdgeInsets.only(left: AppSpace.s16),
+              child: Divider(
+                height: AppSize.hairline,
+                thickness: AppSize.hairline,
+                color: p.border,
+              ),
             ),
-            const SizedBox(height: AppSpace.s4),
-            Row(
-              children: [
-                for (final o in StockOrigin.values) ...[
-                  if (o != StockOrigin.values.first)
-                    const SizedBox(width: AppSpace.s8),
-                  Expanded(
-                    child: _QuantityCell(
-                      label: originLabel(o),
-                      quantity: row.perLocation[l.id]?[o] ?? 0,
-                      semanticLabel: 'inventory_list.cell'.tr(
-                        namedArgs: {
-                          'location': l.name,
-                          'origin': originLabel(o),
-                          'quantity': formatQuantity(
-                            row.perLocation[l.id]?[o] ?? 0,
-                          ),
-                        },
-                      ),
-                      onTap: () => onCellTap(l, o),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
         ],
-      ),
-    );
-  }
-}
-
-class _QuantityCell extends StatelessWidget {
-  const _QuantityCell({
-    required this.label,
-    required this.quantity,
-    required this.semanticLabel,
-    required this.onTap,
-  });
-
-  final String label;
-  final double quantity;
-  final String semanticLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = AppPalette.of(context);
-    return Pressable(
-      onTap: onTap,
-      minSize: AppSize.minTap,
-      radius: AppRadius.tile,
-      semanticLabel: semanticLabel,
-      child: ExcludeSemantics(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: p.surface,
-            borderRadius: BorderRadius.circular(AppRadius.tile),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: AppSize.minTap),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.s12,
-                vertical: AppSpace.s8,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.caption.copyWith(color: p.textSecondary),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpace.s4),
-                  Text(
-                    formatQuantity(quantity),
-                    style: AppText.number.copyWith(
-                      color: quantity > 0 ? p.text : p.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
