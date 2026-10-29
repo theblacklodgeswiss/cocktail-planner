@@ -16,6 +16,8 @@ class _ButtonBase extends StatelessWidget {
     this.dimmed = false,
     this.expand = false,
     this.trailing,
+    this.icon,
+    this.caption,
   });
 
   final String label;
@@ -23,6 +25,8 @@ class _ButtonBase extends StatelessWidget {
   final bool loading;
   final bool expand;
   final String? trailing;
+  final IconData? icon;
+  final String? caption;
   final Color? fill;
   final Color foreground;
   final Color? border;
@@ -49,13 +53,32 @@ class _ButtonBase extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpace.s8),
+        ] else if (icon != null) ...[
+          Icon(icon, size: AppSize.rowIcon, color: fg),
+          const SizedBox(width: AppSpace.s8),
         ],
         Flexible(
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppText.button.copyWith(color: fg),
-          ),
+          child: caption == null
+              ? Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppText.button.copyWith(color: fg),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: AppText.button.copyWith(color: fg),
+                    ),
+                    Text(
+                      caption!,
+                      textAlign: TextAlign.center,
+                      style: AppText.caption.copyWith(color: fg),
+                    ),
+                  ],
+                ),
         ),
         if (trailing != null) ...[
           const SizedBox(width: AppSpace.s8),
@@ -113,11 +136,19 @@ class PrimaryButton extends StatelessWidget {
     this.dimmed = false,
     this.expand = false,
     this.trailing,
+    this.icon,
+    this.caption,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+
+  /// Leading icon (replaced by the spinner while [loading]).
+  final IconData? icon;
+
+  /// Small second line under the label.
+  final String? caption;
 
   /// Fills the available width (glass CTA bar).
   final bool expand;
@@ -143,6 +174,8 @@ class PrimaryButton extends StatelessWidget {
       dimmed: dimmed,
       expand: expand,
       trailing: trailing,
+      icon: icon,
+      caption: caption,
       fill: disabled ? p.surface : (destructive ? p.error : p.primary),
       foreground: destructive ? p.onError : p.onPrimary,
     );
