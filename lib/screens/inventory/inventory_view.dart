@@ -21,7 +21,16 @@ import 'inventory_rows.dart';
 /// an endless spinner.
 const inventoryLoadTimeout = Duration(seconds: 12);
 
-typedef CatalogLoader = Future<List<({String id, String name})>> Function();
+/// Catalog articles of the inventory and how many catalog documents could
+/// not be read (skipped instead of failing the whole catalog).
+class InventoryCatalog {
+  const InventoryCatalog(this.items, {this.skipped = 0});
+
+  final List<({String id, String name})> items;
+  final int skipped;
+}
+
+typedef CatalogLoader = Future<InventoryCatalog> Function();
 
 /// "Alle" or "Mit Bestand".
 enum InventoryFilter { all, inStock }
@@ -107,6 +116,7 @@ class _InventoryViewState extends State<InventoryView> {
   Object? _error;
 
   List<({String id, String name})>? _catalog;
+  int _skipped = 0;
   Object? _catalogError;
   int _catalogRun = 0;
 
@@ -177,8 +187,13 @@ class _InventoryViewState extends State<InventoryView> {
     _catalogError = null;
     _catalog = null;
     try {
-      final items = await widget.loadCatalog().timeout(widget.timeout);
-      if (mounted && run == _catalogRun) setState(() => _catalog = items);
+      final result = await widget.loadCatalog().timeout(widget.timeout);
+      if (mounted && run == _catalogRun) {
+        setState(() {
+          _catalog = result.items;
+          _skipped = result.skipped;
+        });
+      }
     } catch (e) {
       debugPrint(
         'Inventory catalog failed: '
@@ -338,6 +353,20 @@ class _InventoryViewState extends State<InventoryView> {
                       _loadCatalog();
                     }),
                   ),
+          ),
+        ),
+      if (_catalog != null && _skipped > 0)
+        SliverPadding(
+          padding: side.copyWith(bottom: AppSpace.s12),
+          sliver: SliverToBoxAdapter(
+            child: Text(
+              'inventory_list.catalog_skipped'.tr(
+                namedArgs: {'count': '$_skipped'},
+              ),
+              style: AppText.caption.copyWith(
+                color: AppPalette.of(context).textSecondary,
+              ),
+            ),
           ),
         ),
       if (_locations != null && locations.isEmpty)

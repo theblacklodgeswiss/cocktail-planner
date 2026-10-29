@@ -31,12 +31,12 @@ class InventoryScreen extends StatelessWidget {
   /// All catalog articles of the inventory (non-fixed-value materials that
   /// are not archived). Throws on failure, so the view can show the cause
   /// and a retry.
-  static Future<List<({String id, String name})>> _loadCatalog() async {
-    final items = await adminRepository.getMaterialsWithIdsOrThrow();
-    return [
-      for (final m in items)
+  static Future<InventoryCatalog> _loadCatalog() async {
+    final catalog = await adminRepository.getMaterialCatalogOrThrow();
+    return InventoryCatalog([
+      for (final m in catalog.items)
         if (m.item.visible) (id: m.id, name: m.item.name),
-    ];
+    ], skipped: catalog.skipped);
   }
 
   @override

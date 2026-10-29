@@ -926,7 +926,8 @@
     "no_locations": "Noch keine Lagerorte. Lege einen an, um Mengen zu erfassen.",
     "open_history": "{name}, gesamt {quantity}. Verlauf öffnen",
     "cell": "{location}, {origin}: {quantity}. Menge ändern",
-    "current": "{location} · {origin}: {quantity}"
+    "current": "{location} · {origin}: {quantity}",
+    "catalog_skipped": "{count} Artikel konnten nicht gelesen werden."
   },
   "stock": {
     "location_prompt_title": "Dein Lagerort",

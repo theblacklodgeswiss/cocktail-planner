@@ -921,7 +921,8 @@
     "no_locations": "No storage locations yet. Add one to record quantities.",
     "open_history": "{name}, total {quantity}. Open history",
     "cell": "{location}, {origin}: {quantity}. Change quantity",
-    "current": "{location} · {origin}: {quantity}"
+    "current": "{location} · {origin}: {quantity}",
+    "catalog_skipped": "{count} articles could not be read."
   },
   "stock": {
     "location_prompt_title": "Your storage location",
