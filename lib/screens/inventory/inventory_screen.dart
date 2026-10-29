@@ -389,6 +389,7 @@ class _HistorySheetState extends State<_HistorySheet> {
   }
 
   String _reason(String reason) {
+    if (reason == 'manual') return 'inventory_list.reason_manual'.tr();
     const known = {'rest', 'take', 'correction', 'import', 'order_deduction'};
     return known.contains(reason) ? 'inventory.reason_$reason'.tr() : reason;
   }

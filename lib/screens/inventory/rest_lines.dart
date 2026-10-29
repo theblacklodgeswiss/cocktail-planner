@@ -71,3 +71,46 @@ bool mustLockRest(int bookedCount) => bookedCount > 0;
 /// Closing after a partial save must still mark the rest as recorded: part of
 /// it is in stock already, so redoing it later would double-book.
 bool shouldMarkRecordedOnClose(int bookedCount) => bookedCount > 0;
+
+/// How the capture sheet books its lines.
+enum CaptureMode {
+  /// Adds the quantities to the stock ("Dazu", movement with + delta).
+  add,
+
+  /// Sets the stock to the counted quantities ("Zählung", correction).
+  count,
+}
+
+/// Stock entry id a resolved [line] books into, or null while no article is
+/// chosen.
+String? restLineKey(RestLine line) {
+  final id = line.chosenMaterialId;
+  if (id == null) return null;
+  return StockEntry.buildId(id, line.location.id, line.origin);
+}
+
+/// Counted quantity per stock entry id: lines that end up in the same entry
+/// (same article, location and origin) are summed, so "2 Bacardi, 1 Bacardi"
+/// counts 3. Unresolved lines are left out.
+Map<String, double> countTargets(List<RestLine> lines) {
+  final targets = <String, double>{};
+  for (final line in lines) {
+    final key = restLineKey(line);
+    if (key == null) continue;
+    targets[key] = (targets[key] ?? 0) + line.quantity;
+  }
+  return targets;
+}
+
+/// Current stock of the entry [line] books into (0 if none exists).
+double currentQuantityFor(RestLine line, List<StockEntry> entries) {
+  final key = restLineKey(line);
+  if (key == null) return 0;
+  var sum = 0.0;
+  for (final e in entries) {
+    if (StockEntry.buildId(e.materialId, e.locationId, e.origin) == key) {
+      sum += e.quantity;
+    }
+  }
+  return sum;
+}

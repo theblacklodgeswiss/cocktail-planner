@@ -119,7 +119,8 @@ class StockEntry {
 }
 
 /// Append-only log entry for a stock change.
-/// [reason]: rest, take, correction, import or order_deduction.
+/// [reason]: rest, manual (standalone capture), take, correction, import or
+/// order_deduction.
 class StockMovement {
   const StockMovement({
     required this.id,

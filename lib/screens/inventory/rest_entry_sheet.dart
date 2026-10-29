@@ -15,6 +15,8 @@ import '../../services/voice_inventory_parser.dart';
 import '../../ui/tokens.dart';
 import '../../ui/widgets/app_sheet.dart';
 import '../../ui/widgets/buttons.dart';
+import '../../ui/widgets/pressable.dart';
+import 'inventory_rows.dart';
 import 'location_prompt_dialog.dart';
 import 'rest_lines.dart';
 
@@ -23,16 +25,144 @@ import 'rest_lines.dart';
 Future<bool> showRestEntrySheet(
   BuildContext context, {
   required SavedOrder order,
+  RestEntryServices services = const RestEntryServices(),
 }) async {
-  if (!authService.isEmployeeOrHigher) return false;
+  if (!services.canRecord()) return false;
   // Full-screen sheet. Closing it by drag or tap outside runs through the
   // sheet's PopScope, i.e. the same path as "Überspringen".
   final saved = await showAppSheet<bool>(
     context,
     full: true,
-    builder: (_) => _RestEntrySheet(order: order),
+    builder: (_) => RestEntrySheet(orderId: order.id, services: services),
   );
   return saved == true;
+}
+
+/// Standalone stock capture from the inventory page: the same voice/text
+/// flow as [showRestEntrySheet], without an order. Books with reason
+/// `manual` and no order id, and never touches an order. A mode toggle
+/// chooses between adding the quantities ("Dazu") and setting the stock to
+/// the counted quantities ("Zählung"). Returns true if anything was booked.
+Future<bool> showStockCaptureSheet(
+  BuildContext context, {
+  RestEntryServices services = const RestEntryServices(),
+}) async {
+  if (!services.canRecord()) return false;
+  final saved = await showAppSheet<bool>(
+    context,
+    full: true,
+    builder: (_) => RestEntrySheet(services: services),
+  );
+  return saved == true;
+}
+
+typedef BookMovement =
+    Future<void> Function({
+      required String materialId,
+      required String materialName,
+      required String locationId,
+      required StockOrigin origin,
+      required double delta,
+      required String reason,
+      String? orderId,
+    });
+
+typedef SetStockQuantity =
+    Future<void> Function({
+      required String materialId,
+      required String materialName,
+      required String locationId,
+      required StockOrigin origin,
+      required double quantity,
+    });
+
+bool _defaultCanRecord() => authService.isEmployeeOrHigher;
+
+bool _defaultIsAdmin() => authService.isAdmin;
+
+Future<List<(String, MaterialItem)>> _defaultLoadCatalog() async => [
+  for (final m in await adminRepository.getMaterialsWithIds(
+    isFixedValue: false,
+  ))
+    (m.id, m.item),
+];
+
+Future<List<StorageLocation>> _defaultLoadLocations() =>
+    stockRepository.watchLocations().first;
+
+Future<List<StockEntry>> _defaultLoadStock() =>
+    stockRepository.watchStock().first;
+
+Future<void> _defaultApplyMovement({
+  required String materialId,
+  required String materialName,
+  required String locationId,
+  required StockOrigin origin,
+  required double delta,
+  required String reason,
+  String? orderId,
+}) => stockRepository.applyMovement(
+  materialId: materialId,
+  materialName: materialName,
+  locationId: locationId,
+  origin: origin,
+  delta: delta,
+  reason: reason,
+  orderId: orderId,
+);
+
+Future<void> _defaultSetQuantity({
+  required String materialId,
+  required String materialName,
+  required String locationId,
+  required StockOrigin origin,
+  required double quantity,
+}) => stockRepository.setQuantity(
+  materialId: materialId,
+  materialName: materialName,
+  locationId: locationId,
+  origin: origin,
+  quantity: quantity,
+);
+
+Future<bool> _defaultUpdateOrder(String id, Map<String, dynamic> data) =>
+    orderRepository.updateOrder(id, data);
+
+/// External collaborators of [RestEntrySheet], bundled so tests can pump
+/// the sheet without Firebase. Every default delegates to the global
+/// singleton the sheet has always used.
+class RestEntryServices {
+  const RestEntryServices({
+    this.canRecord = _defaultCanRecord,
+    this.isAdmin = _defaultIsAdmin,
+    this.ownLocation = ensureOwnLocation,
+    this.loadCatalog = _defaultLoadCatalog,
+    this.loadLocations = _defaultLoadLocations,
+    this.loadStock = _defaultLoadStock,
+    this.applyMovement = _defaultApplyMovement,
+    this.setQuantity = _defaultSetQuantity,
+    this.updateOrder = _defaultUpdateOrder,
+    this.speechInput = createSpeechInput,
+  });
+
+  /// Employee or higher (may record stock at all).
+  final bool Function() canRecord;
+
+  /// May create catalog articles (`/materials` is admin-only).
+  final bool Function() isAdmin;
+
+  /// The user's own location; asks for one if missing (null: cancelled).
+  final Future<StorageLocation?> Function(BuildContext context) ownLocation;
+  final Future<List<(String, MaterialItem)>> Function() loadCatalog;
+  final Future<List<StorageLocation>> Function() loadLocations;
+
+  /// Current stock, read once for the "Zählung" before/after view.
+  final Future<List<StockEntry>> Function() loadStock;
+  final BookMovement applyMovement;
+  final SetStockQuantity setQuantity;
+  final Future<bool> Function(String orderId, Map<String, dynamic> data)
+  updateOrder;
+  final SpeechInput Function() speechInput;
 }
 
 String _formatQuantity(double q) {
@@ -48,18 +178,32 @@ double? _parseQuantity(String text) {
   return value;
 }
 
-class _RestEntrySheet extends StatefulWidget {
-  const _RestEntrySheet({required this.order});
+/// The capture flow: voice or text input, then a confirmation view of the
+/// parsed lines (always before saving), then booking.
+///
+/// With [orderId] it records the rest of that order (reason `rest`, marks
+/// the order `restRecorded`). Without it, it is the standalone capture of
+/// the inventory page (reason `manual`, no order involved) with the modes
+/// "Dazu" (add) and "Zählung" (set the counted quantity).
+class RestEntrySheet extends StatefulWidget {
+  const RestEntrySheet({
+    super.key,
+    this.orderId,
+    this.services = const RestEntryServices(),
+  });
 
-  final SavedOrder order;
+  final String? orderId;
+  final RestEntryServices services;
+
+  bool get standalone => orderId == null;
 
   @override
-  State<_RestEntrySheet> createState() => _RestEntrySheetState();
+  State<RestEntrySheet> createState() => _RestEntrySheetState();
 }
 
-class _RestEntrySheetState extends State<_RestEntrySheet> {
+class _RestEntrySheetState extends State<RestEntrySheet> {
   final _textController = TextEditingController();
-  final SpeechInput _speech = createSpeechInput();
+  late final SpeechInput _speech = widget.services.speechInput();
   StreamSubscription<String>? _speechSub;
   bool _listening = false;
   String? _micError;
@@ -69,6 +213,9 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
   bool _saving = false;
   String? _saveError;
 
+  CaptureMode _mode = CaptureMode.add;
+  List<StockEntry> _stock = const [];
+
   late List<(String, MaterialItem)> _catalog;
   late List<StorageLocation> _locations;
   late StorageLocation _defaultLocation;
@@ -76,6 +223,9 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
   // Lines already booked, kept so a retry after a partial failure never
   // books them twice.
   final Set<RestLine> _booked = {};
+
+  RestEntryServices get _services => widget.services;
+  bool get _counting => widget.standalone && _mode == CaptureMode.count;
 
   @override
   void dispose() {
@@ -123,14 +273,29 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
 
   Future<void> _skip() async {
     final count = _booked.length;
+    final orderId = widget.orderId;
+    if (orderId == null) {
+      // Standalone: nothing to mark; after a partial booking say so.
+      if (count > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'inventory_list.capture_partial'.tr(
+                namedArgs: {'count': '$count'},
+              ),
+            ),
+          ),
+        );
+      }
+      Navigator.of(context).pop(count > 0);
+      return;
+    }
     if (!shouldMarkRecordedOnClose(count)) {
       Navigator.of(context).pop(false);
       return;
     }
     setState(() => _saving = true);
-    final ok = await orderRepository.updateOrder(widget.order.id, {
-      'restRecorded': true,
-    });
+    final ok = await _services.updateOrder(orderId, {'restRecorded': true});
     if (!mounted) return;
     if (!ok) {
       setState(() {
@@ -150,6 +315,8 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
 
   /// Records "nothing left over": only sets restRecorded, books nothing.
   Future<void> _nothingLeft() async {
+    final orderId = widget.orderId;
+    if (orderId == null) return;
     if (_loading || _saving || _booked.isNotEmpty) return;
     if (_listening) await _speech.stop();
     if (!mounted) return;
@@ -175,9 +342,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       _saving = true;
       _saveError = null;
     });
-    final saved = await orderRepository.updateOrder(widget.order.id, {
-      'restRecorded': true,
-    });
+    final saved = await _services.updateOrder(orderId, {'restRecorded': true});
     if (!mounted) return;
     if (!saved) {
       setState(() {
@@ -195,19 +360,22 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
-      final location = await ensureOwnLocation(context);
+      final location = await _services.ownLocation(context);
       if (location == null || !mounted) {
         if (mounted) setState(() => _loading = false);
         return;
       }
-      final catalog = await adminRepository.getMaterialsWithIds(
-        isFixedValue: false,
-      );
-      final locations = await stockRepository.watchLocations().first;
+      final catalog = await _services.loadCatalog();
+      final locations = await _services.loadLocations();
+      // The count view shows the stock before and after.
+      final stock = _counting
+          ? await _services.loadStock()
+          : const <StockEntry>[];
       if (!mounted) return;
       _defaultLocation = location;
-      _catalog = [for (final m in catalog) (m.id, m.item)];
+      _catalog = catalog;
       _locations = locations;
+      _stock = stock;
       setState(() {
         _lines = buildRestLines(
           parseRestText(_textController.text),
@@ -276,18 +444,16 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       return;
     }
     // addMaterial returns no ID, so look the new item up by name.
-    final fresh = await adminRepository.getMaterialsWithIds(
-      isFixedValue: false,
-    );
+    final fresh = await _services.loadCatalog();
     if (!mounted) return;
-    final created = fresh.where((m) => m.item.name == name);
+    final created = fresh.where((m) => m.$2.name == name);
     if (created.isEmpty) {
       setState(() => _saveError = 'rest.create_failed'.tr());
       return;
     }
     setState(() {
-      _catalog = [for (final m in fresh) (m.id, m.item)];
-      line.chosenMaterialId = created.first.id;
+      _catalog = fresh;
+      line.chosenMaterialId = created.first.$1;
       line.chosenMaterialName = name;
       _saveError = null;
     });
@@ -298,6 +464,47 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       _lines.isNotEmpty &&
       _lines.every((l) => l.chosenMaterialId != null && l.quantity > 0);
 
+  String _nameOf(RestLine line) =>
+      line.chosenMaterialName ?? line.parsed.spokenName;
+
+  /// Adds every unbooked line ("Dazu" and the rest of an order).
+  Future<void> _bookAdditions() async {
+    for (final line in _lines) {
+      if (_booked.contains(line)) continue;
+      await _services.applyMovement(
+        materialId: line.chosenMaterialId!,
+        materialName: _nameOf(line),
+        locationId: line.location.id,
+        origin: line.origin,
+        delta: line.quantity,
+        reason: widget.standalone ? 'manual' : 'rest',
+        orderId: widget.orderId,
+      );
+      _booked.add(line);
+    }
+  }
+
+  /// Sets each counted entry once to the sum of its lines ("Zählung").
+  Future<void> _bookCounts() async {
+    final targets = countTargets(_lines);
+    for (final key in targets.keys) {
+      final lines = [
+        for (final l in _lines)
+          if (restLineKey(l) == key) l,
+      ];
+      if (lines.every(_booked.contains)) continue;
+      final first = lines.first;
+      await _services.setQuantity(
+        materialId: first.chosenMaterialId!,
+        materialName: _nameOf(first),
+        locationId: first.location.id,
+        origin: first.origin,
+        quantity: targets[key]!,
+      );
+      _booked.addAll(lines);
+    }
+  }
+
   Future<void> _save() async {
     if (!_canSave) return;
     setState(() {
@@ -305,22 +512,27 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       _saveError = null;
     });
     try {
-      for (final line in _lines) {
-        if (_booked.contains(line)) continue;
-        await stockRepository.applyMovement(
-          materialId: line.chosenMaterialId!,
-          materialName: line.chosenMaterialName ?? line.parsed.spokenName,
-          locationId: line.location.id,
-          origin: line.origin,
-          delta: line.quantity,
-          reason: 'rest',
-          orderId: widget.order.id,
-        );
-        _booked.add(line);
+      if (_counting) {
+        await _bookCounts();
+      } else {
+        await _bookAdditions();
       }
-      final ok = await orderRepository.updateOrder(widget.order.id, {
-        'restRecorded': true,
-      });
+      final orderId = widget.orderId;
+      if (orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'inventory_list.capture_saved'.tr(
+                namedArgs: {'count': '${_booked.length}'},
+              ),
+            ),
+          ),
+        );
+        Navigator.of(context).pop(true);
+        return;
+      }
+      final ok = await _services.updateOrder(orderId, {'restRecorded': true});
       if (!mounted) return;
       if (!ok) {
         setState(() {
@@ -361,7 +573,9 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                 child: Semantics(
                   header: true,
                   child: Text(
-                    'rest.title'.tr(),
+                    widget.standalone
+                        ? 'inventory_list.capture'.tr()
+                        : 'rest.title'.tr(),
                     style: AppText.heroTitle.copyWith(
                       color: AppPalette.of(context).text,
                     ),
@@ -369,7 +583,9 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                 ),
               ),
               TextAction(
-                label: 'rest.skip'.tr(),
+                label: widget.standalone
+                    ? 'inventory_list.capture_close'.tr()
+                    : 'rest.skip'.tr(),
                 onPressed: _saving ? null : _skip,
               ),
             ],
@@ -381,10 +597,25 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
   }
 
   Widget _buildInput() {
+    final p = AppPalette.of(context);
+    final standalone = widget.standalone;
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
       children: [
-        Text('rest.intro'.tr()),
+        if (standalone) ...[
+          _ModeToggle(
+            value: _mode,
+            onChanged: (m) => setState(() => _mode = m),
+          ),
+          const SizedBox(height: AppSpace.s12),
+        ],
+        Text(
+          !standalone
+              ? 'rest.intro'.tr()
+              : _mode == CaptureMode.count
+              ? 'inventory_list.capture_intro_count'.tr()
+              : 'inventory_list.capture_intro_add'.tr(),
+        ),
         const SizedBox(height: AppSpace.s16),
         TextField(
           controller: _textController,
@@ -392,54 +623,62 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           maxLines: 6,
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
-            labelText: 'rest.text_label'.tr(),
-            hintText: 'rest.text_hint'.tr(),
+            labelText: standalone
+                ? 'inventory_list.capture_text_label'.tr()
+                : 'rest.text_label'.tr(),
+            hintText: standalone ? null : 'rest.text_hint'.tr(),
             border: const OutlineInputBorder(),
           ),
         ),
+        const SizedBox(height: AppSpace.s4),
+        Text(
+          'inventory_list.capture_example'.tr(),
+          style: AppText.caption.copyWith(color: p.textSecondary),
+        ),
         const SizedBox(height: AppSpace.s12),
-        Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: _toggleMic,
-              icon: Icon(_listening ? Icons.stop : Icons.mic),
-              label: Text(
-                _listening ? 'rest.mic_stop'.tr() : 'rest.mic_start'.tr(),
-              ),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(AppSize.minTap),
             ),
-            const Spacer(),
-            FilledButton(
-              onPressed: _loading ? null : _continue,
-              child: _loading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('rest.continue'.tr()),
+            onPressed: _toggleMic,
+            icon: Icon(_listening ? Icons.stop : Icons.mic),
+            label: Text(
+              _listening ? 'rest.mic_stop'.tr() : 'rest.mic_start'.tr(),
             ),
-          ],
+          ),
+        ),
+        const SizedBox(height: AppSpace.s8),
+        PrimaryButton(
+          label: 'rest.continue'.tr(),
+          loading: _loading,
+          expand: true,
+          onPressed: _continue,
         ),
         if (_micError != null) ...[
           const SizedBox(height: AppSpace.s12),
           Text(_micError!, style: const TextStyle(color: AppColors.warning)),
         ],
-        const SizedBox(height: AppSpace.s16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _loading || _saving || _booked.isNotEmpty
-                ? null
-                : _nothingLeft,
-            icon: const Icon(Icons.check_circle_outline),
-            label: Text('rest.nothing_left'.tr()),
+        if (!standalone) ...[
+          const SizedBox(height: AppSpace.s16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _loading || _saving || _booked.isNotEmpty
+                  ? null
+                  : _nothingLeft,
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text('rest.nothing_left'.tr()),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 
   Widget _buildConfirm() {
+    final targets = _counting ? countTargets(_lines) : const <String, double>{};
     return Column(
       children: [
         Expanded(
@@ -464,9 +703,19 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                 'rest.check_hint'.tr(),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (_counting) ...[
+                const SizedBox(height: AppSpace.s4),
+                Text(
+                  'inventory_list.count_hint'.tr(),
+                  style: AppText.body.copyWith(
+                    color: AppPalette.of(context).text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpace.s12),
               if (_lines.isEmpty) Text('rest.no_lines'.tr()),
-              for (final line in _lines) _buildLine(line),
+              for (final line in _lines) _buildLine(line, targets),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
@@ -480,7 +729,9 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                   padding: const EdgeInsets.only(top: AppSpace.s8),
                   child: Text(
                     _saveError!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
             ],
@@ -491,22 +742,20 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             padding: const EdgeInsets.only(top: AppSpace.s12),
             child: Row(
               children: [
-                TextButton(
+                TextAction(
+                  label: 'rest.back'.tr(),
                   onPressed: _saving || mustLockRest(_booked.length)
                       ? null
                       : () => setState(() => _confirming = false),
-                  child: Text('rest.back'.tr()),
                 ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: _canSave ? _save : null,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text('common.save'.tr()),
+                const SizedBox(width: AppSpace.s8),
+                Expanded(
+                  child: PrimaryButton(
+                    label: 'common.save'.tr(),
+                    loading: _saving,
+                    expand: true,
+                    onPressed: _canSave ? _save : null,
+                  ),
                 ),
               ],
             ),
@@ -516,9 +765,11 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
     );
   }
 
-  Widget _buildLine(RestLine line) {
+  Widget _buildLine(RestLine line, Map<String, double> targets) {
     final booked = _booked.contains(line);
     final unresolvedMaterial = line.chosenMaterialId == null;
+    final key = restLineKey(line);
+    final isAdmin = _services.isAdmin();
     return Card(
       key: ObjectKey(line),
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
@@ -530,7 +781,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             Row(
               children: [
                 SizedBox(
-                  width: 80,
+                  width: AppSize.amountField,
                   child: TextFormField(
                     initialValue: _formatQuantity(line.quantity),
                     enabled: !booked && !_saving,
@@ -571,7 +822,26 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             if (line.quantity <= 0)
               Text(
                 'rest.quantity_invalid'.tr(),
-                style: AppText.body.copyWith(color: Theme.of(context).colorScheme.error),
+                style: AppText.body.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            // "Zählung": the stock before and after, e.g. "Bestand 3 → 2".
+            if (_counting && key != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpace.s4),
+                child: Text(
+                  'inventory_list.count_change'.tr(
+                    namedArgs: {
+                      'old': formatQuantity(currentQuantityFor(line, _stock)),
+                      'new': formatQuantity(targets[key] ?? line.quantity),
+                    },
+                  ),
+                  style: AppText.body.copyWith(
+                    color: AppPalette.of(context).text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             if (unresolvedMaterial && !booked) ...[
               const SizedBox(height: AppSpace.s8),
@@ -580,7 +850,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                 style: AppText.body.copyWith(color: AppColors.warning),
               ),
               Wrap(
-                spacing: 8,
+                spacing: AppSpace.s8,
                 children: [
                   for (final c in line.candidates)
                     ActionChip(
@@ -591,24 +861,20 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                       }),
                     ),
                   ActionChip(
-                    avatar: const Icon(Icons.search, size: 16),
+                    avatar: const Icon(Icons.search, size: AppSpace.s16),
                     label: Text('rest.pick_other'.tr()),
                     onPressed: () => _pickAnyItem(line),
                   ),
                   // /materials is writable by admins only.
-                  if (authService.isAdmin)
+                  if (isAdmin)
                     ActionChip(
-                      avatar: const Icon(Icons.add, size: 16),
+                      avatar: const Icon(Icons.add, size: AppSpace.s16),
                       label: Text('rest.create_item'.tr()),
                       onPressed: () => _createItem(line),
                     ),
                 ],
               ),
-              if (!authService.isAdmin)
-                Text(
-                  'rest.ask_admin'.tr(),
-                  style: AppText.body,
-                ),
+              if (!isAdmin) Text('rest.ask_admin'.tr(), style: AppText.body),
             ] else if (!booked)
               Align(
                 alignment: Alignment.centerLeft,
@@ -693,6 +959,65 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Dazu | Zählung": two equal halves, so both labels stay readable at
+/// large text sizes (they wrap instead of scrolling away).
+class _ModeToggle extends StatelessWidget {
+  const _ModeToggle({required this.value, required this.onChanged});
+
+  final CaptureMode value;
+  final ValueChanged<CaptureMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    Widget half(CaptureMode mode, String label) {
+      final active = mode == value;
+      return Expanded(
+        child: Pressable(
+          minSize: AppSize.minTap,
+          radius: AppRadius.pill,
+          selected: active,
+          expand: true,
+          onTap: () => onChanged(mode),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: active ? p.primary : p.card,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: active ? p.primary : p.border),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: AppSize.minTap),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpace.s12,
+                  vertical: AppSpace.s8,
+                ),
+                child: Center(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: AppText.pill.copyWith(
+                      color: active ? p.onPrimary : p.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        half(CaptureMode.add, 'inventory_list.mode_add'.tr()),
+        const SizedBox(width: AppSpace.s8),
+        half(CaptureMode.count, 'inventory_list.mode_count'.tr()),
+      ],
     );
   }
 }
