@@ -97,19 +97,34 @@ class AiAttempt {
 }
 
 class InterpretChoice {
-  const InterpretChoice({required this.useAi, required this.fallbackHint});
+  const InterpretChoice({
+    required this.useAi,
+    required this.fallbackHint,
+    this.offerAi = false,
+  });
 
   /// Show the AI lines (else the rule lines).
   final bool useAi;
 
   /// Show "Ohne KI ausgewertet": the AI was tried and did not help.
   final bool fallbackHint;
+
+  /// The rules are shown, but the AI lines exist and can be switched to
+  /// ("KI-Vorschlag nutzen").
+  final bool offerAi;
 }
 
 /// AI lines when the AI answered with lines; otherwise the rule result,
 /// with a hint when the AI was tried but failed or found nothing the rules
-/// found.
-InterpretChoice chooseInterpretation(AiAttempt ai, ParseResult rules) {
+/// found. Lines must never vanish silently: if the AI saw only part of the
+/// text ([textLength] above [stockAiMaxTextLength]) or returned fewer lines
+/// than the rules found with a quantity, the rules are shown and the AI
+/// result is only offered.
+InterpretChoice chooseInterpretation(
+  AiAttempt ai,
+  ParseResult rules, {
+  int textLength = 0,
+}) {
   final rulesFound = rules.lines.isNotEmpty || rules.unparsed.isNotEmpty;
   switch (ai.status) {
     case AiStatus.skipped:
@@ -117,8 +132,17 @@ InterpretChoice chooseInterpretation(AiAttempt ai, ParseResult rules) {
     case AiStatus.failed:
       return const InterpretChoice(useAi: false, fallbackHint: true);
     case AiStatus.ok:
-      if (ai.result!.lines.isNotEmpty) {
-        return const InterpretChoice(useAi: true, fallbackHint: false);
+      final aiLines = ai.result!.lines.length;
+      if (aiLines > 0) {
+        final partial =
+            textLength > stockAiMaxTextLength || aiLines < rules.lines.length;
+        return partial
+            ? const InterpretChoice(
+                useAi: false,
+                fallbackHint: true,
+                offerAi: true,
+              )
+            : const InterpretChoice(useAi: true, fallbackHint: false);
       }
       return InterpretChoice(useAi: false, fallbackHint: rulesFound);
   }

@@ -225,19 +225,16 @@ Future<void> _reveal(WidgetTester tester, Finder finder) async {
     await tester.pumpAndSettle();
     return;
   }
-  try {
-    await tester.scrollUntilVisible(
-      finder,
-      100,
-      scrollable: _sheetScrollable,
-    );
-  } on StateError {
-    await tester.scrollUntilVisible(
-      finder,
-      -100,
-      scrollable: _sheetScrollable,
-    );
+  // Jump through the sheet's list (dragging could hit the multi-line text
+  // field, which scrolls itself).
+  final list = tester.state<ScrollableState>(_sheetScrollable).position;
+  list.jumpTo(0);
+  await tester.pump();
+  while (finder.evaluate().isEmpty && list.pixels < list.maxScrollExtent) {
+    list.jumpTo((list.pixels + 150).clamp(0, list.maxScrollExtent));
+    await tester.pump();
   }
+  if (finder.evaluate().isNotEmpty) await tester.ensureVisible(finder.first);
   await tester.pumpAndSettle();
 }
 
@@ -251,6 +248,9 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 Future<void> _typeAndContinue(WidgetTester tester, String text) async {
   await _reveal(tester, find.byType(TextField));
   await tester.enterText(find.byType(TextField).first, text);
+  // Unfocus so the caret no longer pulls the field back into view.
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
   await _reveal(tester, find.text('Weiter'));
   await tester.tap(find.text('Weiter'));
   await tester.pump();
@@ -404,6 +404,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ohne KI ausgewertet'), findsOneWidget);
     expect(find.text('Keine Zeilen erkannt.'), findsNothing);
+  });
+
+  const oneBacardi = StockAiResult([
+    StockAiLine(
+      spokenText: '2 Bacardi',
+      materialId: 'm1',
+      quantity: 2,
+      confidence: 0.9,
+    ),
+  ]);
+
+  testWidgets('AI found fewer lines than the rules: no line vanishes', (
+    tester,
+  ) async {
+    final fake = _Fake()..answer = (_) async => oneBacardi;
+    await _open(tester, fake);
+    await _typeAndContinue(tester, '2 Bacardi, 6 Orangensaft');
+    await tester.pumpAndSettle();
+    expect(find.text('Ohne KI ausgewertet'), findsOneWidget);
+    await _shown(tester, find.text('Orangensaft'));
+    await _shown(tester, find.text('KI-Vorschlag nutzen'));
+    await _tap(tester, find.text('Speichern'));
+    expect(fake.movements.map((m) => m['materialId']), ['m1', 'm2']);
   });
 
   testWidgets('"Regel-Erkennung nutzen" switches to the rule result and back', (

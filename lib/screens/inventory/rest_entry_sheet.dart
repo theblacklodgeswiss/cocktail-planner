@@ -479,15 +479,21 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       );
       // Cancelled via "Zurück" (or a newer tap): ignore the answer.
       if (!mounted || generation != _aiGeneration) return;
-      final choice = chooseInterpretation(attempt, parsed);
+      final choice = chooseInterpretation(
+        attempt,
+        parsed,
+        textLength: text.trim().length,
+      );
       setState(() {
         _interpreting = false;
-        if (choice.useAi) {
+        if (choice.useAi || choice.offerAi) {
           _aiLines = buildAiRestLines(
             attempt.result!,
             _catalog,
             _defaultLocation,
           );
+        }
+        if (choice.useAi) {
           _showAi();
         } else {
           _showRules();

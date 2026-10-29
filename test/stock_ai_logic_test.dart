@@ -211,6 +211,53 @@ void main() {
       expect(c.fallbackHint, isFalse);
     });
 
+    test('text longer than the AI saw: rules + hint, AI offered', () {
+      final c = chooseInterpretation(
+        const AiAttempt.ok(aiLines),
+        someRules,
+        textLength: stockAiMaxTextLength + 1,
+      );
+      expect((c.useAi, c.fallbackHint, c.offerAi), (false, true, true));
+      final atCap = chooseInterpretation(
+        const AiAttempt.ok(aiLines),
+        someRules,
+        textLength: stockAiMaxTextLength,
+      );
+      expect((atCap.useAi, atCap.offerAi), (true, false));
+    });
+
+    test('AI found fewer lines than the rules: rules + hint, AI offered', () {
+      const twoRules = ParseResult(
+        lines: [
+          ParsedLine(quantity: 2, spokenName: 'Bacardi'),
+          ParsedLine(quantity: 6, spokenName: 'Orangensaft'),
+        ],
+        unparsed: ['Kahlua'],
+      );
+      final c = chooseInterpretation(const AiAttempt.ok(aiLines), twoRules);
+      expect((c.useAi, c.fallbackHint, c.offerAi), (false, true, true));
+      // Unparsed fragments (no quantity) do not count.
+      const oneRule = ParseResult(
+        lines: [ParsedLine(quantity: 2, spokenName: 'Bacardi')],
+        unparsed: ['Kahlua', 'Gin'],
+      );
+      expect(
+        chooseInterpretation(const AiAttempt.ok(aiLines), oneRule).useAi,
+        isTrue,
+      );
+    });
+
+    test('failed and skipped never offer AI lines', () {
+      expect(
+        chooseInterpretation(const AiAttempt.failed(), someRules).offerAi,
+        isFalse,
+      );
+      expect(
+        chooseInterpretation(const AiAttempt.skipped(), someRules).offerAi,
+        isFalse,
+      );
+    });
+
     test('not configured / switched off: rules, no hint', () {
       final c = chooseInterpretation(const AiAttempt.skipped(), someRules);
       expect(c.useAi, isFalse);
