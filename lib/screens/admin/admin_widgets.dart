@@ -25,6 +25,7 @@ class AdminPage extends StatelessWidget {
     this.onRetry,
     this.onAdd,
     this.addLabel,
+    this.onRefresh,
   });
 
   final String title;
@@ -40,9 +41,13 @@ class AdminPage extends StatelessWidget {
   final VoidCallback? onAdd;
   final String? addLabel;
 
+  /// Enables pull-to-refresh on the list.
+  final Future<void> Function()? onRefresh;
+
   @override
   Widget build(BuildContext context) {
-    return LargeTitleScaffold(
+    final scaffold = LargeTitleScaffold(
+      physics: onRefresh == null ? null : const AlwaysScrollableScrollPhysics(),
       title: title,
       leading: GlassIconButton(
         icon: Icons.arrow_back,
@@ -82,6 +87,8 @@ class AdminPage extends StatelessWidget {
           ...slivers,
       ],
     );
+    if (onRefresh == null) return scaffold;
+    return RefreshIndicator(onRefresh: onRefresh!, child: scaffold);
   }
 }
 

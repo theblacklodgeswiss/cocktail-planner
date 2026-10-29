@@ -43,42 +43,127 @@ Future<T?> showAppSheet<T>(
 }
 
 /// Asks a yes/no question; dismissing the sheet counts as no.
+///
+/// With [confirmAction] the sheet stays open while the action runs (the
+/// button shows a spinner and the sheet cannot be closed by a tap on the
+/// confirm button again). When the action throws, the sheet stays open with
+/// an inline error and the confirm button turns into a retry; when it
+/// completes, the sheet closes and the result is true.
 Future<bool> showConfirmSheet(
   BuildContext context, {
   required String title,
   String? body,
   required String confirmLabel,
   bool destructive = false,
+  Future<void> Function()? confirmAction,
+  String? errorText,
 }) async {
   final ok = await showAppSheet<bool>(
     context,
-    builder: (sheet) {
-      final p = AppPalette.of(sheet);
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: AppText.heroTitle.copyWith(color: p.text)),
-          if (body != null) ...[
-            const SizedBox(height: AppSpace.s8),
-            Text(body, style: AppText.body.copyWith(color: p.textSecondary)),
-          ],
-          const SizedBox(height: AppSpace.s24),
-          PrimaryButton(
-            label: confirmLabel,
-            destructive: destructive,
-            onPressed: () => Navigator.of(sheet).pop(true),
-          ),
-          const SizedBox(height: AppSpace.s8),
-          TextAction(
-            label: 'ui.cancel'.tr(),
-            onPressed: () => Navigator.of(sheet).pop(false),
-          ),
-        ],
-      );
-    },
+    builder: (sheet) => _ConfirmSheetBody(
+      title: title,
+      body: body,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
+      confirmAction: confirmAction,
+      errorText: errorText,
+    ),
   );
   return ok ?? false;
+}
+
+class _ConfirmSheetBody extends StatefulWidget {
+  const _ConfirmSheetBody({
+    required this.title,
+    required this.body,
+    required this.confirmLabel,
+    required this.destructive,
+    required this.confirmAction,
+    required this.errorText,
+  });
+
+  final String title;
+  final String? body;
+  final String confirmLabel;
+  final bool destructive;
+  final Future<void> Function()? confirmAction;
+  final String? errorText;
+
+  @override
+  State<_ConfirmSheetBody> createState() => _ConfirmSheetBodyState();
+}
+
+class _ConfirmSheetBodyState extends State<_ConfirmSheetBody> {
+  bool _busy = false;
+  bool _failed = false;
+
+  Future<void> _confirm() async {
+    final action = widget.confirmAction;
+    if (action == null) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _failed = false;
+    });
+    try {
+      await action();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _failed = true;
+      });
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(widget.title, style: AppText.heroTitle.copyWith(color: p.text)),
+        if (widget.body != null) ...[
+          const SizedBox(height: AppSpace.s8),
+          Text(
+            widget.body!,
+            style: AppText.body.copyWith(color: p.textSecondary),
+          ),
+        ],
+        if (_failed) ...[
+          const SizedBox(height: AppSpace.s12),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              widget.errorText ?? 'common.error'.tr(),
+              style: AppText.body.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpace.s24),
+        PrimaryButton(
+          label: _failed ? 'ui.retry'.tr() : widget.confirmLabel,
+          destructive: widget.destructive,
+          loading: _busy,
+          onPressed: _confirm,
+        ),
+        const SizedBox(height: AppSpace.s8),
+        TextAction(
+          label: 'ui.cancel'.tr(),
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+        ),
+      ],
+    );
+  }
 }
 
 class _AppSheetRoute<T> extends PopupRoute<T> {

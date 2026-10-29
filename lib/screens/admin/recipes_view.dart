@@ -70,14 +70,13 @@ class _RecipesViewState extends State<RecipesView> {
       body: 'admin2.delete_body'.tr(args: [r.item.name]),
       confirmLabel: 'common.delete'.tr(),
       destructive: true,
+      errorText: 'admin2.delete_error'.tr(),
+      confirmAction: () async {
+        if (!await widget.onDelete(r.id)) throw StateError('delete failed');
+      },
     );
     if (!ok) return;
-    final success = await widget.onDelete(r.id);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(success ? 'admin2.deleted'.tr() : 'admin2.delete_error'.tr()),
-      ),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('admin2.deleted'.tr())));
   }
 
   @override

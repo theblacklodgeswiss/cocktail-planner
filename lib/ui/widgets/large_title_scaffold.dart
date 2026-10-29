@@ -37,6 +37,7 @@ class LargeTitleScaffold extends StatefulWidget {
     this.tabBar,
     this.fab,
     this.controller,
+    this.physics,
   });
 
   final String title;
@@ -52,6 +53,9 @@ class LargeTitleScaffold extends StatefulWidget {
   final Widget? fab;
   final List<Widget> slivers;
   final ScrollController? controller;
+
+  /// Scroll physics of the list, e.g. always scrollable for pull-to-refresh.
+  final ScrollPhysics? physics;
 
   @override
   State<LargeTitleScaffold> createState() => _LargeTitleScaffoldState();
@@ -141,6 +145,7 @@ class _LargeTitleScaffoldState extends State<LargeTitleScaffold> {
                   children: [
                     CustomScrollView(
                       controller: _controller,
+                      physics: widget.physics,
                       slivers: [
                         padded(
                           SliverToBoxAdapter(

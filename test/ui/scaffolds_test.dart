@@ -399,6 +399,53 @@ void main() {
     );
   });
 
+  testWidgets('showConfirmSheet confirmAction keeps the sheet open on '
+      'failure and retries', (tester) async {
+    phone(tester);
+    bool? result;
+    var calls = 0;
+    await pumpApp(
+      tester,
+      app(
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async => result = await showConfirmSheet(
+                context,
+                title: 'Loeschen?',
+                confirmLabel: 'Ja',
+                destructive: true,
+                errorText: 'Hat nicht geklappt',
+                confirmAction: () async {
+                  calls++;
+                  if (calls == 1) throw StateError('boom');
+                },
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Ja'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    // Failed: still open, inline error, button now says retry.
+    expect(result, isNull);
+    expect(find.text('Loeschen?'), findsOneWidget);
+    expect(find.text('Hat nicht geklappt'), findsOneWidget);
+    expect(find.text('Ja'), findsNothing);
+    await tester.tap(find.text('Erneut versuchen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(calls, 2);
+    expect(result, isTrue);
+    expect(find.text('Loeschen?'), findsNothing);
+  });
+
   testWidgets('showConfirmSheet returns true and false', (tester) async {
     phone(tester);
     bool? result;

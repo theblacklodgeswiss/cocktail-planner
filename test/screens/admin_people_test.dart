@@ -50,6 +50,7 @@ UserManagementView usersView({
   bool viewerIsAdmin = true,
   Future<void> Function(UserRow, bool)? onToggle,
   Future<bool> Function(String, String, bool)? onAdd,
+  Future<void> Function()? onRefresh,
 }) => UserManagementView(
   users:
       users ??
@@ -67,6 +68,7 @@ UserManagementView usersView({
   onToggleAdmin: onToggle ?? (_, _) async {},
   onRemove: (_) async => true,
   onAdd: onAdd ?? (_, _, _) async => true,
+  onRefresh: onRefresh,
 );
 
 void main() {
@@ -78,7 +80,10 @@ void main() {
       await pumpAdmin(tester, adminApp(employeesView()));
       expect(find.text('Anna'), findsOneWidget);
       expect(find.text('Supervisor'), findsOneWidget);
-      expect(find.text('Kein App-Zugang (keine E-Mail hinterlegt)'), findsOneWidget);
+      expect(
+        find.text('Kein App-Zugang (keine E-Mail hinterlegt)'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('empty list shows the empty state', (tester) async {
@@ -199,19 +204,34 @@ void main() {
   });
 
   group('users', () {
-    testWidgets('self cannot be changed or removed, super admin has no switch', (
-      tester,
-    ) async {
+    testWidgets('pull-to-refresh reloads the list', (tester) async {
       phone(tester);
-      await pumpAdmin(tester, adminApp(usersView()));
-      expect(find.byType(Switch), findsNWidgets(2)); // me + boss, not root
-      final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
-      expect(switches[0].onChanged, isNull); // me
-      expect(switches[1].onChanged, isNotNull); // boss
-      expect(find.text('Du'), findsOneWidget);
-      // Delete only for boss.
-      expect(find.bySemanticsLabel('Löschen'), findsOneWidget);
+      var refreshed = 0;
+      await pumpAdmin(
+        tester,
+        adminApp(usersView(onRefresh: () async => refreshed++)),
+      );
+      await tester.fling(find.text('Me'), const Offset(0, 400), 1000);
+      await settleAdmin(tester);
+      expect(refreshed, 1);
     });
+
+    testWidgets(
+      'self cannot be changed or removed, super admin has no switch',
+      (tester) async {
+        phone(tester);
+        await pumpAdmin(tester, adminApp(usersView()));
+        expect(find.byType(Switch), findsNWidgets(2)); // me + boss, not root
+        final switches = tester
+            .widgetList<Switch>(find.byType(Switch))
+            .toList();
+        expect(switches[0].onChanged, isNull); // me
+        expect(switches[1].onChanged, isNotNull); // boss
+        expect(find.text('Du'), findsOneWidget);
+        // Delete only for boss.
+        expect(find.bySemanticsLabel('Löschen'), findsOneWidget);
+      },
+    );
 
     testWidgets('non-admin manager sees no delete buttons', (tester) async {
       phone(tester);

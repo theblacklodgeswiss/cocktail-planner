@@ -45,6 +45,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }
   }
 
+  /// Pull-to-refresh: reloads without the full-screen spinner.
+  Future<void> _refresh() async {
+    try {
+      final users = await authService.getAllowedUsers();
+      if (!mounted) return;
+      setState(() {
+        _users = users;
+        _failed = false;
+      });
+    } catch (_) {
+      // Keep the current list; the pull gesture just ends.
+    }
+  }
+
   Future<void> _toggleAdmin(UserRow row, bool value) async {
     final index = _users.indexWhere((u) => u.email == row.email);
     if (index < 0) return;
@@ -87,6 +101,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       loading: _isLoading,
       errorMessage: _failed ? 'admin2.load_error'.tr() : null,
       onRetry: _loadUsers,
+      onRefresh: _refresh,
       currentEmail: authService.email,
       superAdminEmail: superAdminEmail,
       viewerIsAdmin: authService.isAdmin,

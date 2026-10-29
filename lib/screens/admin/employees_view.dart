@@ -97,16 +97,13 @@ class _EmployeesViewState extends State<EmployeesView> {
       ),
       confirmLabel: 'common.delete'.tr(),
       destructive: true,
+      errorText: 'common.error'.tr(),
+      confirmAction: () async {
+        if (!await widget.onDelete(employee)) throw StateError('delete failed');
+      },
     );
     if (!ok) return;
-    final success = await widget.onDelete(employee);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          success ? 'admin.employee_deleted'.tr() : 'common.error'.tr(),
-        ),
-      ),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('admin.employee_deleted'.tr())));
   }
 
   Future<void> _rebuildAccess() async {

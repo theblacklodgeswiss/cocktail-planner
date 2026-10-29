@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+import '../../ui/widgets/lazy_indexed_stack.dart';
 import '../../ui/widgets/pill_filter.dart';
 import '../../widgets/admin_protected_screen.dart';
 import 'materials_tab.dart';
@@ -10,7 +11,11 @@ enum AdminTab { materials, fixed, recipes }
 
 /// Tab pills of the admin screen (materials / fixed values / recipes).
 class AdminTabPills extends StatelessWidget {
-  const AdminTabPills({super.key, required this.current, required this.onChanged});
+  const AdminTabPills({
+    super.key,
+    required this.current,
+    required this.onChanged,
+  });
 
   final AdminTab current;
   final ValueChanged<AdminTab> onChanged;
@@ -46,23 +51,24 @@ class _AdminScreenState extends State<AdminScreen> {
       current: _tab,
       onChanged: (t) => setState(() => _tab = t),
     );
+    // Pages stay alive once opened: switching tabs keeps scroll and search.
     return AdminProtectedScreen(
-      child: switch (_tab) {
-        AdminTab.materials => MaterialsTab(
-          key: const ValueKey('materials'),
-          isFixedValue: false,
-          header: pills,
-        ),
-        AdminTab.fixed => MaterialsTab(
-          key: const ValueKey('fixed'),
-          isFixedValue: true,
-          header: pills,
-        ),
-        AdminTab.recipes => RecipesTab(
-          key: const ValueKey('recipes'),
-          header: pills,
-        ),
-      },
+      child: LazyIndexedStack(
+        index: _tab.index,
+        builders: [
+          (_) => MaterialsTab(
+            key: const ValueKey('materials'),
+            isFixedValue: false,
+            header: pills,
+          ),
+          (_) => MaterialsTab(
+            key: const ValueKey('fixed'),
+            isFixedValue: true,
+            header: pills,
+          ),
+          (_) => RecipesTab(key: const ValueKey('recipes'), header: pills),
+        ],
+      ),
     );
   }
 }

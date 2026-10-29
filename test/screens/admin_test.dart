@@ -129,7 +129,9 @@ void main() {
       await tester.enterText(field, 'Aperol Spritz');
       view.value = settingsView(isGenerating: true);
       await tester.pump();
-      view.value = settingsView(generateStatus: const AdminStatus('boom', true));
+      view.value = settingsView(
+        generateStatus: const AdminStatus('boom', true),
+      );
       await tester.pump();
       expect(tester.widget<TextField>(field).controller!.text, 'Aperol Spritz');
     });
@@ -201,33 +203,30 @@ void main() {
     });
 
     for (final dark in [false, true]) {
-      testWidgets(
-        'edit sheet has no overflow with keyboard 300, text 1.3 '
-        '(${dark ? 'dark' : 'light'})',
-        (tester) async {
-          phone(tester);
-          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-          addTearDown(tester.view.resetViewInsets);
-          await pumpAdmin(
-            tester,
-            adminApp(
-              materialsView(),
-              textScale: 1.3,
-              theme: dark ? AppTheme.dark() : AppTheme.light(),
-            ),
-          );
-          await tester.tap(find.text('Vodka'));
-          await settleAdmin(tester);
-          await tester.tap(find.byKey(const Key('material-name')));
-          await settleAdmin(tester);
-          expect(tester.takeException(), isNull);
-          final button = find.widgetWithText(PrimaryButton, 'Speichern');
-          expect(button, findsOneWidget);
-          final rect = tester.getRect(button);
-          expect(rect.bottom, lessThanOrEqualTo(640 - 300));
-          expect(rect.top, greaterThanOrEqualTo(0));
-        },
-      );
+      testWidgets('edit sheet has no overflow with keyboard 300, text 1.3 '
+          '(${dark ? 'dark' : 'light'})', (tester) async {
+        phone(tester);
+        tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+        addTearDown(tester.view.resetViewInsets);
+        await pumpAdmin(
+          tester,
+          adminApp(
+            materialsView(),
+            textScale: 1.3,
+            theme: dark ? AppTheme.dark() : AppTheme.light(),
+          ),
+        );
+        await tester.tap(find.text('Vodka'));
+        await settleAdmin(tester);
+        await tester.tap(find.byKey(const Key('material-name')));
+        await settleAdmin(tester);
+        expect(tester.takeException(), isNull);
+        final button = find.widgetWithText(PrimaryButton, 'Speichern');
+        expect(button, findsOneWidget);
+        final rect = tester.getRect(button);
+        expect(rect.bottom, lessThanOrEqualTo(640 - 300));
+        expect(rect.top, greaterThanOrEqualTo(0));
+      });
     }
 
     testWidgets('delete asks first and calls onDelete only on confirm', (
@@ -254,6 +253,32 @@ void main() {
       await tester.tap(find.widgetWithText(PrimaryButton, 'Löschen'));
       await settleAdmin(tester);
       expect(deleted, ['1']);
+    });
+
+    testWidgets('a failed delete keeps the sheet open with an error and '
+        'a retry', (tester) async {
+      phone(tester);
+      var calls = 0;
+      await pumpAdmin(
+        tester,
+        adminApp(
+          materialsView(
+            items: [rec('1', 'Vodka')],
+            onDelete: (id) async => ++calls > 1,
+          ),
+        ),
+      );
+      await tester.tap(find.bySemanticsLabel('Löschen'));
+      await settleAdmin(tester);
+      await tester.tap(find.widgetWithText(PrimaryButton, 'Löschen'));
+      await settleAdmin(tester);
+      expect(calls, 1);
+      expect(find.text('Artikel löschen?'), findsOneWidget);
+      expect(find.text('Fehler beim Löschen'), findsOneWidget);
+      await tester.tap(find.widgetWithText(PrimaryButton, 'Erneut versuchen'));
+      await settleAdmin(tester);
+      expect(calls, 2);
+      expect(find.text('Artikel löschen?'), findsNothing);
     });
 
     testWidgets('fixed values render reorderable', (tester) async {
@@ -312,34 +337,28 @@ void main() {
     });
 
     for (final dark in [false, true]) {
-      testWidgets(
-        'step 2 has no overflow with keyboard 300, text 1.3 '
-        '(${dark ? 'dark' : 'light'})',
-        (tester) async {
-          phone(tester);
-          tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-          addTearDown(tester.view.resetViewInsets);
-          await pumpAdmin(
-            tester,
-            adminApp(
-              recipesView(onSave: (_, _) async => true),
-              textScale: 1.3,
-              theme: dark ? AppTheme.dark() : AppTheme.light(),
-            ),
-          );
-          await tester.tap(find.text('Mojito'));
-          await settleAdmin(tester);
-          await tester.tap(find.widgetWithText(PrimaryButton, 'Weiter'));
-          await settleAdmin(tester);
-          await tester.tap(find.byType(TextField).last);
-          await settleAdmin(tester);
-          expect(tester.takeException(), isNull);
-          expect(
-            find.widgetWithText(PrimaryButton, 'Speichern'),
-            findsOneWidget,
-          );
-        },
-      );
+      testWidgets('step 2 has no overflow with keyboard 300, text 1.3 '
+          '(${dark ? 'dark' : 'light'})', (tester) async {
+        phone(tester);
+        tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+        addTearDown(tester.view.resetViewInsets);
+        await pumpAdmin(
+          tester,
+          adminApp(
+            recipesView(onSave: (_, _) async => true),
+            textScale: 1.3,
+            theme: dark ? AppTheme.dark() : AppTheme.light(),
+          ),
+        );
+        await tester.tap(find.text('Mojito'));
+        await settleAdmin(tester);
+        await tester.tap(find.widgetWithText(PrimaryButton, 'Weiter'));
+        await settleAdmin(tester);
+        await tester.tap(find.byType(TextField).last);
+        await settleAdmin(tester);
+        expect(tester.takeException(), isNull);
+        expect(find.widgetWithText(PrimaryButton, 'Speichern'), findsOneWidget);
+      });
     }
   });
 

@@ -122,16 +122,13 @@ class _ServicesViewState extends State<ServicesView> {
       ),
       confirmLabel: 'common.delete'.tr(),
       destructive: true,
+      errorText: 'common.error'.tr(),
+      confirmAction: () async {
+        if (!await widget.onDelete(service)) throw StateError('delete failed');
+      },
     );
     if (!ok) return;
-    final success = await widget.onDelete(service);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          success ? 'admin.service_deleted'.tr() : 'common.error'.tr(),
-        ),
-      ),
-    );
+    messenger.showSnackBar(SnackBar(content: Text('admin.service_deleted'.tr())));
   }
 
   Future<void> _import() async {

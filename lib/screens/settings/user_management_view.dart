@@ -37,6 +37,7 @@ class UserManagementView extends StatelessWidget {
     required this.onToggleAdmin,
     required this.onRemove,
     required this.onAdd,
+    this.onRefresh,
   });
 
   final List<UserRow> users;
@@ -49,6 +50,9 @@ class UserManagementView extends StatelessWidget {
   final Future<void> Function(UserRow user, bool isAdmin) onToggleAdmin;
   final Future<bool> Function(String email) onRemove;
   final Future<bool> Function(String email, String name, bool isAdmin) onAdd;
+
+  /// Pull-to-refresh of the user list.
+  final Future<void> Function()? onRefresh;
 
   bool _isSuper(String email) =>
       email.toLowerCase() == superAdminEmail.toLowerCase();
@@ -68,8 +72,7 @@ class UserManagementView extends StatelessWidget {
   }
 
   Future<void> _remove(BuildContext context, UserRow user) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final ok = await showConfirmSheet(
+    await showConfirmSheet(
       context,
       title: 'admin_panel.remove_user_title'.tr(),
       body: 'admin_panel.remove_user_message'.tr(
@@ -77,12 +80,11 @@ class UserManagementView extends StatelessWidget {
       ),
       confirmLabel: 'admin_panel.remove'.tr(),
       destructive: true,
+      errorText: 'common.error'.tr(),
+      confirmAction: () async {
+        if (!await onRemove(user.email)) throw StateError('remove failed');
+      },
     );
-    if (!ok) return;
-    final success = await onRemove(user.email);
-    if (!success) {
-      messenger.showSnackBar(SnackBar(content: Text('common.error'.tr())));
-    }
   }
 
   @override
@@ -93,6 +95,7 @@ class UserManagementView extends StatelessWidget {
       loading: loading,
       errorMessage: errorMessage,
       onRetry: onRetry,
+      onRefresh: onRefresh,
       onAdd: () => _add(context),
       addLabel: 'admin_panel.add_user'.tr(),
       slivers: [
