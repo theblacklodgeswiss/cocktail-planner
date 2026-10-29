@@ -2,21 +2,27 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../data/cocktail_repository.dart';
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/app_sheet.dart';
+import '../../../ui/widgets/pressable.dart';
+import '../../forms/steps/wizard_widgets.dart';
 
 /// Edits a comma-separated cocktail list (kept in [controller], so callers
-/// that read `controller.text` keep working) as removable chips plus an
-/// "add" button that searches the recipe catalog.
+/// that read `controller.text` keep working) as removable pills plus an
+/// "add" pill that searches the recipe catalog in a sheet.
 class CocktailChipsField extends StatefulWidget {
   const CocktailChipsField({
     super.key,
     required this.controller,
     required this.label,
-    this.validator,
+    this.loadCatalog,
   });
 
   final TextEditingController controller;
   final String label;
-  final String? Function(String?)? validator;
+
+  /// Recipe names for the "add" search; defaults to the cocktail repository.
+  final Future<List<String>> Function()? loadCatalog;
 
   @override
   State<CocktailChipsField> createState() => _CocktailChipsFieldState();
@@ -50,8 +56,10 @@ class _CocktailChipsFieldState extends State<CocktailChipsField> {
 
   Future<void> _loadCatalog() async {
     try {
-      final data = await cocktailRepository.load();
-      final names = data.recipes.map((r) => r.name).toSet().toList()..sort();
+      final loaded = widget.loadCatalog != null
+          ? await widget.loadCatalog!()
+          : (await cocktailRepository.load()).recipes.map((r) => r.name);
+      final names = loaded.toSet().toList()..sort();
       if (mounted) setState(() => _catalog = names);
     } catch (_) {
       // Catalog unavailable (offline): custom names can still be typed.
@@ -61,10 +69,10 @@ class _CocktailChipsFieldState extends State<CocktailChipsField> {
   void _set(List<String> items) => widget.controller.text = items.join(', ');
 
   Future<void> _add() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+    final picked = await showAppSheet<String>(
+      context,
+      full: true,
+      scrollable: false,
       builder: (_) => _CocktailPicker(
         catalog: _catalog,
         alreadySelected: _selected.map((s) => s.toLowerCase()).toSet(),
@@ -78,63 +86,34 @@ class _CocktailChipsFieldState extends State<CocktailChipsField> {
 
   @override
   Widget build(BuildContext context) {
-    return FormField<String>(
-      initialValue: widget.controller.text,
-      // Always validate the live controller text, not the stale field value.
-      validator: (_) => widget.validator?.call(widget.controller.text),
-      builder: (state) {
-        final items = _selected;
-        final scheme = Theme.of(context).colorScheme;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final items = _selected;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FieldLabel(widget.label),
+        PillGroup(
           children: [
-            Text(
-              widget.label,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                for (final name in items)
-                  InputChip(
-                    label: Text(name),
-                    onDeleted: () {
-                      _set(items.where((s) => s != name).toList());
-                      state.validate();
-                    },
-                  ),
-                ActionChip(
-                  avatar: const Icon(Icons.add, size: 18),
-                  label: Text('offer.add_cocktail'.tr()),
-                  onPressed: () async {
-                    await _add();
-                    state.validate();
-                  },
-                ),
-              ],
-            ),
-            if (state.hasError)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  state.errorText!,
-                  style: TextStyle(color: scheme.error, fontSize: 12),
-                ),
+            for (final name in items)
+              SelectPill(
+                label: name,
+                selected: true,
+                onTap: () => _set(items.where((s) => s != name).toList()),
               ),
+            SelectPill(
+              label: 'offer.add_cocktail'.tr(),
+              selected: false,
+              icon: Icons.add,
+              onTap: _add,
+            ),
           ],
-        );
-      },
+        ),
+      ],
     );
   }
 }
 
 class _CocktailPicker extends StatefulWidget {
-  const _CocktailPicker({
-    required this.catalog,
-    required this.alreadySelected,
-  });
+  const _CocktailPicker({required this.catalog, required this.alreadySelected});
 
   final List<String> catalog;
   final Set<String> alreadySelected;
@@ -148,58 +127,64 @@ class _CocktailPickerState extends State<_CocktailPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     final q = _query.trim().toLowerCase();
     final matches = widget.catalog
         .where((n) => !widget.alreadySelected.contains(n.toLowerCase()))
         .where((n) => q.isEmpty || n.toLowerCase().contains(q))
         .toList();
-    final exact = widget.catalog.any((n) => n.toLowerCase() == q) ||
+    final exact =
+        widget.catalog.any((n) => n.toLowerCase() == q) ||
         widget.alreadySelected.contains(q);
 
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Column(
+    Widget row(IconData? icon, String text, String result) => Pressable(
+      minSize: AppSize.minTap,
+      onTap: () => Navigator.of(context).pop(result),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSize.minTap),
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                autofocus: true,
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: 'offer.search_cocktail'.tr(),
-                  border: const OutlineInputBorder(),
-                ),
-                onChanged: (v) => setState(() => _query = v),
-              ),
-            ),
+            if (icon != null) ...[
+              Icon(icon, size: AppSize.rowIcon, color: p.text),
+              const SizedBox(width: AppSpace.s12),
+            ],
             Expanded(
-              child: ListView(
-                children: [
-                  if (q.isNotEmpty && !exact)
-                    ListTile(
-                      leading: const Icon(Icons.edit_outlined),
-                      title: Text(
-                        'offer.add_custom_cocktail'.tr(
-                          namedArgs: {'name': _query.trim()},
-                        ),
-                      ),
-                      onTap: () => Navigator.of(context).pop(_query.trim()),
-                    ),
-                  for (final name in matches)
-                    ListTile(
-                      title: Text(name),
-                      onTap: () => Navigator.of(context).pop(name),
-                    ),
-                ],
-              ),
+              child: Text(text, style: AppText.button.copyWith(color: p.text)),
             ),
           ],
         ),
       ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          autofocus: true,
+          style: AppText.button.copyWith(color: p.text),
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: 'offer.search_cocktail'.tr(),
+          ),
+          onChanged: (v) => setState(() => _query = v),
+        ),
+        const SizedBox(height: AppSpace.s8),
+        Expanded(
+          child: ListView(
+            children: [
+              if (q.isNotEmpty && !exact)
+                row(
+                  Icons.edit_outlined,
+                  'offer.add_custom_cocktail'.tr(
+                    namedArgs: {'name': _query.trim()},
+                  ),
+                  _query.trim(),
+                ),
+              for (final name in matches) row(null, name, name),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

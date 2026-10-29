@@ -1129,6 +1129,24 @@
     "summary_popularity": "{}% Beliebtheit",
     "edit": "Ändern"
   },
+  "docflow": {
+    "step_client": "Kunde und Termin",
+    "step_services": "Leistungen und Mitarbeiter",
+    "step_positions": "Positionen",
+    "step_price": "Preis, Rabatt, Senden",
+    "send": "Senden",
+    "more_actions": "Weitere Aktionen",
+    "document": "Dokument",
+    "language": "Sprache",
+    "currency": "Währung",
+    "schedule": "Termin",
+    "staff": "Mitarbeiter",
+    "pick_date": "Datum wählen",
+    "missing_title": "Kein Auftrag ausgewählt",
+    "missing_body": "Öffne Angebot oder Auftragsbestätigung aus der Auftragsübersicht.",
+    "to_orders": "Zu den Aufträgen",
+    "fields_card": "Leistung, Anfahrt und Theke"
+  },
   "months": {
     "1": "Januar",
     "2": "Februar",

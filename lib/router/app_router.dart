@@ -15,6 +15,8 @@ import '../screens/login_screen.dart';
 import '../screens/more/more_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/share/shared_document_screen.dart';
+import '../screens/shared/document_sections/document_flow.dart'
+    show documentRoute;
 import '../screens/orders/orders_overview_screen.dart';
 import '../screens/orders/orders_year_overview_screen.dart';
 import '../screens/orders/pending_orders_screen.dart';
@@ -107,8 +109,14 @@ Widget _page(
   AppPage.employees => const EmployeesScreen(),
   AppPage.services => const ServicesScreen(),
   AppPage.ordersYears => const OrdersYearOverviewScreen(),
-  AppPage.createOffer => CreateOfferScreen(order: state.extra as SavedOrder),
-  AppPage.createInvoice => CreateInvoiceScreen(
-    order: state.extra as SavedOrder,
+  // A missing extra (e.g. after a reload) shows an empty state that leads
+  // back to /orders instead of a cast error.
+  AppPage.createOffer => documentRoute(
+    state.extra,
+    (order) => CreateOfferScreen(order: order),
+  ),
+  AppPage.createInvoice => documentRoute(
+    state.extra,
+    (order) => CreateInvoiceScreen(order: order),
   ),
 };
