@@ -217,15 +217,38 @@ String? _string(Object? v, int max) {
   return s.length > max ? s.substring(0, max) : s;
 }
 
-/// Validates the model's answer against the catalog and locations. Null if
-/// it is no JSON object with a `lines` list. Never trusts the model:
-/// unknown ids become null, invalid quantities are dropped (the line stays,
-/// the user types the number), unknown locations fall back to the default.
+/// Lower case, umlauts and accents folded, for "was it said?" checks.
+String _fold(String s) => s
+    .toLowerCase()
+    .replaceAll('ß', 'ss')
+    .replaceAll('ä', 'ae')
+    .replaceAll('ö', 'oe')
+    .replaceAll('ü', 'ue')
+    .replaceAll(RegExp('[áàâã]'), 'a')
+    .replaceAll(RegExp('[éèêë]'), 'e')
+    .replaceAll(RegExp('[íìîï]'), 'i')
+    .replaceAll(RegExp('[óòôõ]'), 'o')
+    .replaceAll(RegExp('[úùû]'), 'u')
+    .replaceAll(RegExp(r'\s+'), ' ');
+
+/// Validates the model's answer against the catalog, the locations and the
+/// user's [sourceText]. Null if it is no JSON object with a `lines` list.
+/// Never trusts the model: unknown ids become null, invalid quantities are
+/// dropped (the line stays, the user types the number), unknown locations
+/// fall back to the default. An origin or location the text does not
+/// mention is dropped (origin: none, location: the default).
 StockAiResult? parseStockInterpretation(
   String response,
   List<(String id, MaterialItem item)> catalog,
-  List<StorageLocation> locations,
-) {
+  List<StorageLocation> locations, {
+  required String sourceText,
+}) {
+  final said = _fold(sourceText);
+  bool mentions(String word) {
+    final w = _fold(word).trim();
+    return w.isNotEmpty && said.contains(w);
+  }
+
   final jsonText = _extractJsonObject(response);
   if (jsonText == null) return null;
   Object? decoded;
@@ -273,7 +296,8 @@ StockAiResult? parseStockInterpretation(
         ? q.toDouble()
         : null;
 
-    final hint = _string(raw['location'], _maxLocationHintLength);
+    final rawHint = _string(raw['location'], _maxLocationHintLength);
+    final hint = rawHint != null && mentions(rawHint) ? rawHint : null;
     StorageLocation? location;
     if (hint != null) {
       final lower = hint.toLowerCase();
@@ -286,8 +310,8 @@ StockAiResult? parseStockInterpretation(
     }
 
     final origin = switch (raw['origin']) {
-      'order' => StockOrigin.order,
-      'investment' => StockOrigin.investment,
+      'order' when mentions('auftrag') => StockOrigin.order,
+      'investment' when mentions('investition') => StockOrigin.investment,
       _ => null,
     };
 
@@ -322,16 +346,39 @@ StockAiResult? parseStockInterpretation(
   return StockAiResult(out);
 }
 
+/// The answer text of one call, checked: a truncated answer
+/// (`stop_reason: max_tokens`) or no text is rejected (null), so the caller
+/// falls back to the rules instead of showing a cut-off list.
+StockAiResult? acceptStockAnswer({
+  required String? text,
+  required String? stopReason,
+  required List<(String id, MaterialItem item)> catalog,
+  required List<StorageLocation> locations,
+  required String sourceText,
+}) {
+  if (text == null || stopReason == 'max_tokens') return null;
+  return parseStockInterpretation(
+    text,
+    catalog,
+    locations,
+    sourceText: sourceText,
+  );
+}
+
 /// The API rejected the model id (unknown/retired model): worth one retry
-/// with the service's default model.
+/// with the service's default model. Only the not-found error counts
+/// (status 404 or `error.type == not_found_error`) and it must name the
+/// model; any other 400 is not retried.
 bool isModelNotFoundError(int status, String body) {
-  final lower = body.toLowerCase();
-  if (!lower.contains('model')) return false;
+  if (!body.toLowerCase().contains('model')) return false;
   if (status == 404) return true;
-  return status == 400 &&
-      lower.contains('invalid_request_error') &&
-      (lower.contains('invalid model') ||
-          lower.contains('model not found') ||
-          lower.contains('model:') ||
-          lower.contains('unknown model'));
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map && decoded['error'] is Map) {
+      return (decoded['error'] as Map)['type'] == 'not_found_error';
+    }
+  } on FormatException {
+    return false;
+  }
+  return false;
 }

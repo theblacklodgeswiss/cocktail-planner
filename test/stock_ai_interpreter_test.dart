@@ -54,8 +54,16 @@ StockInterpretRequest _request({
       ],
 );
 
-StockAiResult? _parse(String s) =>
-    parseStockInterpretation(s, _catalog, const [_mine, _mario]);
+/// Says everything the fixtures use, so the text check keeps them.
+const _said = 'bei Mario, bei Peter, Investition und Auftrag';
+
+StockAiResult? _parse(String s, {String text = _said}) =>
+    parseStockInterpretation(
+      s,
+      _catalog,
+      const [_mine, _mario],
+      sourceText: text,
+    );
 
 String _json(List<Map<String, Object?>> lines) => jsonEncode({'lines': lines});
 
@@ -331,14 +339,25 @@ void main() {
       );
     });
 
-    test('400 invalid model', () {
+    test('not_found_error type naming the model, whatever the status', () {
+      expect(
+        isModelNotFoundError(
+          400,
+          '{"type":"error","error":{"type":"not_found_error",'
+          '"message":"model: claude-haiku-5-5"}}',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a 400 invalid_request_error mentioning "model:" is not', () {
       expect(
         isModelNotFoundError(
           400,
           '{"type":"error","error":{"type":"invalid_request_error",'
-          '"message":"Invalid model name"}}',
+          '"message":"model: thinking is not supported"}}',
         ),
-        isTrue,
+        isFalse,
       );
     });
 
@@ -352,6 +371,112 @@ void main() {
         isFalse,
       );
       expect(isModelNotFoundError(500, 'model'), isFalse);
+    });
+  });
+
+  group('origin and location must be said (review I3)', () {
+    String answer(Map<String, Object?> extra) => _json([
+      {'text': '2 Bacardi', 'materialId': 'm1', 'quantity': 2, ...extra},
+    ]);
+
+    test('an invented origin is dropped, a said one kept', () {
+      expect(
+        _parse(answer({'origin': 'investment'}), text: '2 Bacardi')!
+            .lines
+            .single
+            .origin,
+        isNull,
+      );
+      expect(
+        _parse(answer({'origin': 'order'}), text: '2 Bacardi')!
+            .lines
+            .single
+            .origin,
+        isNull,
+      );
+      expect(
+        _parse(
+          answer({'origin': 'investment'}),
+          text: '2 Bacardi INVESTITION',
+        )!.lines.single.origin,
+        StockOrigin.investment,
+      );
+      expect(
+        _parse(answer({'origin': 'order'}), text: '2 Bacardi auf Auftrag')!
+            .lines
+            .single
+            .origin,
+        StockOrigin.order,
+      );
+    });
+
+    test('an invented location is dropped (default), a said one kept', () {
+      final invented = _parse(
+        answer({'location': 'Mario'}),
+        text: '2 Bacardi',
+      )!.lines.single;
+      expect(invented.location, isNull);
+      expect(invented.locationHint, isNull);
+      final said = _parse(
+        answer({'location': 'Mario'}),
+        text: '2 Bacardi bei mario',
+      )!.lines.single;
+      expect(said.location, _mario);
+    });
+
+    test('an unknown location keeps its hint only when said', () {
+      expect(
+        _parse(answer({'location': 'Peter'}), text: '2 Bacardi')!
+            .lines
+            .single
+            .locationHint,
+        isNull,
+      );
+      expect(
+        _parse(answer({'location': 'Peter'}), text: '2 Bacardi bei Peter')!
+            .lines
+            .single
+            .locationHint,
+        'Peter',
+      );
+    });
+
+    test('accent-folded comparison', () {
+      const zueri = StorageLocation(id: 'z', name: 'Zürich');
+      final r = parseStockInterpretation(
+        answer({'location': 'Zürich'}),
+        _catalog,
+        const [zueri],
+        sourceText: '2 Bacardi in Zuerich',
+      )!;
+      expect(r.lines.single.location, zueri);
+    });
+  });
+
+  group('acceptStockAnswer (review I1)', () {
+    final valid = _json([
+      {'text': '2 Bacardi', 'materialId': 'm1', 'quantity': 2},
+    ]);
+    StockAiResult? accept(String? text, String? stop) => acceptStockAnswer(
+      text: text,
+      stopReason: stop,
+      catalog: _catalog,
+      locations: const [_mine, _mario],
+      sourceText: '2 Bacardi',
+    );
+
+    test('a complete answer is parsed', () {
+      expect(accept(valid, 'end_turn')!.lines, hasLength(1));
+      expect(accept(valid, null)!.lines, hasLength(1));
+    });
+
+    test('a truncated answer (max_tokens) is rejected', () {
+      expect(accept(valid, 'max_tokens'), isNull);
+      expect(accept('{"lines":[{"text":"2 Bac', 'max_tokens'), isNull);
+    });
+
+    test('no text is rejected', () {
+      expect(accept(null, 'end_turn'), isNull);
     });
   });
 }

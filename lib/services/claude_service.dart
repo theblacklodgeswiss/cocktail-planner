@@ -143,7 +143,8 @@ class ClaudeService {
   /// [model] overrides the service's default model for this call only,
   /// [timeout] bounds each HTTP attempt, [extraBody] adds request fields
   /// (e.g. `thinking`). The first `text` block of the answer is returned
-  /// (thinking blocks are skipped).
+  /// (thinking blocks are skipped); [onStopReason] receives the answer's
+  /// `stop_reason` (e.g. `max_tokens` for a truncated answer).
   Future<String?> _sendMessage(
     String prompt, {
     List<Map<String, dynamic>>? additionalContent,
@@ -153,6 +154,7 @@ class ClaudeService {
     String? model,
     Duration? timeout,
     Map<String, dynamic>? extraBody,
+    void Function(String? stopReason)? onStopReason,
   }) async {
     if (!isConfigured) return null;
 
@@ -194,6 +196,7 @@ class ClaudeService {
               .map((b) => b['text'])
               .whereType<String>()
               .firstOrNull;
+          onStopReason?.call(data['stop_reason'] as String?);
           debugPrint('Claude $operationName succeeded');
           return text;
         }
@@ -241,9 +244,13 @@ class ClaudeService {
     final watch = Stopwatch()..start();
     // No temperature: current small models reject non-default sampling.
     // Thinking off keeps the answer fast and inside max_tokens.
+    // 40 lines of ~55 tokens need ~2400; 4096 leaves room. A truncated
+    // answer (stop_reason max_tokens) is rejected, see acceptStockAnswer.
+    String? stopReason;
     Future<String?> send(String model) => _sendMessage(
       prompt,
-      maxTokens: 1024,
+      maxTokens: 4096,
+      onStopReason: (r) => stopReason = r,
       operationName: 'stock interpret',
       maxRetries: 1,
       model: model,
@@ -261,9 +268,16 @@ class ClaudeService {
         debugPrint('Claude stock interpret: model unavailable, retrying with default');
         text = await send(_model);
       }
-      final result = text == null
-          ? null
-          : parseStockInterpretation(text, request.catalog, request.locations);
+      if (stopReason == 'max_tokens') {
+        debugPrint('Claude stock interpret: answer truncated (max_tokens)');
+      }
+      final result = acceptStockAnswer(
+        text: text,
+        stopReason: stopReason,
+        catalog: request.catalog,
+        locations: request.locations,
+        sourceText: request.text,
+      );
       debugPrint(
         'Claude stock interpret: ${watch.elapsedMilliseconds} ms, '
         '${result == null ? 'invalid answer' : '${result.lines.length} lines'}',
