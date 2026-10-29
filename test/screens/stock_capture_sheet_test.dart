@@ -102,6 +102,8 @@ class _Fake {
       return true;
     },
     speechInput: _NoSpeech.new,
+    // The rule-based path; the AI path is covered in stock_capture_ai_test.
+    interpret: null,
   );
 }
 

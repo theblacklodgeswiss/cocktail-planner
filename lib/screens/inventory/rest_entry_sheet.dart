@@ -10,7 +10,10 @@ import '../../models/material_item.dart';
 import '../../models/order.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
+import '../../services/claude_service.dart';
 import '../../services/speech_input.dart';
+import '../../services/stock_ai_interpreter.dart';
+import '../../services/user_preferences_service.dart';
 import '../../services/voice_inventory_parser.dart';
 import '../../ui/tokens.dart';
 import '../../ui/widgets/app_sheet.dart';
@@ -19,6 +22,7 @@ import '../../ui/widgets/pressable.dart';
 import 'inventory_rows.dart';
 import 'location_prompt_dialog.dart';
 import 'rest_lines.dart';
+import 'stock_ai_logic.dart';
 
 /// Asks what is left over after an order and books it into the stock.
 /// Returns true if the rest was saved. Skipping or cancelling books nothing.
@@ -131,6 +135,23 @@ Future<void> _defaultSetQuantity({
 Future<bool> _defaultUpdateOrder(String id, Map<String, dynamic> data) =>
     orderRepository.updateOrder(id, data);
 
+/// Interprets the capture text with Claude; null on any failure.
+typedef StockInterpreter =
+    Future<StockAiResult?> Function(StockInterpretRequest request);
+
+Future<StockAiResult?> _defaultInterpret(StockInterpretRequest request) =>
+    claudeService.interpretStockText(request);
+
+bool _defaultAiConfigured() => claudeService.isConfigured;
+
+bool _defaultStockAiEnabled() => userPreferencesService.stockAiEnabled;
+
+Future<void> _defaultSetStockAiEnabled(bool enabled) =>
+    userPreferencesService.setStockAiEnabled(enabled);
+
+/// Longest wait for the AI before the rule result is used.
+const stockAiTimeout = Duration(seconds: 10);
+
 /// External collaborators of [RestEntrySheet], bundled so tests can pump
 /// the sheet without Firebase. Every default delegates to the global
 /// singleton the sheet has always used.
@@ -146,6 +167,10 @@ class RestEntryServices {
     this.setQuantity = _defaultSetQuantity,
     this.updateOrder = _defaultUpdateOrder,
     this.speechInput = createSpeechInput,
+    this.interpret = _defaultInterpret,
+    this.aiConfigured = _defaultAiConfigured,
+    this.stockAiEnabled = _defaultStockAiEnabled,
+    this.setStockAiEnabled = _defaultSetStockAiEnabled,
   });
 
   /// Employee or higher (may record stock at all).
@@ -166,6 +191,16 @@ class RestEntryServices {
   final Future<bool> Function(String orderId, Map<String, dynamic> data)
   updateOrder;
   final SpeechInput Function() speechInput;
+
+  /// Claude interpretation of the text; null disables the AI entirely.
+  final StockInterpreter? interpret;
+
+  /// Proxy URL or API key present (same condition as the shopping list AI).
+  final bool Function() aiConfigured;
+
+  /// The local "KI-Auswertung" preference.
+  final bool Function() stockAiEnabled;
+  final Future<void> Function(bool enabled) setStockAiEnabled;
 }
 
 String _formatQuantity(double q) {
@@ -222,8 +257,23 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
   // books them twice.
   final Set<RestLine> _booked = {};
 
+  // Claude-assisted interpretation. Both results stay in memory so the user
+  // can switch between them; edits on the lines are kept.
+  late bool _aiEnabled = widget.services.stockAiEnabled();
+  bool _interpreting = false;
+  int _aiGeneration = 0;
+  bool _stockLoaded = false;
+  List<RestLine> _ruleLines = [];
+  int _ruleUnparsed = 0;
+  RestLine? _ruleFocus;
+  List<RestLine>? _aiLines;
+  bool _showingAi = false;
+  bool _aiFallbackHint = false;
+
   RestEntryServices get _services => widget.services;
   bool get _counting => widget.standalone && _mode == CaptureMode.count;
+  bool get _aiAvailable =>
+      _services.interpret != null && _services.aiConfigured();
 
   @override
   void dispose() {
@@ -353,10 +403,15 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
   }
 
   Future<void> _continue() async {
-    if (_loading) return;
+    // One call per tap: ignore taps while loading or while the AI runs.
+    if (_loading || _interpreting) return;
     if (_listening) await _speech.stop();
     if (!mounted) return;
     setState(() => _loading = true);
+    final text = _textController.text;
+    final interpret = _services.interpret;
+    final useAi =
+        interpret != null && _aiAvailable && _aiEnabled && text.trim().isNotEmpty;
     try {
       final location = await _services.ownLocation(context);
       if (location == null || !mounted) {
@@ -365,8 +420,10 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       }
       final catalog = await _services.loadCatalog();
       final locations = await _services.loadLocations();
-      // The count view shows the stock before and after.
-      final stock = _counting
+      // The count view shows the stock before and after; the AI checks the
+      // statement against it.
+      final withStock = _counting || useAi;
+      final stock = withStock
           ? await _services.loadStock()
           : const <StockEntry>[];
       if (!mounted) return;
@@ -374,36 +431,120 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       _catalog = catalog;
       _locations = locations;
       _stock = stock;
-      final parsed = parseRestTextDetailed(_textController.text);
+      _stockLoaded = withStock;
+      // The rules run first and instantly; they are the fallback.
+      final parsed = parseRestTextDetailed(text);
+      // An unparsed fragment becomes a line with the text as article search
+      // and no quantity, so nothing is dropped and the user only types it.
+      _ruleLines = buildRestLines(
+        [
+          ...parsed.lines,
+          for (final u in parsed.unparsed)
+            ParsedLine(quantity: -1, spokenName: u),
+        ],
+        _catalog,
+        _locations,
+        _defaultLocation,
+      );
+      _ruleUnparsed = parsed.unparsed.length;
+      _ruleFocus = parsed.unparsed.isEmpty
+          ? null
+          : _ruleLines[parsed.lines.length];
+      _aiLines = null;
+      _aiFallbackHint = false;
+      if (!useAi) {
+        setState(() {
+          _showRules();
+          _confirming = true;
+          _loading = false;
+        });
+        return;
+      }
+
+      final generation = ++_aiGeneration;
       setState(() {
-        // An unparsed fragment becomes a line with the text as article search
-        // and no quantity, so nothing is dropped and the user only types it.
-        _lines = buildRestLines(
-          [
-            ...parsed.lines,
-            for (final u in parsed.unparsed)
-              ParsedLine(quantity: -1, spokenName: u),
-          ],
-          _catalog,
-          _locations,
-          _defaultLocation,
-        );
-        _unparsedCount = parsed.unparsed.length;
-        _focusLine = parsed.unparsed.isEmpty
-            ? null
-            : _lines[parsed.lines.length];
-        _confirming = true;
         _loading = false;
+        _interpreting = true;
+      });
+      final attempt = await _interpret(
+        interpret,
+        StockInterpretRequest(
+          text: text,
+          mode: stockAiModeOf(_effectiveMode),
+          catalog: _catalog,
+          locations: _locations,
+          defaultLocation: _defaultLocation,
+          stock: _stock,
+        ),
+      );
+      // Cancelled via "Zurück" (or a newer tap): ignore the answer.
+      if (!mounted || generation != _aiGeneration) return;
+      final choice = chooseInterpretation(attempt, parsed);
+      setState(() {
+        _interpreting = false;
+        if (choice.useAi) {
+          _aiLines = buildAiRestLines(
+            attempt.result!,
+            _catalog,
+            _defaultLocation,
+          );
+          _showAi();
+        } else {
+          _showRules();
+          _aiFallbackHint = choice.fallbackHint;
+        }
+        _confirming = true;
       });
     } catch (e) {
       debugPrint('Rest entry preparation failed: $e');
       if (mounted) {
         setState(() {
           _loading = false;
+          _interpreting = false;
           _micError = 'rest.load_failed'.tr();
         });
       }
     }
+  }
+
+  /// Runs the AI with the sheet's timeout; any error is a failed attempt.
+  Future<AiAttempt> _interpret(
+    StockInterpreter interpret,
+    StockInterpretRequest request,
+  ) async {
+    try {
+      final result = await interpret(request).timeout(stockAiTimeout);
+      return result == null ? const AiAttempt.failed() : AiAttempt.ok(result);
+    } catch (e) {
+      debugPrint('Stock AI unavailable (${e.runtimeType}), using rules');
+      return const AiAttempt.failed();
+    }
+  }
+
+  void _cancelInterpret() {
+    setState(() {
+      _aiGeneration++;
+      _interpreting = false;
+    });
+  }
+
+  void _showRules() {
+    _lines = _ruleLines;
+    _unparsedCount = _ruleUnparsed;
+    _focusLine = _ruleFocus;
+    _showingAi = false;
+  }
+
+  void _showAi() {
+    _lines = _aiLines!;
+    _unparsedCount = 0;
+    _focusLine = null;
+    _showingAi = true;
+  }
+
+  void _toggleAi(bool enabled) {
+    setState(() => _aiEnabled = enabled);
+    _services.setStockAiEnabled(enabled);
   }
 
   void _addManualLine() {
@@ -620,7 +761,13 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
               ),
             ],
           ),
-          Expanded(child: _confirming ? _buildConfirm() : _buildInput()),
+          Expanded(
+            child: _confirming
+                ? _buildConfirm()
+                : _interpreting
+                ? _buildInterpreting()
+                : _buildInput(),
+          ),
         ],
       ),
     );
@@ -637,6 +784,10 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
             value: _mode,
             onChanged: (m) => setState(() => _mode = m),
           ),
+          const SizedBox(height: AppSpace.s12),
+        ],
+        if (_aiAvailable) ...[
+          _AiSwitch(value: _aiEnabled, onChanged: _toggleAi),
           const SizedBox(height: AppSpace.s12),
         ],
         Text(
@@ -709,8 +860,52 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     );
   }
 
+  /// "Wird ausgewertet…" while Claude reads the text; "Zurück" cancels.
+  Widget _buildInterpreting() {
+    final p = AppPalette.of(context);
+    return Column(
+      children: [
+        Expanded(
+          child: Center(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    strokeWidth: AppSize.spinnerStroke,
+                  ),
+                  const SizedBox(height: AppSpace.s12),
+                  Text(
+                    'inventory_list.ai_working'.tr(),
+                    textAlign: TextAlign.center,
+                    style: AppText.body.copyWith(color: p.text),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppSpace.s12),
+            child: Row(
+              children: [
+                TextAction(
+                  label: 'rest.back'.tr(),
+                  onPressed: _cancelInterpret,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildConfirm() {
     final plans = _counting ? _countPlans() : const <RestLine, CountPlan>{};
+    final p = AppPalette.of(context);
+    final canSwitch = !_saving && _booked.isEmpty;
     return Column(
       children: [
         Expanded(
@@ -734,6 +929,35 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                 'rest.check_hint'.tr(),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (_showingAi) ...[
+                const SizedBox(height: AppSpace.s4),
+                Text(
+                  'inventory_list.ai_header'.tr(),
+                  style: AppText.body.copyWith(
+                    color: p.text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              if (_aiFallbackHint) ...[
+                const SizedBox(height: AppSpace.s4),
+                Text(
+                  'inventory_list.ai_fallback'.tr(),
+                  style: AppText.caption.copyWith(color: p.textSecondary),
+                ),
+              ],
+              if (_aiLines != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextAction(
+                    label: _showingAi
+                        ? 'inventory_list.ai_use_rules'.tr()
+                        : 'inventory_list.ai_use_ai'.tr(),
+                    onPressed: canSwitch
+                        ? () => setState(_showingAi ? _showRules : _showAi)
+                        : null,
+                  ),
+                ),
               if (_unparsedCount > 0) ...[
                 const SizedBox(height: AppSpace.s4),
                 Text(
@@ -816,6 +1040,12 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     final unresolvedMaterial = line.chosenMaterialId == null;
     final plan = plans[line];
     final isAdmin = _services.isAdmin();
+    // Deterministic warnings; stock-based ones only with a stock snapshot.
+    final flags = booked
+        ? const <PlausibilityFlag>[]
+        : plausibilityFlags(line, _stock, _effectiveMode)
+              .where((f) => _stockLoaded || f == PlausibilityFlag.notUnique)
+              .toList();
     return Card(
       key: ObjectKey(line),
       margin: const EdgeInsets.only(bottom: AppSpace.s12),
@@ -878,6 +1108,31 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                     : 'rest.quantity_invalid'.tr(),
                 style: AppText.body.copyWith(
                   color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            if (line.fromAi || flags.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpace.s4),
+                child: Wrap(
+                  spacing: AppSpace.s4,
+                  runSpacing: AppSpace.s4,
+                  children: [
+                    if (line.fromAi)
+                      _Tag(label: 'inventory_list.ai_badge'.tr(), ai: true),
+                    for (final f in flags) _Tag(label: f.key.tr()),
+                  ],
+                ),
+              ),
+            if (line.aiNote != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpace.s4),
+                child: Text(
+                  'inventory_list.ai_note'.tr(
+                    namedArgs: {'note': line.aiNote!},
+                  ),
+                  style: AppText.caption.copyWith(
+                    color: AppPalette.of(context).textSecondary,
+                  ),
                 ),
               ),
             // "Zählung": total and per origin, before and after.
@@ -1052,6 +1307,86 @@ class _CountChange extends StatelessWidget {
         ),
       ].join(' · '),
       style: AppText.body.copyWith(color: p.text, fontWeight: FontWeight.w600),
+    );
+  }
+}
+
+/// "KI-Vorschlag" badge or a plausibility warning chip (info, not tappable).
+class _Tag extends StatelessWidget {
+  const _Tag({required this.label, this.ai = false});
+
+  final String label;
+  final bool ai;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    final color = ai ? p.textSecondary : AppColors.warning;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: ai ? p.surface : null,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: ai ? p.border : color),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s8,
+          vertical: AppSpace.s4,
+        ),
+        child: Text(
+          label,
+          style: AppText.caption.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "KI-Auswertung" on/off (local preference), with a one-line explanation.
+class _AiSwitch extends StatelessWidget {
+  const _AiSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return MergeSemantics(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSize.minTap),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.control),
+          onTap: () => onChanged(!value),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'inventory_list.ai_switch'.tr(),
+                      style: AppText.body.copyWith(
+                        color: p.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'inventory_list.ai_switch_hint'.tr(),
+                      style: AppText.caption.copyWith(color: p.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpace.s8),
+              Switch.adaptive(value: value, onChanged: onChanged),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
