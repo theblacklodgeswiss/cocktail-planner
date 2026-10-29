@@ -27,7 +27,7 @@ import '../screens/settings/services_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/settings/user_management_screen.dart';
 import '../screens/shopping_list/shopping_list_screen.dart';
-import '../ui/widgets/staff_scaffold.dart' show staffTabExtra;
+import '../screens/staff/staff_shell_host.dart';
 
 /// Notifier that listens to Firebase Auth state changes
 class AuthNotifier extends ChangeNotifier {
@@ -63,18 +63,50 @@ final GoRouter appRouter = GoRouter(
     return null;
   },
   routes: [
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
+    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(
       path: '/s/:code',
       builder: (context, state) =>
           SharedDocumentScreen(code: state.pathParameters['code']!),
     ),
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const CustomerLandingScreen(),
+    // Staff tabs: a persistent shell (bar and "+" stay, only the content
+    // swaps, every tab keeps its state). Branch order = staffBranchTabs.
+    // `/` belongs to the orders branch: staff get the orders list there,
+    // everyone else the customer start (the shell then shows no bar).
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, shell) => StaffShellHost(shell: shell),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) => const CustomerLandingScreen(),
+            ),
+            GoRoute(
+              path: '/orders',
+              builder: (context, state) => OrdersOverviewScreen(
+                initialStatus: state.uri.queryParameters['status'],
+              ),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/inventory',
+              builder: (context, state) => const InventoryScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/more',
+              builder: (context, state) => const MoreScreen(),
+            ),
+          ],
+        ),
+      ],
     ),
     GoRoute(
       path: '/dashboard',
@@ -83,26 +115,6 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/my-requests',
       builder: (context, state) => const MyRequestsScreen(),
-    ),
-    GoRoute(
-      path: '/orders',
-      builder: (context, state) {
-        final status = state.uri.queryParameters['status'];
-        return OrdersOverviewScreen(
-          initialStatus: status,
-          showBack: state.extra != staffTabExtra,
-        );
-      },
-    ),
-    GoRoute(
-      path: '/inventory',
-      builder: (context, state) =>
-          InventoryScreen(showBack: state.extra != staffTabExtra),
-    ),
-    // Staff "Mehr" tab (new, additional route).
-    GoRoute(
-      path: '/more',
-      builder: (context, state) => const MoreScreen(),
     ),
     GoRoute(
       path: '/pending-orders',
@@ -118,7 +130,9 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/order-form',
       builder: (context, state) {
-        final prefill = state.extra is SavedOrder ? state.extra as SavedOrder : null;
+        final prefill = state.extra is SavedOrder
+            ? state.extra as SavedOrder
+            : null;
         return ModernOrderFormScreen(prefill: prefill);
       },
     ),
@@ -126,25 +140,25 @@ final GoRouter appRouter = GoRouter(
       path: '/order-success',
       builder: (context, state) => const OrderSuccessScreen(),
     ),
-    GoRoute(
-      path: '/admin',
-      builder: (context, state) => const AdminScreen(),
-    ),
+    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
     ),
     GoRoute(
       path: '/settings/legal/imprint',
-      builder: (context, state) => const LegalInfoScreen(type: LegalInfoType.imprint),
+      builder: (context, state) =>
+          const LegalInfoScreen(type: LegalInfoType.imprint),
     ),
     GoRoute(
       path: '/settings/legal/terms',
-      builder: (context, state) => const LegalInfoScreen(type: LegalInfoType.terms),
+      builder: (context, state) =>
+          const LegalInfoScreen(type: LegalInfoType.terms),
     ),
     GoRoute(
       path: '/settings/legal/privacy',
-      builder: (context, state) => const LegalInfoScreen(type: LegalInfoType.privacy),
+      builder: (context, state) =>
+          const LegalInfoScreen(type: LegalInfoType.privacy),
     ),
     GoRoute(
       path: '/settings/admin',
@@ -161,10 +175,6 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/settings/services',
       builder: (context, state) => const ServicesScreen(),
-    ),
-    GoRoute(
-      path: '/orders',
-      builder: (context, state) => const OrdersOverviewScreen(),
     ),
     GoRoute(
       path: '/orders/pending',

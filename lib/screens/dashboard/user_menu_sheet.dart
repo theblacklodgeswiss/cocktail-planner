@@ -99,7 +99,7 @@ class _UserMenuSheet extends StatelessWidget {
       subtitle: Text('drawer.orders_subtitle'.tr()),
       onTap: () {
         Navigator.pop(context);
-        context.push('/orders');
+        context.go('/orders');
       },
     );
   }
@@ -111,7 +111,7 @@ class _UserMenuSheet extends StatelessWidget {
       subtitle: Text('drawer.inventory_page_subtitle'.tr()),
       onTap: () {
         Navigator.pop(context);
-        context.push('/inventory');
+        context.go('/inventory');
       },
     );
   }

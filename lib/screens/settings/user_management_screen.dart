@@ -1,10 +1,11 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
+import '../admin/admin_denied_page.dart';
+import 'user_management_view.dart';
 
-/// Screen for managing allowed users.
+/// Screen for managing allowed users (data wrapper around the view).
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
 
@@ -15,6 +16,7 @@ class UserManagementScreen extends StatefulWidget {
 class _UserManagementScreenState extends State<UserManagementScreen> {
   List<AllowedUser> _users = [];
   bool _isLoading = true;
+  bool _failed = false;
 
   @override
   void initState() {
@@ -23,7 +25,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   Future<void> _loadUsers() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _failed = false;
+    });
     try {
       final users = await authService.getAllowedUsers();
       if (!mounted) return;
@@ -33,348 +38,61 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _failed = true;
+      });
     }
+  }
+
+  Future<void> _toggleAdmin(UserRow row, bool value) async {
+    final index = _users.indexWhere((u) => u.email == row.email);
+    if (index < 0) return;
+    final user = _users[index];
+    // Optimistic UI: update local state immediately.
+    setState(() => _users[index] = user.copyWith(isAdmin: value));
+    final success = await authService.updateAdminStatus(user.email, value);
+    if (!success && mounted) {
+      // Revert local state on error.
+      setState(() => _users[index] = user);
+    }
+  }
+
+  Future<bool> _remove(String email) async {
+    final success = await authService.removeAllowedUser(email);
+    if (success) await _loadUsers();
+    return success;
+  }
+
+  Future<bool> _add(String email, String name, bool isAdmin) async {
+    final success = await authService.addAllowedUser(
+      email,
+      name: name,
+      isAdmin: isAdmin,
+    );
+    if (success) await _loadUsers();
+    return success;
   }
 
   @override
   Widget build(BuildContext context) {
     if (!authService.canManageUsers) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.pop(),
-          ),
-          title: Text('admin_panel.title'.tr()),
-        ),
-        body: Center(child: Text('admin.access_denied'.tr())),
-      );
+      return AdminDeniedPage(title: 'admin_panel.title'.tr());
     }
-
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-        title: Text('admin_panel.title'.tr()),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddUserDialog,
-        child: const Icon(Icons.person_add),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildContent(),
+    return UserManagementView(
+      users: [
+        for (final u in _users)
+          UserRow(email: u.email, name: u.name, isAdmin: u.isAdmin),
+      ],
+      loading: _isLoading,
+      errorMessage: _failed ? 'admin2.load_error'.tr() : null,
+      onRetry: _loadUsers,
+      currentEmail: authService.email,
+      superAdminEmail: superAdminEmail,
+      viewerIsAdmin: authService.isAdmin,
+      onToggleAdmin: _toggleAdmin,
+      onRemove: _remove,
+      onAdd: _add,
     );
-  }
-
-  Widget _buildContent() {
-    if (_users.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.people_outline, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              'admin_panel.no_users'.tr(),
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadUsers,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _users.length,
-        itemBuilder: (context, index) {
-          final user = _users[index];
-          final isCurrentUser =
-              user.email.toLowerCase() == authService.email?.toLowerCase();
-
-          return Card(
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Text(
-                  (user.name.isNotEmpty ? user.name : user.email)
-                      .substring(0, 1)
-                      .toUpperCase(),
-                ),
-              ),
-              title: Row(
-                children: [
-                  Text(user.name.isNotEmpty ? user.name : user.email),
-                  if (isCurrentUser) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Du',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SelectableText(user.email),
-                  if (isCurrentUser)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Eigener Status kann nicht geändert werden',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (user.email.toLowerCase() != superAdminEmail.toLowerCase())
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Admin',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: user.isAdmin
-                                    ? Colors.amber.shade700
-                                    : Colors.grey,
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(width: 4),
-                        Switch(
-                          value: user.isAdmin,
-                          onChanged: isCurrentUser
-                              ? null // Prevents de-admining yourself
-                              : (value) async {
-                                  // Optimistic UI: update local state immediately
-                                  setState(() {
-                                    _users[index] = user.copyWith(
-                                      isAdmin: value,
-                                    );
-                                  });
-
-                                  final success = await authService
-                                      .updateAdminStatus(user.email, value);
-
-                                  if (!success && mounted) {
-                                    // Revert local state on error
-                                    setState(() {
-                                      _users[index] = user;
-                                    });
-                                  }
-                                },
-                          activeThumbColor: Colors.amber,
-                        ),
-                      ],
-                    )
-                  else
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Icon(Icons.security, color: Colors.amber),
-                    ),
-                  if (authService.isAdmin &&
-                      user.email.toLowerCase() !=
-                          superAdminEmail.toLowerCase() &&
-                      !isCurrentUser) // Cannot delete yourself
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _confirmRemoveUser(user.email),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _confirmRemoveUser(String email) async {
-    bool saving = false;
-    String? error;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setDialogState) => AlertDialog(
-          title: Text('admin_panel.remove_user_title'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'admin_panel.remove_user_message'
-                    .tr(namedArgs: {'email': email}),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(c, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final success =
-                          await authService.removeAllowedUser(email);
-                      if (success) {
-                        if (c.mounted) Navigator.pop(c, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'common.error'.tr();
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('admin_panel.remove'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm == true) {
-      await _loadUsers();
-    }
-  }
-
-  Future<void> _showAddUserDialog() async {
-    final emailController = TextEditingController();
-    final nameController = TextEditingController();
-    bool isAdmin = false;
-    bool saving = false;
-    String? error;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('admin_panel.add_user'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'admin_panel.email_label'.tr(),
-                  hintText: 'admin_panel.email_hint'.tr(),
-                  prefixIcon: const Icon(Icons.email),
-                  border: const OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: 'admin_panel.name_label'.tr(),
-                  hintText: 'admin_panel.name_hint'.tr(),
-                  prefixIcon: const Icon(Icons.person),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CheckboxListTile(
-                title: const Text('Admin'),
-                subtitle: const Text('Hat Zugriff auf Einstellungen'),
-                value: isAdmin,
-                onChanged: (val) =>
-                    setDialogState(() => isAdmin = val ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 16),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      if (emailController.text.trim().isEmpty) return;
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final success = await authService.addAllowedUser(
-                        emailController.text.trim(),
-                        name: nameController.text.trim(),
-                        isAdmin: isAdmin,
-                      );
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'common.add_error'.tr();
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('common.add'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.user_added'.tr())),
-      );
-      await _loadUsers();
-    }
   }
 }

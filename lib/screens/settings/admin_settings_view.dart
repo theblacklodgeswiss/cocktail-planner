@@ -80,6 +80,20 @@ class _AdminSettingsViewState extends State<AdminSettingsView> {
     await widget.onSave(value);
   }
 
+  @override
+  void didUpdateWidget(AdminSettingsView old) {
+    super.didUpdateWidget(old);
+    // A finished, successful generate+save empties the input (an error keeps
+    // the text so it can be retried).
+    final status = widget.generateStatus;
+    if (old.isGenerating &&
+        !widget.isGenerating &&
+        status != null &&
+        !status.isError) {
+      _recipeInput.clear();
+    }
+  }
+
   void _generate() {
     if (widget.isGenerating) return;
     widget.onGenerate(_recipeInput.text);

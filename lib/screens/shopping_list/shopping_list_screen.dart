@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/cocktail_repository.dart';
 import '../../data/order_repository.dart';
@@ -9,12 +10,13 @@ import '../../models/material_item.dart';
 import '../../models/recipe.dart';
 import '../../services/pdf_generator.dart'; // for OrderItem class
 import '../../state/app_state.dart';
+import '../../ui/widgets/states.dart';
+import '../../ui/widgets/step_scaffold.dart';
 import '../../utils/currency.dart';
 import 'shopping_list_dialogs.dart';
 import 'shopping_list_logic.dart';
 import 'stock_logic.dart';
 import 'widgets/widgets.dart';
-import 'package:go_router/go_router.dart';
 
 /// Shopping list screen with wizard-style navigation.
 class ShoppingListScreen extends StatefulWidget {
@@ -40,7 +42,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   bool _showAiBanner = false;
   bool _isBannerExpanded = false;
 
-  late PageController _pageController;
+  final ScrollController _scroll = ScrollController();
   int _currentPage = 0;
   int _longDistanceThresholdKm = 400;
 
@@ -69,7 +71,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   void initState() {
     super.initState();
     _dataFuture = (widget.loadData ?? cocktailRepository.load)();
-    _pageController = PageController();
     _loadSettings();
     if (widget.orderSetup != null) {
       final setup = widget.orderSetup as dynamic;
@@ -381,7 +382,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _scroll.dispose();
     for (final controller in _controllers.values) {
       controller.dispose();
     }
@@ -423,11 +424,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   }
 
   void _goToPage(int page) {
-    _pageController.animateToPage(
-      page,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
-    );
+    setState(() => _currentPage = page);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+    });
   }
 
   Future<void> _export(
@@ -461,48 +461,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       await _saveAndGeneratePdf(selectedOrderItems, total, result);
     } finally {
       if (mounted) setState(() => _isSavingOrder = false);
-    }
-  }
-
-  Future<void> _downloadShoppingList(
-    List<MaterialItem> allItems,
-    double total,
-    Map<String, int> aggregatedQuantities,
-    Set<String> aggregatedSelected,
-  ) async {
-    final selectedOrderItems = ShoppingListLogic.getSelectedOrderItems(
-      allItems,
-      aggregatedQuantities,
-      aggregatedSelected,
-    );
-
-    if (selectedOrderItems.isEmpty) {
-      _showError('shopping.no_selection'.tr());
-      return;
-    }
-
-    try {
-      // Generate and download the shopping list PDF directly
-      await PdfGenerator.generateAndDownload(
-        orderName: _orderName,
-        orderDate: _eventDate ?? DateTime.now(),
-        items: selectedOrderItems,
-        grandTotal: total,
-        currency: _currency.code,
-        personCount: _personCount,
-        drinkerType: _drinkerType,
-        serviceType: _serviceType,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('shopping.download_list'.tr())));
-      }
-    } catch (e) {
-      if (mounted) {
-        _showError('Fehler beim Erstellen der PDF: $e');
-      }
     }
   }
 
@@ -646,32 +604,31 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return FutureBuilder<CocktailData>(
       future: _dataFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return Scaffold(
-            backgroundColor: colorScheme.surface,
-            body: const Center(child: CircularProgressIndicator.adaptive()),
-          );
+          return const Scaffold(body: LoadingState());
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
           return Scaffold(
-            backgroundColor: colorScheme.surface,
             appBar: AppBar(title: Text('shopping.title'.tr())),
-            body: Center(child: Text('shopping.load_error'.tr())),
+            body: ErrorState(
+              message: 'shopping.load_error'.tr(),
+              onRetry: () => setState(() {
+                _dataFuture = (widget.loadData ?? cocktailRepository.load)();
+              }),
+            ),
           );
         }
 
-        return _buildContent(snapshot.data!, colorScheme);
+        return _buildContent(snapshot.data!);
       },
     );
   }
 
-  Widget _buildContent(CocktailData data, ColorScheme colorScheme) {
+  Widget _buildContent(CocktailData data) {
     final separated = ShoppingListLogic.buildSeparatedItems(
       data,
       appState.selectedRecipes,
@@ -852,60 +809,105 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       aggregatedSelected,
     );
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            ShoppingHeader(
-              currentPage: _currentPage,
-              totalPages: totalPages,
-              hasSelectedItems: selectedItems.isNotEmpty,
-              totalCost: total,
-              currency: _currency,
-              isSaving: _isSavingOrder,
-              onExport: () => _export(
-                allItems,
-                total,
-                mergedQuantities,
-                aggregatedSelected,
-              ),
-              onDownloadShoppingList: () => _downloadShoppingList(
-                allItems,
-                total,
-                mergedQuantities,
-                aggregatedSelected,
-              ),
-            ),
-            if (_showAiBanner) _buildAiBanner(),
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: (page) => setState(() => _currentPage = page),
-                itemCount: totalPages,
-                itemBuilder: (context, index) => _buildPage(
-                  index,
-                  cocktailNames,
-                  separated,
+    final page = _currentPage.clamp(0, totalPages - 1);
+    final isSummary = page == totalPages - 1;
+    return PopScope(
+      canPop: page == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goToPage(page - 1);
+      },
+      child: StepScaffold(
+        step: page + 1,
+        total: totalPages,
+        title: _pageTitle(
+          page,
+          cocktailNames,
+          categoryPages,
+          additionalIngredients,
+        ),
+        controller: _scroll,
+        onBack: () {
+          if (page > 0) {
+            _goToPage(page - 1);
+          } else if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/dashboard');
+          }
+        },
+        bottom: ShoppingBottomNav(
+          currentPage: page,
+          totalPages: totalPages,
+          isSaving: _isSavingOrder,
+          onBack: () => _goToPage(page - 1),
+          onNext: () => _goToPage(page + 1),
+          onSave: selectedItems.isNotEmpty
+              ? () => _export(
                   allItems,
                   total,
-                  selectedItems,
-                  data,
-                  categoryPages,
-                  additionalIngredients,
-                ),
+                  mergedQuantities,
+                  aggregatedSelected,
+                )
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_showAiBanner)
+              AiSuggestionBanner(
+                count: _aiSuggestionsCount,
+                explanation: _aiExplanation,
+                expanded: _isBannerExpanded,
+                onToggle: () =>
+                    setState(() => _isBannerExpanded = !_isBannerExpanded),
+                onUndo: () {
+                  setState(() {
+                    _showAiBanner = false;
+                    _quantities.clear();
+                    _selectedItems.clear();
+                    for (final controller in _controllers.values) {
+                      controller.text = '';
+                    }
+                  });
+                },
+                onClose: () => setState(() => _showAiBanner = false),
               ),
-            ),
-            ShoppingBottomNav(
-              currentPage: _currentPage,
-              totalPages: totalPages,
-              onBack: () => _goToPage(_currentPage - 1),
-              onNext: () => _goToPage(_currentPage + 1),
+            if (!isSummary)
+              ShoppingTotalLine(totalCost: total, currency: _currency),
+            _buildPage(
+              page,
+              cocktailNames,
+              separated,
+              allItems,
+              total,
+              selectedItems,
+              data,
+              categoryPages,
+              additionalIngredients,
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _pageTitle(
+    int index,
+    List<String> cocktailNames,
+    List<MapEntry<String, List<MaterialItem>>> categoryPages,
+    List<MaterialItem> additionalIngredients,
+  ) {
+    if (index < cocktailNames.length) return cocktailNames[index];
+    final hasExtra = additionalIngredients.isNotEmpty && cocktailNames.isEmpty;
+    var adjusted = index - cocktailNames.length;
+    if (hasExtra) {
+      if (adjusted == 0) return CategoryPage.titleFor('ingredients_extra');
+      adjusted--;
+    }
+    if (adjusted >= 0 && adjusted < categoryPages.length) {
+      return CategoryPage.titleFor(categoryPages[adjusted].key);
+    }
+    return 'shopping_ui.summary_title'.tr();
   }
 
   void _onIngredientsChanged(String cocktailName, List<String> newIngredients) {
@@ -976,197 +978,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   }
 
   Widget _buildCategoryPage(String category, List<MaterialItem> items) {
-    final categoryLabels = {
-      'supervisor': 'Supervisor / Barkeeper',
-      'purchase': 'Zu kaufen',
-      'bring': 'Mitbringen',
-      'other': 'Sonstige',
-      'ingredients_extra': 'Zutaten',
-    };
-
-    final categoryIcons = {
-      'supervisor': Icons.person,
-      'purchase': Icons.shopping_cart,
-      'bring': Icons.local_shipping,
-      'other': Icons.more_horiz,
-      'ingredients_extra': Icons.local_bar,
-    };
-
-    final categoryColors = {
-      'supervisor': Colors.purple,
-      'purchase': Colors.green,
-      'bring': Colors.blue,
-      'other': Colors.grey,
-      'ingredients_extra': Colors.green,
-    };
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: (categoryColors[category] ?? Colors.grey).withValues(
-                    alpha: 0.15,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  categoryIcons[category] ?? Icons.category,
-                  color: categoryColors[category] ?? Colors.grey,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      categoryLabels[category] ?? category,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      '${items.length} Positionen',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          ...items.map((item) {
-            final key = ShoppingListLogic.itemKey(item);
-            final qty = _quantities[key] ?? 0;
-            return ShoppingItemCard(
-              item: item,
-              controller: _controllers[key]!,
-              quantity: qty,
-              isSelected: qty > 0,
-              cocktails: const [],
-              onQuantityChanged: (newQty) => _onQuantityChanged(key, newQty),
-            );
-          }),
-          const SizedBox(height: 100),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAiBanner() {
-    final theme = Theme.of(context);
-    final primaryContainer = theme.colorScheme.primaryContainer;
-    final onPrimaryContainer = theme.colorScheme.onPrimaryContainer;
-    final primary = theme.colorScheme.primary;
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: primaryContainer,
-        border: Border(
-          bottom: BorderSide(color: primary.withValues(alpha: 0.3), width: 1),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            setState(() {
-              _isBannerExpanded = !_isBannerExpanded;
-            });
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(Icons.auto_awesome, color: primary, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'shopping.claude_suggestions_applied'.tr(
-                          namedArgs: {
-                            'count': _aiSuggestionsCount.toString(),
-                          },
-                        ),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: onPrimaryContainer,
-                          fontSize: 13,
-                        ),
-                      ),
-                      if (_aiExplanation.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _aiExplanation,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: onPrimaryContainer.withValues(alpha: 0.8),
-                          ),
-                          maxLines: _isBannerExpanded ? null : 2,
-                          overflow: _isBannerExpanded
-                              ? null
-                              : TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _showAiBanner = false;
-                      _quantities.clear();
-                      _selectedItems.clear();
-                      for (final controller in _controllers.values) {
-                        controller.text = '';
-                      }
-                    });
-                  },
-                  icon: const Icon(Icons.undo, size: 16),
-                  label: Text(
-                    'common.undo'.tr(),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  color: onPrimaryContainer,
-                  onPressed: () {
-                    setState(() => _showAiBanner = false);
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  tooltip: 'common.close'.tr(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return CategoryPage(
+      items: items,
+      quantities: _quantities,
+      controllers: _controllers,
+      onQuantityChanged: _onQuantityChanged,
     );
   }
 }

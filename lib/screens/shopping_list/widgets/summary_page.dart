@@ -1,9 +1,14 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../services/pdf_generator.dart';
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/floating_card.dart';
+import '../../../ui/widgets/hero_card.dart';
+import '../../../ui/widgets/states.dart';
 import '../../../utils/currency.dart';
 
-/// Summary page showing selected items and total.
+/// Content of the summary step: selected items and the total.
 class SummaryPage extends StatelessWidget {
   const SummaryPage({
     super.key,
@@ -16,192 +21,69 @@ class SummaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 20),
-          _buildHeader(context, colorScheme),
-          const SizedBox(height: 32),
-          _buildTotalCard(context, colorScheme),
-          const SizedBox(height: 24),
-          if (selectedItems.isNotEmpty)
-            _buildSelectedItemsList(context, colorScheme)
-          else
-            _buildEmptySelection(context, colorScheme),
-          const SizedBox(height: 100),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, ColorScheme colorScheme) {
-    return Row(
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Icon(
-            Icons.receipt_long,
-            color: colorScheme.onPrimaryContainer,
-            size: 28,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Zusammenfassung',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              Text(
-                '${selectedItems.length} Artikel ausgewählt',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.outline,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTotalCard(BuildContext context, ColorScheme colorScheme) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.primary,
-            colorScheme.primary.withValues(alpha: 0.8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Gesamtbetrag',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onPrimary.withValues(alpha: 0.8),
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            defaultCurrency.format(total),
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onPrimary,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSelectedItemsList(BuildContext context, ColorScheme colorScheme) {
+    final p = AppPalette.of(context);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Ausgewählte Artikel',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+        HeroCard(
+          kicker: 'shopping_ui.total_label'.tr(),
+          title: defaultCurrency.format(total),
+          titleStyle: AppText.display,
+          meta: 'shopping_ui.summary_count'.tr(
+            args: ['${selectedItems.length}'],
+          ),
         ),
-        const SizedBox(height: 12),
-        ...selectedItems.map((oi) => _buildItemRow(context, colorScheme, oi)),
+        const SizedBox(height: AppSpace.s16),
+        if (selectedItems.isEmpty)
+          EmptyState(
+            icon: Icons.remove_shopping_cart_outlined,
+            title: 'shopping_ui.none_selected'.tr(),
+            body: 'shopping_ui.none_selected_hint'.tr(),
+          )
+        else ...[
+          Text(
+            'shopping_ui.selected_articles'.tr(),
+            style: AppText.section.copyWith(color: p.text),
+          ),
+          const SizedBox(height: AppSpace.s12),
+          for (final oi in selectedItems) _ItemRow(item: oi),
+        ],
       ],
     );
   }
+}
 
-  Widget _buildItemRow(
-      BuildContext context, ColorScheme colorScheme, OrderItem oi) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '${oi.quantity}x',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onPrimaryContainer,
-                  ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              oi.item.name,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          Text(
-            Currency.fromCode(oi.item.currency).format(oi.total),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({required this.item});
 
-  Widget _buildEmptySelection(BuildContext context, ColorScheme colorScheme) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.remove_shopping_cart, size: 48, color: colorScheme.outline),
-          const SizedBox(height: 12),
-          Text(
-            'Keine Artikel ausgewählt',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: colorScheme.outline,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Gehe zurück und wähle Artikel aus',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.outline,
-                ),
-          ),
-        ],
+  final OrderItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.s8),
+      child: FloatingCard(
+        child: Row(
+          children: [
+            Text(
+              '${item.quantity}x',
+              style: AppText.button.copyWith(color: p.textSecondary),
+            ),
+            const SizedBox(width: AppSpace.s12),
+            Expanded(
+              child: Text(
+                item.item.name,
+                style: AppText.body.copyWith(color: p.text),
+              ),
+            ),
+            const SizedBox(width: AppSpace.s8),
+            Text(
+              Currency.fromCode(item.item.currency).format(item.total),
+              style: AppText.button.copyWith(color: p.text),
+            ),
+          ],
+        ),
       ),
     );
   }

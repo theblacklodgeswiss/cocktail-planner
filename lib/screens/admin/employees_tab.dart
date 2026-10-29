@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../data/employee_repository.dart';
 import '../../models/employee.dart';
+import 'employees_view.dart';
 
-/// Tab for managing employees (add/delete) with responsive design.
+/// Data wrapper of the employees page (stream + repository writes).
 class EmployeesTab extends StatefulWidget {
   const EmployeesTab({super.key});
 
@@ -13,515 +14,53 @@ class EmployeesTab extends StatefulWidget {
 }
 
 class _EmployeesTabState extends State<EmployeesTab> {
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isAdding = false;
   bool _isReordering = false;
-  bool _isRebuildingAccess = false;
-  List<Employee> _localEmployees = [];
-  EmployeeRole _selectedRole = EmployeeRole.staff;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _addEmployee() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isAdding = true);
-    final emailText = _emailController.text.trim();
-    final success = await employeeRepository.addEmployee(
-      name: _nameController.text.trim(),
-      email: emailText.isEmpty ? null : emailText,
-      role: _selectedRole,
-    );
-    setState(() => _isAdding = false);
-
-    if (!mounted) return;
-
-    if (success) {
-      _nameController.clear();
-      _emailController.clear();
-      setState(() => _selectedRole = EmployeeRole.staff);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('admin.employee_added'.tr())),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.add_error'.tr())),
-      );
-    }
-  }
-
-  Future<void> _deleteEmployee(Employee employee) async {
-    bool saving = false;
-    String? error;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('admin.delete_employee_confirm_title'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('admin.delete_employee_confirm_message'
-                  .tr(namedArgs: {'name': employee.name})),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            TextButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final success =
-                          await employeeRepository.deleteEmployee(employee);
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'common.error'.tr();
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('common.delete'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('admin.employee_deleted'.tr())),
-      );
-    }
-  }
-
-  Future<void> _editEmployee(Employee employee) async {
-    final nameController = TextEditingController(text: employee.name);
-    final emailController = TextEditingController(text: employee.email ?? '');
-    var selectedRole = employee.role;
-    final formKey = GlobalKey<FormState>();
-    var saving = false;
-    String? error;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('admin.edit_employee'.tr()),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: 'admin.employee_name'.tr(),
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.person),
-                    ),
-                    validator: (v) =>
-                        v?.trim().isEmpty ?? true ? 'offer.field_required'.tr() : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: emailController,
-                    decoration: InputDecoration(
-                      labelText: 'admin.employee_email'.tr(),
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.email),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return null;
-                      if (!v.contains('@')) return 'admin.employee_email_hint'.tr();
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<EmployeeRole>(
-                    initialValue: selectedRole,
-                    decoration: InputDecoration(
-                      labelText: 'admin.employee_role'.tr(),
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.badge),
-                    ),
-                    items: EmployeeRole.values.map((role) {
-                      return DropdownMenuItem(
-                        value: role,
-                        child: Text(_getRoleName(role)),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() => selectedRole = value);
-                      }
-                    },
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            TextButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final emailText = emailController.text.trim();
-                      final success = await employeeRepository.updateEmployee(
-                        previous: employee,
-                        name: nameController.text.trim(),
-                        email: emailText.isEmpty ? null : emailText,
-                        role: selectedRole,
-                      );
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'common.error'.tr();
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('common.save'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    nameController.dispose();
-    emailController.dispose();
-
-    if (!mounted) return;
-
-    if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('admin.employee_updated'.tr())),
-      );
-    }
-  }
-
-  Future<void> _rebuildEmployeeAccess() async {
-    setState(() => _isRebuildingAccess = true);
-    final count = await employeeRepository.rebuildEmployeeAccessIndex();
-    if (!mounted) return;
-    setState(() => _isRebuildingAccess = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('admin.employee_access_rebuilt'.tr(args: ['$count'])),
-      ),
-    );
-  }
+  List<Employee> _local = [];
+  late Stream<List<Employee>> _stream = employeeRepository.watchEmployees();
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
+    if (oldIndex < newIndex) newIndex -= 1;
     setState(() => _isReordering = true);
-    final employee = _localEmployees.removeAt(oldIndex);
-    _localEmployees.insert(newIndex, employee);
-    
-    await employeeRepository.reorderEmployees(_localEmployees);
-    if (mounted) {
-      setState(() => _isReordering = false);
-    }
+    final employee = _local.removeAt(oldIndex);
+    _local.insert(newIndex, employee);
+    await employeeRepository.reorderEmployees(_local);
+    if (mounted) setState(() => _isReordering = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 900;
-        final isTablet = constraints.maxWidth > 600 && constraints.maxWidth <= 900;
-
-        return StreamBuilder<List<Employee>>(
-          stream: employeeRepository.watchEmployees(),
-          builder: (context, snapshot) {
-            if (snapshot.hasData && !_isReordering) {
-              _localEmployees = List.from(snapshot.data!);
-            }
-            final employees = _localEmployees;
-
-            if (isDesktop) {
-              return _buildDesktopLayout(employees);
-            } else if (isTablet) {
-              return _buildTabletLayout(employees);
-            } else {
-              return _buildMobileLayout(employees);
-            }
-          },
+    return StreamBuilder<List<Employee>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasData && !_isReordering) {
+          _local = List.from(snapshot.data!);
+        }
+        return EmployeesView(
+          employees: _local,
+          loading: !snapshot.hasData && !snapshot.hasError,
+          errorMessage: snapshot.hasError && !snapshot.hasData
+              ? 'admin2.load_error'.tr()
+              : null,
+          onRetry: () => setState(() {
+            _stream = employeeRepository.watchEmployees();
+          }),
+          onAdd: (name, email, role) => employeeRepository.addEmployee(
+            name: name,
+            email: email,
+            role: role,
+          ),
+          onUpdate: (previous, name, email, role) =>
+              employeeRepository.updateEmployee(
+                previous: previous,
+                name: name,
+                email: email,
+                role: role,
+              ),
+          onDelete: employeeRepository.deleteEmployee,
+          onReorder: _onReorder,
+          onRebuildAccess: employeeRepository.rebuildEmployeeAccessIndex,
         );
       },
     );
-  }
-
-  Widget _buildDesktopLayout(List<Employee> employees) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 2,
-          child: _buildEmployeeList(employees, compact: false),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          flex: 1,
-          child: _buildAddForm(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabletLayout(List<Employee> employees) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildAddForm(),
-          const SizedBox(height: 24),
-          _buildEmployeeList(employees, compact: false),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout(List<Employee> employees) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildAddForm(),
-          const SizedBox(height: 16),
-          _buildEmployeeList(employees, compact: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddForm() {
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'admin.add_employee'.tr(),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: 'admin.employee_name'.tr(),
-                  hintText: 'admin.employee_name_hint'.tr(),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.person),
-                ),
-                validator: (v) =>
-                    v?.trim().isEmpty ?? true ? 'offer.field_required'.tr() : null,
-                enabled: !_isAdding,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'admin.employee_email'.tr(),
-                  hintText: 'admin.employee_email_hint'.tr(),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null; // Email is optional
-                  if (!v.contains('@')) return 'admin.employee_email_hint'.tr();
-                  return null;
-                },
-                enabled: !_isAdding,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<EmployeeRole>(
-                initialValue: _selectedRole,
-                decoration: InputDecoration(
-                  labelText: 'admin.employee_role'.tr(),
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.badge),
-                ),
-                items: EmployeeRole.values.map((role) {
-                  return DropdownMenuItem(
-                    value: role,
-                    child: Text(_getRoleName(role)),
-                  );
-                }).toList(),
-                onChanged: _isAdding ? null : (value) {
-                  if (value != null) {
-                    setState(() => _selectedRole = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _isAdding ? null : _addEmployee,
-                icon: _isAdding
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add),
-                label: Text('common.add'.tr()),
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: _isRebuildingAccess ? null : _rebuildEmployeeAccess,
-                icon: _isRebuildingAccess
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync),
-                label: Text('admin.rebuild_employee_access'.tr()),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmployeeList(List<Employee> employees, {required bool compact}) {
-    if (employees.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            'admin.employees_title'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey,
-                ),
-          ),
-        ),
-      );
-    }
-
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: employees.length,
-      onReorder: _onReorder,
-      buildDefaultDragHandles: false,
-      itemBuilder: (context, index) {
-        final employee = employees[index];
-        return Card(
-          key: ValueKey(employee.id),
-          margin: EdgeInsets.symmetric(
-            horizontal: compact ? 0 : 16,
-            vertical: 4,
-          ),
-          child: ListTile(
-            leading: ReorderableDragStartListener(
-              index: index,
-              child: const Icon(Icons.drag_handle),
-            ),
-            title: Text(employee.name),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(_getRoleName(employee.role)),
-                if (employee.email == null || employee.email!.trim().isEmpty)
-                  Text(
-                    'admin.employee_no_app_access'.tr(),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
-              ],
-            ),
-            onTap: () => _editEmployee(employee),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => _editEmployee(employee),
-                  tooltip: 'common.edit'.tr(),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _deleteEmployee(employee),
-                  tooltip: 'common.delete'.tr(),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _getRoleName(EmployeeRole role) {
-    switch (role) {
-      case EmployeeRole.leadingSupervisor:
-        return 'admin.role_leading_supervisor'.tr();
-      case EmployeeRole.supervisor:
-        return 'admin.role_supervisor'.tr();
-      case EmployeeRole.staff:
-        return 'admin.role_staff'.tr();
-    }
   }
 }

@@ -2,6 +2,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/employee.dart';
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/pressable.dart';
 
 /// Widget for assigning employees to an order with multi-select chips
 class EmployeeAssignmentWidget extends StatefulWidget {
@@ -53,6 +55,7 @@ class _EmployeeAssignmentWidgetState extends State<EmployeeAssignmentWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     return StreamBuilder<List<Employee>>(
       stream: widget.watchEmployees(),
       builder: (context, snapshot) {
@@ -64,72 +67,90 @@ class _EmployeeAssignmentWidgetState extends State<EmployeeAssignmentWidget> {
             Row(
               children: [
                 Icon(
-                  Icons.assignment_ind,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.primary,
+                  Icons.assignment_ind_outlined,
+                  size: AppSize.metaIcon,
+                  color: p.textSecondary,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'orders.assigned_employees'.tr(),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                const SizedBox(width: AppSpace.s8),
+                Expanded(
+                  child: Text(
+                    'orders.assigned_employees'.tr(),
+                    style: AppText.section.copyWith(color: p.text),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s8),
             if (employees.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'orders.no_employees_assigned'.tr(),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                ),
+              Text(
+                'orders.no_employees_assigned'.tr(),
+                style: AppText.body.copyWith(color: p.textSecondary),
               )
             else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final isSmall = constraints.maxWidth < 400;
-                  return Wrap(
-                    spacing: isSmall ? 6 : 8,
-                    runSpacing: isSmall ? 6 : 8,
-                    children: employees.map((employee) {
-                      final isSelected = _selectedIds.contains(employee.name);
-                      return FilterChip(
-                        selected: isSelected,
-                        label: Text(
-                          employee.name,
-                          style: TextStyle(fontSize: isSmall ? 12 : 14),
-                        ),
-                        avatar: CircleAvatar(
-                          backgroundColor: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey,
-                          child: Text(
-                            employee.name.isNotEmpty
-                                ? employee.name[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: isSmall ? 10 : 12,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        onSelected: (_) => _toggleEmployee(employee.name),
-                        selectedColor: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer,
-                        checkmarkColor: Theme.of(context).colorScheme.primary,
-                      );
-                    }).toList(),
-                  );
-                },
+              Wrap(
+                spacing: AppSpace.s8,
+                runSpacing: AppSpace.s4,
+                children: [
+                  for (final employee in employees)
+                    _EmployeeChip(
+                      name: employee.name,
+                      selected: _selectedIds.contains(employee.name),
+                      onTap: () => _toggleEmployee(employee.name),
+                    ),
+                ],
               ),
           ],
         );
       },
+    );
+  }
+}
+
+class _EmployeeChip extends StatelessWidget {
+  const _EmployeeChip({
+    required this.name,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Pressable(
+      minSize: AppSize.minTap,
+      radius: AppRadius.pill,
+      selected: selected,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSize.minTap),
+        child: Center(
+          widthFactor: 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: selected ? p.primary : p.card,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: selected ? p.primary : p.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpace.s12,
+                vertical: AppSpace.s8,
+              ),
+              child: Text(
+                name,
+                style: AppText.body.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: selected ? p.onPrimary : p.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

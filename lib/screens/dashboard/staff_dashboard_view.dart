@@ -114,7 +114,7 @@ class StaffDashboardView extends StatelessWidget {
                     child: _Stat(
                       value: counts.accepted,
                       label: 'dashboard.stat_accepted'.tr(),
-                      onTap: () => context.push('/orders?status=accepted'),
+                      onTap: () => context.go('/orders?status=accepted'),
                     ),
                   ),
                   const SizedBox(width: AppSpace.s8),
@@ -166,13 +166,13 @@ class StaffDashboardView extends StatelessWidget {
                 subtitle: 'dashboard.offers_count'.tr(
                   args: [counts.openOffers.toString()],
                 ),
-                onTap: () => context.push('/orders?status=quote'),
+                onTap: () => context.go('/orders?status=quote'),
               ),
               _Action(
                 icon: Icons.list_alt,
                 title: 'dashboard.action_all_orders'.tr(),
                 subtitle: 'dashboard.action_all_orders_subtitle'.tr(),
-                onTap: () => context.push('/orders'),
+                onTap: () => context.go('/orders'),
               ),
               if (isAdmin)
                 _Action(

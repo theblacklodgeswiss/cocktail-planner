@@ -15,7 +15,8 @@ import '../../../state/app_state.dart';
 import '../../../widgets/cocktail_popularity_dialog.dart';
 import '../../../widgets/gemini_material_review_dialog.dart';
 import '../../../widgets/order_setup_dialog.dart';
-import 'dialogs.dart';
+import '../../../ui/tokens.dart';
+import 'sheets.dart';
 import 'order_detail_controller.dart';
 
 /// Shopping-list handlers of the order detail sheet: edit, PDF exports,
@@ -116,7 +117,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         update(() => isEditingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+          SnackBar(content: Text('order_detail.load_error'.tr(args: ['$e']))),
         );
       }
     }
@@ -144,8 +145,8 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Fehler beim Erstellen der PDF: $e'),
-            backgroundColor: Colors.red,
+            content: Text('order_detail.pdf_error'.tr(args: ['$e'])),
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }
@@ -169,8 +170,8 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Fehler beim Erstellen der PDF: $e'),
-            backgroundColor: Colors.red,
+            content: Text('order_detail.pdf_error'.tr(args: ['$e'])),
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }
@@ -196,7 +197,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         update(() => isOpeningShoppingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+          SnackBar(content: Text('order_detail.load_error'.tr(args: ['$e']))),
         );
       }
       return;
@@ -269,7 +270,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
     var resetExistingShoppingList = false;
 
     if (order.hasShoppingList) {
-      final confirmedReset = await showClaudeResetConfirmDialog(context);
+      final confirmedReset = await showClaudeResetConfirmSheet(context);
 
       if (confirmedReset != true) {
         update(() => isGeneratingList = false);
@@ -315,7 +316,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         update(() => isGeneratingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+          SnackBar(content: Text('order_detail.load_error'.tr(args: ['$e']))),
         );
       }
       return;
@@ -411,7 +412,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
               content: Text(
                 suggestion.errorMessage ?? 'orders.claude_error'.tr(),
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: AppPalette.of(context).error,
               duration: const Duration(seconds: 6),
             ),
           );
@@ -458,7 +459,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('orders.claude_error'.tr()),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }

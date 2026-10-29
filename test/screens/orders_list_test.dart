@@ -192,9 +192,9 @@ void main() {
     ) async {
       phone(tester);
       await pumpApp(tester, app(overview(orders: sample)));
-      // Large title, collapsed title and the tab label.
+      // Large and collapsed title; the bar belongs to the staff shell.
       expect(find.text('Aufträge'), findsWidgets);
-      expect(find.byType(StaffTabBar), findsOneWidget);
+      expect(find.byType(StaffTabBar), findsNothing);
       // No back arrow on the staff home / tab navigation.
       expect(find.bySemanticsLabel('Zurück'), findsNothing);
       expect(find.text('Alle 6'), findsOneWidget);

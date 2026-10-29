@@ -12,6 +12,9 @@ import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../services/speech_input.dart';
 import '../../services/voice_inventory_parser.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/app_sheet.dart';
+import '../../ui/widgets/buttons.dart';
 import 'location_prompt_dialog.dart';
 import 'rest_lines.dart';
 
@@ -22,12 +25,11 @@ Future<bool> showRestEntrySheet(
   required SavedOrder order,
 }) async {
   if (!authService.isEmployeeOrHigher) return false;
-  final saved = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    isDismissible: false,
-    enableDrag: false,
+  // Full-screen sheet. Closing it by drag or tap outside runs through the
+  // sheet's PopScope, i.e. the same path as "Überspringen".
+  final saved = await showAppSheet<bool>(
+    context,
+    full: true,
     builder: (_) => _RestEntrySheet(order: order),
   );
   return saved == true;
@@ -349,30 +351,38 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
         if (didPop || _saving) return;
         _skip();
       },
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Scaffold(
-          appBar: AppBar(
-            automaticallyImplyLeading: false,
-            title: Text('rest.title'.tr()),
-            actions: [
-              TextButton(
+      // The sheet lifts itself above the keyboard.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'rest.title'.tr(),
+                    style: AppText.heroTitle.copyWith(
+                      color: AppPalette.of(context).text,
+                    ),
+                  ),
+                ),
+              ),
+              TextAction(
+                label: 'rest.skip'.tr(),
                 onPressed: _saving ? null : _skip,
-                child: Text('rest.skip'.tr()),
               ),
             ],
           ),
-          body: _confirming ? _buildConfirm() : _buildInput(),
-        ),
+          Expanded(child: _confirming ? _buildConfirm() : _buildInput()),
+        ],
       ),
     );
   }
 
   Widget _buildInput() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
       children: [
         Text('rest.intro'.tr()),
         const SizedBox(height: 16),
@@ -434,7 +444,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
             children: [
               // Fragments without number or name are dropped by the parser,
               // so the raw text stays visible to reveal anything missing.
@@ -478,7 +488,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
         ),
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(top: AppSpace.s12),
             child: Row(
               children: [
                 TextButton(

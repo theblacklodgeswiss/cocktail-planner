@@ -116,3 +116,59 @@ Set<OrderDetailAction> availableActions(
   if (isSuperAdmin) actions.add(OrderDetailAction.delete);
   return actions;
 }
+
+/// The one prominent action of the sheet for [status], taken from
+/// [actions] (null: none).
+///
+/// - quote: "Angebot vervollständigen" while the offer is incomplete,
+///   otherwise "Annehmen";
+/// - accepted: "Abschließen";
+/// - completed: "Rest erfassen" while the leftovers are open (staff);
+/// - declined: none (reopening lives in the menu).
+OrderDetailAction? primaryAction(
+  OrderStatus status,
+  Set<OrderDetailAction> actions,
+) {
+  if (actions.contains(OrderDetailAction.completeOffer)) {
+    return OrderDetailAction.completeOffer;
+  }
+  switch (status) {
+    case OrderStatus.quote:
+      return actions.contains(OrderDetailAction.accept)
+          ? OrderDetailAction.accept
+          : null;
+    case OrderStatus.accepted:
+      return actions.contains(OrderDetailAction.complete)
+          ? OrderDetailAction.complete
+          : null;
+    case OrderStatus.completed:
+      return actions.contains(OrderDetailAction.recordRest)
+          ? OrderDetailAction.recordRest
+          : null;
+    case OrderStatus.declined:
+      return null;
+  }
+}
+
+/// The further actions shown in the "..." menu, in display order: everything
+/// except the [primaryAction] and the inline decline-reason edit. Delete
+/// (super admin only) is always last.
+List<OrderDetailAction> menuActions(
+  OrderStatus status,
+  Set<OrderDetailAction> actions,
+) {
+  const order = [
+    OrderDetailAction.finalizeOffer,
+    OrderDetailAction.invoice,
+    OrderDetailAction.accept,
+    OrderDetailAction.backToAccepted,
+    OrderDetailAction.backToQuote,
+    OrderDetailAction.decline,
+    OrderDetailAction.delete,
+  ];
+  final primary = primaryAction(status, actions);
+  return [
+    for (final a in order)
+      if (actions.contains(a) && a != primary) a,
+  ];
+}

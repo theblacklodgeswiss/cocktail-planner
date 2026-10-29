@@ -5,15 +5,14 @@ import 'package:image_picker/image_picker.dart';
 import '../../data/additional_service_repository.dart';
 import '../../models/additional_service.dart';
 import '../../services/cloudinary_uploader.dart';
+import 'services_view.dart';
 
-/// Tab for managing the additional-services catalog (add/edit/delete
-/// services and their variants), with responsive design mirroring
-/// `employees_tab.dart`.
+/// Data wrapper of the additional-services page (stream + repository writes).
 ///
 /// Image handling: an admin uploads an image from their device via
 /// Cloudinary's unsigned-upload API (`CloudinaryUploader`) - no Firebase
 /// Storage needed, no secret key in this app. There is deliberately no
-/// manual URL-paste field anymore; upload is the only path.
+/// manual URL-paste field; upload is the only path.
 class ServicesTab extends StatefulWidget {
   const ServicesTab({super.key});
 
@@ -21,51 +20,18 @@ class ServicesTab extends StatefulWidget {
   State<ServicesTab> createState() => _ServicesTabState();
 }
 
-/// Mutable draft of a [ServiceVariant] used while editing in the add/edit
-/// dialog, before it is converted back to an immutable [ServiceVariant].
-class _VariantDraft {
-  _VariantDraft({String? id, String name = '', double? price})
-      : id = id ?? UniqueKey().toString(),
-        nameController = TextEditingController(text: name),
-        priceController = TextEditingController(
-          text: price != null ? price.toStringAsFixed(2) : '',
-        );
-
-  final String id;
-  final TextEditingController nameController;
-  final TextEditingController priceController;
-
-  ServiceVariant toVariant() {
-    final priceText = priceController.text.trim();
-    return ServiceVariant(
-      id: id,
-      name: nameController.text.trim(),
-      price: priceText.isEmpty ? null : double.tryParse(priceText.replaceAll(',', '.')),
-    );
-  }
-
-  void dispose() {
-    nameController.dispose();
-    priceController.dispose();
-  }
-}
-
 class _ServicesTabState extends State<ServicesTab> {
-  final _nameController = TextEditingController();
-  final _imageUrlController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isAdding = false;
   bool _isReordering = false;
-  bool _isUploadingImage = false;
-  bool _isImportingLegacy = false;
+  List<AdditionalService> _local = [];
+  late Stream<List<AdditionalService>> _stream =
+      additionalServiceRepository.watchServices();
 
-  /// The 10 services that used to be hardcoded flat button IDs (see
+  /// The services that used to be hardcoded flat button IDs (see
   /// `lib/utils/order_option_labels.dart`'s `_additionalServiceLabelsDe`),
   /// grouped into services with variants where the legacy list had more
   /// than one price point for the same real-world offering (PhotoBox).
   /// `other_services` ("Sonstiges") is deliberately excluded - it stays a
-  /// plain flag on the order form, not a catalog entry (see the design
-  /// spec's section 5).
+  /// plain flag on the order form, not a catalog entry.
   static final List<(String, List<(String, double?)>)> _legacyServices = [
     ('BlackLodge - 360 Booth', [('Standard', 600.0)]),
     (
@@ -81,25 +47,21 @@ class _ServicesTabState extends State<ServicesTab> {
     ('Entry Song mit Geige - Praveen', [('Standard', 300.0)]),
   ];
 
-  /// True once every legacy service name already exists in the catalog -
-  /// used to hide the import button once it has done its job, rather than
-  /// a one-time flag, so it stays hidden even after a reload and reappears
-  /// correctly if a legacy-named service is ever deleted again.
-  bool get _allLegacyServicesImported => _legacyServices.every(
-        (entry) => _localServices.any((s) => s.name == entry.$1),
-      );
+  /// True once every legacy service name already exists in the catalog.
+  bool get _allLegacyImported => _legacyServices.every(
+    (entry) => _local.any((s) => s.name == entry.$1),
+  );
 
   /// One-off migration: adds any of `_legacyServices` not already present
-  /// in the catalog (matched by name, so it's safe to run more than once).
-  Future<void> _importLegacyServices() async {
-    setState(() => _isImportingLegacy = true);
-    final existingNames = _localServices.map((s) => s.name).toSet();
-    var importedCount = 0;
-    for (final (name, variantSpecs) in _legacyServices) {
-      if (existingNames.contains(name)) continue;
+  /// (matched by name, so it is safe to run more than once).
+  Future<int> _importLegacy() async {
+    final existing = _local.map((s) => s.name).toSet();
+    var imported = 0;
+    for (final (name, specs) in _legacyServices) {
+      if (existing.contains(name)) continue;
       final success = await additionalServiceRepository.addService(
         name: name,
-        variants: variantSpecs
+        variants: specs
             .map(
               (spec) => ServiceVariant(
                 id: UniqueKey().toString(),
@@ -109,642 +71,69 @@ class _ServicesTabState extends State<ServicesTab> {
             )
             .toList(),
       );
-      if (success) importedCount++;
+      if (success) imported++;
     }
-    setState(() => _isImportingLegacy = false);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'admin.service_legacy_imported'.tr(args: ['$importedCount']),
-        ),
-      ),
-    );
-  }
-  List<_VariantDraft> _addVariantDrafts = [];
-  List<AdditionalService> _localServices = [];
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _imageUrlController.dispose();
-    for (final draft in _addVariantDrafts) {
-      draft.dispose();
-    }
-    super.dispose();
+    return imported;
   }
 
-  /// Picks an image from the admin's device and uploads it to Cloudinary,
-  /// setting [controller]'s text to the resulting URL on success.
-  ///
-  /// [setFormState] must rebuild whichever widget subtree is showing the
-  /// upload button: the outer `setState` for the inline add-form, or the
-  /// edit dialog's own `setDialogState` (a `StatefulBuilder` opened via
-  /// `showDialog` is a separate subtree from this State, so this State's
-  /// own `setState` would not repaint the dialog's spinner/disabled state).
-  Future<void> _pickAndUploadImage(
-    TextEditingController controller,
-    void Function(void Function()) setFormState,
-  ) async {
+  /// Picks an image from the device and uploads it to Cloudinary; null when
+  /// cancelled or failed (then a snackbar explains).
+  Future<String?> _pickImage() async {
+    final messenger = ScaffoldMessenger.of(context);
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null) return;
-
-    setFormState(() => _isUploadingImage = true);
+    if (picked == null) return null;
     final bytes = await picked.readAsBytes();
     final url = await cloudinaryUploader.uploadImage(bytes, picked.name);
-    setFormState(() => _isUploadingImage = false);
-
-    if (!mounted) return;
-
-    if (url != null) {
-      controller.text = url;
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (url == null) {
+      messenger.showSnackBar(
         SnackBar(content: Text('admin.service_image_upload_failed'.tr())),
       );
     }
-  }
-
-  Future<void> _addService() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isAdding = true);
-    final imageUrl = _imageUrlController.text.trim();
-    final variants = _addVariantDrafts
-        .map((d) => d.toVariant())
-        .where((v) => v.name.isNotEmpty)
-        .toList();
-    final success = await additionalServiceRepository.addService(
-      name: _nameController.text.trim(),
-      imageUrl: imageUrl.isEmpty ? null : imageUrl,
-      variants: variants,
-    );
-    setState(() => _isAdding = false);
-
-    if (!mounted) return;
-
-    if (success) {
-      _nameController.clear();
-      _imageUrlController.clear();
-      setState(() {
-        for (final draft in _addVariantDrafts) {
-          draft.dispose();
-        }
-        _addVariantDrafts = [];
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('admin.service_added'.tr())),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('common.add_error'.tr())),
-      );
-    }
-  }
-
-  void _addVariantDraftRow() {
-    setState(() => _addVariantDrafts.add(_VariantDraft()));
-  }
-
-  void _removeVariantDraftRow(_VariantDraft draft) {
-    setState(() {
-      _addVariantDrafts.remove(draft);
-      draft.dispose();
-    });
-  }
-
-  Future<void> _deleteService(AdditionalService service) async {
-    bool saving = false;
-    String? error;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('admin.delete_service_confirm_title'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'admin.delete_service_confirm_message'.tr(
-                  namedArgs: {'name': service.name},
-                ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            TextButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final success =
-                          await additionalServiceRepository.deleteService(
-                        service.id,
-                      );
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'common.error'.tr();
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('common.delete'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirm == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('admin.service_deleted'.tr())),
-      );
-    }
-  }
-
-  Future<void> _editService(AdditionalService service) async {
-    final nameController = TextEditingController(text: service.name);
-    final imageUrlController = TextEditingController(
-      text: service.imageUrl ?? '',
-    );
-    final drafts = service.variants
-        .map(
-          (v) => _VariantDraft(id: v.id, name: v.name, price: v.price),
-        )
-        .toList();
-    final formKey = GlobalKey<FormState>();
-    var saving = false;
-    String? error;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text('admin.edit_service'.tr()),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildServiceForm(
-                    nameController: nameController,
-                    imageUrlController: imageUrlController,
-                    drafts: drafts,
-                    onAddVariant: () =>
-                        setDialogState(() => drafts.add(_VariantDraft())),
-                    onRemoveVariant: (draft) => setDialogState(() {
-                      drafts.remove(draft);
-                      draft.dispose();
-                    }),
-                    setFormState: setDialogState,
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: Text('common.cancel'.tr()),
-            ),
-            TextButton(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final imageUrl = imageUrlController.text.trim();
-                      final variants = drafts
-                          .map((d) => d.toVariant())
-                          .where((v) => v.name.isNotEmpty)
-                          .toList();
-                      final success =
-                          await additionalServiceRepository.updateService(
-                        id: service.id,
-                        name: nameController.text.trim(),
-                        imageUrl: imageUrl.isEmpty ? null : imageUrl,
-                        variants: variants,
-                      );
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'common.error'.tr();
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text('common.save'.tr()),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    for (final draft in drafts) {
-      draft.dispose();
-    }
-    nameController.dispose();
-    imageUrlController.dispose();
-
-    if (!mounted) return;
-
-    if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('admin.service_updated'.tr())),
-      );
-    }
+    return url;
   }
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
+    if (oldIndex < newIndex) newIndex -= 1;
     setState(() => _isReordering = true);
-    final service = _localServices.removeAt(oldIndex);
-    _localServices.insert(newIndex, service);
-
-    await additionalServiceRepository.reorderServices(_localServices);
-    if (mounted) {
-      setState(() => _isReordering = false);
-    }
+    final service = _local.removeAt(oldIndex);
+    _local.insert(newIndex, service);
+    await additionalServiceRepository.reorderServices(_local);
+    if (mounted) setState(() => _isReordering = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth > 900;
-        final isTablet =
-            constraints.maxWidth > 600 && constraints.maxWidth <= 900;
-
-        return StreamBuilder<List<AdditionalService>>(
-          stream: additionalServiceRepository.watchServices(),
-          builder: (context, snapshot) {
-            if (snapshot.hasData && !_isReordering) {
-              _localServices = List.from(snapshot.data!);
-            }
-            final services = _localServices;
-
-            if (isDesktop) {
-              return _buildDesktopLayout(services);
-            } else if (isTablet) {
-              return _buildTabletLayout(services);
-            } else {
-              return _buildMobileLayout(services);
-            }
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildDesktopLayout(List<AdditionalService> services) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 2,
-          child: _buildServiceList(services, compact: false),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          flex: 1,
-          child: _buildAddForm(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabletLayout(List<AdditionalService> services) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildAddForm(),
-          const SizedBox(height: 24),
-          _buildServiceList(services, compact: false),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout(List<AdditionalService> services) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildAddForm(),
-          const SizedBox(height: 16),
-          _buildServiceList(services, compact: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServiceForm({
-    required TextEditingController nameController,
-    required TextEditingController imageUrlController,
-    required List<_VariantDraft> drafts,
-    required VoidCallback onAddVariant,
-    required void Function(_VariantDraft draft) onRemoveVariant,
-    required void Function(void Function()) setFormState,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextFormField(
-          controller: nameController,
-          decoration: InputDecoration(
-            labelText: 'admin.service_name'.tr(),
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.local_offer),
+    return StreamBuilder<List<AdditionalService>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasData && !_isReordering) {
+          _local = List.from(snapshot.data!);
+        }
+        return ServicesView(
+          services: _local,
+          loading: !snapshot.hasData && !snapshot.hasError,
+          errorMessage: snapshot.hasError && !snapshot.hasData
+              ? 'admin2.load_error'.tr()
+              : null,
+          onRetry: () => setState(() {
+            _stream = additionalServiceRepository.watchServices();
+          }),
+          onAdd: (r) => additionalServiceRepository.addService(
+            name: r.name,
+            imageUrl: r.imageUrl,
+            variants: r.variants,
           ),
-          validator: (v) =>
-              v?.trim().isEmpty ?? true ? 'offer.field_required'.tr() : null,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: _isUploadingImage
-                  ? null
-                  : () => _pickAndUploadImage(imageUrlController, setFormState),
-              icon: _isUploadingImage
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.upload),
-              label: Text('admin.service_image_upload'.tr()),
-            ),
-            const SizedBox(width: 12),
-            if (imageUrlController.text.trim().isNotEmpty) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.network(
-                  imageUrlController.text.trim(),
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.broken_image_outlined),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                tooltip: 'admin.service_image_remove'.tr(),
-                onPressed: () =>
-                    setFormState(() => imageUrlController.clear()),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 24),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'admin.service_variants'.tr(),
-            style: Theme.of(context).textTheme.titleSmall,
+          onUpdate: (id, r) => additionalServiceRepository.updateService(
+            id: id,
+            name: r.name,
+            imageUrl: r.imageUrl,
+            variants: r.variants,
           ),
-        ),
-        const SizedBox(height: 8),
-        for (final draft in drafts) _buildVariantRow(draft, onRemoveVariant),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: onAddVariant,
-            icon: const Icon(Icons.add),
-            label: Text('admin.add_variant'.tr()),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVariantRow(
-    _VariantDraft draft,
-    void Function(_VariantDraft draft) onRemove,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: draft.nameController,
-              decoration: InputDecoration(
-                labelText: 'admin.variant_name'.tr(),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: draft.priceController,
-              decoration: InputDecoration(
-                labelText: 'admin.variant_price'.tr(),
-                hintText: 'admin.variant_price_hint'.tr(),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => onRemove(draft),
-            tooltip: 'common.delete'.tr(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddForm() {
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'admin.add_service'.tr(),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              if (!_allLegacyServicesImported) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed:
-                        _isImportingLegacy ? null : _importLegacyServices,
-                    icon: _isImportingLegacy
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download),
-                    label: Text('admin.service_import_legacy'.tr()),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              _buildServiceForm(
-                nameController: _nameController,
-                imageUrlController: _imageUrlController,
-                drafts: _addVariantDrafts,
-                onAddVariant: _addVariantDraftRow,
-                onRemoveVariant: _removeVariantDraftRow,
-                setFormState: setState,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _isAdding ? null : _addService,
-                icon: _isAdding
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add),
-                label: Text('common.add'.tr()),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildServiceList(
-    List<AdditionalService> services, {
-    required bool compact,
-  }) {
-    if (services.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            'admin.services_empty'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey,
-                ),
-          ),
-        ),
-      );
-    }
-
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: services.length,
-      onReorder: _onReorder,
-      buildDefaultDragHandles: false,
-      itemBuilder: (context, index) {
-        final service = services[index];
-        return Card(
-          key: ValueKey(service.id),
-          margin: EdgeInsets.symmetric(
-            horizontal: compact ? 0 : 16,
-            vertical: 4,
-          ),
-          child: ListTile(
-            leading: ReorderableDragStartListener(
-              index: index,
-              child: const Icon(Icons.drag_handle),
-            ),
-            title: Text(service.name),
-            subtitle: Text(
-              'admin.service_variant_count'.tr(
-                namedArgs: {'count': '${service.variants.length}'},
-              ),
-            ),
-            onTap: () => _editService(service),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (service.imageUrl != null &&
-                    service.imageUrl!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.network(
-                        service.imageUrl!,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.broken_image, size: 40),
-                      ),
-                    ),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => _editService(service),
-                  tooltip: 'common.edit'.tr(),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _deleteService(service),
-                  tooltip: 'common.delete'.tr(),
-                ),
-              ],
-            ),
-          ),
+          onDelete: (s) => additionalServiceRepository.deleteService(s.id),
+          onReorder: _onReorder,
+          onPickImage: _pickImage,
+          showImportLegacy: snapshot.hasData && !_allLegacyImported,
+          onImportLegacy: _importLegacy,
         );
       },
     );
