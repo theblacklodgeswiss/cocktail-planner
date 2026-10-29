@@ -14,10 +14,10 @@ class FirestoreService {
   /// reflects the real result, so the local fallback semantics are unchanged.
   bool get isAvailable => _available || _checkPending;
 
-  /// Completes with the connection test result (null-safe: completes with
-  /// `false` if no background check was started and nothing is known yet).
-  Future<bool> get availabilityKnown =>
-      _backgroundCheck ?? Future.value(_available);
+  /// Completes with the connection test result, starting the (single) test if
+  /// nobody has yet. Use instead of [initialize] where the screen only needs
+  /// the flag to be known, so no extra test query is issued.
+  Future<bool> get availabilityKnown => startBackgroundCheck();
 
   /// Starts the connection test without blocking the caller. Idempotent.
   Future<bool> startBackgroundCheck() {

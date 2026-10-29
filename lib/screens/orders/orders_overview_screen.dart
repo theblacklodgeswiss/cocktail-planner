@@ -41,7 +41,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
     if (firestoreService.isAvailable) _subscribe();
     // Ensure Firestore is initialized (screen can be reached directly
     // without going through the dashboard).
-    firestoreService.initialize().then((_) {
+    firestoreService.availabilityKnown.then((_) {
       if (mounted) setState(_subscribe);
     });
   }

@@ -26,7 +26,7 @@ class _OrdersYearOverviewScreenState extends State<OrdersYearOverviewScreen> {
   void initState() {
     super.initState();
     if (firestoreService.isAvailable) _subscribe();
-    firestoreService.initialize().then((_) {
+    firestoreService.availabilityKnown.then((_) {
       if (mounted) setState(_subscribe);
     });
   }
