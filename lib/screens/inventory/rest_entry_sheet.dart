@@ -65,6 +65,7 @@ typedef BookMovement =
       required double delta,
       required String reason,
       String? orderId,
+      String? movementId,
     });
 
 typedef SetStockQuantity =
@@ -101,6 +102,7 @@ Future<void> _defaultApplyMovement({
   required double delta,
   required String reason,
   String? orderId,
+  String? movementId,
 }) => stockRepository.applyMovement(
   materialId: materialId,
   materialName: materialName,
@@ -109,6 +111,7 @@ Future<void> _defaultApplyMovement({
   delta: delta,
   reason: reason,
   orderId: orderId,
+  movementId: movementId,
 );
 
 Future<void> _defaultSetQuantity({
@@ -168,14 +171,6 @@ class RestEntryServices {
 String _formatQuantity(double q) {
   final text = q == q.truncateToDouble() ? q.toInt().toString() : q.toString();
   return text.replaceAll('.', ',');
-}
-
-double? _parseQuantity(String text) {
-  final value = double.tryParse(text.trim().replaceAll(',', '.'));
-  if (value == null || value.isNaN || value.isInfinite || value <= 0) {
-    return null;
-  }
-  return value;
 }
 
 /// The capture flow: voice or text input, then a confirmation view of the
@@ -459,10 +454,32 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     });
   }
 
-  bool get _canSave =>
-      !_saving &&
-      _lines.isNotEmpty &&
-      _lines.every((l) => l.chosenMaterialId != null && l.quantity > 0);
+  CaptureMode get _effectiveMode =>
+      _counting ? CaptureMode.count : CaptureMode.add;
+
+  /// Count plans of the unbooked lines against the stock snapshot.
+  Map<RestLine, CountPlan> _countPlans() {
+    final duplicates = countDuplicates(_lines);
+    return {
+      for (final l in _lines)
+        if (l.chosenMaterialId != null)
+          l: planCountFor(l, _stock, duplicate: duplicates.contains(l)),
+    };
+  }
+
+  bool get _canSave {
+    if (_saving || _lines.isEmpty) return false;
+    final mode = _effectiveMode;
+    if (!_lines.every(
+      (l) =>
+          l.chosenMaterialId != null && isValidLineQuantity(l.quantity, mode),
+    )) {
+      return false;
+    }
+    if (!_counting) return true;
+    final plans = _countPlans();
+    return _lines.every((l) => _booked.contains(l) || plans[l]!.valid);
+  }
 
   String _nameOf(RestLine line) =>
       line.chosenMaterialName ?? line.parsed.spokenName;
@@ -479,29 +496,28 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
         delta: line.quantity,
         reason: widget.standalone ? 'manual' : 'rest',
         orderId: widget.orderId,
+        // Standalone: a retry after a commit whose answer got lost is a no-op.
+        movementId: widget.standalone ? manualMovementId(line) : null,
       );
       _booked.add(line);
     }
   }
 
-  /// Sets each counted entry once to the sum of its lines ("Zählung").
+  /// "Zählung": per line the planned corrections (changed origins only).
   Future<void> _bookCounts() async {
-    final targets = countTargets(_lines);
-    for (final key in targets.keys) {
-      final lines = [
-        for (final l in _lines)
-          if (restLineKey(l) == key) l,
-      ];
-      if (lines.every(_booked.contains)) continue;
-      final first = lines.first;
-      await _services.setQuantity(
-        materialId: first.chosenMaterialId!,
-        materialName: _nameOf(first),
-        locationId: first.location.id,
-        origin: first.origin,
-        quantity: targets[key]!,
-      );
-      _booked.addAll(lines);
+    final plans = _countPlans();
+    for (final line in _lines) {
+      if (_booked.contains(line)) continue;
+      for (final (origin, quantity) in plans[line]!.writes) {
+        await _services.setQuantity(
+          materialId: line.chosenMaterialId!,
+          materialName: _nameOf(line),
+          locationId: line.location.id,
+          origin: origin,
+          quantity: quantity,
+        );
+      }
+      _booked.add(line);
     }
   }
 
@@ -630,11 +646,13 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
             border: const OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: AppSpace.s4),
-        Text(
-          'inventory_list.capture_example'.tr(),
-          style: AppText.caption.copyWith(color: p.textSecondary),
-        ),
+        if (standalone) ...[
+          const SizedBox(height: AppSpace.s4),
+          Text(
+            'inventory_list.capture_example'.tr(),
+            style: AppText.caption.copyWith(color: p.textSecondary),
+          ),
+        ],
         const SizedBox(height: AppSpace.s12),
         SizedBox(
           width: double.infinity,
@@ -678,7 +696,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
   }
 
   Widget _buildConfirm() {
-    final targets = _counting ? countTargets(_lines) : const <String, double>{};
+    final plans = _counting ? _countPlans() : const <RestLine, CountPlan>{};
     return Column(
       children: [
         Expanded(
@@ -715,7 +733,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
               ],
               const SizedBox(height: AppSpace.s12),
               if (_lines.isEmpty) Text('rest.no_lines'.tr()),
-              for (final line in _lines) _buildLine(line, targets),
+              for (final line in _lines) _buildLine(line, plans),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
@@ -765,10 +783,10 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     );
   }
 
-  Widget _buildLine(RestLine line, Map<String, double> targets) {
+  Widget _buildLine(RestLine line, Map<RestLine, CountPlan> plans) {
     final booked = _booked.contains(line);
     final unresolvedMaterial = line.chosenMaterialId == null;
-    final key = restLineKey(line);
+    final plan = plans[line];
     final isAdmin = _services.isAdmin();
     return Card(
       key: ObjectKey(line),
@@ -793,8 +811,11 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                       isDense: true,
                       border: const OutlineInputBorder(),
                     ),
-                    onChanged: (v) =>
-                        setState(() => line.quantity = _parseQuantity(v) ?? 0),
+                    // Invalid input is kept as -1 (shown as an error).
+                    onChanged: (v) => setState(
+                      () => line.quantity =
+                          parseQuantity(v, allowZero: true) ?? -1,
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpace.s12),
@@ -819,29 +840,20 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                 ),
               ],
             ),
-            if (line.quantity <= 0)
+            if (!isValidLineQuantity(line.quantity, _effectiveMode))
               Text(
-                'rest.quantity_invalid'.tr(),
+                _counting
+                    ? 'inventory.quantity_invalid'.tr()
+                    : 'rest.quantity_invalid'.tr(),
                 style: AppText.body.copyWith(
                   color: Theme.of(context).colorScheme.error,
                 ),
               ),
-            // "Zählung": the stock before and after, e.g. "Bestand 3 → 2".
-            if (_counting && key != null)
+            // "Zählung": total and per origin, before and after.
+            if (plan != null && line.quantity >= 0)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpace.s4),
-                child: Text(
-                  'inventory_list.count_change'.tr(
-                    namedArgs: {
-                      'old': formatQuantity(currentQuantityFor(line, _stock)),
-                      'new': formatQuantity(targets[key] ?? line.quantity),
-                    },
-                  ),
-                  style: AppText.body.copyWith(
-                    color: AppPalette.of(context).text,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: _CountChange(plan: plan),
               ),
             if (unresolvedMaterial && !booked) ...[
               const SizedBox(height: AppSpace.s8),
@@ -861,14 +873,14 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                       }),
                     ),
                   ActionChip(
-                    avatar: const Icon(Icons.search, size: AppSpace.s16),
+                    avatar: const Icon(Icons.search, size: AppSize.chipIcon),
                     label: Text('rest.pick_other'.tr()),
                     onPressed: () => _pickAnyItem(line),
                   ),
                   // /materials is writable by admins only.
                   if (isAdmin)
                     ActionChip(
-                      avatar: const Icon(Icons.add, size: AppSpace.s16),
+                      avatar: const Icon(Icons.add, size: AppSize.chipIcon),
                       label: Text('rest.create_item'.tr()),
                       onPressed: () => _createItem(line),
                     ),
@@ -933,7 +945,10 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                     ],
                     onChanged: booked || _saving
                         ? null
-                        : (o) => setState(() => line.origin = o ?? line.origin),
+                        : (o) => setState(() {
+                            line.origin = o ?? line.origin;
+                            line.originExplicit = true;
+                          }),
                   ),
                 ),
               ],
@@ -959,6 +974,53 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Gesamt 5 → 6 · Auftrag 3 → 4 · Investition 2 → 2", or the reason the
+/// count line cannot be saved.
+class _CountChange extends StatelessWidget {
+  const _CountChange({required this.plan});
+
+  final CountPlan plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    final problem = plan.problem;
+    if (problem != null) {
+      return Text(switch (problem) {
+        CountProblem.belowInvestment =>
+          'inventory_list.count_below_investment'.tr(),
+        CountProblem.duplicate => 'inventory_list.count_duplicate'.tr(),
+      }, style: AppText.body.copyWith(color: p.error));
+    }
+    String change(String key, double old, double next, [String? origin]) =>
+        key.tr(
+          namedArgs: {
+            'old': formatQuantity(old),
+            'new': formatQuantity(next),
+            'origin': ?origin,
+          },
+        );
+    return Text(
+      [
+        change('inventory_list.count_change', plan.oldTotal, plan.newTotal),
+        change(
+          'inventory_list.count_origin_change',
+          plan.oldOrder,
+          plan.newOrder,
+          'rest.origin_order'.tr(),
+        ),
+        change(
+          'inventory_list.count_origin_change',
+          plan.oldInvestment,
+          plan.newInvestment,
+          'rest.origin_investment'.tr(),
+        ),
+      ].join(' · '),
+      style: AppText.body.copyWith(color: p.text, fontWeight: FontWeight.w600),
     );
   }
 }

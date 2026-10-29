@@ -929,11 +929,11 @@
     "mode_add": "Add (incoming)",
     "mode_count": "Count (set stock)",
     "capture_intro_add": "What is coming in? Speak or type it.",
-    "capture_intro_count": "What did you count? The counted quantities replace the current stock at the location.",
+    "capture_intro_count": "Count: the counted quantity at the location; the investment stock is kept. Say “Investition” or “Auftrag” to set exactly that stock.",
     "capture_example": "e.g. “2 Bacardi, 6 orange juice, at Mario 3 Sprite”",
     "capture_text_label": "Stock",
-    "count_hint": "Count: the quantities replace the stock at the location.",
-    "count_change": "Stock {old} → {new}",
+    "count_hint": "Count: the counted quantity at the location; the investment stock is kept.",
+    "count_change": "Total {old} → {new}",
     "capture_saved": "{count} line(s) booked.",
     "capture_partial": "{count} line(s) were already booked.",
     "reason_manual": "Manual entry",
@@ -944,7 +944,10 @@
     "editor_hint": "Only changed values are saved.",
     "decrease": "Decrease {label}",
     "increase": "Increase {label}",
-    "take_title": "Take out: {name}"
+    "take_title": "Take out: {name}",
+    "count_origin_change": "{origin} {old} → {new}",
+    "count_below_investment": "The count is below the investment stock: please add \"Investition\"",
+    "count_duplicate": "This article appears twice at this location. Please keep only one line."
   },
   "stock": {
     "location_prompt_title": "Your storage location",

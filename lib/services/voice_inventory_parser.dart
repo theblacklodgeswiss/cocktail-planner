@@ -109,6 +109,10 @@ ParsedLine? _parseFragment(String fragment) {
   if (tokens.any((t) => t.toLowerCase() == 'investition')) {
     origin = StockOrigin.investment;
     tokens = tokens.where((t) => t.toLowerCase() != 'investition').toList();
+  } else if (tokens.any((t) => t.toLowerCase() == 'auftrag')) {
+    // An explicit "Auftrag" matters for a count (only that origin is set).
+    origin = StockOrigin.order;
+    tokens = tokens.where((t) => t.toLowerCase() != 'auftrag').toList();
   }
 
   if (tokens.isEmpty) return null;

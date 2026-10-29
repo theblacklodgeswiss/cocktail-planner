@@ -196,6 +196,9 @@ class AppSize {
   // Order lists
   static const double metaIcon = 14;
 
+  /// Avatar icon of a chip.
+  static const double chipIcon = 16;
+
   // Admin recipe editor
   static const double amountField = 112;
 }

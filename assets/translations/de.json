@@ -934,11 +934,11 @@
     "mode_add": "Dazu (Zugang)",
     "mode_count": "Zählung (Bestand setzen)",
     "capture_intro_add": "Was kommt dazu? Sprich es ein oder tippe es.",
-    "capture_intro_count": "Was hast du gezählt? Die gezählten Mengen ersetzen den bisherigen Bestand am Lagerort.",
+    "capture_intro_count": "Zählung: gezählte Menge am Lagerort; der Investitions-Bestand bleibt erhalten. Sag „Investition“ oder „Auftrag“ dazu, um genau diesen Bestand zu setzen.",
     "capture_example": "z. B. „2 Bacardi, 6 Orangensaft, bei Mario 3 Sprite“",
     "capture_text_label": "Bestand",
-    "count_hint": "Zählung: die Mengen ersetzen den Bestand am Lagerort.",
-    "count_change": "Bestand {old} → {new}",
+    "count_hint": "Zählung: gezählte Menge am Lagerort; der Investitions-Bestand bleibt erhalten.",
+    "count_change": "Gesamt {old} → {new}",
     "capture_saved": "{count} Zeile(n) gebucht.",
     "capture_partial": "{count} Zeile(n) wurden bereits gebucht.",
     "reason_manual": "Erfassung",
@@ -949,7 +949,10 @@
     "editor_hint": "Nur geänderte Werte werden gespeichert.",
     "decrease": "{label} verringern",
     "increase": "{label} erhöhen",
-    "take_title": "Entnehmen: {name}"
+    "take_title": "Entnehmen: {name}",
+    "count_origin_change": "{origin} {old} → {new}",
+    "count_below_investment": "Zählung ist kleiner als der Investitions-Bestand: bitte \"Investition\" dazusagen",
+    "count_duplicate": "Dieser Artikel ist an diesem Lagerort doppelt. Bitte nur eine Zeile behalten."
   },
   "stock": {
     "location_prompt_title": "Dein Lagerort",
