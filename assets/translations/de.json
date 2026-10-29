@@ -833,6 +833,21 @@
     "owner_invalid": "Ungültige E-Mail-Adresse",
     "location_failed": "Lagerort konnte nicht gespeichert werden (fehlende Berechtigung?)"
   },
+  "inventory_list": {
+    "filter_all": "Alle",
+    "filter_in_stock": "Mit Bestand",
+    "all_locations": "Alle Lagerorte",
+    "catalog_loading": "Artikelkatalog wird geladen …",
+    "catalog_failed": "Artikelkatalog konnte nicht geladen werden. Angezeigt wird nur der vorhandene Bestand.",
+    "catalog_empty_title": "Noch keine Artikel im Katalog",
+    "catalog_empty_admin": "Importiere die Materialliste per Excel, um die Inventur zu beginnen.",
+    "catalog_empty_hint": "Ein Admin kann die Materialliste per Excel importieren.",
+    "no_results": "Keine Artikel gefunden",
+    "no_locations": "Noch keine Lagerorte. Lege einen an, um Mengen zu erfassen.",
+    "open_history": "{name}, gesamt {quantity}. Verlauf öffnen",
+    "cell": "{location}, {origin}: {quantity}. Menge ändern",
+    "current": "{location} · {origin}: {quantity}"
+  },
   "stock": {
     "location_prompt_title": "Dein Lagerort",
     "location_name": "Name des Lagerorts",

@@ -828,6 +828,21 @@
     "owner_invalid": "Invalid email address",
     "location_failed": "Location could not be saved (missing permission?)"
   },
+  "inventory_list": {
+    "filter_all": "All",
+    "filter_in_stock": "In stock",
+    "all_locations": "All locations",
+    "catalog_loading": "Loading article catalog …",
+    "catalog_failed": "The article catalog could not be loaded. Only existing stock is shown.",
+    "catalog_empty_title": "No articles in the catalog yet",
+    "catalog_empty_admin": "Import the material list from Excel to start the inventory.",
+    "catalog_empty_hint": "An admin can import the material list from Excel.",
+    "no_results": "No articles found",
+    "no_locations": "No storage locations yet. Add one to record quantities.",
+    "open_history": "{name}, total {quantity}. Open history",
+    "cell": "{location}, {origin}: {quantity}. Change quantity",
+    "current": "{location} · {origin}: {quantity}"
+  },
   "stock": {
     "location_prompt_title": "Your storage location",
     "location_name": "Location name",
