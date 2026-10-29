@@ -88,7 +88,8 @@ class InvoicePdfGenerator {
     } catch (e) {
       // Payment info image not available
     }
-    // Load settings
+    // Load settings (wait for the startup load; falls back after a timeout)
+    await settingsRepository.awaitReady();
     final settings = settingsRepository.current;
 
     // One-shot catalog snapshot, to resolve any new-style composite

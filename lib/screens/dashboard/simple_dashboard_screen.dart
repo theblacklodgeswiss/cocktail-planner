@@ -38,7 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _initialize() async {
     if (!_initialized) {
       await authService.checkIsAdmin();
-      await firestoreService.initialize();
+      await firestoreService.availabilityKnown;
       if (mounted) {
         setState(() {
           _subscribe();

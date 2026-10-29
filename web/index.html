@@ -102,6 +102,13 @@
       document.body.appendChild(configScript);
     });
   </script>
+  <script>
+    // Remove the static splash once Flutter has painted its first frame.
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('loading');
+      if (el) el.remove();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

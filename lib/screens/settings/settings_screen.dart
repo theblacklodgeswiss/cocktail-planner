@@ -34,6 +34,10 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
+
+  /// True when the stored settings could not be loaded: every write based on
+  /// settingsRepository.current stays disabled (it may only hold defaults).
+  bool _loadFailed = false;
   String _appVersion = '';
   String _buildNumber = '';
 
@@ -44,6 +48,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadData() async {
+    // Company data / Microsoft status / save() base read settingsRepository
+    // synchronously: stay in the loading state until the startup load is done.
+    var authoritative = false;
+    await settingsRepository.awaitReady();
+    authoritative = settingsRepository.currentIsAuthoritative ||
+        await settingsRepository.ensureLoaded();
+    _loadFailed = !authoritative;
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       _appVersion = packageInfo.version;
@@ -68,6 +79,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onPressed: () => context.pop(),
         ),
         slivers: const [SliverFillRemaining(child: LoadingState())],
+      );
+    }
+    if (_loadFailed) {
+      return LargeTitleScaffold(
+        title: 'settings.title'.tr(),
+        leading: GlassIconButton(
+          icon: Icons.arrow_back,
+          semanticLabel: 'ui.back'.tr(),
+          onPressed: () => context.pop(),
+        ),
+        slivers: [
+          SliverFillRemaining(
+            child: ErrorState(
+              message: 'admin2.load_error'.tr(),
+              onRetry: () {
+                setState(() {
+                  _isLoading = true;
+                  _loadFailed = false;
+                });
+                _loadData();
+              },
+            ),
+          ),
+        ],
       );
     }
     final isAdmin = authService.isAdmin;
@@ -120,6 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showClientIdSheet() async {
+    if (!settingsRepository.currentIsAuthoritative) return;
     final result = await showMicrosoftSetupSheet(context);
     if (result == null) return;
 
@@ -195,6 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showCompanyEdit() async {
+    if (!settingsRepository.currentIsAuthoritative) return;
     final updated = await showCompanyEditSheet(
       context,
       settingsRepository.current,

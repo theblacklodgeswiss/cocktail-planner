@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,15 +15,35 @@ import 'services/auth_service.dart';
 import 'services/microsoft_graph_service.dart';
 import 'services/user_preferences_service.dart';
 
+/// Startup stopwatch; timing logs are plain debugPrint calls (cheap, and read
+/// from the browser console).
+final Stopwatch _startup = Stopwatch();
+
+void _logTiming(String label) =>
+    debugPrint('⏱ startup +${_startup.elapsedMilliseconds}ms $label');
+
+/// Completes when the Microsoft settings have been synced to localStorage
+/// (runs in the background after runApp; see [_syncMicrosoftSettings]).
+Future<void> microsoftSettingsSynced = Future<void>.value();
+
 Future<void> main() async {
+  _startup.start();
   WidgetsFlutterBinding.ensureInitialized();
 
   // Use path-based URLs (removes # from URLs)
   usePathUrlStrategy();
 
-  // Initialize user preferences
-  await userPreferencesService.initialize();
+  // Local work, independent of Firebase: start right away, await with the rest.
+  final prefsFuture = userPreferencesService.initialize();
+  final localeFuture = () async {
+    try {
+      await EasyLocalization.ensureInitialized();
+    } catch (e) {
+      debugPrint('EasyLocalization initialization failed: $e');
+    }
+  }();
 
+  String? defaultMicrosoftClientId;
   // Initialize Firebase
   try {
     debugPrint('🚀 Initializing Firebase...');
@@ -33,37 +55,45 @@ Future<void> main() async {
     final firebaseOptions = flavor == 'prod'
         ? prod.DefaultFirebaseOptions.currentPlatform
         : dev.DefaultFirebaseOptions.currentPlatform;
+    defaultMicrosoftClientId = googleClientId.contains('-')
+        ? dev.DefaultFirebaseOptions.microsoftClientId
+        : prod.DefaultFirebaseOptions.microsoftClientId;
 
     debugPrint('🔧 Firebase Project: ${firebaseOptions.projectId}');
     await Firebase.initializeApp(options: firebaseOptions);
     debugPrint('✅ Firebase initialized successfully');
-
-    // Initialize Firestore connection
-    await firestoreService.initialize();
+    _logTiming('firebase initialized');
 
     // Initialize Auth Service with environment specific client ID
     authService.initialize(googleClientId: googleClientId);
+
+    // The Firestore connection test runs in the background: isAvailable is
+    // optimistic until it completes, then reflects the real result (local
+    // fallback semantics unchanged).
+    unawaited(
+      firestoreService.startBackgroundCheck().then(
+        (ok) => _logTiming('firestore connection test done (available=$ok)'),
+      ),
+    );
+
     // Wait for initial auth state to be determined (important for page reload)
     final user = await FirebaseAuth.instance.authStateChanges().first;
     debugPrint('👤 Initial auth state: ${user?.email ?? "Not signed in"}');
+    _logTiming('auth state resolved');
 
-    // Load settings and sync Microsoft Client ID to localStorage
-    await _syncMicrosoftSettings(
-      defaultClientId: googleClientId.contains('-')
-          ? dev.DefaultFirebaseOptions.microsoftClientId
-          : prod.DefaultFirebaseOptions.microsoftClientId,
+    // Settings load + MS sync: off the critical path, but awaitable via
+    // settingsRepository.awaitReady() (settings screen, PDF builders).
+    microsoftSettingsSynced = _syncMicrosoftSettings(
+      defaultClientId: defaultMicrosoftClientId,
     );
+    settingsRepository.trackReady(microsoftSettingsSynced);
   } catch (e) {
     // Firebase initialization failed - app will use local JSON fallback
     debugPrint('❌ Firebase initialization failed: $e');
   }
 
-  // Initialize localization
-  try {
-    await EasyLocalization.ensureInitialized();
-  } catch (e) {
-    debugPrint('EasyLocalization initialization failed: $e');
-  }
+  await Future.wait([prefsFuture, localeFuture]);
+  _logTiming('prefs + locale ready, calling runApp');
 
   runApp(
     EasyLocalization(
@@ -73,10 +103,16 @@ Future<void> main() async {
       child: const CocktailPlanerApp(),
     ),
   );
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _logTiming('first frame');
+  });
 }
 
 /// Syncs Microsoft Client ID from Firestore to localStorage.
-/// This ensures MSAL can read the config synchronously on page reload.
+/// MSAL (web/msal_config.js) reads the stored client id once at script load,
+/// and Dart only ever writes it for the NEXT page load (no Dart code
+/// initializes MSAL), so running this after runApp cannot change ordering.
 Future<void> _syncMicrosoftSettings({String? defaultClientId}) async {
   try {
     final settings = await settingsRepository.load();
