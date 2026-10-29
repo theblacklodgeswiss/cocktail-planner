@@ -19,13 +19,35 @@ class FirestoreService {
   /// the flag to be known, so no extra test query is issued.
   Future<bool> get availabilityKnown => startBackgroundCheck();
 
-  /// Starts the connection test without blocking the caller. Idempotent.
+  /// Starts the connection test without blocking the caller. Idempotent while
+  /// a test is running or the last one succeeded; after a FAILED test it
+  /// re-tests once [retryAfter] has elapsed so a transient outage does not
+  /// pin the whole session to the local fallback.
   Future<bool> startBackgroundCheck() {
-    return _backgroundCheck ??= () {
-      _checkPending = true;
-      return initialize();
-    }();
+    final existing = _backgroundCheck;
+    if (existing != null) {
+      final failedLongAgo =
+          !_available &&
+          !_checkPending &&
+          _lastCheckAt != null &&
+          now().difference(_lastCheckAt!) >= retryAfter;
+      if (!failedLongAgo) return existing;
+    }
+    _checkPending = true;
+    return _backgroundCheck = initialize();
   }
+
+  DateTime? _lastCheckAt;
+
+  /// Minimum age of a failed check before it is retried.
+  Duration retryAfter = const Duration(seconds: 10);
+
+  @visibleForTesting
+  DateTime Function() now = DateTime.now;
+
+  /// Connection probe; replaceable in tests.
+  @visibleForTesting
+  Future<void> Function()? probeOverride;
 
   FirebaseFirestore get firestore {
     _firestoreInstance ??= FirebaseFirestore.instance;
@@ -66,16 +88,22 @@ class FirestoreService {
   Future<bool> initialize() async {
     try {
       debugPrint('🔧 Testing Firestore connection with materials collection...');
-      final testDoc = await materialsCollection.limit(1).get();
-      debugPrint('✅ Firestore available - fetched ${testDoc.docs.length} test docs');
+      if (probeOverride != null) {
+        await probeOverride!();
+      } else {
+        final testDoc = await materialsCollection.limit(1).get();
+        debugPrint('✅ Firestore available - fetched ${testDoc.docs.length} test docs');
+      }
       _available = true;
       _checkPending = false;
+      _lastCheckAt = now();
       return true;
     } catch (e) {
       debugPrint('❌ Firestore initialization failed: $e');
       debugPrint('📋 Error type: ${e.runtimeType}');
       _available = false;
       _checkPending = false;
+      _lastCheckAt = now();
       return false;
     }
   }

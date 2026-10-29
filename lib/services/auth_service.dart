@@ -29,6 +29,7 @@ class AuthService {
         // RoleProtectedScreen for guests).
         _cachedRole = AppRole.customer;
         _cachedEmployeeRole = null;
+        debugPrint('⏱ role resolved: $_cachedRole (guest)');
         _roleChangesController.add(_cachedRole!);
       }
     });
@@ -66,10 +67,16 @@ class AuthService {
         .doc(email)
         .get();
     if (!doc.exists) return (exists: false, role: null);
-    return (
-      exists: true,
-      role: EmployeeRole.fromFirestore(doc.data()?['role'] as String?),
-    );
+    // Existence alone grants the employee tier (matches the rules), so a
+    // malformed role must not fail the lookup.
+    EmployeeRole? role;
+    try {
+      final raw = doc.data()?['role'];
+      role = EmployeeRole.fromFirestore(raw is String ? raw : null);
+    } catch (e) {
+      debugPrint('Unparseable employeeAccess role: $e');
+    }
+    return (exists: true, role: role);
   }
 
   FirebaseAuth? _auth;
@@ -187,14 +194,14 @@ class AuthService {
       // afterwards exactly as before: an admin flag from allowedUsers wins and
       // the employeeAccess result is then ignored.
       final results = await Future.wait<Object?>([
-        lookupAllowedUserIsAdmin(normalizedEmail).then<Object?>(
+        Future.sync(() => lookupAllowedUserIsAdmin(normalizedEmail)).then<Object?>(
           (v) => v,
           onError: (Object e) {
             debugPrint('Failed to check admin status: $e');
             return false;
           },
         ),
-        lookupEmployeeAccess(normalizedEmail).then<Object?>(
+        Future.sync(() => lookupEmployeeAccess(normalizedEmail)).then<Object?>(
           (v) => v,
           onError: (Object e) {
             debugPrint('Failed to check employee access: $e');
@@ -216,6 +223,7 @@ class AuthService {
       hasEmployeeAccessDoc: hasEmployeeAccessDoc,
     );
     _cachedEmployeeRole = employeeRoleFromMirror;
+    debugPrint('⏱ role resolved: $_cachedRole');
     _roleChangesController.add(_cachedRole!);
     return _cachedRole!;
   }

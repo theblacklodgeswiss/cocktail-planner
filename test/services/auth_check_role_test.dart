@@ -114,6 +114,19 @@ void main() {
     expect(await f, AppRole.customer);
   });
 
+  test('employeeAccess doc exists with unparseable role still counts', () async {
+    final s = build(access: (_) async => (exists: true, role: null));
+    expect(await s.checkRole(), AppRole.employee);
+  });
+
+  test('synchronous throw from lookups is handled', () async {
+    final s = build(
+      allowed: (_) => throw Exception('sync'),
+      access: (_) => throw Exception('sync'),
+    );
+    expect(await s.checkRole(), AppRole.customer);
+  });
+
   test('emits on roleChanges', () async {
     final s = build(allowed: (_) async => true);
     final next = s.roleChanges.first;
