@@ -1,25 +1,32 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/admin_repository.dart';
-import '../../models/material_item.dart';
-import 'material_edit_dialog.dart';
-import 'material_item_card.dart';
+import 'material_edit_sheet.dart';
+import 'material_logic.dart';
+import 'materials_view.dart';
 
-/// Tab for managing materials/fixed values in the admin screen.
+/// Data wrapper of the materials / fixed values page in the admin screen.
 class MaterialsTab extends StatefulWidget {
-  const MaterialsTab({super.key, required this.isFixedValue});
+  const MaterialsTab({
+    super.key,
+    required this.isFixedValue,
+    required this.header,
+  });
 
   final bool isFixedValue;
+
+  /// Tab pills shown under the title.
+  final Widget header;
 
   @override
   State<MaterialsTab> createState() => _MaterialsTabState();
 }
 
 class _MaterialsTabState extends State<MaterialsTab> {
-  List<({String id, MaterialItem item})> _items = [];
+  List<MaterialRecord> _items = [];
   bool _isLoading = true;
-  String _searchQuery = '';
-  bool _showHidden = false;
+  bool _failed = false;
 
   @override
   void initState() {
@@ -28,72 +35,43 @@ class _MaterialsTabState extends State<MaterialsTab> {
   }
 
   Future<void> _loadItems() async {
-    setState(() => _isLoading = true);
-    final items = await adminRepository.getMaterialsWithIds(
-      isFixedValue: widget.isFixedValue,
-    );
-    if (mounted) {
+    setState(() {
+      _isLoading = true;
+      _failed = false;
+    });
+    try {
+      final items = await adminRepository.getMaterialsWithIds(
+        isFixedValue: widget.isFixedValue,
+      );
+      if (!mounted) return;
       setState(() {
-        _items = _sortItems(items);
+        _items = sortMaterials(items, isFixedValue: widget.isFixedValue);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _failed = true;
         _isLoading = false;
       });
     }
   }
 
-  List<({String id, MaterialItem item})> _sortItems(
-    List<({String id, MaterialItem item})> items,
-  ) {
-    if (widget.isFixedValue) {
-      // Sort by manual sortOrder; fall back to name for unsorted items.
-      return items
-        ..sort((a, b) {
-          final aOrder = a.item.sortOrder;
-          final bOrder = b.item.sortOrder;
-          if (aOrder != null && bOrder != null) return aOrder.compareTo(bOrder);
-          if (aOrder != null) return -1;
-          if (bOrder != null) return 1;
-          return a.item.name.compareTo(b.item.name);
-        });
-    } else {
-      return items..sort((a, b) => a.item.name.compareTo(b.item.name));
-    }
-  }
-
-  Future<void> _onReorder(int oldIndex, int newIndex) async {
-    if (newIndex > oldIndex) newIndex--;
-    final visible = _filteredItems;
-    final newVisible = List.of(visible)
-      ..removeAt(oldIndex)
-      ..insert(newIndex, visible[oldIndex]);
-    final hiddenItems = _items.where((i) => !i.item.visible).toList();
-    setState(() {
-      _items = [...newVisible, ...hiddenItems];
-    });
-    await adminRepository.updateFixedValueSortOrders(
-      _items.map((e) => e.id).toList(),
-    );
-  }
-
-  List<({String id, MaterialItem item})> get _filteredItems {
-    var list =
-        _showHidden ? _items : _items.where((i) => i.item.visible).toList();
-    if (_searchQuery.isEmpty) return list;
-    final query = _searchQuery.toLowerCase();
-    return list
-        .where((i) =>
-            i.item.name.toLowerCase().contains(query) ||
-            i.item.note.toLowerCase().contains(query))
-        .toList();
-  }
-
-  Future<void> _showEditDialog({String? docId, MaterialItem? item}) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final result = await showMaterialEditDialog(
-      context,
-      item: item,
-      onSave: (result) {
-        if (docId == null) {
-          return adminRepository.addMaterial(
+  Future<bool> _save(String? docId, MaterialEditResult result) async {
+    final ok = docId == null
+        ? await adminRepository.addMaterial(
+            name: result.name,
+            unit: result.unit,
+            price: result.price,
+            currency: result.currency,
+            note: result.note,
+            isFixedValue: widget.isFixedValue,
+            active: result.active,
+            visible: result.visible,
+            category: result.category,
+          )
+        : await adminRepository.updateMaterial(
+            docId: docId,
             name: result.name,
             unit: result.unit,
             price: result.price,
@@ -104,202 +82,39 @@ class _MaterialsTabState extends State<MaterialsTab> {
             visible: result.visible,
             category: result.category,
           );
-        }
-        return adminRepository.updateMaterial(
-          docId: docId,
-          name: result.name,
-          unit: result.unit,
-          price: result.price,
-          currency: result.currency,
-          note: result.note,
-          isFixedValue: widget.isFixedValue,
-          active: result.active,
-          visible: result.visible,
-          category: result.category,
-        );
-      },
-    );
-
-    if (result != null) {
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('Gespeichert!')),
-      );
-      _loadItems();
-    }
+    if (ok) _loadItems();
+    return ok;
   }
 
-  Future<void> _deleteItem(String docId, String name) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    bool saving = false;
-    String? error;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Artikel löschen?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('"$name" wird unwiderruflich gelöscht.'),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(ctx, false),
-              child: const Text('Abbrechen'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: saving
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        saving = true;
-                        error = null;
-                      });
-                      final success = await adminRepository.deleteMaterial(
-                        docId: docId,
-                        isFixedValue: widget.isFixedValue,
-                      );
-                      if (success) {
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      } else {
-                        setDialogState(() {
-                          saving = false;
-                          error = 'Fehler beim Löschen';
-                        });
-                      }
-                    },
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Löschen'),
-            ),
-          ],
-        ),
-      ),
+  Future<bool> _delete(String docId) async {
+    final ok = await adminRepository.deleteMaterial(
+      docId: docId,
+      isFixedValue: widget.isFixedValue,
     );
+    if (ok) _loadItems();
+    return ok;
+  }
 
-    if (confirm == true) {
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('Gelöscht!')),
-      );
-      _loadItems();
-    }
+  Future<void> _reorder(List<MaterialRecord> reordered) async {
+    setState(() => _items = reordered);
+    await adminRepository.updateFixedValueSortOrders(
+      reordered.map((e) => e.id).toList(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return Column(
-      children: [
-        _buildSearchBar(),
-        _buildListHeader(context),
-        const SizedBox(height: 8),
-        Expanded(child: _buildList()),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Suchen...',
-          prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          filled: true,
-        ),
-        onChanged: (value) => setState(() => _searchQuery = value),
-      ),
-    );
-  }
-
-  Widget _buildListHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '${_filteredItems.length} Artikel',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          Row(
-            children: [
-              if (_items.any((i) => !i.item.visible))
-                TextButton.icon(
-                  onPressed: () => setState(() => _showHidden = !_showHidden),
-                  icon: Icon(
-                      _showHidden ? Icons.visibility_off : Icons.visibility),
-                  label: Text(
-                      _showHidden ? 'Versteckte ausblenden' : 'Versteckte anzeigen'),
-                ),
-              const SizedBox(width: 8),
-              FilledButton.tonalIcon(
-                onPressed: () => _showEditDialog(),
-                icon: const Icon(Icons.add),
-                label: const Text('Neu'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    if (_filteredItems.isEmpty) {
-      return const Center(child: Text('Keine Artikel gefunden'));
-    }
-
-    if (widget.isFixedValue && _searchQuery.isEmpty) {
-      return ReorderableListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _filteredItems.length,
-        onReorder: _onReorder,
-        itemBuilder: (context, index) {
-          final record = _filteredItems[index];
-          return MaterialItemCard(
-            key: ValueKey(record.id),
-            item: record.item,
-            leading: const Icon(Icons.drag_handle),
-            onEdit: () => _showEditDialog(docId: record.id, item: record.item),
-            onDelete: () => _deleteItem(record.id, record.item.name),
-          );
-        },
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _filteredItems.length,
-      itemBuilder: (context, index) {
-        final record = _filteredItems[index];
-        return MaterialItemCard(
-          key: ValueKey(record.id),
-          item: record.item,
-          onEdit: () => _showEditDialog(docId: record.id, item: record.item),
-          onDelete: () => _deleteItem(record.id, record.item.name),
-        );
-      },
+    return MaterialsView(
+      title: 'admin.title'.tr(),
+      header: widget.header,
+      isFixedValue: widget.isFixedValue,
+      items: _items,
+      loading: _isLoading,
+      errorMessage: _failed ? 'admin2.load_error'.tr() : null,
+      onRetry: _loadItems,
+      onSave: _save,
+      onDelete: _delete,
+      onReorder: _reorder,
     );
   }
 }
