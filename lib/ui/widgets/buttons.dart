@@ -14,11 +14,15 @@ class _ButtonBase extends StatelessWidget {
     required this.foreground,
     this.border,
     this.dimmed = false,
+    this.expand = false,
+    this.trailing,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+  final bool expand;
+  final String? trailing;
   final Color? fill;
   final Color foreground;
   final Color? border;
@@ -33,7 +37,7 @@ class _ButtonBase extends StatelessWidget {
         : foreground;
 
     final content = Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (loading) ...[
@@ -53,6 +57,17 @@ class _ButtonBase extends StatelessWidget {
             style: AppText.button.copyWith(color: fg),
           ),
         ),
+        if (trailing != null) ...[
+          const SizedBox(width: AppSpace.s8),
+          Flexible(
+            child: Text(
+              trailing!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.section.copyWith(color: fg),
+            ),
+          ),
+        ],
       ],
     );
 
@@ -77,6 +92,7 @@ class _ButtonBase extends StatelessWidget {
     final button = Pressable(
       minSize: AppSize.minTap,
       radius: AppRadius.pill,
+      expand: expand,
       onTap: enabled ? onPressed : null,
       child: body,
     );
@@ -95,11 +111,19 @@ class PrimaryButton extends StatelessWidget {
     this.loading = false,
     this.destructive = false,
     this.dimmed = false,
+    this.expand = false,
+    this.trailing,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+
+  /// Fills the available width (glass CTA bar).
+  final bool expand;
+
+  /// Small text on the right inside the button, e.g. a count.
+  final String? trailing;
 
   /// Error-colored fill for irreversible actions.
   final bool destructive;
@@ -117,6 +141,8 @@ class PrimaryButton extends StatelessWidget {
       onPressed: onPressed,
       loading: loading,
       dimmed: dimmed,
+      expand: expand,
+      trailing: trailing,
       fill: disabled ? p.surface : (destructive ? p.error : p.primary),
       foreground: destructive ? p.onError : p.onPrimary,
     );

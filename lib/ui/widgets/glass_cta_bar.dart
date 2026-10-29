@@ -37,7 +37,6 @@ class GlassCtaBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = AppPalette.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         AppSize.barSide,
@@ -52,31 +51,12 @@ class GlassCtaBar extends StatelessWidget {
           child: GlassSurface(
             child: Padding(
               padding: const EdgeInsets.all(AppSpace.s4),
-              child: Row(
-                children: [
-                  if (badge != null)
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpace.s12,
-                        ),
-                        child: Text(
-                          badge!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppText.section.copyWith(color: p.text),
-                        ),
-                      ),
-                    ),
-                  Expanded(
-                    flex: 2,
-                    child: PrimaryButton(
-                      label: label,
-                      onPressed: onPressed,
-                      loading: loading,
-                    ),
-                  ),
-                ],
+              child: PrimaryButton(
+                label: label,
+                onPressed: onPressed,
+                loading: loading,
+                expand: true,
+                trailing: badge,
               ),
             ),
           ),

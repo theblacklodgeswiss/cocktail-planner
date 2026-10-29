@@ -18,6 +18,7 @@ class Pressable extends StatefulWidget {
     this.radius = AppRadius.control,
     this.semanticLabel,
     this.selected,
+    this.expand = false,
   });
 
   final Widget child;
@@ -28,6 +29,9 @@ class Pressable extends StatefulWidget {
   final double radius;
   final String? semanticLabel;
   final bool? selected;
+
+  /// Fills the incoming width instead of hugging the child.
+  final bool expand;
 
   @override
   State<Pressable> createState() => _PressableState();
@@ -126,7 +130,9 @@ class _PressableState extends State<Pressable> {
                 minWidth: widget.minSize,
                 minHeight: widget.minSize,
               ),
-              child: Center(widthFactor: 1, heightFactor: 1, child: content),
+              child: widget.expand
+                  ? content
+                  : Center(widthFactor: 1, heightFactor: 1, child: content),
             ),
           ),
         ),
