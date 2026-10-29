@@ -1,5 +1,6 @@
 import 'package:cocktail_planer/ui/app_theme.dart';
 import 'package:cocktail_planer/ui/tokens.dart';
+import 'package:cocktail_planer/ui/widgets/app_sheet.dart';
 import 'package:cocktail_planer/ui/widgets/floating_fab.dart';
 import 'package:cocktail_planer/ui/widgets/glass_surface.dart';
 import 'package:cocktail_planer/ui/widgets/staff_scaffold.dart';
@@ -29,6 +30,17 @@ class _TabPage extends StatelessWidget {
               context,
             ).showSnackBar(SnackBar(content: Text('snack ${tab.name}'))),
             child: Text('show snack ${tab.name}'),
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showAppSheet<void>(
+              context,
+              builder: (_) => const Text('sheet body'),
+            ),
+            child: Text('open sheet ${tab.name}'),
           ),
         ),
       ),
@@ -427,5 +439,28 @@ void main() {
     expect(snack.behavior, isNull);
     final rect = tester.getRect(find.byType(SnackBar).last);
     expect(rect.bottom, 640, reason: 'fixed at the bottom edge');
+  });
+
+  testWidgets('a sheet from a tab covers the bar; no tab switch under it', (
+    tester,
+  ) async {
+    phone(tester);
+    final r = shellRouter();
+    await pumpApp(tester, app(r));
+    final inventur = tester.getCenter(_tab('Inventur'));
+    await tester.tap(find.text('open sheet orders'));
+    await tester.pumpAndSettle();
+    expect(find.text('sheet body'), findsOneWidget);
+    // The sheet lives on the root navigator, above the shell.
+    expect(find.byType(StaffTabBar).hitTestable(), findsNothing);
+    expect(find.byType(FloatingFab).hitTestable(), findsNothing);
+
+    await tester.tapAt(inventur);
+    await tester.pumpAndSettle();
+    expect(r.state.matchedLocation, '/', reason: 'tap hit the barrier');
+    expect(
+      tester.widget<StaffShell>(find.byType(StaffShell)).current,
+      StaffTab.orders,
+    );
   });
 }

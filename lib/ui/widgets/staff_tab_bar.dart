@@ -39,9 +39,9 @@ double staffFabBottom(BuildContext context) =>
     staffTabBarExtent(context) + AppSize.fabGap;
 
 /// Space a scroll view needs at its end so its last item can be scrolled
-/// above the floating staff bar. `LargeTitleScaffold.tabBar` and
-/// `StaffFrame` apply it themselves; a screen that floats [StaffTabBar]
-/// on its own must add this to its bottom padding.
+/// above the floating staff bar. `LargeTitleScaffold.tabBar` applies it
+/// itself (the staff shell passes its own clearance); a screen that floats
+/// [StaffTabBar] on its own must add this to its bottom padding.
 double staffBarClearance(BuildContext context) =>
     staffTabBarExtent(context) + AppSpace.s24;
 

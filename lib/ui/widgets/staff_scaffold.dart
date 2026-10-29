@@ -18,17 +18,9 @@ const staffTabRoutes = {
 /// Target of the round "+" button (same form the dashboard FAB opens).
 const staffNewOrderRoute = '/order-form';
 
-/// Bottom padding a tab page's scroll view needs so its last item scrolls
-/// clear of the floating bar and the "+" button.
-///
-/// [StaffShell] publishes this as the page's bottom `MediaQuery` padding
-/// (ListView, SafeArea and [LargeTitleScaffold] pick it up on their own);
-/// this helper reads it for scroll views that do not. It is 0 while the
-/// keyboard is open, because the bar and the "+" hide then.
-double staffContentClearance(BuildContext context) =>
-    MediaQuery.paddingOf(context).bottom;
-
-/// Clearance [StaffShell] gives its pages: bar, gap, "+" and safe area.
+/// Clearance [StaffShell] gives its pages (as their bottom MediaQuery
+/// padding, which ListView, SafeArea and [LargeTitleScaffold] pick up):
+/// bar, gap, "+" and safe area.
 double _shellClearance(BuildContext context) =>
     staffFabBottom(context) + AppSize.liquidFab;
 
@@ -79,7 +71,7 @@ class _Signal extends ChangeNotifier {
 /// resolves.
 ///
 /// The child gets the bar and "+" clearance as its bottom MediaQuery
-/// padding (see [staffContentClearance]). While the keyboard is open the
+/// padding. While the keyboard is open the
 /// bar and the "+" slide away and the padding drops to 0.
 ///
 /// Tapping a tab calls [onSwitch]; tapping the active tab calls
