@@ -578,7 +578,7 @@ void main() {
           final drink = tester.getRect(find.text('Caipirinha')).top;
           if (barFirst) {
             final bar = tester.getRect(find.text('Bar-Getränke')).top;
-            final alcohol = tester.getRect(find.text('Alkohol von uns')).top;
+            final alcohol = tester.getRect(find.text('Wollt ihr Alkohol von Blacklodge beziehen?')).top;
             expect(bar, lessThan(drink));
             expect(alcohol, lessThan(drink));
           } else {
