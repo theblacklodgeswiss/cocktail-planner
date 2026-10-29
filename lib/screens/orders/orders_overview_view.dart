@@ -85,6 +85,7 @@ class OrdersOverviewView extends StatefulWidget {
     required this.onRetry,
     required this.now,
     this.initialFilter = OrderStatusFilter.quotes,
+    this.filterNonce,
     this.pendingCount = 0,
     this.actions = const [],
     required this.onOpen,
@@ -97,6 +98,9 @@ class OrdersOverviewView extends StatefulWidget {
   final VoidCallback onRetry;
   final DateTime now;
   final OrderStatusFilter initialFilter;
+
+  /// A new value re-applies [initialFilter] (a repeated link to the tab).
+  final Object? filterNonce;
   final int pendingCount;
 
   /// Extra top bar buttons (dashboard, OneDrive sync).
@@ -120,7 +124,8 @@ class _OrdersOverviewViewState extends State<OrdersOverviewView> {
   @override
   void didUpdateWidget(OrdersOverviewView old) {
     super.didUpdateWidget(old);
-    if (widget.initialFilter != old.initialFilter) {
+    if (widget.initialFilter != old.initialFilter ||
+        widget.filterNonce != old.filterNonce) {
       _filter = widget.initialFilter;
     }
   }

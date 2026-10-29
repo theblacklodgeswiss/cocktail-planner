@@ -21,7 +21,11 @@ import 'orders_overview_view.dart';
 class OrdersOverviewScreen extends StatefulWidget {
   final String? initialStatus;
 
-  const OrdersOverviewScreen({super.key, this.initialStatus});
+  /// Changes with every link to the orders tab (see [ordersLinkNonce]), so
+  /// a repeated link with the same status still resets the filter.
+  final Object? filterNonce;
+
+  const OrdersOverviewScreen({super.key, this.initialStatus, this.filterNonce});
 
   @override
   State<OrdersOverviewScreen> createState() => _OrdersOverviewScreenState();
@@ -63,6 +67,7 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
             onRetry: () => setState(_subscribe),
             now: DateTime.now(),
             initialFilter: statusFilterFromQuery(widget.initialStatus),
+            filterNonce: widget.filterNonce,
             pendingCount: pending.data?.length ?? 0,
             actions: _actions(context),
             onOpen: (order) => showOrderDetails(context, order),

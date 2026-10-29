@@ -241,6 +241,42 @@ void main() {
       expect(find.text('Hochzeit Meier'), findsNothing);
     });
 
+    testWidgets('a repeated tab link (new nonce) re-applies the filter', (
+      tester,
+    ) async {
+      phone(tester);
+      final nonce = ValueNotifier<Object?>(1);
+      addTearDown(nonce.dispose);
+      await pumpApp(
+        tester,
+        app(
+          ValueListenableBuilder<Object?>(
+            valueListenable: nonce,
+            builder: (_, n, _) => OrdersOverviewView(
+              orders: sample,
+              onRetry: () {},
+              now: now,
+              initialFilter: OrderStatusFilter.accepted,
+              filterNonce: n,
+              onOpen: (_) {},
+              onOpenPending: () {},
+              onOpenArchive: () {},
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(OrderCard), findsNWidgets(3));
+      await tapPill(tester, 'Alle 6');
+      await settle(tester);
+      expect(find.text('Bestellungen · 6'), findsOneWidget);
+
+      // Same status link again: the kept page goes back to "Angenommen".
+      nonce.value = 2;
+      await settle(tester);
+      expect(find.byType(OrderCard), findsNWidgets(3));
+      expect(find.text('Bestellungen · 6'), findsNothing);
+    });
+
     testWidgets('flat list in stream order, no month headings', (tester) async {
       phone(tester, h: 1400);
       await pumpApp(
