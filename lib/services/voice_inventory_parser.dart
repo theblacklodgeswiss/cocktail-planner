@@ -33,6 +33,7 @@ const _numberWords = <String, double>{
   'ein': 1,
   'eine': 1,
   'einen': 1,
+  'einem': 1,
   'eins': 1,
   'zwei': 2,
   'drei': 3,
@@ -56,14 +57,64 @@ const _numberWords = <String, double>{
   'achtzehn': 18,
   'neunzehn': 19,
   'zwanzig': 20,
+  'dreißig': 30,
+  'dreissig': 30,
+  'vierzig': 40,
+  'fünfzig': 50,
+  'fuenfzig': 50,
   'halbe': 0.5,
   'halben': 0.5,
   'halb': 0.5,
   'anderthalb': 1.5,
+  'eineinhalb': 1.5,
+  'zweieinhalb': 2.5,
+  'dreieinhalb': 3.5,
+  'viereinhalb': 4.5,
+  'fünfeinhalb': 5.5,
+  'fuenfeinhalb': 5.5,
+  'sechseinhalb': 6.5,
 };
 
-/// Words that sit between the number and the name but are not the name.
-const _fillerWords = {'flasche', 'flaschen', 'x', 'mal', 'stück', 'stueck'};
+/// Spoken lead-in that is not part of the line ("ich hab noch ungefähr ...").
+const _leadFillers = {
+  'ich',
+  'wir',
+  'hab',
+  'habe',
+  'haben',
+  'es',
+  'sind',
+  'da',
+  'noch',
+  'insgesamt',
+  'ungefähr',
+  'ungefaehr',
+  'circa',
+  'etwa',
+  'so',
+  'ca',
+};
+
+/// Unit words around the quantity that are not part of the article name.
+/// "Liter"/"L" are deliberately absent ("Orangen Saft 1L").
+const _unitWords = {
+  'flasche',
+  'flaschen',
+  'fl',
+  'packung',
+  'packungen',
+  'pack',
+  'packs',
+  'kiste',
+  'kisten',
+  'karton',
+  'kartons',
+  'stück',
+  'stueck',
+  'stk',
+  'x',
+  'mal',
+};
 
 // Split on , ; newline and "und", but not on a decimal comma ("2,8").
 final _separator = RegExp(
@@ -72,6 +123,8 @@ final _separator = RegExp(
 );
 
 final _plainNumber = RegExp(r'^\d+([.,]\d+)?$');
+final _numberWithX = RegExp(r'^(\d+([.,]\d+)?)x$', caseSensitive: false);
+final _edgePunctuation = RegExp('^[.,;:!?"\'“”„‚‘’()]+|[.,;:!?"\'“”„‚‘’()]+\$');
 
 double? _parseNumber(String token) {
   final lower = token.toLowerCase();
@@ -82,27 +135,68 @@ double? _parseNumber(String token) {
   return double.tryParse(lower.replaceAll(',', '.'));
 }
 
-/// Parses speech-recognition output into stock lines. Fragments without a
-/// quantity or without a name are skipped instead of guessed.
-List<ParsedLine> parseRestText(String text) {
-  final result = <ParsedLine>[];
-  for (final fragment in text.split(_separator)) {
-    final line = _parseFragment(fragment);
-    if (line != null) result.add(line);
-  }
-  return result;
+/// The result of [parseRestTextDetailed].
+class ParseResult {
+  const ParseResult({required this.lines, required this.unparsed});
+
+  /// Fragments that became a line.
+  final List<ParsedLine> lines;
+
+  /// Fragments with content but without a usable quantity or name, as the
+  /// text to pre-fill (the user adds the number).
+  final List<String> unparsed;
 }
 
-ParsedLine? _parseFragment(String fragment) {
-  var tokens = fragment
-      .split(RegExp(r'\s+'))
-      .where((t) => t.isNotEmpty)
-      .toList();
+/// Parses speech-recognition output into stock lines. Fragments without a
+/// quantity or without a name are skipped instead of guessed.
+List<ParsedLine> parseRestText(String text) =>
+    parseRestTextDetailed(text).lines;
 
+/// Like [parseRestText], but also reports the fragments that could not be
+/// turned into a line, so none is dropped silently.
+ParseResult parseRestTextDetailed(String text) {
+  final lines = <ParsedLine>[];
+  final unparsed = <String>[];
+  for (final fragment in text.split(_separator)) {
+    final (line, leftover) = _parseFragment(fragment);
+    if (line != null) {
+      lines.add(line);
+    } else if (leftover != null) {
+      unparsed.add(leftover);
+    }
+  }
+  return ParseResult(lines: lines, unparsed: unparsed);
+}
+
+List<String> _tokenize(String fragment) {
+  final tokens = <String>[];
+  for (final raw in fragment.split(RegExp(r'\s+'))) {
+    final t = raw.replaceAll(_edgePunctuation, '');
+    if (t.isEmpty) continue;
+    final x = _numberWithX.firstMatch(t);
+    if (x != null) {
+      tokens
+        ..add(x.group(1)!)
+        ..add('x');
+    } else {
+      tokens.add(t);
+    }
+  }
+  return tokens;
+}
+
+// (line, unparsedText): at most one is set; both null = nothing to say.
+(ParsedLine?, String?) _parseFragment(String fragment) {
+  var tokens = _tokenize(fragment);
+  if (tokens.isEmpty) return (null, null);
+  final raw = tokens.join(' ');
+
+  // "bei Mario" anywhere in the fragment is the location hint.
   String? location;
-  if (tokens.length >= 2 && tokens.first.toLowerCase() == 'bei') {
-    location = tokens[1];
-    tokens = tokens.sublist(2);
+  final beiAt = tokens.indexWhere((t) => t.toLowerCase() == 'bei');
+  if (beiAt >= 0 && beiAt + 1 < tokens.length) {
+    location = tokens[beiAt + 1];
+    tokens = [...tokens.sublist(0, beiAt), ...tokens.sublist(beiAt + 2)];
   }
 
   StockOrigin? origin;
@@ -115,30 +209,55 @@ ParsedLine? _parseFragment(String fragment) {
     tokens = tokens.where((t) => t.toLowerCase() != 'auftrag').toList();
   }
 
-  if (tokens.isEmpty) return null;
-  var quantity = _parseNumber(tokens.first);
-  if (quantity == null) return null;
-  var i = 1;
+  var lead = 0;
+  while (lead < tokens.length &&
+      _leadFillers.contains(tokens[lead].toLowerCase())) {
+    lead++;
+  }
+  tokens = tokens.sublist(lead);
+  if (tokens.isEmpty) return (null, null);
 
-  // "zwei Komma acht": digits after "Komma" are the decimal places.
-  if (i + 1 < tokens.length && tokens[i].toLowerCase() == 'komma') {
-    final decimals = _parseNumber(tokens[i + 1]);
-    if (decimals != null && decimals >= 0 && decimals == decimals.truncate()) {
-      quantity = double.parse('${quantity.truncate()}.${decimals.truncate()}');
-      i += 2;
+  // The first standalone number token (digits or word) is the quantity.
+  final numAt = tokens.indexWhere((t) => _parseNumber(t) != null);
+  double? quantity;
+  var rest = tokens;
+  if (numAt >= 0) {
+    quantity = _parseNumber(tokens[numAt]);
+    var end = numAt + 1;
+    // "zwei Komma acht": digits after "Komma" are the decimal places.
+    if (end + 1 < tokens.length && tokens[end].toLowerCase() == 'komma') {
+      final decimals = _parseNumber(tokens[end + 1]);
+      if (quantity != null &&
+          decimals != null &&
+          decimals >= 0 &&
+          decimals == decimals.truncate()) {
+        quantity = double.parse(
+          '${quantity.truncate()}.${decimals.truncate()}',
+        );
+        end += 2;
+      }
     }
+    rest = [...tokens.sublist(0, numAt), ...tokens.sublist(end)];
   }
 
-  final nameTokens = tokens
-      .sublist(i)
-      .where((t) => !_fillerWords.contains(t.toLowerCase()));
+  var nameTokens = rest
+      .where((t) => !_unitWords.contains(t.toLowerCase()))
+      .toList();
+  if (nameTokens.isNotEmpty && nameTokens.first.toLowerCase() == 'von') {
+    nameTokens = nameTokens.sublist(1);
+  }
   final name = nameTokens.join(' ');
-  if (name.isEmpty) return null;
-  return ParsedLine(
-    quantity: quantity,
-    spokenName: name,
-    locationHint: location,
-    originHint: origin,
+  if (quantity == null || name.isEmpty) {
+    return (null, name.isEmpty ? raw : name);
+  }
+  return (
+    ParsedLine(
+      quantity: quantity,
+      spokenName: name,
+      locationHint: location,
+      originHint: origin,
+    ),
+    null,
   );
 }
 
@@ -148,6 +267,11 @@ String _normalize(String s) => s
     .replaceAll('ä', 'ae')
     .replaceAll('ö', 'oe')
     .replaceAll('ü', 'ue')
+    .replaceAll(RegExp('[áàâã]'), 'a')
+    .replaceAll(RegExp('[éèêë]'), 'e')
+    .replaceAll(RegExp('[íìîï]'), 'i')
+    .replaceAll(RegExp('[óòôõ]'), 'o')
+    .replaceAll(RegExp('[úùû]'), 'u')
     .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();

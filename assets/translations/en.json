@@ -1006,6 +1006,8 @@
       "heard": "Recognized text",
       "check_hint": "Check that everything was recognized. You can add missing lines manually.",
       "no_lines": "No lines recognized.",
+      "no_lines_example": "e.g. “2 Bacardi, 6 orange juice”",
+      "partly_recognized": "Not everything was recognized – please add the quantity",
       "add_line": "Add line",
       "quantity": "Quantity",
       "quantity_invalid": "Quantity must be greater than 0",

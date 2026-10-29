@@ -215,6 +215,9 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
   late List<StorageLocation> _locations;
   late StorageLocation _defaultLocation;
   List<RestLine> _lines = [];
+  // Fragments the parser could not turn into a line (manual lines, no quantity).
+  int _unparsedCount = 0;
+  RestLine? _focusLine;
   // Lines already booked, kept so a retry after a partial failure never
   // books them twice.
   final Set<RestLine> _booked = {};
@@ -371,13 +374,24 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       _catalog = catalog;
       _locations = locations;
       _stock = stock;
+      final parsed = parseRestTextDetailed(_textController.text);
       setState(() {
+        // An unparsed fragment becomes a line with the text as article search
+        // and no quantity, so nothing is dropped and the user only types it.
         _lines = buildRestLines(
-          parseRestText(_textController.text),
+          [
+            ...parsed.lines,
+            for (final u in parsed.unparsed)
+              ParsedLine(quantity: -1, spokenName: u),
+          ],
           _catalog,
           _locations,
           _defaultLocation,
         );
+        _unparsedCount = parsed.unparsed.length;
+        _focusLine = parsed.unparsed.isEmpty
+            ? null
+            : _lines[parsed.lines.length];
         _confirming = true;
         _loading = false;
       });
@@ -703,8 +717,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
             children: [
-              // Fragments without number or name are dropped by the parser,
-              // so the raw text stays visible to reveal anything missing.
+              // The raw text stays visible to reveal anything missing.
               Text(
                 'rest.heard'.tr(),
                 style: Theme.of(context).textTheme.labelMedium,
@@ -721,6 +734,13 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                 'rest.check_hint'.tr(),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (_unparsedCount > 0) ...[
+                const SizedBox(height: AppSpace.s4),
+                Text(
+                  'rest.partly_recognized'.tr(),
+                  style: AppText.body.copyWith(color: AppColors.warning),
+                ),
+              ],
               if (_counting) ...[
                 const SizedBox(height: AppSpace.s4),
                 Text(
@@ -732,7 +752,15 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                 ),
               ],
               const SizedBox(height: AppSpace.s12),
-              if (_lines.isEmpty) Text('rest.no_lines'.tr()),
+              if (_lines.isEmpty) ...[
+                Text('rest.no_lines'.tr()),
+                Text(
+                  'rest.no_lines_example'.tr(),
+                  style: AppText.caption.copyWith(
+                    color: AppPalette.of(context).textSecondary,
+                  ),
+                ),
+              ],
               for (final line in _lines) _buildLine(line, plans),
               Align(
                 alignment: Alignment.centerLeft,
@@ -801,7 +829,10 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                 SizedBox(
                   width: AppSize.amountField,
                   child: TextFormField(
-                    initialValue: _formatQuantity(line.quantity),
+                    initialValue: line.quantity < 0
+                        ? ''
+                        : _formatQuantity(line.quantity),
+                    autofocus: identical(line, _focusLine),
                     enabled: !booked && !_saving,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,

@@ -538,4 +538,65 @@ void main() {
     expect(fake.orderUpdates.single.$2, {'restRecorded': true});
     expect(result, isTrue);
   });
+
+  testWidgets('a natural sentence becomes one line with quantity and match', (
+    tester,
+  ) async {
+    final fake = _Fake();
+    await _openCapture(tester, fake);
+    await _enter(tester, 'Ich hab drei Flaschen Bacardi');
+
+    expect(find.text('Keine Zeilen erkannt.'), findsNothing);
+    expect(
+      find.text('Nicht alles erkannt – bitte Menge ergänzen'),
+      findsNothing,
+    );
+    expect(find.byType(TextFormField), findsNWidgets(1));
+    final qty = tester.widget<TextFormField>(find.byType(TextFormField));
+    expect(qty.initialValue, '3');
+    expect(find.text('Bacardi'), findsWidgets);
+    await _save(tester);
+    expect(fake.movements.single['materialId'], 'm1');
+    expect(fake.movements.single['delta'], 3.0);
+  });
+
+  testWidgets('a fragment without number becomes a manual line, no dead end', (
+    tester,
+  ) async {
+    final fake = _Fake();
+    await _openCapture(tester, fake);
+    await _enter(tester, 'Bacardi');
+
+    expect(find.text('Keine Zeilen erkannt.'), findsNothing);
+    expect(
+      find.text('Nicht alles erkannt – bitte Menge ergänzen'),
+      findsOneWidget,
+    );
+    final qty = tester.widget<TextFormField>(find.byType(TextFormField));
+    expect(qty.initialValue, '');
+    expect(find.text('Bacardi'), findsWidgets);
+    expect(_onPressed(tester, 'Speichern'), isNull);
+
+    await tester.enterText(find.byType(TextFormField), '4');
+    await tester.pumpAndSettle();
+    expect(_onPressed(tester, 'Speichern'), isNotNull);
+    await _save(tester);
+    expect(fake.movements.single['delta'], 4.0);
+    expect(fake.movements.single['materialId'], 'm1');
+  });
+
+  testWidgets('empty input keeps the empty state with an example', (
+    tester,
+  ) async {
+    final fake = _Fake();
+    await _openCapture(tester, fake);
+    await _enter(tester, '');
+
+    expect(find.text('Keine Zeilen erkannt.'), findsOneWidget);
+    expect(find.text('z. B. „2 Bacardi, 6 Orangensaft“'), findsOneWidget);
+    expect(
+      find.text('Nicht alles erkannt – bitte Menge ergänzen'),
+      findsNothing,
+    );
+  });
 }

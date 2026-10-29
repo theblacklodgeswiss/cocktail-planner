@@ -1011,6 +1011,8 @@
       "heard": "Erkannter Text",
       "check_hint": "Prüfe, ob alles erkannt wurde. Fehlende Zeilen kannst du manuell hinzufügen.",
       "no_lines": "Keine Zeilen erkannt.",
+      "no_lines_example": "z. B. „2 Bacardi, 6 Orangensaft“",
+      "partly_recognized": "Nicht alles erkannt – bitte Menge ergänzen",
       "add_line": "Zeile hinzufügen",
       "quantity": "Menge",
       "quantity_invalid": "Menge muss größer als 0 sein",
