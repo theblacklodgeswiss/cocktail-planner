@@ -47,6 +47,16 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   }
 
   Future<void> _saveSettings(int newThreshold) async {
+    // Never write a defaults-based object over the stored settings.
+    if (!await settingsRepository.ensureLoaded()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('common.error'.tr())));
+      return;
+    }
+    if (!mounted) return;
+    _settings = settingsRepository.current;
     setState(() => _isSaving = true);
 
     try {

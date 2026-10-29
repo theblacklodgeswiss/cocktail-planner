@@ -177,6 +177,7 @@ class AuthService {
     if (userEmail == null) {
       _cachedRole = AppRole.customer;
       _cachedEmployeeRole = null;
+      debugPrint('⏱ role resolved: $_cachedRole (no email)');
       _roleChangesController.add(_cachedRole!);
       return _cachedRole!;
     }
