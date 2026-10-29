@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cocktail_planer/ui/app_theme.dart';
 import 'package:cocktail_planer/ui/motion.dart';
 import 'package:cocktail_planer/ui/page_transitions.dart';
@@ -444,6 +446,92 @@ void main() {
     expect(calls, 2);
     expect(result, isTrue);
     expect(find.text('Loeschen?'), findsNothing);
+  });
+
+  testWidgets('showConfirmSheet is not dismissible while its action runs', (
+    tester,
+  ) async {
+    phone(tester);
+    bool? result;
+    var fail = false;
+    var calls = 0;
+    var gate = Completer<void>();
+    await pumpApp(
+      tester,
+      app(
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async => result = await showConfirmSheet(
+                context,
+                title: 'Loeschen?',
+                confirmLabel: 'Ja',
+                errorText: 'Hat nicht geklappt',
+                confirmAction: () async {
+                  calls++;
+                  await gate.future;
+                  if (fail) throw StateError('boom');
+                },
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    Future<void> settle() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    await tester.tap(find.text('open'));
+    await settle();
+    await tester.tap(find.text('Ja'));
+    await settle();
+    expect(calls, 1);
+
+    // Barrier tap.
+    await tester.tapAt(const Offset(180, 40));
+    await settle();
+    expect(find.text('Loeschen?'), findsOneWidget);
+    // Escape.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+    expect(find.text('Loeschen?'), findsOneWidget);
+    // Drag the handle far down.
+    await tester.fling(
+      find.byKey(const Key('sheet-handle')),
+      const Offset(0, 400),
+      2000,
+    );
+    await settle();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Loeschen?'), findsOneWidget);
+    expect(result, isNull);
+
+    // Failure: dismissible again, inline error and retry.
+    fail = true;
+    gate.complete();
+    await settle();
+    expect(find.text('Hat nicht geklappt'), findsOneWidget);
+    expect(find.text('Erneut versuchen'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+    expect(find.text('Loeschen?'), findsNothing);
+    expect(result, isFalse);
+
+    // Success closes and returns true.
+    fail = false;
+    gate = Completer<void>();
+    await tester.tap(find.text('open'));
+    await settle();
+    await tester.tap(find.text('Ja'));
+    await settle();
+    expect(find.text('Loeschen?'), findsOneWidget);
+    gate.complete();
+    await settle();
+    expect(find.text('Loeschen?'), findsNothing);
+    expect(result, isTrue);
   });
 
   testWidgets('showConfirmSheet returns true and false', (tester) async {

@@ -125,43 +125,49 @@ class _ConfirmSheetBodyState extends State<_ConfirmSheetBody> {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(widget.title, style: AppText.heroTitle.copyWith(color: p.text)),
-        if (widget.body != null) ...[
-          const SizedBox(height: AppSpace.s8),
-          Text(
-            widget.body!,
-            style: AppText.body.copyWith(color: p.textSecondary),
-          ),
-        ],
-        if (_failed) ...[
-          const SizedBox(height: AppSpace.s12),
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              widget.errorText ?? 'common.error'.tr(),
-              style: AppText.body.copyWith(
-                color: Theme.of(context).colorScheme.error,
+    // While the action runs, barrier tap, Escape and the handle drag all go
+    // through maybePop; vetoing it here keeps the sheet (and its error/retry
+    // state) alive until the action settles.
+    return PopScope(
+      canPop: !_busy,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: AppText.heroTitle.copyWith(color: p.text)),
+          if (widget.body != null) ...[
+            const SizedBox(height: AppSpace.s8),
+            Text(
+              widget.body!,
+              style: AppText.body.copyWith(color: p.textSecondary),
+            ),
+          ],
+          if (_failed) ...[
+            const SizedBox(height: AppSpace.s12),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                widget.errorText ?? 'common.error'.tr(),
+                style: AppText.body.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
             ),
+          ],
+          const SizedBox(height: AppSpace.s24),
+          PrimaryButton(
+            label: _failed ? 'ui.retry'.tr() : widget.confirmLabel,
+            destructive: widget.destructive,
+            loading: _busy,
+            onPressed: _confirm,
+          ),
+          const SizedBox(height: AppSpace.s8),
+          TextAction(
+            label: 'ui.cancel'.tr(),
+            onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           ),
         ],
-        const SizedBox(height: AppSpace.s24),
-        PrimaryButton(
-          label: _failed ? 'ui.retry'.tr() : widget.confirmLabel,
-          destructive: widget.destructive,
-          loading: _busy,
-          onPressed: _confirm,
-        ),
-        const SizedBox(height: AppSpace.s8),
-        TextAction(
-          label: 'ui.cancel'.tr(),
-          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
-        ),
-      ],
+      ),
     );
   }
 }
