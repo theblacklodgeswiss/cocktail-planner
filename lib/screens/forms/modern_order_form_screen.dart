@@ -1,45 +1,33 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../utils/url_utils.dart';
-import '../../data/additional_service_repository.dart';
-import '../../data/cocktail_repository.dart';
-import '../../data/order_repository.dart';
+
 import '../../models/additional_service.dart';
-import '../../models/cocktail_data.dart';
-import '../../models/offer.dart' show EventType;
 import '../../models/order.dart';
 import '../../models/recipe.dart';
-import '../../widgets/order_setup_dialog.dart';
-import '../../services/auth_service.dart';
-import '../../services/distance_calculator.dart';
 import '../../state/app_state.dart';
-import '../../services/claude_service.dart';
-import '../../utils/currency.dart';
-import '../../utils/order_option_labels.dart';
-import '../../widgets/gemini_material_review_dialog.dart';
+import '../../ui/motion.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/app_sheet.dart';
+import '../../ui/widgets/pressable.dart';
+import '../../ui/widgets/step_scaffold.dart';
+import '../../widgets/order_setup_dialog.dart';
+import 'order_form_navigation.dart';
+import 'order_form_services.dart';
+import 'order_form_shopping_list.dart';
+import 'order_form_state.dart';
+import 'step_mapping.dart';
+import 'steps/contact_step.dart';
+import 'steps/drinks_step.dart';
+import 'steps/extras_step.dart';
+import 'steps/occasion_step.dart';
+import 'steps/schedule_step.dart';
+import 'steps/wizard_widgets.dart' show CheckMark;
 
-/// Resolves the per-flavor quantity to seed for a shot during prefill: uses
-/// the matching entry's quantity from [shotSelections] if the customer
-/// requested a specific quantity for [recipeName], otherwise defaults to 1
-/// (matching the default applied when a shot is freshly selected by staff).
-/// Extracted as a pure, directly-testable function - see
-/// test/click_interactions_test.dart for the regression test covering the
-/// bug where this quantity was silently dropped on prefill.
-int resolveShotPrefillQuantity(
-  List<ShotSelection> shotSelections,
-  String recipeName,
-) {
-  final matchingSelection = shotSelections
-      .cast<ShotSelection?>()
-      .firstWhere((s) => s!.name == recipeName, orElse: () => null);
-  return matchingSelection?.quantity ?? 1;
-}
+export 'order_form_state.dart' show resolveShotPrefillQuantity;
 
 /// Result from the modern order form containing both setup data and selected recipes
 class OrderFormResult {
@@ -49,76 +37,39 @@ class OrderFormResult {
   OrderFormResult({required this.setupData, required this.selectedRecipes});
 }
 
-/// Modern multi-step order form inspired by Roamy app design.
-/// Features card-based UI, smooth transitions, and touch-optimized controls.
+/// The five-step order wizard (see `step_mapping.dart` for the steps and
+/// how old nine-step `?step=n` links are read). Each step is a
+/// [StepScaffold]; Android back goes to the previous step.
 /// Pass [prefill] to pre-populate all fields from an existing form order.
 class ModernOrderFormScreen extends StatefulWidget {
   final void Function(OrderFormResult result)? onSubmit;
   final SavedOrder? prefill;
 
-  const ModernOrderFormScreen({super.key, this.onSubmit, this.prefill});
+  /// External collaborators (auth role, repositories, distance lookup,
+  /// browser URL). Defaults to the app's global singletons; tests inject
+  /// fakes.
+  final OrderFormServices services;
+
+  const ModernOrderFormScreen({
+    super.key,
+    this.onSubmit,
+    this.prefill,
+    this.services = const OrderFormServices(),
+  });
 
   @override
   State<ModernOrderFormScreen> createState() => _ModernOrderFormScreenState();
 }
 
 class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
-  final PageController _pageController = PageController();
-  int _currentStep = 0;
-  final int _totalSteps = 9;
+  final ScrollController _scrollController = ScrollController();
+  static const int _totalSteps = OrderFormState.totalSteps;
 
-  /// Guards the final-step submit button against a double-tap and drives
-  /// its loading spinner while the (async) submit work - a Firestore write
-  /// - is in flight. Intermediate "Weiter" taps go through the same
-  /// `_nextStep`/button but only do a synchronous `setState`, so they are
-  /// unaffected by this flag.
-  bool _isSubmitting = false;
+  /// All form data (controllers, selections, derived values).
+  late final OrderFormState _form;
 
-  Future<CocktailData>? _dataFuture;
-
-  /// Resolved prefill order (from widget.prefill or appState.pendingFormOrder).
-  SavedOrder? _prefillOrder;
-
-  // Form data
-  String _serviceType = 'cocktail_barservice';
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  DateTime? _eventDate;
-  TimeOfDay? _eventTime;
-  final TextEditingController _addressController = TextEditingController();
-  int _personCount = 100;
-  int _distanceKm = 10;
-  // Guests start with a "pending" lookup so `_buildDistanceDisplay()` shows
-  // a "calculating..." state instead of the fabricated default `_distanceKm`
-  // value above. Cleared to false as soon as a lookup attempt for the
-  // current address resolves (success or definitive failure - see the
-  // debounced listener in `initState`). Employees/admins never see that
-  // display, but this starts false for them anyway so the flag's meaning
-  // stays simple and role-independent.
-  bool _distanceLookupPending = !authService.isEmployeeOrHigher;
-  String _currency = defaultCurrency.code;
-  String _drinkerType = 'normal';
-  EventType? _selectedEventType;
-  final List<Recipe> _selectedRecipes = [];
-  final Map<String, double> _cocktailPopularity = {};
-  final Map<String, int> _shotQuantities = {};
-  final Map<String, TextEditingController> _shotQuantityControllers = {};
-  String _searchQuery = '';
-  String _cocktailFilter = 'all'; // 'all', 'cocktails', 'shots'
-  final Set<String> _selectedBarDrinks = {};
-  final Set<String> _selectedAlcoholItems = {};
-  // Catalog services the customer picked a variant for: serviceId -> variantId.
-  final Map<String, String> _selectedAdditionalServices = {};
-  // "Sonstiges" ("Other") stays a plain flag, not a catalog service - see
-  // the design spec section 5.
-  bool _otherServicesSelected = false;
-  // Legacy bare-string service IDs (e.g. 'booth_360') carried over from an
-  // order created before the catalog existed - preserved untouched on
-  // prefill/save, but not editable through the new tile grid.
-  final Set<String> _legacyAdditionalServiceIds = {};
-  List<AdditionalService> _serviceCatalog = [];
   StreamSubscription<List<AdditionalService>>? _serviceCatalogSubscription;
-  final TextEditingController _remarksController = TextEditingController();
+
   Timer? _distanceLookupDebounce;
   // Trimmed address text as of the last time the debounce/lookup logic
   // below actually ran. `TextEditingController.addListener` fires on ANY
@@ -131,22 +82,28 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController.addListener(() => setState(() {}));
-    _phoneController.addListener(() => setState(() {}));
-    _addressController.addListener(() {
+    _form = OrderFormState(
+      distanceLookupPending: !widget.services.isEmployeeOrHigher(),
+    );
+    // Step widgets mutate the form through `_form.update`, which rebuilds
+    // the whole screen - exactly like the former in-place `setState` calls.
+    _form.addListener(_onFormChanged);
+    _form.nameController.addListener(() => setState(() {}));
+    _form.phoneController.addListener(() => setState(() {}));
+    _form.addressController.addListener(() {
       setState(() {});
       // Guests get their distance computed automatically from the address
       // they type; an employee's manually-set value must never be silently
       // overwritten by a background lookup.
-      if (!authService.isEmployeeOrHigher) {
-        final trimmedAddress = _addressController.text.trim();
+      if (!widget.services.isEmployeeOrHigher()) {
+        final trimmedAddress = _form.addressController.text.trim();
         // Skip the debounce/pending-reset/reschedule entirely when the
         // text hasn't actually changed (a cursor move, tapping back into
         // the field, etc. still notifies listeners but isn't an edit).
         if (trimmedAddress == _lastLookupAddress) return;
         _lastLookupAddress = trimmedAddress;
         _distanceLookupDebounce?.cancel();
-        setState(() => _distanceLookupPending = true);
+        setState(() => _form.distanceLookupPending = true);
         _distanceLookupDebounce = Timer(const Duration(milliseconds: 800), () {
           // Capture the address this lookup is for at the moment it starts.
           // Cancelling `_distanceLookupDebounce` above only prevents a *new*
@@ -156,8 +113,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
           // network call returns, its (now stale) result must not overwrite
           // whatever the newer lookup found, even if the older call happens
           // to resolve later (e.g. a slower round trip).
-          final requestedAddress = _addressController.text.trim();
-          distanceCalculator
+          final requestedAddress = _form.addressController.text.trim();
+          widget.services
               .distanceKmFromAddress(requestedAddress)
               .then((result) {
             // Re-check mounted/role state HERE, right before applying the
@@ -167,47 +124,46 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
             // (firing this listener) before the async role check resolves,
             // so this Timer can be scheduled as a "guest" lookup and only
             // fire well after the session is known to be employee-or-higher
-            // and the correct prefilled `_distanceKm` is already showing.
+            // and the correct prefilled `_form.distanceKm` is already showing.
             // Also discard the result if the address has since changed
             // (see `requestedAddress` above) - it no longer corresponds to
             // what's in the field. Only one Timer is ever pending at a time
             // (a new address change cancels the previous one above), so
             // these guards are sufficient without extra request-id tracking.
             if (!mounted ||
-                authService.isEmployeeOrHigher ||
-                _addressController.text.trim() != requestedAddress) {
+                widget.services.isEmployeeOrHigher() ||
+                _form.addressController.text.trim() != requestedAddress) {
               return;
             }
             setState(() {
-              if (result != null) _distanceKm = result;
-              _distanceLookupPending = false;
+              if (result != null) _form.distanceKm = result;
+              _form.distanceLookupPending = false;
             });
           });
         });
       }
     });
-    _applyPrefill(); // must run before _loadCocktailData so _prefillOrder is set
+    _applyPrefill(); // must run before _loadCocktailData so _form.prefillOrder is set
     _loadCocktailData();
     _serviceCatalogSubscription =
-        additionalServiceRepository.watchServices().listen((services) {
-      if (mounted) setState(() => _serviceCatalog = services);
+        widget.services.watchAdditionalServices().listen((services) {
+      if (mounted) setState(() => _form.serviceCatalog = services);
     });
-    authService.checkIsAdmin().then((_) {
+    widget.services.resolveRole().then((_) {
       if (mounted) {
         setState(() {});
       }
     });
-    // Read step from URL query parameter
+    // Read step from URL query parameter (old 5..8 links are mapped).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final uri = Uri.base;
+      final uri = widget.services.currentUri();
       final stepParam = uri.queryParameters['step'];
       if (stepParam != null) {
-        final step = int.tryParse(stepParam) ?? 0;
-        if (step >= 0 && step < _totalSteps) {
-          setState(() => _currentStep = step);
-          if (_pageController.hasClients) {
-            _pageController.jumpToPage(step);
-          }
+        final step = resolveStepParam(stepParam);
+        if (step != null) {
+          setState(() => _form.currentStep = step);
+          // A legacy index is rewritten to its new one.
+          if ('$step' != stepParam) _updateUrlWithoutNavigation(step);
         }
       } else {
         // No step parameter, set to 0 and update URL
@@ -217,164 +173,47 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   }
 
   void _loadCocktailData() {
-    _dataFuture = cocktailRepository.load();
+    _form.dataFuture = widget.services.loadCocktailData();
     // After data loads, pre-select cocktails from prefill
-    final prefillOrder = _prefillOrder;
+    final prefillOrder = _form.prefillOrder;
     if (prefillOrder != null) {
-      _dataFuture = _dataFuture!.then((data) {
-        final order = prefillOrder;
-        final cocktailNames = order.cocktails.isNotEmpty
-            ? order.cocktails
-            : order.requestedCocktails;
+      _form.dataFuture = _form.dataFuture!.then((data) {
         if (mounted) {
-          setState(() {
-            for (final name in cocktailNames) {
-              final clean = name.contains('(')
-                  ? name.substring(0, name.indexOf('(')).trim()
-                  : name;
-              final recipe = data.recipes.cast<Recipe?>().firstWhere(
-                (r) => r!.name.toLowerCase() == clean.toLowerCase(),
-                orElse: () => null,
-              );
-              if (recipe != null &&
-                  !_selectedRecipes.any((r) => r.name == recipe.name)) {
-                _selectedRecipes.add(recipe);
-              }
-            }
-            for (final name in order.shots) {
-              final recipe = data.recipes.cast<Recipe?>().firstWhere(
-                (r) => r!.name == name,
-                orElse: () => null,
-              );
-              if (recipe != null &&
-                  !_selectedRecipes.any((r) => r.name == recipe.name)) {
-                _selectedRecipes.add(recipe);
-                _shotQuantities[recipe.name] = resolveShotPrefillQuantity(
-                  order.shotSelections,
-                  recipe.name,
-                );
-              }
-            }
-          });
+          setState(() => _form.preselectRecipes(data, prefillOrder));
         }
         return data;
       });
     }
-  }
-
-  String _normalizeServiceType(String serviceType) {
-    return switch (serviceType) {
-      'cocktailservice' => 'cocktail_service',
-      'barservice' => 'bar_service',
-      _ => serviceType,
-    };
+    // A failed load is shown (with retry) by the drinks step; mark the
+    // error as handled so it is not reported as uncaught before that step
+    // is opened.
+    _form.dataFuture!.then<void>((_) {}, onError: (Object _) {});
   }
 
   void _applyPrefill() {
     // widget.prefill for programmatic use; appState.pendingFormOrder for push-navigation (avoids GoRouter extra being lost on web)
     final order = widget.prefill ?? appState.pendingFormOrder;
     if (order == null) return;
-    _prefillOrder = order;
+    _form.prefillOrder = order;
     appState.clearPendingFormOrder();
-    _nameController.text = order.name;
-    _phoneController.text = order.phone;
-    _addressController.text = order.location;
-    _remarksController.text = order.remarks;
-    _eventDate = order.date;
-    _personCount = order.personCount > 0 ? order.personCount : _personCount;
-    _currency = order.currency.isNotEmpty ? order.currency : _currency;
-    _drinkerType = order.drinkerType.isNotEmpty
-        ? order.drinkerType
-        : _drinkerType;
-    _selectedEventType = order.eventType.isNotEmpty
-        ? EventType.values.where((e) => e.name == order.eventType).firstOrNull
-        : _selectedEventType;
-    _selectedBarDrinks
-      ..clear()
-      ..addAll(order.barDrinks);
-    _selectedAlcoholItems
-      ..clear()
-      ..addAll(order.alcoholPurchase);
-    _applyAdditionalServicesPrefill(order.additionalServices);
-    _cocktailPopularity
-      ..clear()
-      ..addAll(order.cocktailPopularity);
-    if (order.serviceType.isNotEmpty) {
-      _serviceType = _normalizeServiceType(order.serviceType);
-    }
-    if (order.distanceKm > 0) _distanceKm = order.distanceKm;
-    // Parse event time
-    final timeStr = order.offerEventTime.isNotEmpty
-        ? order.offerEventTime
-        : order.eventTime;
-    if (timeStr.isNotEmpty) {
-      try {
-        final parts = timeStr.split(':');
-        if (parts.length == 2) {
-          _eventTime = TimeOfDay(
-            hour: int.parse(parts[0]),
-            minute: int.parse(parts[1]),
-          );
-        }
-      } catch (_) {}
-    }
+    _form.applyPrefill(order);
   }
 
-  /// Parses a prefilled order's `additionalServices` values into this
-  /// screen's split selection state: composite `"serviceId:variantId"`
-  /// strings go into [_selectedAdditionalServices], the `'other_services'`
-  /// flag into [_otherServicesSelected], and anything else (a legacy bare
-  /// service ID from before the catalog existed) into
-  /// [_legacyAdditionalServiceIds] so it round-trips unchanged on save even
-  /// though the new tile grid can't display or edit it.
-  void _applyAdditionalServicesPrefill(List<String> values) {
-    _selectedAdditionalServices.clear();
-    _legacyAdditionalServiceIds.clear();
-    _otherServicesSelected = false;
-    for (final value in values) {
-      if (value == 'other_services') {
-        _otherServicesSelected = true;
-        continue;
-      }
-      final separatorIndex = value.indexOf(':');
-      if (separatorIndex > 0) {
-        final serviceId = value.substring(0, separatorIndex);
-        final variantId = value.substring(separatorIndex + 1);
-        if (serviceId.isNotEmpty && variantId.isNotEmpty) {
-          _selectedAdditionalServices[serviceId] = variantId;
-          continue;
-        }
-      }
-      _legacyAdditionalServiceIds.add(value);
-    }
-  }
+  void _onFormChanged() => setState(() {});
 
-  /// Flattens the split selection state back into the `List<String>` shape
-  /// the `additionalServices` order field has always had - composite
-  /// `"serviceId:variantId"` strings for catalog picks, preserved legacy
-  /// bare IDs, and `'other_services'` when that flag is set.
-  List<String> get _additionalServicesList => [
-        for (final entry in _selectedAdditionalServices.entries)
-          '${entry.key}:${entry.value}',
-        ..._legacyAdditionalServiceIds,
-        if (_otherServicesSelected) 'other_services',
-      ];
-
-  bool get _isAdminUser => authService.isEmployeeOrHigher;
+  bool get _isAdminUser => widget.services.isEmployeeOrHigher();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Sync step from URL when navigating back/forward
-    final uri = Uri.base;
+    final uri = widget.services.currentUri();
     final stepParam = uri.queryParameters['step'];
     if (stepParam != null) {
-      final step = int.tryParse(stepParam) ?? 0;
-      if (step >= 0 && step < _totalSteps && step != _currentStep) {
-        setState(() => _currentStep = step);
-        if (_pageController.hasClients) {
-          _pageController.jumpToPage(step);
-        }
+      final step = resolveStepParam(stepParam);
+      if (step != null && step != _form.currentStep) {
+        setState(() => _form.currentStep = step);
+        _scrollToTop();
       }
     }
   }
@@ -383,334 +222,137 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   void dispose() {
     _distanceLookupDebounce?.cancel();
     _serviceCatalogSubscription?.cancel();
-    _pageController.dispose();
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    _remarksController.dispose();
-    for (final controller in _shotQuantityControllers.values) {
-      controller.dispose();
-    }
+    _scrollController.dispose();
+    _form.dispose();
     super.dispose();
   }
 
   // Update browser URL without affecting GoRouter's navigation stack
   void _updateUrlWithoutNavigation(int step) {
-    final currentUrl = Uri.base;
+    final currentUrl = widget.services.currentUri();
     final newUrl = currentUrl.replace(
       queryParameters: {'step': step.toString()},
     );
-    updateBrowserUrl(newUrl.toString());
+    widget.services.updateUrl(newUrl.toString());
   }
 
-  // Show date picker (Cupertino style with mouse wheel support on Web)
-  Future<DateTime?> _showCupertinoDatePicker() async {
-    final now = DateTime.now();
-    final maxDate = now.add(const Duration(days: 730));
-
-    // Use Cupertino Picker everywhere with proper mouse/touch support
-    DateTime selectedDate = _eventDate ?? now;
-
-    return showModalBottomSheet<DateTime>(
-      context: context,
-      builder: (BuildContext context) {
-        return Container(
-          height: 300,
-          color: Theme.of(context).colorScheme.surface,
-          child: Column(
-            children: [
-              // Header with Cancel and OK buttons
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.2),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        'common.cancel'.tr(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'order_setup.event_date_label'.tr(),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pop(selectedDate),
-                      child: Text(
-                        'common.ok'.tr(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Cupertino Date Picker
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date,
-                  initialDateTime: selectedDate,
-                  minimumDate: now,
-                  maximumDate: maxDate,
-                  onDateTimeChanged: (DateTime newDate) {
-                    selectedDate = newDate;
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  void _scrollToTop() {
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 
-  // Show time picker (Cupertino style with mouse wheel support on Web)
-  Future<TimeOfDay?> _showCupertinoTimePicker() async {
-    final initialTime = _eventTime ?? const TimeOfDay(hour: 18, minute: 0);
-
-    // Use Cupertino Picker everywhere with proper mouse/touch support
-    DateTime selectedDateTime = DateTime(
-      2000,
-      1,
-      1,
-      initialTime.hour,
-      initialTime.minute,
-    );
-
-    return showModalBottomSheet<TimeOfDay>(
-      context: context,
-      builder: (BuildContext context) {
-        return Container(
-          height: 300,
-          color: Theme.of(context).colorScheme.surface,
-          child: Column(
-            children: [
-              // Header with Cancel and OK buttons
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.2),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        'common.cancel'.tr(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'order_setup.event_time_label'.tr(),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        final timeOfDay = TimeOfDay(
-                          hour: selectedDateTime.hour,
-                          minute: selectedDateTime.minute,
-                        );
-                        Navigator.of(context).pop(timeOfDay);
-                      },
-                      child: Text(
-                        'common.ok'.tr(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Cupertino Time Picker
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.time,
-                  initialDateTime: selectedDateTime,
-                  use24hFormat: true,
-                  onDateTimeChanged: (DateTime newDateTime) {
-                    selectedDateTime = newDateTime;
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  bool get _canProceed {
-    if (_currentStep == 1) {
-      return _nameController.text.trim().isNotEmpty &&
-          _phoneController.text.trim().isNotEmpty;
-    }
-    if (_currentStep == 2) {
-      return _eventDate != null &&
-          _eventTime != null &&
-          _addressController.text.trim().isNotEmpty;
-    }
-    if (_currentStep == 3) {
-      return _selectedEventType != null;
-    }
-    return true;
+  /// Shows [step] (content, progress, bottom bar) and mirrors it in the URL.
+  void _goToStep(int step) {
+    setState(() => _form.currentStep = step);
+    // Update URL without affecting navigation stack
+    _updateUrlWithoutNavigation(step);
+    _scrollToTop();
   }
 
   void _nextStep() {
-    HapticFeedback.lightImpact();
-    if (_currentStep < _totalSteps - 1) {
-      final nextStep = _currentStep + 1;
-      setState(() => _currentStep = nextStep);
-      // Update URL without affecting navigation stack
-      _updateUrlWithoutNavigation(nextStep);
-      // Animate PageView on mobile layout
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          nextStep,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
-    } else {
+    final step = _form.currentStep;
+    if (step >= _totalSteps - 1) {
       unawaited(_submitForm());
+      return;
     }
+    if (!_form.canProceed(step)) {
+      // Never a silent no-op: the first tap explains at the fields what is
+      // missing. Guests and customers stay on the step until it is valid;
+      // staff (who often fill in only what they know, as the old sidebar
+      // allowed) continue with the next tap. Submit validation is the same
+      // for everyone.
+      final explained = _form.attemptedSteps.contains(step);
+      if (!_isAdminUser || !explained) {
+        _revealMissing(step, _form.firstMissingField(step));
+        return;
+      }
+    }
+    HapticFeedback.lightImpact();
+    _goToStep(step + 1);
   }
 
   void _previousStep() {
-    HapticFeedback.lightImpact();
-    if (_currentStep > 0) {
-      final prevStep = _currentStep - 1;
-      setState(() => _currentStep = prevStep);
-      // Update URL without affecting navigation stack
-      _updateUrlWithoutNavigation(prevStep);
-      // Animate PageView on mobile layout
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          prevStep,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
+    if (_form.currentStep > 0) {
+      HapticFeedback.lightImpact();
+      _goToStep(_form.currentStep - 1);
     }
   }
 
-  Future<void> _submitForm() async {
-    if (_isSubmitting) return;
-    // Validate required fields
-    String? errorMessage;
-
-    if (_nameController.text.trim().isEmpty) {
-      errorMessage = 'order_setup.required_name'.tr();
-      _currentStep = 1; // Jump to Basic Info step
-      _updateUrlWithoutNavigation(1);
-    } else if (_eventDate == null) {
-      errorMessage = 'order_setup.required_date'.tr();
-      _currentStep = 2; // Jump to Event Details step
-      _updateUrlWithoutNavigation(2);
-    } else if (_selectedRecipes.isEmpty) {
-      errorMessage = 'order_setup.required_cocktails'.tr();
-      _currentStep = 5; // Jump to Cocktail Selection step
-      _updateUrlWithoutNavigation(5);
+  /// Back arrow: previous step, or leave the wizard from step 0.
+  void _onBack() {
+    if (_form.currentStep > 0) {
+      _previousStep();
+    } else if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/dashboard');
     }
+  }
 
-    if (errorMessage != null) {
+  /// Turns on the hints of [step] and brings [field] into view (text
+  /// fields also get focus, which opens the keyboard).
+  void _revealMissing(int step, FormFieldId? field) {
+    _form.update(() => _form.attemptedSteps.add(step));
+    if (field == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = _form.focusNodeOf(field);
+      if (node == null) FocusManager.instance.primaryFocus?.unfocus();
+      final anchor = _form.fieldKeys[field]?.currentContext;
+      if (anchor != null) {
+        Scrollable.ensureVisible(
+          anchor,
+          alignment: 0.2,
+          duration: AppMotion.reduced(context) ? Duration.zero : AppMotion.page,
+          curve: AppMotion.easeOut,
+        );
+      }
+      node?.requestFocus();
+    });
+  }
+
+  Future<void> _submitForm() async {
+    if (_form.isSubmitting) return;
+    // Validate required fields
+    final invalid = _form.firstInvalidStep();
+    if (invalid != null) {
+      // Jump to the faulty step (content included) and point at the field.
+      _goToStep(invalid.step);
+      _revealMissing(
+        invalid.step,
+        FormFieldId.values.firstWhere(
+          (f) => f.messageKey == invalid.messageKey,
+        ),
+      );
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(errorMessage)));
-      setState(() {}); // Update UI to show correct step
+      ).showSnackBar(SnackBar(content: Text(invalid.messageKey.tr())));
       return;
     }
 
-    setState(() => _isSubmitting = true);
+    setState(() => _form.isSubmitting = true);
 
-    final setupData = OrderSetupData(
-      orderName: _nameController.text.trim(),
-      phoneNumber: _phoneController.text.trim().isEmpty
-          ? null
-          : _phoneController.text.trim(),
-      eventDate: _eventDate,
-      eventTime: _eventTime,
-      address: _addressController.text.trim().isEmpty
-          ? null
-          : _addressController.text.trim(),
-      personCount: _personCount,
-      distanceKm: _distanceKm,
-      currency: _currency,
-      drinkerType: _drinkerType,
-      serviceType: _serviceType,
-      barDrinks: _selectedBarDrinks.isEmpty
-          ? null
-          : _selectedBarDrinks.toList(),
-      alcoholPurchase: _selectedAlcoholItems.isEmpty
-          ? null
-          : _selectedAlcoholItems.toList(),
-      additionalServices: _additionalServicesList.isEmpty
-          ? null
-          : _additionalServicesList,
-      remarks: _remarksController.text.trim().isEmpty
-          ? null
-          : _remarksController.text.trim(),
-    );
+    final setupData = _form.buildSetupData();
 
     final result = OrderFormResult(
       setupData: setupData,
-      selectedRecipes: _selectedRecipes,
+      selectedRecipes: _form.selectedRecipes,
     );
 
     // Employees and admins get the staff flow (pricing, shopping list);
     // everyone else gets the customer request flow.
-    final isEmployeeOrHigher = authService.isEmployeeOrHigher;
+    final isEmployeeOrHigher = widget.services.isEmployeeOrHigher();
 
     try {
       if (!isEmployeeOrHigher) {
         // Customer flow: Save as pending order and show thank you dialog
         await _savePendingOrderAndShowThanks(setupData);
-      } else if (_prefillOrder != null) {
+      } else if (_form.prefillOrder != null) {
         // Admin prefill flow: update existing form order with new data, then go to shopping list
         await _updateFormOrderAndNavigate(setupData);
       } else {
         // Admin flow: Sync selected recipes + popularity to global state and navigate
-        appState.setSelectedRecipes(_selectedRecipes);
-        for (final entry in _cocktailPopularity.entries) {
+        appState.setSelectedRecipes(_form.selectedRecipes);
+        for (final entry in _form.cocktailPopularity.entries) {
           appState.setCocktailPopularity(entry.key, entry.value);
         }
         if (widget.onSubmit != null) {
@@ -720,24 +362,24 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         }
       }
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _form.isSubmitting = false);
     }
   }
 
   Future<void> _updateFormOrderAndNavigate(OrderSetupData setupData) async {
-    final order = _prefillOrder!;
-    final cocktailNames = _selectedRecipes
+    final order = _form.prefillOrder!;
+    final cocktailNames = _form.selectedRecipes
         .where((r) => !r.isShot)
         .map((r) => r.name)
         .toList();
-    final shotNames = _selectedRecipes
+    final shotNames = _form.selectedRecipes
         .where((r) => r.isShot)
         .map((r) => r.name)
         .toList();
     final eventTimeStr = setupData.eventTime != null
         ? '${setupData.eventTime!.hour.toString().padLeft(2, '0')}:${setupData.eventTime!.minute.toString().padLeft(2, '0')}'
         : '';
-    await orderRepository.updateOrder(order.id, {
+    await widget.services.orders.updateOrder(order.id, {
       'name': setupData.orderName,
       'date': (setupData.eventDate ?? order.date).toIso8601String(),
       'phone': setupData.phoneNumber ?? '',
@@ -749,12 +391,12 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       'serviceType': setupData.serviceType,
       'cocktails': cocktailNames,
       'shots': shotNames,
-      'shotQuantities': _shotQuantities.entries
+      'shotQuantities': _form.shotQuantities.entries
           .map((e) => {'name': e.key, 'quantity': e.value})
           .toList(),
       'eventTime': eventTimeStr,
       'offerEventTime': eventTimeStr,
-      'eventType': _selectedEventType?.name ?? '',
+      'eventType': _form.selectedEventType?.name ?? '',
       'offerClientName': setupData.orderName,
       'offerClientContact': setupData.phoneNumber ?? '',
     });
@@ -764,8 +406,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
       requestedCocktails: order.requestedCocktails,
       savedItems: order.items,
     );
-    appState.setSelectedRecipes(_selectedRecipes);
-    for (final entry in _cocktailPopularity.entries) {
+    appState.setSelectedRecipes(_form.selectedRecipes);
+    for (final entry in _form.cocktailPopularity.entries) {
       appState.setCocktailPopularity(entry.key, entry.value);
     }
     if (mounted) {
@@ -776,7 +418,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
   Future<void> _savePendingOrderAndShowThanks(OrderSetupData setupData) async {
     try {
       // Save pending order (total = 0) using repository method
-      final orderId = await orderRepository.saveOrder(
+      final orderId = await widget.services.orders.saveOrder(
         name: setupData.orderName,
         date: setupData.eventDate ?? DateTime.now(),
         items: [], // Empty items for pending order
@@ -785,15 +427,15 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         personCount: setupData.personCount,
         drinkerType: setupData.drinkerType,
         status: 'quote',
-        cocktails: _selectedRecipes
+        cocktails: _form.selectedRecipes
             .where((r) => !r.isShot)
             .map((r) => r.name)
             .toList(),
-        shots: _selectedRecipes
+        shots: _form.selectedRecipes
             .where((r) => r.isShot)
             .map((r) => r.name)
             .toList(),
-        shotQuantities: _shotQuantities.entries
+        shotQuantities: _form.shotQuantities.entries
             .map((e) => {'name': e.key, 'quantity': e.value})
             .toList(),
         serviceType: setupData.serviceType,
@@ -807,8 +449,8 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         alcoholPurchase: setupData.alcoholPurchase ?? [],
         additionalServices: setupData.additionalServices ?? [],
         remarks: setupData.remarks ?? '',
-        cocktailPopularity: _cocktailPopularity,
-        eventType: _selectedEventType?.name ?? '',
+        cocktailPopularity: _form.cocktailPopularity,
+        eventType: _form.selectedEventType?.name ?? '',
       );
 
       if (orderId == null) {
@@ -825,2861 +467,168 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('order_form.save_error'.tr()),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
           ),
         );
       }
     }
   }
+
+  Future<void> _generateShoppingListWithGemini() =>
+      generateShoppingListWithClaude(context, _form);
+
+  void _retryCocktailData() => setState(_loadCocktailData);
+
+  /// Staff only: a sheet listing all steps; picking one jumps there
+  /// without validation (what the old desktop sidebar did).
+  Future<void> _showStepPicker() async {
+    final picked = await showAppSheet<int>(
+      context,
+      builder: (sheet) {
+        final p = AppPalette.of(sheet);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'ui.jump_to_step'.tr(),
+              style: AppText.heroTitle.copyWith(color: p.text),
+            ),
+            const SizedBox(height: AppSpace.s8),
+            for (var i = 0; i < _totalSteps; i++)
+              Pressable(
+                minSize: AppSize.minTap,
+                selected: i == _form.currentStep,
+                onTap: () => Navigator.of(sheet).pop(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: AppSize.stepDigit,
+                        child: Text(
+                          '${i + 1}',
+                          style: AppText.number.copyWith(
+                            color: p.textSecondary,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _titleOf(i),
+                          style: AppText.button.copyWith(color: p.text),
+                        ),
+                      ),
+                      CheckMark(selected: i == _form.currentStep),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+    if (picked != null && mounted && picked != _form.currentStep) {
+      HapticFeedback.selectionClick();
+      _goToStep(picked);
+    }
+  }
+
+  String _titleOf(int step) => switch (step) {
+    0 => 'order_wizard.title_occasion'.tr(),
+    1 => 'order_wizard.title_schedule'.tr(),
+    2 => 'order_wizard.title_contact'.tr(),
+    3 => 'order_wizard.title_drinks'.tr(),
+    _ => 'order_wizard.title_extras'.tr(),
+  };
+
+  Widget _stepContent(int step) => switch (step) {
+    0 => OccasionStep(form: _form),
+    1 => ScheduleStep(form: _form, isEmployeeOrHigher: _isAdminUser),
+    2 => ContactStep(form: _form),
+    3 => DrinksStep(form: _form, onRetry: _retryCocktailData),
+    _ => ExtrasStep(
+      form: _form,
+      isEmployeeOrHigher: _isAdminUser,
+      onEditStep: _goToStep,
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        title: Text('order_setup.title'.tr()),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_currentStep > 0) {
-              _previousStep();
-            } else if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/dashboard');
-            }
-          },
-        ),
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          // Desktop/Tablet Layout (≥ 600px width)
-          if (constraints.maxWidth >= 600) {
-            return _buildDesktopLayout();
-          }
-          // Mobile Layout (< 600px width)
-          return _buildMobileLayout();
-        },
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout() {
-    return Column(
-      children: [
-        // Progress Indicator
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: List.generate(
-              _totalSteps,
-              (index) => Expanded(
-                child: Container(
-                  height: 4,
-                  margin: EdgeInsets.only(
-                    right: index < _totalSteps - 1 ? 8 : 0,
-                  ),
-                  decoration: BoxDecoration(
-                    color: index <= _currentStep
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        // Page View
-        Expanded(
-          child: PageView(
-            controller: _pageController,
-            onPageChanged: (index) => setState(() => _currentStep = index),
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _buildServiceTypeStep(),
-              _buildBasicInfoStep(),
-              _buildEventDetailsStep(),
-              _buildPreferencesStep(),
-              _buildBarAlcoholStep(),
-              _buildCocktailSelectionStep(),
-              _buildCocktailPopularityStep(),
-              _buildAdditionalServicesStep(),
-              _buildOrderOverviewStep(),
-            ],
-          ),
-        ),
-        // Navigation Buttons
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: _currentStep == _totalSteps - 1
-                ? _isAdminUser
-                      ? Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _generateShoppingListWithGemini,
-                                icon: const Icon(Icons.auto_awesome),
-                                label: Text(
-                                  'order_form.generate_with_claude'.tr(),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: _isSubmitting ? null : _nextStep,
-                                icon: _isSubmitting
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.shopping_cart),
-                                label: Text('dashboard.generate_list'.tr()),
-                                iconAlignment: IconAlignment.end,
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      : SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _isSubmitting ? null : _nextStep,
-                            icon: _isSubmitting
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.send_outlined),
-                            label: Text('order_form.submit_request'.tr()),
-                            iconAlignment: IconAlignment.end,
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: _currentStep > 0
-                            ? OutlinedButton(
-                                onPressed: _previousStep,
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Text('common.back'.tr()),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _canProceed ? _nextStep : null,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text('common.next'.tr()),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDesktopLayout() {
-    return Row(
-      children: [
-        // Left Side: Vertical Stepper
-        Container(
-          width: 280,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            border: Border(
-              right: BorderSide(
-                color: Theme.of(context).colorScheme.outlineVariant,
-                width: 1,
-              ),
-            ),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 32),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  'order_setup.title'.tr(),
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _buildStepperItem(
-                      0,
-                      Icons.celebration,
-                      'order_setup.service_type_label'.tr(),
-                      'Service auswählen',
-                    ),
-                    _buildStepperItem(
-                      1,
-                      Icons.person_outline,
-                      'order_setup.basic_info_title'.tr(),
-                      'Kontaktdaten',
-                    ),
-                    _buildStepperItem(
-                      2,
-                      Icons.calendar_today,
-                      'order_setup.event_details_title'.tr(),
-                      'Event-Details',
-                    ),
-                    _buildStepperItem(
-                      3,
-                      Icons.tune,
-                      'order_setup.preferences_title'.tr(),
-                      'Präferenzen',
-                    ),
-                    _buildStepperItem(
-                      4,
-                      Icons.liquor,
-                      'Bargetränke & Alkohol',
-                      'Optional',
-                    ),
-                    _buildStepperItem(
-                      5,
-                      Icons.local_bar,
-                      'Cocktail-Auswahl',
-                      'Cocktails',
-                    ),
-                    _buildStepperItem(
-                      6,
-                      Icons.bar_chart,
-                      'Wahrscheinlichkeiten',
-                      'Beliebtheit',
-                    ),
-                    _buildStepperItem(
-                      7,
-                      Icons.miscellaneous_services,
-                      'Zusatzleistungen',
-                      'Optional',
-                    ),
-                    _buildStepperItem(
-                      8,
-                      Icons.checklist,
-                      'Übersicht',
-                      'Zusammenfassung',
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Right Side: Content
-        Expanded(
-          child: SingleChildScrollView(
-            child: _currentStep >= 5
-                ? Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: _buildCurrentStepContent(),
-                  )
-                : Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 700),
-                      child: Padding(
-                        padding: const EdgeInsets.all(48),
-                        child: _buildCurrentStepContent(),
-                      ),
-                    ),
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStepperItem(
-    int step,
-    IconData icon,
-    String title,
-    String subtitle,
-  ) {
-    final isActive = _currentStep == step;
-    final isCompleted = _currentStep > step;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: isActive
-            ? Theme.of(context).colorScheme.primaryContainer
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            setState(() => _currentStep = step);
-            // Update URL without affecting navigation stack
-            _updateUrlWithoutNavigation(step);
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: isActive || isCompleted
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isCompleted ? Icons.check : icon,
-                    color: isActive || isCompleted
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: isActive
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _getStepTitle(step),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: isActive
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: isActive
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _getStepTitle(int step) {
-    switch (step) {
-      case 0:
-        return _serviceType == 'cocktail_barservice'
-            ? 'Cocktail & Bar'
-            : _serviceType == 'cocktail_service'
-            ? 'Nur Cocktail'
-            : _serviceType == 'mocktail_service'
-            ? 'Nur Mocktails'
-            : 'Nur Bar';
-      case 1:
-        return _nameController.text.trim().isEmpty
-            ? 'Nicht ausgefüllt'
-            : _nameController.text.trim();
-      case 2:
-        return _eventDate != null
-            ? DateFormat('dd.MM.yyyy').format(_eventDate!)
-            : 'Nicht ausgefüllt';
-      case 3:
-        return '$_personCount Personen';
-      case 4:
-        if (_serviceType == 'cocktail_barservice' ||
-            _serviceType == 'bar_service') {
-          final total =
-              _selectedBarDrinks.length + _selectedAlcoholItems.length;
-          return total == 0 ? 'Keine ausgewählt' : '$total ausgewählt';
-        }
-        return 'Übersprungen';
-      case 5:
-        return _selectedRecipes.isEmpty
-            ? 'Keine ausgewählt'
-            : _serviceType == 'mocktail_service'
-            ? '${_selectedRecipes.length} Mocktails'
-            : '${_selectedRecipes.length} Cocktails';
-      case 6:
-        return _selectedRecipes.isEmpty
-            ? 'Keine Cocktails'
-            : '${_selectedRecipes.length} konfiguriert';
-      case 7:
-        final count7 = _additionalServicesList.length;
-        return count7 == 0 ? 'Keine' : '$count7 ausgewählt';
-      case 8:
-        return 'Alles prüfen & abschließen';
-      default:
-        return '';
-    }
-  }
-
-  Widget _buildCurrentStepContent() {
-    switch (_currentStep) {
-      case 0:
-        return _buildServiceTypeStep();
-      case 1:
-        return _buildBasicInfoStep();
-      case 2:
-        return _buildEventDetailsStep();
-      case 3:
-        return _buildPreferencesStep();
-      case 4:
-        return _buildBarAlcoholStep();
-      case 5:
-        return _buildCocktailSelectionStep();
-      case 6:
-        return _buildCocktailPopularityStep();
-      case 7:
-        return _buildAdditionalServicesStep();
-      case 8:
-        return _buildOrderOverviewStep();
-      default:
-        return Container();
-    }
-  }
-
-  Widget _buildServiceTypeStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'order_setup.service_type_title'.tr(),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'order_setup.service_type_subtitle'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildServiceCard(
-            'cocktail_barservice',
-            Icons.celebration,
-            'order_setup.service_cocktail_barservice'.tr(),
-            'order_setup.service_cocktail_barservice_desc'.tr(),
-          ),
-          const SizedBox(height: 16),
-          _buildServiceCard(
-            'cocktail_service',
-            Icons.local_bar,
-            'order_setup.service_cocktailservice'.tr(),
-            'order_setup.service_cocktailservice_desc'.tr(),
-          ),
-          const SizedBox(height: 16),
-          _buildServiceCard(
-            'mocktail_service',
-            Icons.no_drinks,
-            'order_setup.service_mocktailservice'.tr(),
-            'order_setup.service_mocktailservice_desc'.tr(),
-          ),
-          const SizedBox(height: 16),
-          _buildServiceCard(
-            'bar_service',
-            Icons.liquor,
-            'order_setup.service_barservice'.tr(),
-            'order_setup.service_barservice_desc'.tr(),
-          ),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServiceCard(
-    String value,
-    IconData icon,
-    String title,
-    String description,
-  ) {
-    final isSelected = _serviceType == value;
-    return Card(
-      elevation: isSelected ? 8 : 0,
-      color: Theme.of(context).colorScheme.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() {
-            _serviceType = value;
-            if (value == 'mocktail_service') {
-              _selectedRecipes.removeWhere((recipe) => recipe.isShot);
-              _shotQuantities.clear();
-              for (final controller in _shotQuantityControllers.values) {
-                controller.dispose();
-              }
-              _shotQuantityControllers.clear();
-              _cocktailPopularity.removeWhere(
-                (name, _) =>
-                    !_selectedRecipes.any((recipe) => recipe.name == name),
-              );
-              if (_cocktailFilter == 'shots') {
-                _cocktailFilter = 'all';
-              }
-            }
-          });
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  size: 32,
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isSelected)
-                Icon(
-                  Icons.check_circle,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 28,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBasicInfoStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'order_setup.basic_info_title'.tr(),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'order_setup.basic_info_subtitle'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          TextField(
-            controller: _nameController,
-            decoration: InputDecoration(
-              labelText: 'order_setup.order_name_label'.tr(),
-              hintText: 'order_setup.order_name_hint'.tr(),
-              prefixIcon: const Icon(Icons.person_outline),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-            ),
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _phoneController,
-            decoration: InputDecoration(
-              labelText: '${'order_setup.phone_label'.tr()} *',
-              hintText: 'order_setup.phone_hint'.tr(),
-              prefixIcon: const Icon(Icons.phone_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-            ),
-            keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.done,
-          ),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEventDetailsStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'order_setup.event_details_title'.tr(),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'order_setup.event_details_subtitle'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildDateTimePicker(),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _addressController,
-            decoration: InputDecoration(
-              labelText: 'order_setup.address_label'.tr(),
-              hintText: 'order_setup.address_hint'.tr(),
-              prefixIcon: const Icon(Icons.location_on_outlined),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-            ),
-            maxLines: 3,
-          ),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateTimePicker() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () async {
-              HapticFeedback.lightImpact();
-              final date = await _showCupertinoDatePicker();
-              if (date != null) {
-                HapticFeedback.selectionClick();
-                setState(() => _eventDate = date);
-              }
-            },
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'order_setup.event_date_label'.tr(),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _eventDate != null
-                              ? DateFormat(
-                                  'EEEE, dd. MMMM yyyy',
-                                ).format(_eventDate!)
-                              : 'order_setup.event_date_hint'.tr(),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right),
-                ],
-              ),
-            ),
-          ),
-          Divider(
-            height: 1,
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-          ),
-          InkWell(
-            onTap: () async {
-              HapticFeedback.lightImpact();
-              final time = await _showCupertinoTimePicker();
-              if (time != null) {
-                HapticFeedback.selectionClick();
-                setState(() => _eventTime = time);
-              }
-            },
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'order_setup.event_time_label'.tr(),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _eventTime != null
-                              ? _eventTime!.format(context)
-                              : 'order_setup.event_time_hint'.tr(),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreferencesStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'order_setup.preferences_title'.tr(),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'order_setup.preferences_subtitle'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          if (_prefillOrder != null &&
-              (_prefillOrder!.location.isNotEmpty ||
-                  _prefillOrder!.guestCountRange.isNotEmpty)) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.outline.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_prefillOrder!.location.isNotEmpty) ...[
-                    InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () {
-                        final origin = Uri.encodeComponent('Allschwil, 4123');
-                        final dest = Uri.encodeComponent(
-                          _prefillOrder!.location,
-                        );
-                        launchUrl(
-                          Uri.parse(
-                            'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$dest&travelmode=driving',
-                          ),
-                          mode: LaunchMode.externalApplication,
-                        );
-                      },
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.location_on_outlined,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _prefillOrder!.location,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                            ),
-                          ),
-                          Icon(
-                            Icons.open_in_new,
-                            size: 14,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (_prefillOrder!.location.isNotEmpty &&
-                      _prefillOrder!.guestCountRange.isNotEmpty)
-                    const SizedBox(height: 8),
-                  if (_prefillOrder!.guestCountRange.isNotEmpty) ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.people_outline,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Formular: ${_prefillOrder!.guestCountRange} Personen → Mittelwert: $_personCount',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-          _buildPersonCountSlider(),
-          const SizedBox(height: 32),
-          authService.isEmployeeOrHigher
-              ? _buildDistanceSlider()
-              : _buildDistanceDisplay(),
-          const SizedBox(height: 32),
-          _buildCurrencySelector(),
-          const SizedBox(height: 32),
-          _buildDrinkerTypeSelector(),
-          const SizedBox(height: 32),
-          _buildEventTypeSelector(),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPersonCountSlider() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'order_setup.person_count_label'.tr(),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '$_personCount',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Slider(
-          value: _personCount.toDouble(),
-          min: 50,
-          max: 1000,
-          divisions: 19,
-          label: '$_personCount',
-          onChanged: (value) {
-            HapticFeedback.selectionClick();
-            setState(() => _personCount = value.round());
-          },
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('50', style: Theme.of(context).textTheme.bodySmall),
-            Text('1000', style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDistanceSlider() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'order_setup.distance_label'.tr(),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '$_distanceKm km',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Slider(
-          value: _distanceKm.toDouble(),
-          min: 0,
-          max: 1000,
-          divisions: 50,
-          label: '$_distanceKm km',
-          onChanged: (value) {
-            HapticFeedback.selectionClick();
-            setState(() => _distanceKm = value.round());
-          },
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('0 km', style: Theme.of(context).textTheme.bodySmall),
-            Text('1000 km', style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ],
-    );
-  }
-
-  /// Read-only distance row shown to guest customers in place of the
-  /// staff-only slider. The value is computed automatically from the
-  /// address they entered earlier in the form (see the debounced listener
-  /// on `_addressController` in `initState`).
-  Widget _buildDistanceDisplay() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'order_setup.distance_label'.tr(),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              iconSize: 20,
-              onPressed: _showDistanceInfo,
-              tooltip: 'order_setup.distance_info'.tr(),
-            ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            _distanceLookupPending
-                ? 'order_setup.distance_calculating'.tr()
-                : '$_distanceKm km',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCurrencySelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'order_setup.currency_label'.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        SegmentedButton<String>(
-          segments: Currency.values
-              .map(
-                (currency) => ButtonSegment<String>(
-                  value: currency.code,
-                  label: Text(currency.code),
-                ),
-              )
-              .toList(growable: false),
-          selected: {_currency},
-          onSelectionChanged: (values) {
-            HapticFeedback.selectionClick();
-            setState(() => _currency = values.first);
-          },
-          style: ButtonStyle(
-            visualDensity: VisualDensity.comfortable,
-            padding: WidgetStateProperty.all(
-              const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEventTypeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'offer.event_type'.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _buildEventTypeChip(
-              EventType.birthday,
-              Icons.cake_outlined,
-              'offer.event_birthday'.tr(),
-            ),
-            _buildEventTypeChip(
-              EventType.wedding,
-              Icons.favorite_border,
-              'offer.event_wedding'.tr(),
-            ),
-            _buildEventTypeChip(
-              EventType.company,
-              Icons.business_center_outlined,
-              'offer.event_company'.tr(),
-            ),
-            _buildEventTypeChip(
-              EventType.babyshower,
-              Icons.child_friendly_outlined,
-              'offer.event_babyshower'.tr(),
-            ),
-            _buildEventTypeChip(
-              EventType.other,
-              Icons.celebration_outlined,
-              'offer.event_other'.tr(),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEventTypeChip(EventType type, IconData icon, String label) {
-    final isSelected = _selectedEventType == type;
-    return FilterChip(
-      selected: isSelected,
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(label)],
-      ),
-      onSelected: (_) {
-        HapticFeedback.selectionClick();
-        setState(() {
-          // Single-select: tapping the already-selected chip deselects it,
-          // tapping another one replaces the selection - an event has one
-          // occasion, unlike the admin offer screen's multi-select.
-          _selectedEventType = isSelected ? null : type;
-        });
+    // The step widgets read MediaQuery and the EasyLocalization locale on
+    // their own contexts. This screen keeps depending on both explicitly:
+    // every resize, rotation, keyboard inset or locale change re-runs
+    // didChangeDependencies, which re-reads the URL's `?step=` (this is how
+    // browser back/forward re-syncs).
+    MediaQuery.of(context);
+    context.locale;
+    final step = _form.currentStep;
+    return PopScope(
+      // Android back walks the steps; only step 0 leaves the wizard.
+      canPop: step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _previousStep();
       },
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    );
-  }
-
-  Widget _buildDrinkerTypeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'order_setup.drinker_type_label'.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      child: StepScaffold(
+        step: step + 1,
+        total: _totalSteps,
+        title: _titleOf(step),
+        onBack: _onBack,
+        controller: _scrollController,
+        onStepLabelTap: _isAdminUser ? _showStepPicker : null,
+        bottom: OrderFormBottomBar(
+          form: _form,
+          isEmployeeOrHigher: _isAdminUser,
+          onNext: _nextStep,
+          onGenerateShoppingList: _generateShoppingListWithGemini,
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _buildDrinkerChip(
-              'light',
-              Icons.local_drink,
-              'order_setup.drinker_light'.tr(),
-            ),
-            _buildDrinkerChip(
-              'normal',
-              Icons.local_bar,
-              'order_setup.drinker_normal'.tr(),
-            ),
-            _buildDrinkerChip(
-              'heavy',
-              Icons.sports_bar,
-              'order_setup.drinker_heavy'.tr(),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDrinkerChip(String value, IconData icon, String label) {
-    final isSelected = _drinkerType == value;
-    return FilterChip(
-      selected: isSelected,
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(label)],
-      ),
-      onSelected: (_) {
-        HapticFeedback.selectionClick();
-        setState(() => _drinkerType = value);
-      },
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    );
-  }
-
-  Widget _buildBarDrinksSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'order_setup.bar_drinks_title'.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'order_setup.bar_drinks_subtitle'.tr(),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildBarDrinkCheckbox('whiskey_mix', 'Whiskey & Mischgetränke'),
-            _buildBarDrinkCheckbox('vodka_mix', 'Vodka & Mischgetränke'),
-            _buildBarDrinkCheckbox('gin_mix', 'Gin & Mischgetränke'),
-            _buildBarDrinkCheckbox('shots', 'Shots'),
-            _buildBarDrinkCheckbox('other', 'Sonstiges'),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBarDrinkCheckbox(String value, String label) {
-    final isSelected = _selectedBarDrinks.contains(value);
-    return FilterChip(
-      selected: isSelected,
-      label: Text(label),
-      onSelected: (selected) {
-        HapticFeedback.selectionClick();
-        setState(() {
-          if (selected) {
-            _selectedBarDrinks.add(value);
-          } else {
-            _selectedBarDrinks.remove(value);
-          }
-        });
-      },
-      showCheckmark: true,
-    );
-  }
-
-  Widget _buildAlcoholPurchaseSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'order_setup.alcohol_purchase_title'.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'order_setup.alcohol_purchase_subtitle'.tr(),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildAlcoholCheckbox(
-              'whiskey_chivas',
-              'Whiskey Chivas 0.7L - 35,-',
-            ),
-            _buildAlcoholCheckbox(
-              'whiskey_black_label',
-              'Whiskey Black Label 0.7L - 35,-',
-            ),
-            _buildAlcoholCheckbox('vodka_absolut', 'Vodka Absolut 0.7L - 25,-'),
-            _buildAlcoholCheckbox(
-              'vodka_three_sixty',
-              'Vodka Three Sixty 0.7L - 25,-',
-            ),
-            _buildAlcoholCheckbox('vodka_ciroc', 'Vodka Ciroc 0.7L - 40,-'),
-            _buildAlcoholCheckbox(
-              'vodka_belvedere',
-              'Vodka Belvedere 0.7L - 45,-',
-            ),
-            _buildAlcoholCheckbox(
-              'vodka_grey_goose',
-              'Vodka Grey Goose 0.7L - 45,-',
-            ),
-            _buildAlcoholCheckbox(
-              'gin_bombay',
-              'Gin Bombay Saphire 0.7L - 25,-',
-            ),
-            _buildAlcoholCheckbox('gin_bulldog', 'Gin Bulldog 0.7L - 35,-'),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAlcoholCheckbox(String value, String label) {
-    final isSelected = _selectedAlcoholItems.contains(value);
-    return FilterChip(
-      selected: isSelected,
-      label: Text(label),
-      onSelected: (selected) {
-        HapticFeedback.selectionClick();
-        setState(() {
-          if (selected) {
-            _selectedAlcoholItems.add(value);
-          } else {
-            _selectedAlcoholItems.remove(value);
-          }
-        });
-      },
-      showCheckmark: true,
-    );
-  }
-
-  Widget _buildBarAlcoholStep() {
-    // Skip this step if service type doesn't include bar service
-    if (_serviceType != 'cocktail_barservice' &&
-        _serviceType != 'bar_service') {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 64,
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Dieser Schritt ist für Ihren ausgewählten Service nicht erforderlich.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Barservice - Welche Getränke sollen ausgeschenkt werden?',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Wähle alle zutreffenden Kategorien',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildBarDrinksSelector(),
-          const SizedBox(height: 32),
-          _buildAlcoholPurchaseSelector(),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCocktailSelectionStep() {
-    return FutureBuilder<CocktailData>(
-      future: _dataFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(48.0),
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(48.0),
-              child: Text('Error: ${snapshot.error}'),
-            ),
-          );
-        }
-
-        final recipes = snapshot.data?.recipes ?? [];
-        final isMocktailService = _serviceType == 'mocktail_service';
-        final selectedLabelSingular = isMocktailService
-            ? 'Mocktail'
-            : 'Cocktail';
-        final selectedLabelPlural = isMocktailService
-            ? 'Mocktails'
-            : 'Cocktails';
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'order_setup.cocktail_selection_title'.tr(),
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'order_setup.cocktail_selection_subtitle'.tr(),
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                decoration: InputDecoration(
-                  hintText: 'dialog.search_hint'.tr(),
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                ),
-                onChanged: (value) {
-                  setState(() => _searchQuery = value.toLowerCase());
-                },
-              ),
-              const SizedBox(height: 16),
-              // Filter Chips
-              Row(
-                children: [
-                  FilterChip(
-                    selected: _cocktailFilter == 'all',
-                    label: Text('Alle'),
-                    onSelected: (_) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _cocktailFilter = 'all');
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _cocktailFilter == 'cocktails',
-                    label: Text(isMocktailService ? 'Mocktails' : 'Cocktails'),
-                    onSelected: (_) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _cocktailFilter = 'cocktails');
-                    },
-                  ),
-                  if (!isMocktailService) ...[
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      selected: _cocktailFilter == 'shots',
-                      label: Text('Shots'),
-                      onSelected: (_) {
-                        HapticFeedback.selectionClick();
-                        setState(() => _cocktailFilter = 'shots');
-                      },
-                    ),
-                  ],
-                ],
-              ),
-              if (_selectedRecipes.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${_selectedRecipes.length} ${_selectedRecipes.length == 1 ? selectedLabelSingular : selectedLabelPlural} ausgewählt',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              _buildCocktailList(recipes),
-              if (MediaQuery.of(context).size.width >= 600) ...[
-                const SizedBox(height: 32),
-                _buildDesktopActionButtons(),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCocktailList(List<Recipe> recipes) {
-    final filtered = recipes.where((recipe) {
-      // Suchfilter
-      if (_searchQuery.isNotEmpty &&
-          !recipe.name.toLowerCase().contains(_searchQuery)) {
-        return false;
-      }
-      // Mocktail-Service: keine Shots anzeigen
-      if (_serviceType == 'mocktail_service' && recipe.isShot) {
-        return false;
-      }
-      // Typ-Filter
-      if (_cocktailFilter == 'cocktails' && recipe.isShot) {
-        return false;
-      }
-      if (_cocktailFilter == 'shots' && !recipe.isShot) {
-        return false;
-      }
-      return true;
-    }).toList()..sort((a, b) => a.name.compareTo(b.name));
-
-    if (filtered.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(48.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.search_off,
-                size: 64,
-                color: Theme.of(context).colorScheme.outline,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Keine Cocktails gefunden',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Grid für Desktop (≥600px)
-    final screenWidth = MediaQuery.of(context).size.width;
-    if (screenWidth >= 600) {
-      // Berücksichtige die Sidebar (280px) bei der Berechnung
-      final availableWidth = screenWidth - 280 - 64; // Sidebar + Padding
-      final crossAxisCount = availableWidth > 1400
-          ? 8
-          : availableWidth > 1200
-          ? 7
-          : availableWidth > 1000
-          ? 6
-          : availableWidth > 800
-          ? 5
-          : availableWidth > 600
-          ? 4
-          : 3;
-
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          childAspectRatio: 1.0,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: filtered.length,
-        itemBuilder: (context, index) {
-          return _buildCocktailCard(filtered[index]);
-        },
-      );
-    }
-
-    // Liste für Mobile
-    return Column(
-      children: filtered.map((recipe) => _buildCocktailCard(recipe)).toList(),
-    );
-  }
-
-  void _toggleRecipeSelection(Recipe recipe) {
-    setState(() {
-      final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
-      if (isSelected) {
-        _selectedRecipes.removeWhere((r) => r.id == recipe.id);
-        if (recipe.isShot) {
-          _shotQuantities.remove(recipe.name);
-          _shotQuantityControllers.remove(recipe.name)?.dispose();
-        }
-      } else {
-        _selectedRecipes.add(recipe);
-        if (recipe.isShot) _shotQuantities[recipe.name] = 1;
-      }
-    });
-  }
-
-  void _setShotQuantity(Recipe recipe, int quantity) {
-    final clamped = quantity < 1 ? 1 : quantity;
-    setState(() => _shotQuantities[recipe.name] = clamped);
-  }
-
-  TextEditingController _shotQuantityController(Recipe recipe) {
-    return _shotQuantityControllers.putIfAbsent(
-      recipe.name,
-      () => TextEditingController(
-        text: '${_shotQuantities[recipe.name] ?? 1}',
-      ),
-    );
-  }
-
-  void _showDistanceInfo() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('order_setup.distance_info_title'.tr()),
-        content: Text('order_setup.distance_info_message'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('common.ok'.tr()),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showShotQuantityInfo() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('order_setup.shot_quantity_info_title'.tr()),
-        content: Text('order_setup.shot_quantity_info_message'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('common.ok'.tr()),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShotQuantityStepper(Recipe recipe) {
-    final controller = _shotQuantityController(recipe);
-    return Semantics(
-      label: '${recipe.name}: ${_shotQuantities[recipe.name] ?? 1}',
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            iconSize: 20,
-            onPressed: _showShotQuantityInfo,
-            tooltip: 'order_setup.shot_quantity_info'.tr(),
-          ),
-          SizedBox(
-            width: 56,
-            child: TextField(
-              controller: controller,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 4,
-                ),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                final parsed = int.tryParse(value);
-                if (parsed != null && parsed >= 1) {
-                  _setShotQuantity(recipe, parsed);
-                }
-              },
-              onEditingComplete: () {
-                final resolved = _shotQuantities[recipe.name] ?? 1;
-                controller.text = '$resolved';
-                FocusScope.of(context).unfocus();
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCocktailCard(Recipe recipe) {
-    final isSelected = _selectedRecipes.any((r) => r.id == recipe.id);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth >= 600;
-
-    // Quadratisches Design für Desktop, Liste für Mobile
-    if (isDesktop) {
-      return Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outlineVariant,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            _toggleRecipeSelection(recipe);
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Icon oben
-                Icon(
-                  Icons.local_bar,
-                  size: 24,
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                // Name in der Mitte (flexibel)
-                Flexible(
-                  child: Center(
-                    child: Text(
-                      recipe.name,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                // Badge + Check unten
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (recipe.isShot)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Shot',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSecondaryContainer,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 9,
-                              ),
-                        ),
-                      ),
-                    if (recipe.isShot) const SizedBox(width: 4),
-                    Icon(
-                      isSelected ? Icons.check_circle : Icons.circle_outlined,
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.outline,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Mobile Layout (Liste)
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outlineVariant,
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          _toggleRecipeSelection(recipe);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        recipe.name,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (recipe.isShot) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Shot',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSecondaryContainer,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              if (recipe.isShot && isSelected) ...[
-                _buildShotQuantityStepper(recipe),
-                const SizedBox(width: 12),
-              ],
-              Icon(
-                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline,
-                size: 28,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdditionalServicesStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'order_setup.additional_services_title'.tr(),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'order_setup.additional_services_subtitle'.tr(),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          if (_serviceCatalog.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'order_setup.additional_services_empty'.tr(),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            )
-          else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                childAspectRatio: 0.85,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: _serviceCatalog.length,
-              itemBuilder: (context, index) =>
-                  _buildServiceTile(_serviceCatalog[index]),
-            ),
-          if (_legacyAdditionalServiceIds.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _legacyAdditionalServiceIds
-                  .map(
-                    (value) => Chip(
-                      label: Text(
-                        formatOrderAdditionalServiceLabel(
-                          value,
-                          isEnglish: context.locale.languageCode == 'en',
-                          currencyCode: _currency,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilterChip(
-                selected: _otherServicesSelected,
-                label: Text(
-                  context.locale.languageCode == 'en' ? 'Other' : 'Sonstiges',
-                ),
-                showCheckmark: true,
-                onSelected: (selected) {
-                  HapticFeedback.selectionClick();
-                  setState(() => _otherServicesSelected = selected);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'order_setup.remarks_title'.tr(),
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'order_setup.remarks_subtitle'.tr(),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _remarksController,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: 'order_setup.remarks_hint'.tr(),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// One tile per catalog [AdditionalService]: shows its image (or a
-  /// placeholder icon), name, and - once the customer has picked a variant
-  /// for it - a check badge plus the chosen variant's name/price. Tapping
-  /// opens [_showServiceVariantPicker].
-  Widget _buildServiceTile(AdditionalService service) {
-    final selectedVariantId = _selectedAdditionalServices[service.id];
-    final selectedVariant = selectedVariantId != null
-        ? service.variantById(selectedVariantId)
-        : null;
-    final isSelected = selectedVariant != null;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => _showServiceVariantPicker(service),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
-            width: isSelected ? 2 : 1,
-          ),
-          color: isSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.2)
-              : null,
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: service.imageUrl != null &&
-                              service.imageUrl!.isNotEmpty
-                          ? Image.network(
-                              service.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  _buildServiceTilePlaceholder(colorScheme),
-                            )
-                          : _buildServiceTilePlaceholder(colorScheme),
-                    ),
-                  ),
-                  if (isSelected)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Icon(
-                        Icons.check_circle,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              service.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            if (selectedVariant != null)
-              Text(
-                _formatVariantSummary(selectedVariant),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.primary,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildServiceTilePlaceholder(ColorScheme colorScheme) {
-    return Container(
-      color: colorScheme.surfaceContainerHighest,
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.room_service,
-        size: 40,
-        color: colorScheme.onSurfaceVariant,
-      ),
-    );
-  }
-
-  String _formatVariantSummary(ServiceVariant variant) {
-    final isEnglish = context.locale.languageCode == 'en';
-    final priceLabel = variant.price != null
-        ? '${variant.price!.toStringAsFixed(0)} $_currency'
-        : (isEnglish ? 'price on request' : 'Preis auf Anfrage');
-    return '${variant.name} ($priceLabel)';
-  }
-
-  /// Opens a single-select bottom sheet listing [service]'s variants; the
-  /// customer picks at most one. Confirming updates
-  /// [_selectedAdditionalServices] and closes the sheet.
-  Future<void> _showServiceVariantPicker(AdditionalService service) async {
-    if (service.variants.isEmpty) return;
-    var selectedVariantId = _selectedAdditionalServices[service.id];
-    final isEnglish = context.locale.languageCode == 'en';
-
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  service.name,
-                  style: Theme.of(ctx).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                for (final variant in service.variants)
-                  ListTile(
-                    leading: Icon(
-                      selectedVariantId == variant.id
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked,
-                      color: selectedVariantId == variant.id
-                          ? Theme.of(ctx).colorScheme.primary
-                          : null,
-                    ),
-                    title: Text(variant.name),
-                    subtitle: Text(
-                      variant.price != null
-                          ? '${variant.price!.toStringAsFixed(0)} $_currency'
-                          : (isEnglish
-                              ? 'Price on request'
-                              : 'Preis auf Anfrage'),
-                    ),
-                    onTap: () =>
-                        setSheetState(() => selectedVariantId = variant.id),
-                  ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (_selectedAdditionalServices.containsKey(service.id))
-                      TextButton(
-                        onPressed: () {
-                          setSheetState(() => selectedVariantId = null);
-                        },
-                        child: Text(
-                          isEnglish ? 'Clear' : 'Entfernen',
-                        ),
-                      ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text('common.ok'.tr()),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (confirmed != true) return;
-    HapticFeedback.selectionClick();
-    setState(() {
-      if (selectedVariantId == null) {
-        _selectedAdditionalServices.remove(service.id);
-      } else {
-        _selectedAdditionalServices[service.id] = selectedVariantId!;
-      }
-    });
-  }
-
-  Widget _buildCocktailPopularityStep() {
-    if (_selectedRecipes.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(48),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 64,
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Bitte zuerst Cocktails auswählen (Schritt 6).',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Initialize missing entries with 50%
-    for (final recipe in _selectedRecipes) {
-      _cocktailPopularity.putIfAbsent(recipe.name, () => 50.0);
-    }
-    // Remove stale entries
-    _cocktailPopularity.removeWhere(
-      (name, _) => !_selectedRecipes.any((r) => r.name == name),
-    );
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Wie beliebt werden die Cocktails sein?',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Schätze die Wahrscheinlichkeit, wie oft jeder Cocktail bestellt wird. Das hilft uns, die richtigen Mengen einzukaufen.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 32),
-          ..._selectedRecipes.map((recipe) {
-            final popularity = _cocktailPopularity[recipe.name] ?? 50.0;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 16),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            recipe.name,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '${popularity.round()}%',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      value: popularity,
-                      min: 0,
-                      max: 100,
-                      divisions: 20,
-                      onChanged: (val) {
-                        HapticFeedback.selectionClick();
-                        setState(() => _cocktailPopularity[recipe.name] = val);
-                      },
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Selten',
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                        Text(
-                          'Sehr beliebt',
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-          if (MediaQuery.of(context).size.width >= 600) ...[
-            const SizedBox(height: 32),
-            _buildDesktopActionButtons(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderOverviewStep() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isEnglish = context.locale.languageCode == 'en';
-
-    String formatDate(DateTime? d) =>
-        d != null ? DateFormat('EEEE, dd. MMMM yyyy').format(d) : '–';
-    String formatTime(TimeOfDay? t) => t != null ? t.format(context) : '–';
-
-    Widget section(String title, List<_OverviewRow> rows) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: colorScheme.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...rows.map(
-                  (row) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 130,
-                          child: Text(
-                            row.label,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            row.value,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final serviceLabel = _serviceType == 'cocktail_barservice'
-        ? (isEnglish ? 'Cocktail & bar' : 'Cocktail & Bar')
-        : _serviceType == 'cocktail_service'
-        ? (isEnglish ? 'Cocktails only' : 'Nur Cocktails')
-        : _serviceType == 'mocktail_service'
-        ? (isEnglish ? 'Mocktails only' : 'Nur Mocktails')
-        : (isEnglish ? 'Bar only' : 'Nur Bar');
-
-    final drinkerLabel = _drinkerType == 'light'
-        ? (isEnglish ? 'Light drinkers' : 'Leichte Trinker')
-        : _drinkerType == 'heavy'
-        ? (isEnglish ? 'Heavy drinkers' : 'Starke Trinker')
-        : 'Normal';
-
-    final barDrinkLabels = formatOrderBarDrinkLabels(
-      _selectedBarDrinks,
-      isEnglish: isEnglish,
-    );
-    final alcoholLabels = formatOrderAlcoholLabels(
-      _selectedAlcoholItems,
-      isEnglish: isEnglish,
-    );
-    final additionalServiceLabels = _additionalServicesList
-        .map(
-          (value) => resolveAdditionalServiceLabel(
-            value,
-            catalog: _serviceCatalog,
-            isEnglish: isEnglish,
-            currencyCode: _currency,
-          ),
-        )
-        .toList(growable: false);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _isAdminUser
-                ? (isEnglish ? 'Order review' : 'Auftragsübersicht')
-                : (isEnglish ? 'Request review' : 'Anfrageübersicht'),
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _isAdminUser
-                ? (isEnglish
-                      ? 'Please review everything before you generate the shopping list.'
-                      : 'Bitte alles prüfen, bevor du den Auftrag abschließt.')
-                : (isEnglish
-                      ? 'Please review everything before you submit your request.'
-                      : 'Bitte alles prüfen, bevor du deine Anfrage einreichst.'),
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 24),
-          section('Service', [_OverviewRow('Service-Typ', serviceLabel)]),
-          section('Kontakt', [
-            _OverviewRow(
-              'Name',
-              _nameController.text.trim().isEmpty
-                  ? '–'
-                  : _nameController.text.trim(),
-            ),
-            _OverviewRow(
-              'Telefon',
-              _phoneController.text.trim().isEmpty
-                  ? '–'
-                  : _phoneController.text.trim(),
-            ),
-          ]),
-          section('Event-Details', [
-            _OverviewRow('Datum', formatDate(_eventDate)),
-            _OverviewRow('Uhrzeit', formatTime(_eventTime)),
-            _OverviewRow(
-              'Ort',
-              _addressController.text.trim().isEmpty
-                  ? '–'
-                  : _addressController.text.trim(),
-            ),
-          ]),
-          section('Präferenzen', [
-            _OverviewRow('Personen', '$_personCount'),
-            _OverviewRow('Entfernung', '$_distanceKm km'),
-            _OverviewRow('Währung', _currency),
-            _OverviewRow('Trinkverhalten', drinkerLabel),
-          ]),
-          if (_selectedRecipes.isNotEmpty)
-            section('Cocktails (${_selectedRecipes.length})', [
-              ..._selectedRecipes.map((r) {
-                final pop = (_cocktailPopularity[r.name] ?? 50).round();
-                return _OverviewRow(r.name, '$pop% Beliebtheit');
-              }),
-            ]),
-          if (_selectedBarDrinks.isNotEmpty || _selectedAlcoholItems.isNotEmpty)
-            section('Bardrinks & Alkohol', [
-              if (barDrinkLabels.isNotEmpty)
-                _OverviewRow('Bardrinks', barDrinkLabels.join(', ')),
-              ...alcoholLabels.map((label) => _OverviewRow('Alkohol', label)),
-            ]),
-          if (additionalServiceLabels.isNotEmpty)
-            section('Zusatzleistungen', [
-              ...additionalServiceLabels.map(
-                (label) => _OverviewRow('Service', label),
-              ),
-            ]),
-          if (_remarksController.text.trim().isNotEmpty)
-            section('Bemerkungen', [
-              _OverviewRow('Hinweis', _remarksController.text.trim()),
-            ]),
-          const SizedBox(height: 8),
-          if (MediaQuery.of(context).size.width >= 600 && _isAdminUser) ...[
-            OutlinedButton.icon(
-              onPressed: _generateShoppingListWithGemini,
-              icon: const Icon(Icons.auto_awesome),
-              label: Text('order_form.generate_with_claude'.tr()),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          _buildDesktopActionButtons(),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _generateShoppingListWithGemini() async {
-    if (!claudeService.isConfigured) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('orders.claude_not_configured'.tr())),
-      );
-      return;
-    }
-    if (_selectedRecipes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte zuerst Cocktails auswählen.')),
-      );
-      return;
-    }
-
-    final cocktailData = await _dataFuture;
-    if (cocktailData == null || !mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('orders.claude_generating'.tr()),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final materials = cocktailData.materials
-          .where((m) => m.visible)
-          .map(
-            (m) => {
-              'name': m.name,
-              'unit': m.unit,
-              'price': m.price,
-              'currency': m.currency,
-            },
-          )
-          .toList();
-
-      final recipeIngredients = _selectedRecipes
-          .map((r) => {'cocktail': r.name, 'ingredients': r.ingredients})
-          .toList();
-
-      final suggestion = await claudeService.generateMaterialSuggestions(
-        guestCount: _personCount,
-        guestRange: '',
-        requestedCocktails: _selectedRecipes.map((r) => r.name).toList(),
-        eventType: _drinkerType,
-        drinkerType: _drinkerType,
-        availableMaterials: materials,
-        recipeIngredients: recipeIngredients,
-        cocktailPopularity: _cocktailPopularity,
-      );
-
-      if (mounted) Navigator.pop(context);
-
-      if (suggestion.hasError) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                suggestion.errorMessage ?? 'orders.claude_error'.tr(),
-              ),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        }
-        return;
-      }
-
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (_) => GeminiMaterialReviewDialog(
-            suggestion: suggestion,
-            personCount: _personCount,
-            cocktailNames: _selectedRecipes.map((r) => r.name).toList(),
-            onConfirm: (confirmedSuggestions, explanation) {
-              // Sync recipes & popularity to global state
-              appState.setSelectedRecipes(_selectedRecipes);
-              for (final entry in _cocktailPopularity.entries) {
-                appState.setCocktailPopularity(entry.key, entry.value);
-              }
-              appState.setMaterialSuggestions(
-                confirmedSuggestions,
-                explanation,
-              );
-
-              // Build setup data and navigate to shopping list
-              final setupData = OrderSetupData(
-                orderName: _nameController.text.trim(),
-                phoneNumber: _phoneController.text.trim().isEmpty
-                    ? null
-                    : _phoneController.text.trim(),
-                eventDate: _eventDate,
-                eventTime: _eventTime,
-                address: _addressController.text.trim().isEmpty
-                    ? null
-                    : _addressController.text.trim(),
-                personCount: _personCount,
-                distanceKm: _distanceKm,
-                currency: _currency,
-                drinkerType: _drinkerType,
-                serviceType: _serviceType,
-                barDrinks: _selectedBarDrinks.isEmpty
-                    ? null
-                    : _selectedBarDrinks.toList(),
-                alcoholPurchase: _selectedAlcoholItems.isEmpty
-                    ? null
-                    : _selectedAlcoholItems.toList(),
-                additionalServices: _additionalServicesList.isEmpty
-                    ? null
-                    : _additionalServicesList,
-                remarks: _remarksController.text.trim().isEmpty
-                    ? null
-                    : _remarksController.text.trim(),
-              );
-              context.go('/shopping-list', extra: setupData);
-            },
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('orders.claude_error'.tr()),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildDesktopActionButtons() {
-    if (_currentStep == _totalSteps - 1 && !_isAdminUser) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: _isSubmitting ? null : _nextStep,
-            icon: _isSubmitting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_outlined),
-            label: Text('order_form.submit_request'.tr()),
-            iconAlignment: IconAlignment.end,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (_currentStep > 0)
-            OutlinedButton.icon(
-              onPressed: _previousStep,
-              icon: const Icon(Icons.arrow_back),
-              label: Text('common.back'.tr()),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            )
-          else
-            const SizedBox.shrink(),
-          FilledButton.icon(
-            onPressed: (_canProceed && !_isSubmitting) ? _nextStep : null,
-            icon: (_currentStep == _totalSteps - 1 && _isSubmitting)
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    _currentStep < _totalSteps - 1
-                        ? Icons.arrow_forward
-                        : Icons.shopping_cart,
-                  ),
-            label: Text(
-              _currentStep < _totalSteps - 1
-                  ? 'common.next'.tr()
-                  : 'dashboard.generate_list'.tr(),
-            ),
-            iconAlignment: IconAlignment.end,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ],
+        child: _StepEntrance(key: ValueKey(step), child: _stepContent(step)),
       ),
     );
   }
 }
 
-class _OverviewRow {
-  final String label;
-  final String value;
-  const _OverviewRow(this.label, this.value);
+/// Fades (and, unless reduced motion is on, slightly slides) a step's
+/// content in when it appears. Only the new step is in the tree, so field
+/// anchors and focus nodes are never mounted twice.
+class _StepEntrance extends StatefulWidget {
+  const _StepEntrance({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_StepEntrance> createState() => _StepEntranceState();
+}
+
+class _StepEntranceState extends State<_StepEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.page,
+  )..forward();
+  late final CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.easeOut,
+  );
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final faded = FadeTransition(opacity: _curve, child: widget.child);
+    if (AppMotion.reduced(context)) return faded;
+    return SlideTransition(
+      position: Tween(
+        begin: const Offset(0.04, 0),
+        end: Offset.zero,
+      ).animate(_curve),
+      child: faded,
+    );
+  }
 }

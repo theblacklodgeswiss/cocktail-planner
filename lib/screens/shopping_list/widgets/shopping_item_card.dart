@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../models/material_item.dart';
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/floating_card.dart';
 import '../../../utils/currency.dart';
+import 'quantity_stepper.dart';
 
-/// A card widget displaying a material item with quantity controls.
+/// A card displaying a material item with quantity controls.
 class ShoppingItemCard extends StatelessWidget {
   const ShoppingItemCard({
     super.key,
@@ -27,174 +29,139 @@ class ShoppingItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final p = AppPalette.of(context);
+    final currency = Currency.fromCode(item.currency);
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected ? colorScheme.primary : Colors.transparent,
-          width: 2,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.s8),
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: isSelected
+              ? Border.all(color: p.primary, width: AppSize.hairline)
+              : null,
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            if (totalSelected > 0) ...[
-              _buildTotalBadge(context, colorScheme),
-              const SizedBox(width: 12),
-            ],
-            Expanded(child: _buildItemInfo(context, colorScheme)),
-            const SizedBox(width: 12),
-            _buildQuantityStepper(context, colorScheme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTotalBadge(BuildContext context, ColorScheme colorScheme) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Center(
-        child: Text(
-          totalSelected.toString(),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onPrimaryContainer,
+        child: FloatingCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (totalSelected > 0) ...[
+                    _Badge(count: totalSelected),
+                    const SizedBox(width: AppSpace.s12),
+                  ],
+                  Expanded(
+                    child: _Info(item: item, currency: currency),
+                  ),
+                ],
               ),
+              if (cocktails.length > 1) ...[
+                const SizedBox(height: AppSpace.s8),
+                Wrap(
+                  spacing: AppSpace.s4,
+                  runSpacing: AppSpace.s4,
+                  children: [for (final c in cocktails) _Chip(text: c)],
+                ),
+              ],
+              const SizedBox(height: AppSpace.s8),
+              Row(
+                children: [
+                  Expanded(
+                    child: isSelected
+                        ? Text(
+                            currency.format(item.price * quantity),
+                            style: AppText.number.copyWith(color: p.text),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  QuantityStepper(
+                    controller: controller,
+                    quantity: quantity,
+                    onChanged: onQuantityChanged,
+                    label: item.name,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildItemInfo(BuildContext context, ColorScheme colorScheme) {
+class _Badge extends StatelessWidget {
+  const _Badge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.primary,
+        borderRadius: BorderRadius.circular(AppRadius.tile),
+      ),
+      child: SizedBox.square(
+        dimension: AppSize.optionIconBox,
+        child: Center(
+          child: Text(
+            '$count',
+            style: AppText.button.copyWith(color: p.onPrimary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Info extends StatelessWidget {
+  const _Info({required this.item, required this.currency});
+
+  final MaterialItem item;
+  final Currency currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(item.name, style: AppText.section.copyWith(color: p.text)),
+        const SizedBox(height: AppSpace.s4),
         Text(
-          item.name,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          '${item.unit} • ${currency.format(item.price)}'
+          '${item.note.isEmpty ? '' : ' • ${item.note}'}',
+          style: AppText.body.copyWith(color: p.textSecondary),
         ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Text(
-              '${item.unit} • ${Currency.fromCode(item.currency).format(item.price)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.outline,
-                  ),
-            ),
-            if (item.note.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  item.note,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSecondaryContainer,
-                      ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        if (cocktails.length > 1) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 4,
-            children: cocktails
-                .map((c) => Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        c,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Colors.green.shade700,
-                              fontSize: 10,
-                            ),
-                      ),
-                    ))
-                .toList(),
-          ),
-        ],
-        if (isSelected) ...[
-          const SizedBox(height: 6),
-          Text(
-            Currency.fromCode(item.currency).format(item.price * quantity),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                ),
-          ),
-        ],
       ],
     );
   }
+}
 
-  Widget _buildQuantityStepper(BuildContext context, ColorScheme colorScheme) {
-    return Container(
+class _Chip extends StatelessWidget {
+  const _Chip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: isSelected
-            ? colorScheme.surface
-            : colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        color: p.surface,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.remove, size: 18),
-            onPressed: quantity > 0
-                ? () => onQuantityChanged(quantity - 1)
-                : null,
-            visualDensity: VisualDensity.compact,
-          ),
-          SizedBox(
-            width: 40,
-            child: TextField(
-              controller: controller,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-                hintText: '0',
-              ),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add, size: 18),
-            onPressed: () => onQuantityChanged(quantity + 1),
-            visualDensity: VisualDensity.compact,
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.s8,
+          vertical: AppSpace.s4,
+        ),
+        child: Text(text, style: AppText.pill.copyWith(color: p.textSecondary)),
       ),
     );
   }

@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
+import 'link_google.dart';
 
-/// Shows the user menu as a bottom sheet.
+/// Shows the user menu as a bottom sheet. Opened from the customer start
+/// (and the old dashboard app bar); staff screens use the tab bar and the
+/// "Mehr" page (`/more`), which carries every entry of this menu.
 Future<void> showUserMenu(BuildContext context) async {
   final user = authService.currentUser;
   if (user == null) return;
@@ -96,7 +99,7 @@ class _UserMenuSheet extends StatelessWidget {
       subtitle: Text('drawer.orders_subtitle'.tr()),
       onTap: () {
         Navigator.pop(context);
-        context.push('/orders');
+        context.go('/orders');
       },
     );
   }
@@ -108,7 +111,7 @@ class _UserMenuSheet extends StatelessWidget {
       subtitle: Text('drawer.inventory_page_subtitle'.tr()),
       onTap: () {
         Navigator.pop(context);
-        context.push('/inventory');
+        context.go('/inventory');
       },
     );
   }
@@ -129,22 +132,10 @@ class _UserMenuSheet extends StatelessWidget {
       leading: const Icon(Icons.login),
       title: Text('drawer.link_google_title'.tr()),
       subtitle: Text('drawer.link_google_subtitle'.tr()),
-      onTap: () async {
+      onTap: () {
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
-        try {
-          await authService.linkWithGoogle();
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('drawer.link_success'.tr())),
-            );
-          }
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${'common.error'.tr()}: $e')),
-            );
-          }
-        }
+        linkGoogleAccount(messenger);
       },
     );
   }

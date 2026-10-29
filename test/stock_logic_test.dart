@@ -169,4 +169,25 @@ void main() {
       isFalse,
     );
   });
+
+  test('canToggleSource is locked once stock was applied', () {
+    expect(
+      canToggleSource(
+        canStock: true,
+        isStock: true,
+        saving: false,
+        stockApplied: true,
+      ),
+      isFalse,
+    );
+    expect(
+      canToggleSource(
+        canStock: true,
+        isStock: false,
+        saving: false,
+        stockApplied: true,
+      ),
+      isFalse,
+    );
+  });
 }

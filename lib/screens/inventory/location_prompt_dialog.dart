@@ -14,9 +14,90 @@ Future<StorageLocation?> ensureOwnLocation(BuildContext context) {
   return _ensureOwnLocation.run(() => _ensure(context));
 }
 
+enum _ClaimChoice { claim, createNew }
+
+/// An ownerless location with the same name would become a duplicate. Admins
+/// may claim it (the rules only let owner/admin update a location); everyone
+/// else is told to ask an admin and may still create a new one.
+/// Returns null if the dialog was cancelled.
+Future<_ClaimChoice?> _askClaim(
+  BuildContext context,
+  StorageLocation candidate,
+) {
+  final canClaim = authService.isAdmin;
+  return showDialog<_ClaimChoice>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('stock.claim_title'.tr()),
+      content: Text(
+        (canClaim ? 'stock.claim_admin' : 'stock.claim_ask_admin').tr(
+          namedArgs: {'name': candidate.name},
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('common.cancel'.tr()),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(_ClaimChoice.createNew),
+          child: Text('stock.claim_create_new'.tr()),
+        ),
+        if (canClaim)
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(_ClaimChoice.claim),
+            child: Text('stock.claim_action'.tr()),
+          ),
+      ],
+    ),
+  );
+}
+
+/// Claims [candidate] for the current user. Returns null if it failed.
+Future<StorageLocation?> _claim(StorageLocation candidate) async {
+  final email = authService.email;
+  if (email == null) return null;
+  try {
+    await stockRepository.setLocationOwner(candidate.id, email);
+    return StorageLocation(
+      id: candidate.id,
+      name: candidate.name,
+      ownerEmail: normalizeOwnerEmail(email),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<StorageLocation?> _ensure(BuildContext context) async {
   final existing = await stockRepository.ownLocation();
   if (existing != null) return existing;
+  if (!context.mounted) return null;
+  final declined = <String>{};
+  List<StorageLocation> all = const [];
+  try {
+    all = await stockRepository.watchLocations().first;
+  } catch (_) {}
+  if (!context.mounted) return null;
+  // Offer an ownerless location named like the user before asking for a name.
+  final byDisplayName = findClaimableLocation(
+    all,
+    authService.displayName ?? '',
+  );
+  if (byDisplayName != null) {
+    final choice = await _askClaim(context, byDisplayName);
+    if (choice == null) return null;
+    if (choice == _ClaimChoice.claim) {
+      final claimed = await _claim(byDisplayName);
+      if (claimed != null) return claimed;
+      if (!context.mounted) return null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('stock.claim_failed'.tr())));
+      return null;
+    }
+    declined.add(byDisplayName.id);
+  }
   if (!context.mounted) return null;
   final name = await showDialog<String>(
     context: context,
@@ -24,6 +105,21 @@ Future<StorageLocation?> _ensure(BuildContext context) async {
         _LocationNameDialog(suggestion: authService.displayName ?? ''),
   );
   if (name == null) return null;
+  final byName = findClaimableLocation(all, name);
+  if (byName != null && !declined.contains(byName.id)) {
+    if (!context.mounted) return null;
+    final choice = await _askClaim(context, byName);
+    if (choice == null) return null;
+    if (choice == _ClaimChoice.claim) {
+      final claimed = await _claim(byName);
+      if (claimed != null) return claimed;
+      if (!context.mounted) return null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('stock.claim_failed'.tr())));
+      return null;
+    }
+  }
   // A location may have been created while the dialog was open.
   final meanwhile = await stockRepository.ownLocation();
   if (meanwhile != null) return meanwhile;

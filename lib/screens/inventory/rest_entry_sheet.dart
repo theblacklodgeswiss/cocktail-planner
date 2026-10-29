@@ -12,6 +12,9 @@ import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../services/speech_input.dart';
 import '../../services/voice_inventory_parser.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/app_sheet.dart';
+import '../../ui/widgets/buttons.dart';
 import 'location_prompt_dialog.dart';
 import 'rest_lines.dart';
 
@@ -22,12 +25,11 @@ Future<bool> showRestEntrySheet(
   required SavedOrder order,
 }) async {
   if (!authService.isEmployeeOrHigher) return false;
-  final saved = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    isDismissible: false,
-    enableDrag: false,
+  // Full-screen sheet. Closing it by drag or tap outside runs through the
+  // sheet's PopScope, i.e. the same path as "Überspringen".
+  final saved = await showAppSheet<bool>(
+    context,
+    full: true,
     builder: (_) => _RestEntrySheet(order: order),
   );
   return saved == true;
@@ -143,6 +145,47 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
         duration: const Duration(seconds: 8),
       ),
     );
+    Navigator.of(context).pop(true);
+  }
+
+  /// Records "nothing left over": only sets restRecorded, books nothing.
+  Future<void> _nothingLeft() async {
+    if (_loading || _saving || _booked.isNotEmpty) return;
+    if (_listening) await _speech.stop();
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('rest.nothing_left'.tr()),
+        content: Text('rest.nothing_left_confirm'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('common.ok'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    final saved = await orderRepository.updateOrder(widget.order.id, {
+      'restRecorded': true,
+    });
+    if (!mounted) return;
+    if (!saved) {
+      setState(() {
+        _saving = false;
+        _micError = 'rest.mark_failed'.tr();
+      });
+      return;
+    }
     Navigator.of(context).pop(true);
   }
 
@@ -308,30 +351,38 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
         if (didPop || _saving) return;
         _skip();
       },
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Scaffold(
-          appBar: AppBar(
-            automaticallyImplyLeading: false,
-            title: Text('rest.title'.tr()),
-            actions: [
-              TextButton(
+      // The sheet lifts itself above the keyboard.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'rest.title'.tr(),
+                    style: AppText.heroTitle.copyWith(
+                      color: AppPalette.of(context).text,
+                    ),
+                  ),
+                ),
+              ),
+              TextAction(
+                label: 'rest.skip'.tr(),
                 onPressed: _saving ? null : _skip,
-                child: Text('rest.skip'.tr()),
               ),
             ],
           ),
-          body: _confirming ? _buildConfirm() : _buildInput(),
-        ),
+          Expanded(child: _confirming ? _buildConfirm() : _buildInput()),
+        ],
       ),
     );
   }
 
   Widget _buildInput() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
       children: [
         Text('rest.intro'.tr()),
         const SizedBox(height: 16),
@@ -373,6 +424,17 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           const SizedBox(height: 12),
           Text(_micError!, style: const TextStyle(color: Colors.orange)),
         ],
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _loading || _saving || _booked.isNotEmpty
+                ? null
+                : _nothingLeft,
+            icon: const Icon(Icons.check_circle_outline),
+            label: Text('rest.nothing_left'.tr()),
+          ),
+        ),
       ],
     );
   }
@@ -382,7 +444,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
             children: [
               // Fragments without number or name are dropped by the parser,
               // so the raw text stays visible to reveal anything missing.
@@ -426,7 +488,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
         ),
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(top: AppSpace.s12),
             child: Row(
               children: [
                 TextButton(

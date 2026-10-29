@@ -39,6 +39,7 @@ class OrderDeductionPlan {
     this.shortfalls = const [],
     this.unresolved = const [],
     this.alreadyApplied = false,
+    this.restRecorded,
   });
 
   final List<PlannedMovement> movements;
@@ -49,6 +50,9 @@ class OrderDeductionPlan {
 
   /// The fresh order already had stockApplied set; nothing to book.
   final bool alreadyApplied;
+
+  /// `restRecorded` of the FRESH order the plan was made from; null = unknown.
+  final bool? restRecorded;
 
   bool get hasNotes => shortfalls.isNotEmpty || unresolved.isNotEmpty;
 }
@@ -157,8 +161,15 @@ OrderDeductionPlan planOrderDeduction(
     movements: movements,
     shortfalls: shortfalls,
     unresolved: unresolved,
+    restRecorded: order.restRecorded,
   );
 }
+
+/// Whether the leftover sheet may open right after completing. Fails closed:
+/// only when the fresh order is known to have no recorded leftovers (a reopened
+/// and re-completed order must not book its leftovers a second time).
+bool shouldOfferRest({required bool? freshRestRecorded}) =>
+    freshRestRecorded == false;
 
 /// Reads everything needed from the sources (injectable for tests) and plans
 /// from the FRESH order, never from an order object opened earlier: source
@@ -181,10 +192,15 @@ Future<OrderDeductionPlan> prepareOrderDeduction({
   }
   if (fresh == null) throw StateError('order could not be read');
   if (fresh.stockApplied) {
-    return const OrderDeductionPlan(alreadyApplied: true);
+    return OrderDeductionPlan(
+      alreadyApplied: true,
+      restRecorded: fresh.restRecorded,
+    );
   }
   final hasStockItems = fresh.items.any((i) => ItemSource.fromItem(i).isStock);
-  if (!hasStockItems) return const OrderDeductionPlan();
+  if (!hasStockItems) {
+    return OrderDeductionPlan(restRecorded: fresh.restRecorded);
+  }
 
   final catalog = await loadCatalog();
   if (catalog.isEmpty) throw StateError('catalog is empty or not loaded');
@@ -199,7 +215,9 @@ Future<OrderDeductionPlan> prepareOrderDeduction({
     final materialId = resolveMaterialId(item, catalog);
     if (!source.isStock || materialId == null) continue;
     for (final origin in StockOrigin.values) {
-      ids.add(orderMovementId(fresh.id, materialId, source.locationId!, origin));
+      ids.add(
+        orderMovementId(fresh.id, materialId, source.locationId!, origin),
+      );
     }
   }
   final booked = await loadBooked(ids.toList());

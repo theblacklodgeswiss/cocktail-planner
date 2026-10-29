@@ -30,6 +30,7 @@ StockEntry _entry(String m, String loc, StockOrigin o, double q) => StockEntry(
 SavedOrder _order(
   List<Map<String, dynamic>> items, {
   bool stockApplied = false,
+  bool restRecorded = false,
 }) => SavedOrder(
   id: 'o1',
   name: 'Test',
@@ -41,6 +42,7 @@ SavedOrder _order(
   currency: 'CHF',
   status: OrderStatus.accepted,
   stockApplied: stockApplied,
+  restRecorded: restRecorded,
 );
 
 Map<String, dynamic> _stockItem(String name, num qty, {String loc = 'l1'}) => {
@@ -207,6 +209,26 @@ void main() {
       );
     });
 
+    test('exposes restRecorded of the fresh order on every path', () async {
+      final applied = await run(
+        fetch: () async => _order(
+          [_stockItem('Rum', 3)],
+          stockApplied: true,
+          restRecorded: true,
+        ),
+      );
+      expect(applied.alreadyApplied, isTrue);
+      expect(applied.restRecorded, isTrue);
+      final noStock = await run(
+        fetch: () async => _order([
+          {'name': 'Rum', 'unit': 'Fl', 'quantity': 3, 'source': 'shop'},
+        ], restRecorded: true),
+      );
+      expect(noStock.restRecorded, isTrue);
+      final planned = await run(fetch: () async => freshStock);
+      expect(planned.restRecorded, isFalse);
+    });
+
     test('catalog is not needed without stock items', () async {
       final plan = await run(
         fetch: () async => staleShop,
@@ -230,5 +252,11 @@ void main() {
       );
       expect(plan.unresolved, ['Unbekannt']);
     });
+  });
+
+  test('shouldOfferRest only when known not recorded (fail closed)', () {
+    expect(shouldOfferRest(freshRestRecorded: false), isTrue);
+    expect(shouldOfferRest(freshRestRecorded: true), isFalse);
+    expect(shouldOfferRest(freshRestRecorded: null), isFalse);
   });
 }

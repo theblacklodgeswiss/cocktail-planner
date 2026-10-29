@@ -5,8 +5,9 @@ import 'package:printing/printing.dart';
 import '../../../models/order.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/invoice_pdf_generator.dart';
+import '../../../ui/widgets/app_sheet.dart';
 import '../../orders/order_detail_sheet.dart';
-import '../../orders/order_status_helpers.dart';
+import 'my_request_detail_view.dart';
 
 /// Shows a read-only summary of a customer's own submitted request. Unlike
 /// `order_detail_sheet.dart`'s `showOrderDetails` (staff tooling: offer
@@ -14,10 +15,9 @@ import '../../orders/order_status_helpers.dart';
 /// exposes nothing actionable - a customer cannot edit or delete a request
 /// from here.
 Future<void> showMyRequestDetails(BuildContext context, SavedOrder request) {
-  return showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) => MyRequestDetailSheet(request: request),
+  return showAppSheet<void>(
+    context,
+    builder: (_) => MyRequestDetailSheet(request: request),
   );
 }
 
@@ -60,116 +60,19 @@ class _MyRequestDetailSheetState extends State<MyRequestDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) => SingleChildScrollView(
-        controller: scrollController,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              request.name,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(statusIcon(request.customerStatus),
-                    size: 16, color: statusColor(request.customerStatus)),
-                const SizedBox(width: 4),
-                Text(statusLabel(request.customerStatus),
-                    style: TextStyle(color: statusColor(request.customerStatus))),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (request.isAccepted) ...[
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _opening ? null : _openConfirmation,
-                  icon: _opening
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.picture_as_pdf, size: 18),
-                  label: Text('dashboard.view_confirmation'.tr()),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (authService.isEmployeeOrHigher) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Close this sheet, then open the staff order view
-                    // with the navigator's context (this sheet's own
-                    // context is gone after the pop).
-                    final navigator = Navigator.of(context);
-                    navigator.pop();
-                    showOrderDetails(navigator.context, request);
-                  },
-                  icon: const Icon(Icons.assignment_outlined, size: 18),
-                  label: Text('dashboard.open_order'.tr()),
-                ),
-              ),
-            ],
-            const Divider(height: 24),
-            _row(context, 'dashboard.request_date'.tr(), formatDate(request.date)),
-            if (request.effectiveEventTime.isNotEmpty)
-              _row(context, 'dashboard.request_time'.tr(), request.effectiveEventTime),
-            if (request.location.isNotEmpty)
-              _row(context, 'dashboard.request_location'.tr(), request.location),
-            _row(context, 'dashboard.request_guests'.tr(), '${request.personCount}'),
-            if (request.serviceType.isNotEmpty)
-              _row(context, 'dashboard.request_service_type'.tr(), request.serviceType),
-            if (request.cocktails.isNotEmpty)
-              _row(context, 'dashboard.request_cocktails'.tr(),
-                  request.cocktails.join(', ')),
-            if (request.shotSelections.isNotEmpty)
-              _row(
-                context,
-                'dashboard.request_shots'.tr(),
-                request.shotSelections
-                    .map((s) => '${s.name} (${s.quantity})')
-                    .join(', '),
-              )
-            else if (request.shots.isNotEmpty)
-              _row(context, 'dashboard.request_shots'.tr(), request.shots.join(', ')),
-            if (request.remarks.isNotEmpty)
-              _row(context, 'dashboard.request_remarks'.tr(), request.remarks),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(BuildContext context, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 2),
-          Text(value, style: Theme.of(context).textTheme.bodyLarge),
-        ],
-      ),
+    return MyRequestDetailView(
+      request: request,
+      showStaffAction: authService.isEmployeeOrHigher,
+      confirmationLoading: _opening,
+      onConfirmation: _opening ? null : _openConfirmation,
+      onOpenOrder: () {
+        // Close this sheet, then open the staff order view with the
+        // navigator's context (this sheet's own context is gone after the
+        // pop).
+        final navigator = Navigator.of(context);
+        navigator.pop();
+        showOrderDetails(navigator.context, request);
+      },
     );
   }
 }

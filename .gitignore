@@ -52,3 +52,7 @@ functions/node_modules/
 
 # Subagent-driven-development scratch workspace
 .superpowers/
+
+# Installed agent skills (npx skills add)
+.claude/skills/
+skills-lock.json

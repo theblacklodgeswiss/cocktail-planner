@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cocktail_planer/models/stock.dart';
 import 'package:cocktail_planer/services/auth_service.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
@@ -15,6 +16,30 @@ StorageLocation? pickOwn(List<StorageLocation> locations, String email) {
     if (location.ownerEmail?.toLowerCase() == wanted) return location;
   }
   return null;
+}
+
+/// An ownerless location (no or empty ownerEmail) whose name equals [name]
+/// (trimmed, case-insensitive), or null. Used to offer claiming it instead of
+/// creating a duplicate.
+StorageLocation? findClaimableLocation(
+  List<StorageLocation> locations,
+  String name,
+) {
+  final wanted = name.trim().toLowerCase();
+  if (wanted.isEmpty) return null;
+  for (final l in locations) {
+    final ownerless = (l.ownerEmail ?? '').trim().isEmpty;
+    if (ownerless && l.name.trim().toLowerCase() == wanted) return l;
+  }
+  return null;
+}
+
+String normalizeOwnerEmail(String raw) => raw.trim().toLowerCase();
+
+/// An owner email is optional; if given it must contain '@'.
+bool isValidOwnerEmail(String raw) {
+  final v = raw.trim();
+  return v.isEmpty || v.contains('@');
 }
 
 /// Fields written to a stock entry document. [note] is only included when
@@ -43,6 +68,29 @@ Map<String, dynamic> stockEntryFields({
 bool shouldApplyMovement({required String? movementId, required bool exists}) =>
     movementId == null || !exists;
 
+/// Parses each document with [parse]; a document that throws is skipped and
+/// logged instead of failing the whole list (a stream error would hide every
+/// other row behind an error message).
+List<T> parseTolerant<T>(
+  Iterable<({String id, Map<String, dynamic> data})> docs,
+  T Function(String id, Map<String, dynamic> data) parse, {
+  required String collection,
+}) {
+  final result = <T>[];
+  for (final d in docs) {
+    try {
+      result.add(parse(d.id, d.data));
+    } catch (e) {
+      debugPrint('Skipping malformed $collection/${d.id}: $e');
+    }
+  }
+  return result;
+}
+
+Iterable<({String id, Map<String, dynamic> data})> _docs(
+  QuerySnapshot<Map<String, dynamic>> snap,
+) => snap.docs.map((d) => (id: d.id, data: d.data()));
+
 /// Repository for storage locations, stock quantities and stock movements.
 class StockRepository {
   CollectionReference<Map<String, dynamic>> get _locations =>
@@ -57,9 +105,11 @@ class StockRepository {
         .orderBy('name')
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => StorageLocation.fromMap(d.id, d.data()))
-              .toList(),
+          (snap) => parseTolerant(
+            _docs(snap),
+            StorageLocation.fromMap,
+            collection: 'storageLocations',
+          ),
         );
   }
 
@@ -95,14 +145,40 @@ class StockRepository {
     );
   }
 
-  Future<void> renameLocation(String id, String name) {
-    return _locations.doc(id).update({'name': name});
+  /// Renames a location and, if [ownerEmail] is given, sets its owner. Both
+  /// need admin rights in the rules unless the caller already owns it.
+  Future<void> renameLocation(String id, String name, {String? ownerEmail}) {
+    return _locations.doc(id).update({
+      'name': name,
+      if (ownerEmail != null && ownerEmail.isNotEmpty)
+        'ownerEmail': normalizeOwnerEmail(ownerEmail),
+    });
+  }
+
+  /// Sets the owner of a location (admin only per the rules).
+  Future<void> setLocationOwner(String id, String ownerEmail) {
+    return _locations.doc(id).update({
+      'ownerEmail': normalizeOwnerEmail(ownerEmail),
+    });
+  }
+
+  /// True if at least one movement with reason `import` exists. A single
+  /// equality filter plus limit(1) needs no composite index.
+  Future<bool> hasImportMovements() async {
+    final snap = await _movements
+        .where('reason', isEqualTo: 'import')
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
   }
 
   Stream<List<StockEntry>> watchStock() {
     return _stock.snapshots().map(
-      (snap) =>
-          snap.docs.map((d) => StockEntry.fromMap(d.id, d.data())).toList(),
+      (snap) => parseTolerant(
+        _docs(snap),
+        StockEntry.fromMap,
+        collection: 'stockEntries',
+      ),
     );
   }
 
@@ -252,9 +328,11 @@ class StockRepository {
         .orderBy('at', descending: true)
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => StockMovement.fromMap(d.id, d.data()))
-              .toList(),
+          (snap) => parseTolerant(
+            _docs(snap),
+            StockMovement.fromMap,
+            collection: 'stockMovements',
+          ),
         );
   }
 

@@ -27,6 +27,31 @@ class InvoicePdfGenerator {
     return _buildPdf(order, language: language);
   }
 
+  /// Grand total exactly as printed in the PDF's total row; also used by the
+  /// public share page so both always agree.
+  static double grandTotalOf(SavedOrder order) {
+    final shotsCost = order.offerShotsCount * order.offerShotsPricePerPiece;
+    final extraPositionsTotal = order.offerExtraPositions.fold<double>(
+      0.0,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
+    );
+    final extraHoursCost =
+        order.assignedEmployees.length *
+        order.offerExtraHours *
+        order.offerExtraHourRate;
+    final offerPositionsTotal = order.offerPositions.fold<double>(
+      0.0,
+      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
+    );
+    return order.offerPositions.isNotEmpty
+        ? offerPositionsTotal - order.offerDiscount
+        : order.total +
+              shotsCost +
+              extraPositionsTotal +
+              extraHoursCost -
+              order.offerDiscount;
+  }
+
   /// Gets the filename for an invoice PDF.
   static String getFilename(SavedOrder order) {
     final dateTag =
@@ -94,26 +119,7 @@ class InvoicePdfGenerator {
     final travelCostPerKm = 0.70;
     final travelTotal = order.distanceKm * travelCostPerKm;
     final barServiceCost = order.total - travelTotal - order.thekeCost;
-    final shotsCost = order.offerShotsCount * order.offerShotsPricePerPiece;
-    final extraPositionsTotal = order.offerExtraPositions.fold<double>(
-      0.0,
-      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
-    );
-    final extraHoursCost =
-        order.assignedEmployees.length *
-        order.offerExtraHours *
-        order.offerExtraHourRate;
-    final offerPositionsTotal = order.offerPositions.fold<double>(
-      0.0,
-      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
-    );
-    final grandTotal = order.offerPositions.isNotEmpty
-        ? offerPositionsTotal - order.offerDiscount
-        : order.total +
-              shotsCost +
-              extraPositionsTotal +
-              extraHoursCost -
-              order.offerDiscount;
+    final grandTotal = grandTotalOf(order);
     // Payment split: on-site payment always equals the sum of all wages
     // (Löhne) — i.e. the total cost of the supervisor/barkeeper items from
     // the shopping list (already computed there as price × quantity, see
@@ -573,26 +579,11 @@ class InvoicePdfGenerator {
   ) {
     final dateStr =
         '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}.${order.date.year}';
-    final shotsCost = order.offerShotsCount * order.offerShotsPricePerPiece;
-    final extraPositionsTotal = order.offerExtraPositions.fold<double>(
-      0.0,
-      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
-    );
     final extraHoursCost =
         order.assignedEmployees.length *
         order.offerExtraHours *
         order.offerExtraHourRate;
-    final offerPositionsTotal = order.offerPositions.fold<double>(
-      0.0,
-      (sum, posMap) => sum + ExtraPosition.fromJson(posMap).total,
-    );
-    final grandTotal = order.offerPositions.isNotEmpty
-        ? offerPositionsTotal - order.offerDiscount
-        : order.total +
-              shotsCost +
-              extraPositionsTotal +
-              extraHoursCost -
-              order.offerDiscount;
+    final grandTotal = grandTotalOf(order);
 
     pw.Widget headerCell(String text) => pw.Container(
       color: PdfColors.grey200,

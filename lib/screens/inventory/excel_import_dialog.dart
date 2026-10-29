@@ -8,6 +8,10 @@ import '../../models/stock.dart';
 import '../../services/auth_service.dart';
 import '../../services/inventory_import.dart';
 import '../../services/voice_inventory_parser.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/app_sheet.dart';
+import '../../ui/widgets/buttons.dart';
+import '../../ui/widgets/floating_card.dart';
 import 'rest_entry_sheet.dart';
 
 /// Excel column headers C..H and the location each one defaults to. The
@@ -32,10 +36,15 @@ const _columnOrigins = [
 
 /// One-time import of the Excel Materialliste. Admin only.
 Future<void> showExcelImportDialog(BuildContext context) {
+  // NOTE: authService.isAdmin includes the super admin, but the Firestore
+  // rules' isAdmin() does not. A super admin who is not also a rules-admin
+  // passes this gate and the location/stock writes then fail. Known, no
+  // behavior change on purpose.
   if (!authService.isAdmin) return Future.value();
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: false,
+  // Full-screen sheet; it cannot be closed while booking (PopScope).
+  return showAppSheet<void>(
+    context,
+    full: true,
     builder: (_) => const ExcelImportDialog(),
   );
 }
@@ -197,12 +206,52 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
       _movementCount > 0 &&
       _rows.every((s) => !s.active || s.materialId != null);
 
+  /// The import is meant to run once. If an earlier import exists, ask before
+  /// booking everything a second time. Only checked on the first attempt (a
+  /// retry after a partial failure continues the same import). Fails closed.
+  Future<bool> _confirmRepeat() async {
+    if (_booked.isNotEmpty || _createdLocationIds.isNotEmpty) return true;
+    final bool exists;
+    try {
+      exists = await stockRepository.hasImportMovements();
+    } catch (e) {
+      debugPrint('Import check failed: $e');
+      if (mounted) setState(() => _error = 'excel_import.failed'.tr());
+      return false;
+    }
+    if (!exists) return true;
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('excel_import.repeat_title'.tr()),
+        content: Text('excel_import.repeat_body'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('common.cancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('excel_import.repeat_confirm'.tr()),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _import() async {
     if (!_canImport) return;
     setState(() {
       _saving = true;
       _error = null;
     });
+    if (!await _confirmRepeat()) {
+      if (mounted) setState(() => _saving = false);
+      return;
+    }
+    if (!mounted) return;
     try {
       // Create locations that are used by an active cell and do not exist.
       final used = <String>{
@@ -272,59 +321,81 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('excel_import.title'.tr()),
-      content: SizedBox(
-        width: 640,
-        child: _previewing ? _buildPreview() : _buildInput(),
+    final p = AppPalette.of(context);
+    return PopScope(
+      canPop: !_saving,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              'excel_import.title'.tr(),
+              style: AppText.heroTitle.copyWith(color: p.text),
+            ),
+          ),
+          const SizedBox(height: AppSpace.s12),
+          Expanded(child: _previewing ? _buildPreview() : _buildInput()),
+          const SizedBox(height: AppSpace.s12),
+          if (_previewing)
+            PrimaryButton(
+              label: 'excel_import.import'.tr(),
+              loading: _saving,
+              onPressed: _canImport ? _import : null,
+            )
+          else
+            PrimaryButton(
+              label: 'excel_import.preview'.tr(),
+              loading: _loading,
+              onPressed: _paste.text.trim().isEmpty ? null : _preview,
+            ),
+          const SizedBox(height: AppSpace.s8),
+          Row(
+            children: [
+              if (_previewing)
+                Expanded(
+                  child: TextAction(
+                    label: 'excel_import.back'.tr(),
+                    onPressed: _saving || _booked.isNotEmpty
+                        ? null
+                        : () => setState(() => _previewing = false),
+                  ),
+                ),
+              Expanded(
+                child: TextAction(
+                  label: 'common.close'.tr(),
+                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      actions: [
-        if (_previewing)
-          TextButton(
-            onPressed: _saving || _booked.isNotEmpty
-                ? null
-                : () => setState(() => _previewing = false),
-            child: Text('excel_import.back'.tr()),
-          ),
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: Text('common.close'.tr()),
-        ),
-        if (_previewing)
-          FilledButton(
-            onPressed: _canImport ? _import : null,
-            child: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text('excel_import.import'.tr()),
-          )
-        else
-          FilledButton(
-            onPressed: _loading || _paste.text.trim().isEmpty ? null : _preview,
-            child: _loading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text('excel_import.preview'.tr()),
-          ),
-      ],
     );
   }
 
-  Widget _warning() => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.orange.withValues(alpha: 0.15),
-      border: Border.all(color: Colors.orange),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text('excel_import.warning'.tr()),
-  );
+  Widget _warning() {
+    final p = AppPalette.of(context);
+    return FloatingCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            size: AppSize.rowIcon,
+            color: p.goldText,
+          ),
+          const SizedBox(width: AppSpace.s8),
+          Expanded(
+            child: Text(
+              'excel_import.warning'.tr(),
+              style: AppText.body.copyWith(color: p.text),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildInput() {
     return SingleChildScrollView(
@@ -347,11 +418,20 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
           ),
           if (_success != null) ...[
             const SizedBox(height: 12),
-            Text(_success!, style: const TextStyle(color: Colors.green)),
+            Text(
+              _success!,
+              style: AppText.body.copyWith(
+                color: AppPalette.of(context).text,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(
+              _error!,
+              style: AppText.body.copyWith(color: AppPalette.of(context).error),
+            ),
           ],
         ],
       ),
@@ -430,7 +510,15 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 ),
                 enabled: !_saving,
                 keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
+                  helperText: _owners[name]!.text.trim().isEmpty
+                      ? 'excel_import.owner_missing'.tr()
+                      : null,
+                  helperMaxLines: 3,
+                  helperStyle: AppText.caption.copyWith(
+                    color: AppPalette.of(context).goldText,
+                  ),
                   labelText: 'excel_import.owner_for'.tr(
                     namedArgs: {'name': name},
                   ),
@@ -454,7 +542,10 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
+            Text(
+              _error!,
+              style: AppText.body.copyWith(color: AppPalette.of(context).error),
+            ),
           ],
         ],
       ),
@@ -476,15 +567,9 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             if (s.materialName != null)
-              Text(
-                '-> ${s.materialName}',
-                style: const TextStyle(fontSize: 13),
-              ),
+              Text('-> ${s.materialName}', style: AppText.body),
             if (!s.hasQuantities)
-              Text(
-                'excel_import.no_quantities'.tr(),
-                style: const TextStyle(fontSize: 12),
-              )
+              Text('excel_import.no_quantities'.tr(), style: AppText.caption)
             else ...[
               Text(
                 [
@@ -493,7 +578,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                         '${'rest.origin_${_columnOrigins[c.column].name}'.tr()}: '
                         '${c.quantity.toString().replaceAll('.', ',')}',
                 ].join('  |  '),
-                style: const TextStyle(fontSize: 12),
+                style: AppText.caption,
               ),
             ],
             if (s.row.invalidColumns.isNotEmpty)
@@ -509,20 +594,26 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                         .join(', '),
                   },
                 ),
-                style: const TextStyle(color: Colors.red, fontSize: 12),
+                style: AppText.caption.copyWith(
+                  color: AppPalette.of(context).error,
+                ),
               ),
             if (s.row.note != null)
               Text(s.row.note!, style: const TextStyle(fontSize: 12)),
             if (s.skipped)
               Text(
                 'excel_import.skipped'.tr(),
-                style: const TextStyle(color: Colors.orange, fontSize: 12),
+                style: AppText.caption.copyWith(
+                  color: AppPalette.of(context).goldText,
+                ),
               ),
             if (unresolved) ...[
               const SizedBox(height: 4),
               Text(
                 'excel_import.no_match'.tr(),
-                style: const TextStyle(color: Colors.orange, fontSize: 12),
+                style: AppText.caption.copyWith(
+                  color: AppPalette.of(context).goldText,
+                ),
               ),
               Wrap(
                 spacing: 8,
