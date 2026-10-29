@@ -309,7 +309,8 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
           _micError = switch (code) {
             'unsupported' => 'rest.mic_unsupported'.tr(),
             'not-allowed' => 'rest.mic_denied'.tr(),
-            _ => 'rest.mic_failed'.tr(),
+            'no-speech' => 'rest.mic_no_speech'.tr(),
+            _ => 'rest.mic_failed'.tr(namedArgs: {'code': code}),
           };
         });
       },
