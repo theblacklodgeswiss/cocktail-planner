@@ -56,3 +56,6 @@ functions/node_modules/
 # Installed agent skills (npx skills add)
 .claude/skills/
 skills-lock.json
+
+# Agent worktrees
+.claude/worktrees/
