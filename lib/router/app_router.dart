@@ -15,6 +15,8 @@ import '../screens/login_screen.dart';
 import '../screens/more/more_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/share/shared_document_screen.dart';
+import '../screens/shared/document_sections/document_flow.dart'
+    show documentRoute;
 import '../screens/orders/orders_overview_screen.dart';
 import '../screens/orders/orders_year_overview_screen.dart';
 import '../screens/orders/pending_orders_screen.dart';
@@ -174,17 +176,19 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/create-offer',
-      builder: (context, state) {
-        final order = state.extra as SavedOrder;
-        return CreateOfferScreen(order: order);
-      },
+      // A missing extra (e.g. after a reload) shows an empty state that
+      // leads back to /orders instead of a cast error.
+      builder: (context, state) => documentRoute(
+        state.extra,
+        (order) => CreateOfferScreen(order: order),
+      ),
     ),
     GoRoute(
       path: '/create-invoice',
-      builder: (context, state) {
-        final order = state.extra as SavedOrder;
-        return CreateInvoiceScreen(order: order);
-      },
+      builder: (context, state) => documentRoute(
+        state.extra,
+        (order) => CreateInvoiceScreen(order: order),
+      ),
     ),
   ],
 );

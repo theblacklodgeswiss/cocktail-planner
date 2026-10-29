@@ -1,24 +1,28 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/employee.dart';
 import '../../../models/offer.dart';
 import '../../../models/order.dart';
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/app_sheet.dart';
+import '../../../ui/widgets/buttons.dart';
+import '../../../ui/widgets/floating_card.dart';
+import '../../../ui/widgets/hero_card.dart';
 import '../../../utils/currency.dart';
+import '../../forms/steps/wizard_widgets.dart';
 import '../../offer/offer_form_state.dart' show formatDocumentDate;
 import '../../offer/widgets/cocktail_chips_field.dart';
-import '../../offer/widgets/event_type_selector.dart';
-import '../../offer/widgets/section_header.dart';
 import 'document_field.dart';
 
-/// Sections shared by the offer and invoice screens (moved verbatim; the
-/// differences between the two screens are parameters). [prefix] is the
-/// translation group, 'offer' or 'invoice'.
+/// Sections shared by the offer and invoice flows. [prefix] is the
+/// translation group of the screen, 'offer' or 'invoice'.
 
-/// Order name, date and total on top.
-class DocumentOrderBanner extends StatelessWidget {
-  const DocumentOrderBanner({
+/// Order name, date and request total (former info banner).
+class DocumentOrderSummary extends StatelessWidget {
+  const DocumentOrderSummary({
     super.key,
     required this.order,
     required this.currency,
@@ -29,54 +33,100 @@ class DocumentOrderBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-      child: ListTile(
-        leading: const Icon(Icons.receipt_long),
-        title: Text(order.name),
-        subtitle: Text(
-          '${formatDocumentDate(order.date)} • ${currency.format(order.total)}',
+    final p = AppPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.s16),
+      child: FloatingCard(
+        child: Row(
+          children: [
+            Icon(Icons.receipt_long, size: AppSize.rowIcon, color: p.text),
+            const SizedBox(width: AppSpace.s12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(order.name, style: AppText.section.copyWith(color: p.text)),
+                  Text(
+                    '${formatDocumentDate(order.date)} • ${currency.format(order.total)}',
+                    style: AppText.body.copyWith(color: p.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class DocumentEditorSection extends StatelessWidget {
-  const DocumentEditorSection({
+/// Language (DE/EN), the offer's currency and the editor name.
+class DocumentSettingsSection extends StatelessWidget {
+  const DocumentSettingsSection({
     super.key,
     required this.prefix,
-    required this.controller,
-    required this.field,
+    required this.language,
+    required this.onLanguage,
+    required this.editorCtrl,
+    required this.hints,
+    this.currency,
+    this.onCurrency,
   });
 
   final String prefix;
-  final TextEditingController controller;
-  final DocumentFieldFactory field;
+  final String language;
+  final ValueChanged<String> onLanguage;
+  final TextEditingController editorCtrl;
+  final DocHints hints;
+  final Currency? currency;
+  final ValueChanged<Currency>? onCurrency;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: '$prefix.editor'.tr()),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 400,
-          child: field(
-            controller: controller,
-            label: '$prefix.editor_name'.tr(),
-            required: true,
+    return WizardSection(
+      caption: 'docflow.document'.tr(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FieldLabel('docflow.language'.tr()),
+          PillGroup(
+            children: [
+              for (final lang in const ['de', 'en'])
+                SelectPill(
+                  label: lang.toUpperCase(),
+                  selected: language == lang,
+                  onTap: () => onLanguage(lang),
+                ),
+            ],
           ),
-        ),
-      ],
+          if (currency != null) ...[
+            const SizedBox(height: AppSpace.s12),
+            FieldLabel('docflow.currency'.tr()),
+            PillGroup(
+              children: [
+                for (final c in Currency.values)
+                  SelectPill(
+                    label: c.code,
+                    selected: currency == c,
+                    onTap: () => onCurrency?.call(c),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpace.s12),
+          DocTextField(
+            controller: editorCtrl,
+            label: '$prefix.editor_name'.tr(),
+            hints: hints,
+            field: 'editor',
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Client name, contact and location. The offer requires all three; the
-/// invoice only the name.
+/// Client name, contact and location (offer: all required; invoice: name).
 class DocumentClientSection extends StatelessWidget {
   const DocumentClientSection({
     super.key,
@@ -84,171 +134,62 @@ class DocumentClientSection extends StatelessWidget {
     required this.nameCtrl,
     required this.contactCtrl,
     required this.locationCtrl,
-    required this.field,
-    required this.allRequired,
+    required this.hints,
   });
 
   final String prefix;
   final TextEditingController nameCtrl;
   final TextEditingController contactCtrl;
   final TextEditingController locationCtrl;
-  final DocumentFieldFactory field;
-  final bool allRequired;
+  final DocHints hints;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: '$prefix.client'.tr()),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 500;
-            final fields = [
-              field(
-                controller: nameCtrl,
-                label: '$prefix.client_name'.tr(),
-                required: true,
-              ),
-              field(
-                controller: contactCtrl,
-                label: '$prefix.client_contact'.tr(),
-                hint: '$prefix.client_contact_hint'.tr(),
-                required: allRequired,
-              ),
-            ];
-            return Column(
-              children: [
-                wide
-                    ? Row(
-                        children: fields
-                            .map(
-                              (f) => Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: f,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : allRequired
-                    ? Column(
-                        children: fields
-                            .map(
-                              (f) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: f,
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : Column(
-                        children: [
-                          fields[0],
-                          const SizedBox(height: 8),
-                          fields[1],
-                        ],
-                      ),
-                const SizedBox(height: 8),
-                field(
-                  controller: locationCtrl,
-                  label: 'orders.location'.tr(),
-                  hint: 'z.B. Musterstrasse 123, 3000 Bern',
-                  required: allRequired,
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-/// Event type chips; the offer frames them and shows [errorKey].
-class DocumentEventTypeSection extends StatelessWidget {
-  const DocumentEventTypeSection({
-    super.key,
-    required this.prefix,
-    required this.selected,
-    required this.onChanged,
-    this.framed = false,
-    this.errorKey,
-  });
-
-  final String prefix;
-  final Set<EventType> selected;
-  final ValueChanged<Set<EventType>> onChanged;
-  final bool framed;
-  final String? errorKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final selector = EventTypeSelector(
-      selectedTypes: selected,
-      onChanged: onChanged,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: '$prefix.event_type'.tr()),
-        const SizedBox(height: 8),
-        if (!framed)
-          selector
-        else
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: errorKey != null
-                    ? Theme.of(context).colorScheme.error
-                    : Colors.transparent,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: selector,
+    return WizardSection(
+      caption: '$prefix.client'.tr(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DocTextField(
+            controller: nameCtrl,
+            label: '$prefix.client_name'.tr(),
+            hints: hints,
+            field: 'client_name',
+            keyboardType: TextInputType.name,
           ),
-        if (errorKey != null) DocumentSectionError(errorKey!.tr()),
-      ],
-    );
-  }
-}
-
-/// Red explanation below a section (offer).
-class DocumentSectionError extends StatelessWidget {
-  const DocumentSectionError(this.text, {super.key});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.error,
-          fontWeight: FontWeight.w600,
-        ),
+          const SizedBox(height: AppSpace.s12),
+          DocTextField(
+            controller: contactCtrl,
+            label: '$prefix.client_contact'.tr(),
+            hintText: '$prefix.client_contact_hint'.tr(),
+            hints: hints,
+            field: 'client_contact',
+          ),
+          const SizedBox(height: AppSpace.s12),
+          DocTextField(
+            controller: locationCtrl,
+            label: 'orders.location'.tr(),
+            hintText: 'z.B. Musterstrasse 123, 3000 Bern',
+            hints: hints,
+            field: 'location',
+            keyboardType: TextInputType.streetAddress,
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Guest count, event time and date.
-class DocumentEventDetailsSection extends StatelessWidget {
-  const DocumentEventDetailsSection({
+/// Guest count, event time and date (date picked in a sheet).
+class DocumentScheduleSection extends StatelessWidget {
+  const DocumentScheduleSection({
     super.key,
     required this.prefix,
     required this.guestCountCtrl,
     required this.eventTimeCtrl,
     required this.eventDate,
     required this.onDateChanged,
-    required this.field,
-    this.guestValidator,
-    required this.timeRequired,
+    required this.hints,
   });
 
   final String prefix;
@@ -256,95 +197,153 @@ class DocumentEventDetailsSection extends StatelessWidget {
   final TextEditingController eventTimeCtrl;
   final DateTime eventDate;
   final ValueChanged<DateTime> onDateChanged;
-  final DocumentFieldFactory field;
-
-  /// Offer: the guest count validator; invoice: null (plain "required").
-  final FormFieldValidator<String>? guestValidator;
-  final bool timeRequired;
+  final DocHints hints;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: '$prefix.event_details'.tr()),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 600;
-            final fields = [
-              SizedBox(
-                width: 200,
-                child: field(
-                  controller: guestCountCtrl,
-                  label: '$prefix.guest_count'.tr(),
-                  keyboard: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: guestValidator,
-                  required: guestValidator == null,
-                ),
+    return WizardSection(
+      caption: 'docflow.schedule'.tr(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DocTextField(
+            controller: guestCountCtrl,
+            label: '$prefix.guest_count'.tr(),
+            hints: hints,
+            field: 'guests',
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+          const SizedBox(height: AppSpace.s12),
+          DocTextField(
+            controller: eventTimeCtrl,
+            label: '$prefix.event_time'.tr(),
+            hintText: '17:30',
+            hints: hints,
+            field: 'event_time',
+            keyboardType: TextInputType.datetime,
+            textInputAction: TextInputAction.done,
+          ),
+          const SizedBox(height: AppSpace.s8),
+          PickerRow(
+            icon: Icons.calendar_today,
+            label: '$prefix.event_date'.tr(),
+            value: formatDocumentDate(eventDate),
+            placeholder: 'docflow.pick_date'.tr(),
+            onTap: () => _pickDate(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    var picked = eventDate;
+    final first = DateTime(2020);
+    final last = DateTime.now().add(const Duration(days: 1825));
+    final result = await showAppSheet<DateTime>(
+      context,
+      builder: (sheet) {
+        final p = AppPalette.of(sheet);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '$prefix.event_date'.tr(),
+              style: AppText.heroTitle.copyWith(color: p.text),
+            ),
+            SizedBox(
+              height: AppSize.pickerHeight,
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: eventDate,
+                minimumDate: eventDate.isBefore(first) ? eventDate : first,
+                maximumDate: eventDate.isAfter(last) ? eventDate : last,
+                onDateTimeChanged: (v) => picked = v,
               ),
-              SizedBox(
-                width: 200,
-                child: field(
-                  controller: eventTimeCtrl,
-                  label: '$prefix.event_time'.tr(),
-                  hint: '17:30',
-                  required: timeRequired,
-                ),
-              ),
-              SizedBox(
-                width: 200,
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: eventDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 1825)),
-                    );
-                    if (picked != null) onDateChanged(picked);
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: '$prefix.event_date'.tr(),
-                      suffixIcon: const Icon(Icons.calendar_today),
-                    ),
-                    child: Text(formatDocumentDate(eventDate)),
+            ),
+            const SizedBox(height: AppSpace.s16),
+            PrimaryButton(
+              label: 'common.ok'.tr(),
+              onPressed: () => Navigator.of(sheet).pop(picked),
+            ),
+            const SizedBox(height: AppSpace.s8),
+            TextAction(
+              label: 'ui.cancel'.tr(),
+              onPressed: () => Navigator.of(sheet).pop(),
+            ),
+          ],
+        );
+      },
+    );
+    if (result != null) onDateChanged(result);
+  }
+}
+
+/// Event type pills with the "required" hint (offer).
+class DocumentEventTypeSection extends StatelessWidget {
+  const DocumentEventTypeSection({
+    super.key,
+    required this.prefix,
+    required this.selected,
+    required this.onChanged,
+    required this.hints,
+  });
+
+  final String prefix;
+  final Set<EventType> selected;
+  final ValueChanged<Set<EventType>> onChanged;
+  final DocHints hints;
+
+  static const _types = [
+    (EventType.birthday, 'offer.event_birthday'),
+    (EventType.wedding, 'offer.event_wedding'),
+    (EventType.company, 'offer.event_company'),
+    (EventType.babyshower, 'offer.event_babyshower'),
+    (EventType.other, 'offer.event_other'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(
+      key: hints.anchorOf('event_type'),
+      child: WizardSection(
+        caption: '$prefix.event_type'.tr(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PillGroup(
+              children: [
+                for (final (type, key) in _types)
+                  SelectPill(
+                    label: key.tr(),
+                    selected: selected.contains(type),
+                    onTap: () {
+                      final next = Set<EventType>.from(selected);
+                      if (!next.remove(type)) next.add(type);
+                      onChanged(next);
+                    },
                   ),
-                ),
-              ),
-            ];
-            return wide
-                ? Row(
-                    children: fields
-                        .map(
-                          (f) => Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: f,
-                          ),
-                        )
-                        .toList(),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: fields
-                        .map(
-                          (f) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: f,
-                          ),
-                        )
-                        .toList(),
-                  );
-          },
+              ],
+            ),
+            FieldHint(hints.hintOf('event_type')),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-/// Service type dropdown; the offer adds a hint below it.
+/// The four service types.
+const serviceTypeOptions = [
+  ('cocktail_barservice', 'orders.service_cocktail_bar'),
+  ('cocktail_service', 'orders.service_cocktail_only'),
+  ('mocktail_service', 'orders.service_mocktail_only'),
+  ('bar_service', 'orders.service_bar_only'),
+];
+
+/// Service type pills; the offer adds the "positions follow" hint.
 class DocumentServiceTypeSection extends StatelessWidget {
   const DocumentServiceTypeSection({
     super.key,
@@ -359,52 +358,36 @@ class DocumentServiceTypeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'orders.service_type'.tr()),
-        const SizedBox(height: 8),
-        InputDecorator(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          ),
-          child: DropdownButton<String>(
-            value: value,
-            isExpanded: true,
-            underline: const SizedBox.shrink(),
-            items: [
+    final p = AppPalette.of(context);
+    return WizardSection(
+      caption: 'orders.service_type'.tr(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PillGroup(
+            children: [
               for (final (v, key) in serviceTypeOptions)
-                DropdownMenuItem(value: v, child: Text(key.tr())),
+                SelectPill(
+                  label: key.tr(),
+                  selected: value == v,
+                  onTap: () => onChanged(v),
+                ),
             ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
           ),
-        ),
-        if (showHint) ...[
-          const SizedBox(height: 8),
-          Text(
-            'offer.positions_manage_hint'.tr(),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
+          if (showHint) ...[
+            const SizedBox(height: AppSpace.s8),
+            Text(
+              'offer.positions_manage_hint'.tr(),
+              style: AppText.caption.copyWith(color: p.textSecondary),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
-/// The four service types and their labels.
-const serviceTypeOptions = [
-  ('cocktail_barservice', 'orders.service_cocktail_bar'),
-  ('cocktail_service', 'orders.service_cocktail_only'),
-  ('mocktail_service', 'orders.service_mocktail_only'),
-  ('bar_service', 'orders.service_bar_only'),
-];
-
-/// Cocktails (chips), bar description and shots.
+/// Cocktails (chips + catalog search), bar description and shots.
 class DocumentServicesSection extends StatelessWidget {
   const DocumentServicesSection({
     super.key,
@@ -412,8 +395,7 @@ class DocumentServicesSection extends StatelessWidget {
     required this.cocktailsCtrl,
     required this.barDescCtrl,
     required this.shotsCtrl,
-    required this.field,
-    this.cocktailsValidator,
+    required this.hints,
     this.loadCatalog,
   });
 
@@ -421,83 +403,205 @@ class DocumentServicesSection extends StatelessWidget {
   final TextEditingController cocktailsCtrl;
   final TextEditingController barDescCtrl;
   final TextEditingController shotsCtrl;
-  final DocumentFieldFactory field;
-  final FormFieldValidator<String>? cocktailsValidator;
+  final DocHints hints;
   final Future<List<String>> Function()? loadCatalog;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: '$prefix.services'.tr()),
-        const SizedBox(height: 8),
-        CocktailChipsField(
-          controller: cocktailsCtrl,
-          label: '$prefix.cocktails'.tr(),
-          validator: cocktailsValidator,
-          loadCatalog: loadCatalog,
-        ),
-        const SizedBox(height: 8),
-        field(
-          controller: barDescCtrl,
-          label: '$prefix.bar_description'.tr(),
-          hint: '$prefix.bar_description_hint'.tr(),
-        ),
-        const SizedBox(height: 8),
-        field(
-          controller: shotsCtrl,
-          label: '$prefix.shots'.tr(),
-          hint: '$prefix.shots_hint'.tr(),
-        ),
-      ],
+    return WizardSection(
+      caption: '$prefix.services'.tr(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          KeyedSubtree(
+            key: hints.anchorOf('cocktails'),
+            child: CocktailChipsField(
+              controller: cocktailsCtrl,
+              label: '$prefix.cocktails'.tr(),
+              loadCatalog: loadCatalog,
+            ),
+          ),
+          FieldHint(hints.hintOf('cocktails')),
+          const SizedBox(height: AppSpace.s12),
+          DocTextField(
+            controller: barDescCtrl,
+            label: '$prefix.bar_description'.tr(),
+            hintText: '$prefix.bar_description_hint'.tr(),
+          ),
+          const SizedBox(height: AppSpace.s12),
+          DocTextField(
+            controller: shotsCtrl,
+            label: '$prefix.shots'.tr(),
+            hintText: '$prefix.shots_hint'.tr(),
+            textInputAction: TextInputAction.done,
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Employee filter chips (offer: own section; invoice: inside extra hours).
-class EmployeeChips extends StatelessWidget {
-  const EmployeeChips({
+/// Employee selection as pills, with the "required" hint (invoice).
+class DocumentEmployeesSection extends StatelessWidget {
+  const DocumentEmployeesSection({
     super.key,
     required this.employees,
     required this.selected,
     required this.onToggle,
+    required this.hints,
   });
 
   final List<Employee> employees;
   final Set<String> selected;
   final void Function(String name, bool selected) onToggle;
+  final DocHints hints;
 
   @override
   Widget build(BuildContext context) {
-    if (employees.isEmpty) {
-      return Text(
-        'orders.no_employees_available'.tr(),
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-      );
-    }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: employees.map((employee) {
-        final isSelected = selected.contains(employee.name);
-        return FilterChip(
-          selected: isSelected,
-          label: Text(employee.name),
-          avatar: CircleAvatar(
-            backgroundColor: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : Colors.grey,
-            child: Text(
-              employee.name.isNotEmpty ? employee.name[0].toUpperCase() : '?',
-              style: const TextStyle(fontSize: 12, color: Colors.white),
+    final p = AppPalette.of(context);
+    return KeyedSubtree(
+      key: hints.anchorOf('employees'),
+      child: WizardSection(
+        caption: 'docflow.staff'.tr(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'invoice.select_employees'.tr(),
+              style: AppText.caption.copyWith(color: p.textSecondary),
             ),
-          ),
-          onSelected: (value) => onToggle(employee.name, value),
-        );
-      }).toList(),
+            const SizedBox(height: AppSpace.s8),
+            if (employees.isEmpty)
+              Text(
+                'orders.no_employees_available'.tr(),
+                style: AppText.body.copyWith(color: p.textSecondary),
+              )
+            else
+              PillGroup(
+                children: [
+                  for (final e in employees)
+                    SelectPill(
+                      label: e.name,
+                      selected: selected.contains(e.name),
+                      onTap: () =>
+                          onToggle(e.name, !selected.contains(e.name)),
+                    ),
+                ],
+              ),
+            FieldHint(hints.hintOf('employees')),
+          ],
+        ),
+      ),
     );
   }
+}
+
+/// One position as a floating card: name, number, total, meta, remark and
+/// 44 px edit/delete actions.
+class DocPositionCard extends StatelessWidget {
+  const DocPositionCard({
+    super.key,
+    required this.index,
+    required this.position,
+    required this.currency,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final int index;
+  final ExtraPosition position;
+  final Currency currency;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    final pos = position;
+    final tbd = pos.quantity == 0;
+    final meta = [
+      if (pos.date.isNotEmpty) pos.date,
+      '${'offer.position_quantity'.tr()}: ${tbdOr(tbd, '${pos.quantity}')}',
+      '${'offer.position_price'.tr()}: ${tbdOr(tbd, currency.format(pos.price))}',
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.s8),
+      child: FloatingCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '#${index + 1}',
+                        style: AppText.caption.copyWith(color: p.textSecondary),
+                      ),
+                      Text(
+                        pos.name,
+                        style: AppText.section.copyWith(color: p.text),
+                      ),
+                    ],
+                  ),
+                ),
+                DocIconAction(
+                  icon: Icons.edit_outlined,
+                  label: 'common.edit'.tr(),
+                  onTap: onEdit,
+                ),
+                const SizedBox(width: AppSpace.s4),
+                DocIconAction(
+                  icon: Icons.delete_outline,
+                  label: 'common.delete'.tr(),
+                  destructive: true,
+                  onTap: onDelete,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.s4),
+            Text(
+              tbdOr(tbd, currency.format(pos.total)),
+              style: AppText.number.copyWith(
+                color: tbd ? p.textSecondary : p.text,
+              ),
+            ),
+            Text(meta, style: AppText.caption.copyWith(color: p.textSecondary)),
+            if (pos.remark.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.s4),
+              Text(pos.remark, style: AppText.body.copyWith(color: p.text)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The one black card of the flow: the grand total on the last step.
+class DocTotalHero extends StatelessWidget {
+  const DocTotalHero({
+    super.key,
+    required this.label,
+    required this.total,
+    this.meta,
+  });
+
+  final String label;
+  final String total;
+  final String? meta;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpace.s16),
+    child: HeroCard(
+      kicker: label.toUpperCase(),
+      title: total,
+      titleStyle: AppText.display,
+      meta: meta,
+    ),
+  );
 }

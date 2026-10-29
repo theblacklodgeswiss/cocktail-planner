@@ -6,6 +6,7 @@ import '../../models/order.dart';
 import '../../utils/currency.dart';
 import '../../utils/position_translation.dart';
 import '../../widgets/discount_editor.dart';
+import '../shared/document_sections/document_flow.dart' show DocIssue;
 import '../offer/offer_form_state.dart' show splitCommaList;
 
 /// All data of the invoice screen: controllers, selections, positions and
@@ -349,6 +350,41 @@ class InvoiceFormState {
   /// The first validation error's translation key.
   String? get validationErrorKey =>
       employeeValidationErrorKey ?? totalValidationErrorKey;
+
+  /// Everything missing or invalid, by step (same rules as the old
+  /// screen's form validators plus [validateAll]).
+  List<DocIssue> get issues {
+    String? req(TextEditingController c) =>
+        c.text.trim().isEmpty ? 'invoice.field_required' : null;
+    final checks = <(int, String, String?)>[
+      (0, 'editor', req(editorNameCtrl)),
+      (0, 'client_name', req(clientNameCtrl)),
+      (0, 'guests', req(guestCountCtrl)),
+      (
+        1,
+        'employees',
+        selectedEmployees.isEmpty ? 'invoice.employees_required' : null,
+      ),
+      (
+        2,
+        'bar_service_cost',
+        usePositionsMode ? null : req(barServiceCostCtrl),
+      ),
+      (
+        3,
+        'discount',
+        DiscountEditor.errorKeyOf(
+          discountValueCtrl.text,
+          isPercent: discountIsPercent,
+        ),
+      ),
+      (3, 'total', grandTotal < 0 ? 'invoice.total_cannot_be_negative' : null),
+    ];
+    return [
+      for (final (step, field, key) in checks)
+        if (key != null) DocIssue(step, field, key),
+    ];
+  }
 
   /// The order as the invoice PDF and the share link see it.
   SavedOrder buildUpdatedOrder() {

@@ -7,6 +7,7 @@ import '../../models/order.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
 import '../../widgets/discount_editor.dart';
+import '../shared/document_sections/document_flow.dart' show DocIssue;
 
 /// Splits a comma-separated list field ("Mojito, Hugo") into trimmed,
 /// non-empty entries.
@@ -316,6 +317,41 @@ class OfferFormState {
       return 'offer.cocktails_required';
     }
     return null;
+  }
+
+  /// Everything missing or invalid, by step (0 client and date, 1 services,
+  /// 2 positions, 3 price) - the same rules the old screen's form
+  /// validators, event type and positions checks applied.
+  List<DocIssue> get issues {
+    String? req(TextEditingController c) =>
+        c.text.trim().isEmpty ? 'offer.field_required' : null;
+    final checks = <(int, String, String?)>[
+      (0, 'editor', req(editorNameCtrl)),
+      (0, 'client_name', req(clientNameCtrl)),
+      (0, 'client_contact', req(clientContactCtrl)),
+      (0, 'location', req(locationCtrl)),
+      (0, 'guests', guestCountErrorKey(guestCountCtrl.text)),
+      (0, 'event_time', req(eventTimeCtrl)),
+      (
+        0,
+        'event_type',
+        hasEventTypeSelection ? null : 'offer.event_type_required',
+      ),
+      (1, 'cocktails', cocktailsErrorKey(cocktailsCtrl.text)),
+      (2, 'positions', hasOfferPositions ? null : 'offer.positions_required'),
+      (
+        3,
+        'discount',
+        DiscountEditor.errorKeyOf(
+          discountValueCtrl.text,
+          isPercent: discountIsPercent,
+        ),
+      ),
+    ];
+    return [
+      for (final (step, field, key) in checks)
+        if (key != null) DocIssue(step, field, key),
+    ];
   }
 
   /// Offers saved before the dedicated discount field kept it as a negative

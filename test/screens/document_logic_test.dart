@@ -396,6 +396,68 @@ void main() {
     });
   });
 
+  group('issues (step, field, hint) for the guided flow', () {
+    test('complete offer has none; each rule maps to its step', () {
+      final s = OfferFormState(offerOrder(eventType: 'birthday'));
+      addTearDown(s.dispose);
+      expect(s.issues, isEmpty);
+      s.editorNameCtrl.clear();
+      s.clientContactCtrl.text = ' ';
+      s.guestCountCtrl.text = '0';
+      s.eventTimeCtrl.clear();
+      s.eventTypes.clear();
+      s.cocktailsCtrl.clear();
+      s.offerPositions.clear();
+      s.discountValueCtrl.text = '120';
+      expect(
+        s.issues.map((i) => '${i.step}:${i.field}:${i.messageKey}').toList(),
+        [
+          '0:editor:offer.field_required',
+          '0:client_contact:offer.field_required',
+          '0:guests:offer.invalid_number',
+          '0:event_time:offer.field_required',
+          '0:event_type:offer.event_type_required',
+          '1:cocktails:offer.cocktails_required',
+          '2:positions:offer.positions_required',
+          '3:discount:discount.percent_too_high',
+        ],
+      );
+    });
+
+    test('invoice: fields mode rules, employees, negative total', () {
+      final s = InvoiceFormState(invoiceOrder(assignedEmployees: const []));
+      addTearDown(s.dispose);
+      expect(s.issues.map((i) => i.field), ['employees']);
+      s.clientNameCtrl.clear();
+      s.guestCountCtrl.clear();
+      s.barServiceCostCtrl.text = '-5000';
+      s.discountValueCtrl.text = 'x';
+      expect(
+        s.issues.map((i) => '${i.step}:${i.field}:${i.messageKey}').toList(),
+        [
+          '0:client_name:invoice.field_required',
+          '0:guests:invoice.field_required',
+          '1:employees:invoice.employees_required',
+          '3:discount:offer.invalid_number',
+          '3:total:invoice.total_cannot_be_negative',
+        ],
+      );
+      // An empty bar service cost is a required field (fields mode only).
+      s.barServiceCostCtrl.clear();
+      expect(s.issues.map((i) => i.field), contains('bar_service_cost'));
+      final positions = InvoiceFormState(
+        invoiceOrder(
+          offerPositions: const [
+            {'name': 'A', 'price': 10.0, 'quantity': 1},
+          ],
+        ),
+      );
+      addTearDown(positions.dispose);
+      positions.barServiceCostCtrl.clear();
+      expect(positions.issues, isEmpty);
+    });
+  });
+
   test('splitCommaList and formatDocumentDate', () {
     expect(splitCommaList(' a, ,b ,'), ['a', 'b']);
     expect(formatDocumentDate(DateTime(2027, 1, 5)), '05.01.2027');
