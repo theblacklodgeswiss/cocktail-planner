@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../data/order_repository.dart';
+import 'stock_ai_interpreter.dart';
 
 /// Suggested material item for the shopping list from Claude AI.
 class SuggestedMaterial {
@@ -68,6 +69,17 @@ class AiMaterialSuggestion {
   }
 }
 
+/// A non-200 answer of the Claude API (or the proxy).
+class ClaudeHttpException implements Exception {
+  const ClaudeHttpException(this.statusCode, this.body);
+
+  final int statusCode;
+  final String body;
+
+  @override
+  String toString() => 'HTTP $statusCode: $body';
+}
+
 enum AiErrorType {
   serviceUnavailable,
   rateLimitExceeded,
@@ -127,12 +139,20 @@ class ClaudeService {
   }
 
   /// Send a message to Claude and return the text response.
+  ///
+  /// [model] overrides the service's default model for this call only,
+  /// [timeout] bounds each HTTP attempt, [extraBody] adds request fields
+  /// (e.g. `thinking`). The first `text` block of the answer is returned
+  /// (thinking blocks are skipped).
   Future<String?> _sendMessage(
     String prompt, {
     List<Map<String, dynamic>>? additionalContent,
     int maxTokens = 4096,
     String operationName = 'request',
     int maxRetries = 3,
+    String? model,
+    Duration? timeout,
+    Map<String, dynamic>? extraBody,
   }) async {
     if (!isConfigured) return null;
 
@@ -145,7 +165,7 @@ class ClaudeService {
 
     while (attempt < maxRetries) {
       try {
-        final response = await http.post(
+        final request = http.post(
           Uri.parse(_apiBase),
           headers: {
             if (_apiKey != null && _apiKey!.isNotEmpty) 'x-api-key': _apiKey!,
@@ -153,18 +173,27 @@ class ClaudeService {
             'content-type': 'application/json',
           },
           body: jsonEncode({
-            'model': _model,
+            'model': model ?? _model,
             'max_tokens': maxTokens,
+            ...?extraBody,
             'messages': [
               {'role': 'user', 'content': content},
             ],
           }),
         );
+        final response = timeout == null
+            ? await request
+            : await request.timeout(timeout);
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           final contentList = data['content'] as List<dynamic>;
-          final text = (contentList.first as Map<String, dynamic>)['text'] as String?;
+          final text = contentList
+              .whereType<Map<String, dynamic>>()
+              .where((b) => b['type'] == null || b['type'] == 'text')
+              .map((b) => b['text'])
+              .whereType<String>()
+              .firstOrNull;
           debugPrint('Claude $operationName succeeded');
           return text;
         }
@@ -174,7 +203,7 @@ class ClaudeService {
 
         if (!isRetryable || attempt >= maxRetries) {
           debugPrint('Claude $operationName failed: ${response.statusCode} ${response.body}');
-          throw Exception('HTTP ${response.statusCode}: ${response.body}');
+          throw ClaudeHttpException(response.statusCode, response.body);
         }
 
         debugPrint('Claude $operationName attempt $attempt failed (${response.statusCode}), retrying in ${delay.inSeconds}s...');
@@ -191,7 +220,63 @@ class ClaudeService {
     return null;
   }
 
+  /// Fast, small model for the latency-sensitive stock interpretation.
+  static const String stockModel = 'claude-haiku-5-5';
 
+  /// Client timeout of one stock interpretation request.
+  static const Duration stockTimeout = Duration(seconds: 10);
+
+  /// Interprets a spoken/typed stock statement with Claude and checks it
+  /// against the current stock. Returns the validated lines, or null on any
+  /// failure (not configured, empty text, timeout, HTTP error, invalid
+  /// answer); the caller then uses the rule-based parser.
+  ///
+  /// One request; only an unknown-model answer is retried once with the
+  /// service's default model. Logs operation, duration and line count only.
+  Future<StockAiResult?> interpretStockText(
+    StockInterpretRequest request,
+  ) async {
+    if (!isConfigured || request.text.trim().isEmpty) return null;
+    final prompt = buildStockInterpretPrompt(request);
+    final watch = Stopwatch()..start();
+    // No temperature: current small models reject non-default sampling.
+    // Thinking off keeps the answer fast and inside max_tokens.
+    Future<String?> send(String model) => _sendMessage(
+      prompt,
+      maxTokens: 1024,
+      operationName: 'stock interpret',
+      maxRetries: 1,
+      model: model,
+      timeout: stockTimeout,
+      extraBody: const {
+        'thinking': {'type': 'disabled'},
+      },
+    );
+    try {
+      String? text;
+      try {
+        text = await send(stockModel);
+      } on ClaudeHttpException catch (e) {
+        if (!isModelNotFoundError(e.statusCode, e.body)) rethrow;
+        debugPrint('Claude stock interpret: model unavailable, retrying with default');
+        text = await send(_model);
+      }
+      final result = text == null
+          ? null
+          : parseStockInterpretation(text, request.catalog, request.locations);
+      debugPrint(
+        'Claude stock interpret: ${watch.elapsedMilliseconds} ms, '
+        '${result == null ? 'invalid answer' : '${result.lines.length} lines'}',
+      );
+      return result;
+    } catch (e) {
+      debugPrint(
+        'Claude stock interpret failed after ${watch.elapsedMilliseconds} ms '
+        '(${e.runtimeType})',
+      );
+      return null;
+    }
+  }
 
   /// Generate a recipe (ingredients + amounts) from a name or description.
   /// Returns null on failure.
