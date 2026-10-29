@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import '../utils/currency.dart';
@@ -61,9 +62,9 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      margin: const EdgeInsets.symmetric(vertical: AppSpace.s32, horizontal: AppSpace.s16),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpace.s24),
         child: Form(
           key: _formKey,
           child: Column(
@@ -74,14 +75,14 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                 'order_setup.title'.tr(),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Text('order_setup.hint'.tr()),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               Text(
                 'order_setup.service_type_label'.tr(),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -112,7 +113,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s24),
               TextFormField(
                 controller: orderNameCtrl,
                 decoration: InputDecoration(
@@ -124,7 +125,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                     ? 'order_setup.required'.tr()
                     : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: phoneNumberCtrl,
                 decoration: InputDecoration(
@@ -134,7 +135,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                 ),
                 keyboardType: TextInputType.phone,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               InkWell(
                 onTap: () async {
                   final date = await showDatePicker(
@@ -164,7 +165,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               InkWell(
                 onTap: () async {
                   final time = await showTimePicker(
@@ -193,7 +194,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: addressCtrl,
                 decoration: InputDecoration(
@@ -203,7 +204,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                 ),
                 maxLines: 2,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: personCountCtrl,
                 decoration: InputDecoration(
@@ -215,7 +216,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                     ? 'order_setup.required'.tr()
                     : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               TextFormField(
                 controller: distanceCtrl,
                 decoration: InputDecoration(
@@ -224,14 +225,14 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                 ),
                 keyboardType: TextInputType.number,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 4,
                 runSpacing: 4,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: AppSpace.s8),
                     child: Text('order_setup.currency_label'.tr()),
                   ),
                   ...Currency.values.map(
@@ -243,14 +244,14 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 4,
                 runSpacing: 4,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: AppSpace.s8),
                     child: Text('order_setup.drinker_type_label'.tr()),
                   ),
                   ChoiceChip(
@@ -270,7 +271,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.s24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -280,7 +281,7 @@ class _OrderSetupFormState extends State<OrderSetupForm> {
                     },
                     child: Text('common.cancel'.tr()),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.s12),
                   FilledButton(
                     onPressed: () {
                       if (_formKey.currentState!.validate()) {

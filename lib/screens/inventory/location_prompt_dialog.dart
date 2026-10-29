@@ -4,6 +4,7 @@ import 'package:cocktail_planer/services/auth_service.dart';
 import 'package:cocktail_planer/utils/shared_future.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 
 final _ensureOwnLocation = SharedFuture<StorageLocation?>();
 
@@ -165,7 +166,7 @@ class _LocationNameDialogState extends State<_LocationNameDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('stock.location_prompt_hint'.tr()),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
           TextField(
             controller: _controller,
             autofocus: true,

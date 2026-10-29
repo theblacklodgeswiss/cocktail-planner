@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/app_role.dart';
@@ -50,7 +51,7 @@ class _RoleProtectedScreenState extends State<RoleProtectedScreen> {
             ),
             body: Center(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(AppSpace.s24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -59,13 +60,13 @@ class _RoleProtectedScreenState extends State<RoleProtectedScreen> {
                       size: 80,
                       color: Theme.of(context).colorScheme.error,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpace.s24),
                     Text(
                       'admin.access_denied'.tr(),
                       style: Theme.of(context).textTheme.headlineSmall,
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpace.s16),
                     Text(
                       'admin.access_denied_message'.tr(),
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -74,7 +75,7 @@ class _RoleProtectedScreenState extends State<RoleProtectedScreen> {
                           ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: AppSpace.s32),
                     FilledButton.icon(
                       onPressed: () => context.go('/'),
                       icon: const Icon(Icons.home),

@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 import '../../services/claude_service.dart';
 import '../../state/app_state.dart';
 
@@ -47,7 +48,7 @@ class _GeminiMaterialReviewDialogState
       title: Row(
         children: [
           Icon(Icons.auto_awesome, color: Colors.deepPurple),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpace.s8),
           Expanded(child: Text('orders.claude_material_suggestions'.tr())),
         ],
       ),
@@ -61,7 +62,7 @@ class _GeminiMaterialReviewDialogState
             children: [
               // Info section
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.s12),
                 decoration: BoxDecoration(
                   color: Colors.deepPurple.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -74,7 +75,7 @@ class _GeminiMaterialReviewDialogState
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     if (widget.cocktailNames.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpace.s4),
                       Text(
                         '${'orders.requested_cocktails'.tr()}: ${widget.cocktailNames.join(", ")}',
                         style: TextStyle(color: colorScheme.outline),
@@ -83,7 +84,7 @@ class _GeminiMaterialReviewDialogState
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.s16),
 
               // Reasoning
               if (widget.suggestion.explanation.isNotEmpty) ...[
@@ -91,12 +92,12 @@ class _GeminiMaterialReviewDialogState
                   'orders.claude_reasoning'.tr(),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.s8),
                 Text(
                   widget.suggestion.explanation,
                   style: TextStyle(fontSize: 13, color: colorScheme.outline),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpace.s16),
               ],
 
               // Suggested materials header
@@ -113,7 +114,7 @@ class _GeminiMaterialReviewDialogState
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
 
               // Material list
               ..._editableMaterials.entries.map((entry) {
@@ -123,9 +124,9 @@ class _GeminiMaterialReviewDialogState
                 final reason = _materialReasons[entry.key] ?? '';
 
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
+                  margin: const EdgeInsets.only(bottom: AppSpace.s8),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppSpace.s12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -202,7 +203,7 @@ class _GeminiMaterialReviewDialogState
                           ],
                         ),
                         if (reason.isNotEmpty) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpace.s4),
                           Text(
                             reason,
                             style: TextStyle(

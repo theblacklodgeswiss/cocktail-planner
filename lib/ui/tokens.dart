@@ -87,6 +87,11 @@ class AppColors {
   // Errors and destructive actions only
   static const Color errorLight = Color(0xFFB3261E);
   static const Color errorDark = Color(0xFFFF6B63);
+
+  // Hints that are neither error nor neutral (readable on light and dark)
+  static const Color warning = Color(0xFFC77700);
+  static const Color success = Color(0xFF2E9E5B);
+  static const Color adminBadge = Color(0xFFFFC107);
 }
 
 class AppSpace {
@@ -97,6 +102,7 @@ class AppSpace {
   static const double s12 = 12;
   static const double s16 = 16;
   static const double s24 = 24;
+  static const double s32 = 32;
 }
 
 /// Fixed sizes shared by the base widgets.
@@ -183,6 +189,9 @@ class AppSize {
 
   // Order lists
   static const double metaIcon = 14;
+
+  // Admin recipe editor
+  static const double amountField = 112;
 }
 
 /// Elevation shadows shared by cards and glass.
@@ -248,6 +257,7 @@ class AppRadius {
   static const double tile = 12;
   static const double sheet = 28;
   static const double pill = 999;
+  static const double badge = 12;
 }
 
 /// Type scale (system font). Colors come from the theme, not from here.

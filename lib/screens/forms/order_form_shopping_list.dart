@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/claude_service.dart';
@@ -38,7 +39,7 @@ Future<void> generateShoppingListWithClaude(
         mainAxisSize: MainAxisSize.min,
         children: [
           const CircularProgressIndicator(),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpace.s16),
           Text('orders.claude_generating'.tr()),
         ],
       ),
@@ -82,7 +83,7 @@ Future<void> generateShoppingListWithClaude(
             content: Text(
               suggestion.errorMessage ?? 'orders.claude_error'.tr(),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 6),
           ),
         );
@@ -118,7 +119,7 @@ Future<void> generateShoppingListWithClaude(
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('orders.claude_error'.tr()),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }

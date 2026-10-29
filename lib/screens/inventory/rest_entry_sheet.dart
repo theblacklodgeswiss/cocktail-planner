@@ -385,7 +385,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
       padding: const EdgeInsets.symmetric(vertical: AppSpace.s12),
       children: [
         Text('rest.intro'.tr()),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
         TextField(
           controller: _textController,
           minLines: 3,
@@ -397,7 +397,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             border: const OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.s12),
         Row(
           children: [
             OutlinedButton.icon(
@@ -421,10 +421,10 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
           ],
         ),
         if (_micError != null) ...[
-          const SizedBox(height: 12),
-          Text(_micError!, style: const TextStyle(color: Colors.orange)),
+          const SizedBox(height: AppSpace.s12),
+          Text(_micError!, style: const TextStyle(color: AppColors.warning)),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.s16),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -452,19 +452,19 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                 'rest.heard'.tr(),
                 style: Theme.of(context).textTheme.labelMedium,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 _textController.text.trim().isEmpty
                     ? '-'
                     : _textController.text.trim(),
                 style: const TextStyle(fontStyle: FontStyle.italic),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 'rest.check_hint'.tr(),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.s12),
               if (_lines.isEmpty) Text('rest.no_lines'.tr()),
               for (final line in _lines) _buildLine(line),
               Align(
@@ -477,10 +477,10 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
               ),
               if (_saveError != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: AppSpace.s8),
                   child: Text(
                     _saveError!,
-                    style: const TextStyle(color: Colors.red),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
             ],
@@ -521,9 +521,9 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
     final unresolvedMaterial = line.chosenMaterialId == null;
     return Card(
       key: ObjectKey(line),
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpace.s12),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpace.s12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -546,7 +546,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                         setState(() => line.quantity = _parseQuantity(v) ?? 0),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: Text(
                     line.chosenMaterialName ??
@@ -555,7 +555,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                             : '"${line.parsed.spokenName}"'),
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: unresolvedMaterial ? Colors.orange : null,
+                      color: unresolvedMaterial ? AppColors.warning : null,
                     ),
                   ),
                 ),
@@ -571,13 +571,13 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             if (line.quantity <= 0)
               Text(
                 'rest.quantity_invalid'.tr(),
-                style: const TextStyle(color: Colors.red, fontSize: 12),
+                style: AppText.body.copyWith(color: Theme.of(context).colorScheme.error),
               ),
             if (unresolvedMaterial && !booked) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.s8),
               Text(
                 'rest.pick_item'.tr(),
-                style: const TextStyle(color: Colors.orange, fontSize: 12),
+                style: AppText.body.copyWith(color: AppColors.warning),
               ),
               Wrap(
                 spacing: 8,
@@ -607,7 +607,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
               if (!authService.isAdmin)
                 Text(
                   'rest.ask_admin'.tr(),
-                  style: const TextStyle(fontSize: 12),
+                  style: AppText.body,
                 ),
             ] else if (!booked)
               Align(
@@ -622,7 +622,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                   child: Text('rest.change_item'.tr()),
                 ),
               ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.s4),
             Row(
               children: [
                 Expanded(
@@ -648,7 +648,7 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
                           }),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 Expanded(
                   child: DropdownButtonFormField<StockOrigin>(
                     initialValue: line.origin,
@@ -674,20 +674,20 @@ class _RestEntrySheetState extends State<_RestEntrySheet> {
             ),
             if (line.locationUnresolved)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: AppSpace.s4),
                 child: Text(
                   'rest.location_unknown'.tr(
                     namedArgs: {'name': line.parsed.locationHint ?? ''},
                   ),
-                  style: const TextStyle(color: Colors.orange, fontSize: 12),
+                  style: AppText.body.copyWith(color: AppColors.warning),
                 ),
               ),
             if (booked)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: AppSpace.s4),
                 child: Text(
                   'rest.booked'.tr(),
-                  style: const TextStyle(color: Colors.green, fontSize: 12),
+                  style: AppText.body.copyWith(color: AppColors.success),
                 ),
               ),
           ],
@@ -734,7 +734,7 @@ class CatalogPickerDialogState extends State<CatalogPickerDialog> {
               ),
               onChanged: (v) => setState(() => _filter = v),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Expanded(
               child: ListView(
                 children: [
@@ -802,7 +802,7 @@ class NewItemDialogState extends State<NewItemDialog> {
               border: const OutlineInputBorder(),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           TextField(
             controller: _unit,
             decoration: InputDecoration(

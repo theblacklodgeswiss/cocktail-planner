@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/order.dart';
 import '../services/claude_service.dart';
@@ -101,18 +102,18 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Dialog(
-      insetPadding: const EdgeInsets.all(24),
+      insetPadding: const EdgeInsets.all(AppSpace.s24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         width: 800,
         height: 600,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpace.s24),
         child: Column(
           children: [
             Row(
               children: [
                 Icon(Icons.auto_awesome, color: colorScheme.primary),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.s12),
                 Expanded(
                   child: Text(
                     'orders.generate_with_claude'.tr(),
@@ -136,7 +137,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppSpace.s16),
                           Text('orders.claude_generating'.tr()),
                         ],
                       ),
@@ -151,9 +152,9 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
                             size: 48,
                             color: colorScheme.error,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppSpace.s16),
                           Text(_error!),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: AppSpace.s24),
                           FilledButton(
                             onPressed: _generate,
                             child: Text(
@@ -202,7 +203,7 @@ class _GeminiPlanDialogState extends State<GeminiPlanDialog> {
                     icon: const Icon(Icons.copy),
                     tooltip: 'Kopieren',
                   ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.s8),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text('common.close'.tr()),

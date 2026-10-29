@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
@@ -59,17 +60,17 @@ class _UserMenuSheet extends StatelessWidget {
           Text(user.displayName ??
               (user.isAnonymous ? 'Gast' : 'Benutzer')),
           if (authService.isAdmin) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.s8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.s8, vertical: AppSize.tileGap),
               decoration: BoxDecoration(
-                color: Colors.amber,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.adminBadge,
+                borderRadius: BorderRadius.circular(AppRadius.badge),
               ),
               child: Text(
                 'drawer.admin_badge'.tr(),
                 style:
-                    const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                    AppText.kicker.copyWith(fontWeight: FontWeight.bold, letterSpacing: 0),
               ),
             ),
           ],

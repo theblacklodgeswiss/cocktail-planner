@@ -10,7 +10,6 @@ import 'admin_widgets.dart';
 import 'material_logic.dart';
 
 /// Width of the amount field next to a selected ingredient.
-const double _amountWidth = 112;
 
 typedef RecipeEditResult = ({
   String name,
@@ -397,7 +396,7 @@ class _IngredientRow extends StatelessWidget {
         ),
         if (selected && controller != null)
           SizedBox(
-            width: _amountWidth,
+            width: AppSize.amountField,
             child: TextField(
               controller: controller,
               textAlign: TextAlign.center,

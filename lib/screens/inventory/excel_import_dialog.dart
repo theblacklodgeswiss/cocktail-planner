@@ -404,7 +404,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _warning(),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           TextField(
             controller: _paste,
             minLines: 6,
@@ -417,7 +417,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             ),
           ),
           if (_success != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Text(
               _success!,
               style: AppText.body.copyWith(
@@ -427,7 +427,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             ),
           ],
           if (_error != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.s12),
             Text(
               _error!,
               style: AppText.body.copyWith(color: AppPalette.of(context).error),
@@ -457,15 +457,15 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _warning(),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.s12),
           Text(
             'excel_import.columns'.tr(),
             style: Theme.of(context).textTheme.titleSmall,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           for (var col = 0; col < _columnLocations.length; col++)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpace.s8),
               child: DropdownButtonFormField<String>(
                 initialValue: _columnLocations[col],
                 isExpanded: true,
@@ -502,7 +502,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             ),
           for (final name in newNames)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpace.s8),
               child: TextField(
                 controller: _owners.putIfAbsent(
                   name,
@@ -530,7 +530,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
           const Divider(),
           if (_rows.isEmpty) Text('excel_import.no_rows'.tr()),
           for (var i = 0; i < _rows.length; i++) _buildRow(_rows[i]),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.s8),
           Text(
             'excel_import.summary'.tr(
               namedArgs: {
@@ -541,7 +541,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           if (_error != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.s8),
             Text(
               _error!,
               style: AppText.body.copyWith(color: AppPalette.of(context).error),
@@ -556,9 +556,9 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
     final unresolved = s.active && s.materialId == null;
     return Card(
       key: ObjectKey(s),
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: AppSpace.s8),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpace.s12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -599,7 +599,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 ),
               ),
             if (s.row.note != null)
-              Text(s.row.note!, style: const TextStyle(fontSize: 12)),
+              Text(s.row.note!, style: AppText.body),
             if (s.skipped)
               Text(
                 'excel_import.skipped'.tr(),
@@ -608,7 +608,7 @@ class _ExcelImportDialogState extends State<ExcelImportDialog> {
                 ),
               ),
             if (unresolved) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.s4),
               Text(
                 'excel_import.no_match'.tr(),
                 style: AppText.caption.copyWith(

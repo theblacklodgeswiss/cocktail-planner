@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:cocktail_planer/ui/tokens.dart';
 
 import '../models/recipe.dart';
 import '../state/app_state.dart';
@@ -37,7 +38,7 @@ class _CocktailPopularityDialogState extends State<CocktailPopularityDialog> {
     final theme = Theme.of(context);
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpace.s16, vertical: AppSpace.s24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
         child: Column(
@@ -64,7 +65,7 @@ class _CocktailPopularityDialogState extends State<CocktailPopularityDialog> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpace.s4),
                   Text(
                     'cocktail_popularity.description'.tr(),
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -98,7 +99,7 @@ class _CocktailPopularityDialogState extends State<CocktailPopularityDialog> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: AppSpace.s4),
                         SizedBox(
                           width: 120,
                           child: Slider(
@@ -150,7 +151,7 @@ class _CocktailPopularityDialogState extends State<CocktailPopularityDialog> {
                         onPressed: () => Navigator.pop(context),
                         child: Text('cocktail_popularity.cancel'.tr()),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpace.s8),
                       FilledButton.icon(
                         onPressed: () {
                           appState.setCocktailPopularities(_localPopularity);
