@@ -8,6 +8,7 @@ import '../../../ui/motion.dart';
 import '../../../ui/tokens.dart';
 import '../../../ui/widgets/app_sheet.dart';
 import '../../../ui/widgets/buttons.dart';
+import '../../../ui/widgets/glass_cta_bar.dart' show bottomBarInset;
 import '../../../ui/widgets/pressable.dart';
 import '../../../ui/widgets/states.dart';
 import '../../../ui/widgets/step_scaffold.dart';
@@ -57,6 +58,34 @@ mixin DocumentStepFlow<T extends StatefulWidget> on State<T> {
 
   /// Set by a failed final action: every hint shows.
   bool showAllHints = false;
+
+  /// The fixed bottom area (menu + primary); snackbars float above it.
+  final GlobalKey bottomAreaKey = GlobalKey(debugLabel: 'doc-bottom');
+
+  /// Shows the message [key] as a floating snackbar just above the bottom
+  /// area, so it never covers "Weiter"/"Senden" or the "…" menu.
+  void showSnack(String key) {
+    if (!mounted) return;
+    final box = bottomAreaKey.currentContext?.findRenderObject();
+    final screen = MediaQuery.sizeOf(context).height;
+    final lift = box is RenderBox && box.hasSize
+        ? screen - box.localToGlobal(Offset.zero).dy
+        : AppSize.minTap + bottomBarInset(context);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(key.tr()),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(
+            AppSpace.s16,
+            0,
+            AppSpace.s16,
+            lift + AppSpace.s8,
+          ),
+        ),
+      );
+  }
 
   /// All current issues of the form.
   List<DocIssue> get issues;
@@ -242,6 +271,7 @@ class DocumentFlowScaffold extends StatelessWidget {
         onBack: flow.leaveOrBack,
         onStepLabelTap: flow.showStepPicker,
         bottom: Row(
+          key: flow.bottomAreaKey,
           children: [
             _MenuButton(actions: menu, enabled: !loading),
             const SizedBox(width: AppSpace.s8),

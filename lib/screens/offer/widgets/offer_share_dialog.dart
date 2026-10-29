@@ -32,7 +32,7 @@ Future<void> showOfferShareSheet(
   return showAppSheet<void>(
     context,
     full: true,
-    scrollable: true,
+    scrollable: false,
     builder: (_) => OfferShareSheet(
       clientName: clientName,
       editorName: editorName,
@@ -200,9 +200,9 @@ $editorFirst''';
 
   void _snack(String key) {
     if (!mounted) return;
-    ScaffoldMessenger.maybeOf(
-      context,
-    )?.showSnackBar(SnackBar(content: Text(key.tr())));
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(key.tr())));
   }
 
   Future<void> _swap(int index) async {
@@ -296,6 +296,16 @@ $editorFirst''';
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
     final busy = _loading || _pdfSharing;
+    // The sheet has no Scaffold of its own, so without this one the
+    // snackbars ("Link kopiert", ...) would show on the page behind it.
+    // Transparent: the sheet card provides the background.
+    return Scaffold(
+      backgroundColor: AppColors.glowClear,
+      body: SingleChildScrollView(child: _content(p, busy)),
+    );
+  }
+
+  Widget _content(AppPalette p, bool busy) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -28,13 +28,6 @@ class CreateInvoiceScreen extends StatelessWidget {
   final SavedOrder order;
   final DocumentServices services;
 
-  void _snack(BuildContext context, String key) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(key.tr())));
-  }
-
   Future<void> _previewPdf(
     BuildContext context,
     SavedOrder invoice,
@@ -65,9 +58,9 @@ class CreateInvoiceScreen extends StatelessWidget {
 
   /// Without a Microsoft login the OneDrive upload is silently skipped, so
   /// ask first. Declining still saves and creates the link.
-  Future<void> _beforeExport(BuildContext context) async {
+  Future<void> _beforeExport(BuildContext context, DocNotify notify) async {
     if (microsoftGraphService.isSupported && EnvConfig.isOneDriveEnabled) {
-      await _ensureMicrosoftLogin(context);
+      await _ensureMicrosoftLogin(context, notify);
     }
   }
 
@@ -96,7 +89,10 @@ class CreateInvoiceScreen extends StatelessWidget {
 
   /// Makes sure a Microsoft account is signed in (OneDrive and calendar);
   /// asks in a sheet first. True when signed in afterwards.
-  Future<bool> _ensureMicrosoftLogin(BuildContext context) async {
+  Future<bool> _ensureMicrosoftLogin(
+    BuildContext context,
+    DocNotify notify,
+  ) async {
     if (!microsoftGraphService.isSupported) return false;
     if (microsoftGraphService.isLoggedIn) return true;
     final wantsLogin = await showConfirmSheet(
@@ -107,15 +103,14 @@ class CreateInvoiceScreen extends StatelessWidget {
     );
     if (!wantsLogin) return false;
     final account = await microsoftGraphService.login();
-    if (account == null && context.mounted) {
-      _snack(context, 'invoice.ms_login_failed');
-    }
+    if (account == null) notify('invoice.ms_login_failed');
     return account != null;
   }
 
   /// Outlook entry with the confirmation PDF and the shopping list
-  /// (uploaded to OneDrive for the links, attached to the event).
-  Future<void> _createCalendarEntry(
+  /// (uploaded to OneDrive for the links, attached to the event). Returns
+  /// the message key of the result.
+  Future<String> _createCalendarEntry(
     BuildContext context,
     SavedOrder invoice,
     InvoiceFormState form,
@@ -181,12 +176,9 @@ class CreateInvoiceScreen extends StatelessWidget {
         bytes: shoppingListBytes,
       );
     }
-    if (context.mounted) {
-      _snack(
-        context,
-        eventId != null ? 'invoice.calendar_created' : 'invoice.calendar_failed',
-      );
-    }
+    return eventId != null
+        ? 'invoice.calendar_created'
+        : 'invoice.calendar_failed';
   }
 
   @override

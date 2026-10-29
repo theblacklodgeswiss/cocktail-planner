@@ -107,12 +107,7 @@ class _OfferFlowState extends State<OfferFlow>
 
   void _update(VoidCallback fn) => setState(fn);
 
-  void _snack(String key) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(key.tr())));
-  }
+  void _snack(String key) => showSnack(key);
 
   /// All steps valid? Otherwise jump to the first problem and explain.
   bool _validate() {

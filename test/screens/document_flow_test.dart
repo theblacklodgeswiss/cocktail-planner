@@ -262,6 +262,75 @@ void main() {
       await tester.pumpAndSettle();
       expect(h.links.offerLinks.single.$2, 'o1');
       expect(h.links.offerLinks.single.$1.grandTotal, closeTo(1000, 1e-9));
+      // Its snackbar shows inside the sheet, not behind it. (In the VM
+      // `Uri.base.origin` throws for file://, so this is the error message;
+      // on the web it is "Link kopiert". Same snackbar path either way.)
+      final snack = find
+          .descendant(of: find.byType(SnackBar), matching: find.byType(Text))
+          .last;
+      final hit = tester.hitTestOnBinding(tester.getCenter(snack));
+      expect(
+        hit.path.any((e) => e.target == snack.evaluate().first.renderObject),
+        isTrue,
+      );
+    });
+
+    testWidgets('Vorschau in the menu saves and hands the PDF data over', (
+      tester,
+    ) async {
+      _tall(tester);
+      final h = _H();
+      final previews = <double>[];
+      await _pump(
+        tester,
+        h.app(
+          (s) => OfferFlow(
+            order: offerOrder(eventType: 'birthday', discountPercent: 10),
+            services: s,
+            initialStep: 2,
+            previewPdf: (_, offer) async => previews.add(offer.grandTotal),
+          ),
+        ),
+      );
+      await _openMenuItem(tester, 'offer.preview'.tr());
+      expect(h.repo.offerDataCalls, hasLength(1));
+      expect(previews.single, closeTo(900, 1e-9));
+    });
+
+    testWidgets('a failed final action: snackbar clear of the bottom bar', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final h = _H();
+      await _pump(
+        tester,
+        h.app(
+          (s) => OfferFlow(order: offerOrder(), services: s, initialStep: 3),
+          textScale: 1.3,
+        ),
+      );
+      await tester.tap(_primary);
+      await tester.pumpAndSettle();
+      // The visible card (the SnackBar's box also spans its margin).
+      final snack = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(SnackBar),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(snack.overlaps(tester.getRect(_primary)), isFalse);
+      expect(
+        snack.overlaps(tester.getRect(find.byIcon(Icons.more_horiz))),
+        isFalse,
+      );
+      // ... so the next tap reaches the button.
+      await tester.tap(_primary);
+      await tester.pumpAndSettle();
+      expect(find.text(_title(1)), findsOneWidget);
     });
   });
 
@@ -319,6 +388,54 @@ void main() {
       await tester.pumpAndSettle();
       await _openMenuItem(tester, 'invoice.save'.tr());
       expect(h.repo.offerDataCalls.single['assignedEmployees'], ['Ana']);
+    });
+
+    testWidgets('Vorschau and Kalender via the menu', (tester) async {
+      _tall(tester);
+      final h = _H();
+      final calls = <String>[];
+      await _pump(
+        tester,
+        h.app(
+          (s) => InvoiceFlow(
+            order: invoiceOrder(),
+            services: s,
+            initialStep: 3,
+            previewPdf: (_, invoice, lang) async =>
+                calls.add('preview ${invoice.total} $lang'),
+            calendarSupported: () => true,
+            ensureLogin: (_, _) async {
+              calls.add('login');
+              return true;
+            },
+            createCalendarEntry: (_, invoice, form) async {
+              calls.add('calendar ${form.grandTotal}');
+              return 'invoice.calendar_created';
+            },
+          ),
+        ),
+      );
+      await _openMenuItem(tester, 'invoice.preview'.tr());
+      await _openMenuItem(tester, 'invoice.create_calendar'.tr());
+      expect(calls, ['preview 1000.0 de', 'login', 'calendar 1208.4']);
+      expect(h.repo.offerDataCalls, hasLength(2));
+      expect(find.text('invoice.calendar_created'.tr()), findsOneWidget);
+    });
+
+    testWidgets('Kalender without Microsoft support explains it', (
+      tester,
+    ) async {
+      _tall(tester);
+      final h = _H();
+      await _pump(
+        tester,
+        h.app(
+          (s) => InvoiceFlow(order: invoiceOrder(), services: s, initialStep: 3),
+        ),
+      );
+      await _openMenuItem(tester, 'invoice.create_calendar'.tr());
+      expect(find.text('invoice.calendar_unsupported'.tr()), findsOneWidget);
+      expect(h.repo.offerDataCalls, isEmpty);
     });
 
     testWidgets('positions mode lists positions as cards', (tester) async {
@@ -417,9 +534,18 @@ void main() {
                 // Show the hints too (soft Weiter / final action).
                 await tester.tap(_primary);
                 await tester.pumpAndSettle();
-                if (find.text('ui.cancel'.tr()).evaluate().isNotEmpty) {
-                  await tester.tap(find.text('ui.cancel'.tr()).last);
+                // The invoice's last step asks first: close that sheet.
+                final confirmTitle = find.text(
+                  'invoice.confirm_save_title'.tr(),
+                );
+                if (confirmTitle.evaluate().isNotEmpty) {
+                  expect(tester.takeException(), isNull);
+                  final cancel = find.text('ui.cancel'.tr()).last;
+                  await tester.ensureVisible(cancel);
                   await tester.pumpAndSettle();
+                  await tester.tap(cancel);
+                  await tester.pumpAndSettle();
+                  expect(confirmTitle, findsNothing);
                 }
                 expect(tester.takeException(), isNull);
                 final button = tester.getRect(_primary);

@@ -32,23 +32,26 @@ typedef InvoicePdfAction =
     );
 
 /// Creates the Outlook entry for the saved invoice (PDF, uploads,
-/// attachments) and reports the result.
+/// attachments) and returns the message key of the result.
 typedef InvoiceCalendarAction =
-    Future<void> Function(
+    Future<String> Function(
       BuildContext context,
       SavedOrder invoice,
       InvoiceFormState form,
     );
 
 Future<void> _noPdf(BuildContext c, SavedOrder o, String l) async {}
-Future<void> _noPrepare(BuildContext c) async {}
-Future<bool> _noLogin(BuildContext c) async => false;
+/// Shows a message key in the flow (above its bottom area).
+typedef DocNotify = void Function(String messageKey);
+
+Future<void> _noPrepare(BuildContext c, DocNotify n) async {}
+Future<bool> _noLogin(BuildContext c, DocNotify n) async => false;
 bool _unsupported() => false;
-Future<void> _noCalendar(
+Future<String> _noCalendar(
   BuildContext c,
   SavedOrder o,
   InvoiceFormState f,
-) async {}
+) async => 'invoice.calendar_failed';
 
 /// The order confirmation (Auftragsbestätigung) as a four-step flow:
 /// (1) client and date, (2) services and staff, (3) positions, (4) price,
@@ -74,12 +77,14 @@ class InvoiceFlow extends StatefulWidget {
   final InvoicePdfAction previewPdf;
 
   /// Before "PDF speichern": offers the Microsoft login (OneDrive).
-  final Future<void> Function(BuildContext context) beforeExport;
+  final Future<void> Function(BuildContext context, DocNotify notify)
+  beforeExport;
 
   /// Generates the PDF and uploads it to OneDrive (when signed in).
   final InvoicePdfAction uploadPdf;
   final bool Function() calendarSupported;
-  final Future<bool> Function(BuildContext context) ensureLogin;
+  final Future<bool> Function(BuildContext context, DocNotify notify)
+  ensureLogin;
   final InvoiceCalendarAction createCalendarEntry;
 
   @override
@@ -130,12 +135,7 @@ class _InvoiceFlowState extends State<InvoiceFlow>
 
   void _update(VoidCallback fn) => setState(fn);
 
-  void _snack(String key) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(key.tr())));
-  }
+  void _snack(String key) => showSnack(key);
 
   bool _validate() {
     final issue = checkAll();
@@ -193,7 +193,7 @@ class _InvoiceFlowState extends State<InvoiceFlow>
   /// Saves, uploads the PDF and copies a fresh 14-day link.
   Future<void> _generatePdf() async {
     if (!_validate()) return;
-    await widget.beforeExport(context);
+    await widget.beforeExport(context, _snack);
     if (!mounted) return;
     await _busy(() async {
       try {
@@ -243,14 +243,16 @@ class _InvoiceFlowState extends State<InvoiceFlow>
     if (!widget.calendarSupported()) {
       return _snack('invoice.calendar_unsupported');
     }
-    if (!await widget.ensureLogin(context) || !mounted) return;
+    if (!await widget.ensureLogin(context, _snack) || !mounted) return;
     await _busy(() async {
       try {
         if (!await _save() || !mounted) return;
-        await widget.createCalendarEntry(
-          context,
-          _form.buildUpdatedOrder(),
-          _form,
+        _snack(
+          await widget.createCalendarEntry(
+            context,
+            _form.buildUpdatedOrder(),
+            _form,
+          ),
         );
       } catch (e) {
         debugPrint('Calendar entry error: $e');
