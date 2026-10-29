@@ -91,6 +91,66 @@ Iterable<({String id, Map<String, dynamic> data})> _docs(
   QuerySnapshot<Map<String, dynamic>> snap,
 ) => snap.docs.map((d) => (id: d.id, data: d.data()));
 
+/// Writes of an article note: [updates] per existing entry id (null removes
+/// the note), or, without any entry yet, one entry to [create].
+class ArticleNotePlan {
+  const ArticleNotePlan({this.updates = const {}, this.create});
+
+  final Map<String, String?> updates;
+  final ({String id, Map<String, dynamic> fields})? create;
+
+  bool get isEmpty => updates.isEmpty && create == null;
+}
+
+/// The note goes onto every stock entry of the article; an empty note
+/// removes it. Without any entry yet, a non-empty note creates the
+/// "Auftrag" entry at [fallbackLocationId] with quantity 0 (an empty note
+/// then writes nothing). Notes are not logged as movements.
+ArticleNotePlan planArticleNote({
+  required List<String> existingEntryIds,
+  required String materialId,
+  required String materialName,
+  required String note,
+  required String fallbackLocationId,
+}) {
+  final trimmed = note.trim();
+  if (existingEntryIds.isNotEmpty) {
+    return ArticleNotePlan(
+      updates: {
+        for (final id in existingEntryIds) id: trimmed.isEmpty ? null : trimmed,
+      },
+    );
+  }
+  if (trimmed.isEmpty) return const ArticleNotePlan();
+  return ArticleNotePlan(
+    create: (
+      id: StockEntry.buildId(materialId, fallbackLocationId, StockOrigin.order),
+      fields: stockEntryFields(
+        materialId: materialId,
+        materialName: materialName,
+        locationId: fallbackLocationId,
+        origin: StockOrigin.order,
+        quantity: 0,
+        note: trimmed,
+      ),
+    ),
+  );
+}
+
+/// Where a note of an article without stock goes: the user's own location
+/// if known, else the alphabetically first one. Null without locations.
+StorageLocation? noteFallbackLocation(
+  List<StorageLocation> locations,
+  String? email,
+) {
+  if (locations.isEmpty) return null;
+  final own = email == null ? null : pickOwn(locations, email);
+  if (own != null) return own;
+  return ([...locations]
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())))
+      .first;
+}
+
 /// Repository for storage locations, stock quantities and stock movements.
 class StockRepository {
   CollectionReference<Map<String, dynamic>> get _locations =>
@@ -319,41 +379,29 @@ class StockRepository {
     });
   }
 
-  /// Sets the note of an article on all its stock entries (an empty note
-  /// removes it). Without any entry yet, the note goes onto a new entry with
-  /// quantity 0 at [fallbackLocationId] ("Auftrag"). Notes are not logged as
-  /// movements (no quantity change).
+  /// Sets the note of an article (see [planArticleNote]).
   Future<void> setArticleNote({
     required String materialId,
     required String materialName,
     required String note,
     required String fallbackLocationId,
   }) async {
-    final trimmed = note.trim();
     final snap = await _stock.where('materialId', isEqualTo: materialId).get();
+    final plan = planArticleNote(
+      existingEntryIds: [for (final d in snap.docs) d.id],
+      materialId: materialId,
+      materialName: materialName,
+      note: note,
+      fallbackLocationId: fallbackLocationId,
+    );
+    if (plan.isEmpty) return;
     final batch = firestoreService.firestore.batch();
-    if (snap.docs.isEmpty) {
-      if (trimmed.isEmpty) return;
-      batch.set(
-        _stock.doc(
-          StockEntry.buildId(materialId, fallbackLocationId, StockOrigin.order),
-        ),
-        stockEntryFields(
-          materialId: materialId,
-          materialName: materialName,
-          locationId: fallbackLocationId,
-          origin: StockOrigin.order,
-          quantity: 0,
-          note: trimmed,
-        ),
-        SetOptions(merge: true),
-      );
-    } else {
-      for (final d in snap.docs) {
-        batch.update(d.reference, {
-          'note': trimmed.isEmpty ? FieldValue.delete() : trimmed,
-        });
-      }
+    plan.updates.forEach((id, value) {
+      batch.update(_stock.doc(id), {'note': value ?? FieldValue.delete()});
+    });
+    final create = plan.create;
+    if (create != null) {
+      batch.set(_stock.doc(create.id), create.fields, SetOptions(merge: true));
     }
     await batch.commit();
   }

@@ -102,7 +102,7 @@ void main() {
   test('changedQuantities lists only differing cells', () {
     final row = _row();
     expect(
-      changedQuantities(row, {
+      changedQuantities(row.perLocation, {
         'a': {StockOrigin.order: 3, StockOrigin.investment: 0},
         'b': {StockOrigin.order: 0, StockOrigin.investment: 2},
       }),
@@ -114,8 +114,8 @@ void main() {
     testWidgets('saving reports only the changed values (dark: $dark)', (
       tester,
     ) async {
-      List<QuantityChange>? saved;
-      String? savedNote = 'unset';
+      final saved = <QuantityChange>[];
+      String? savedNote;
       await _open(
         tester,
         _app(
@@ -123,10 +123,8 @@ void main() {
             row: _row(),
             locations: const [_a, _b, _c],
             originLabel: _label,
-            onSave: (changes, note) async {
-              saved = changes;
-              savedNote = note;
-            },
+            saveQuantity: (c) async => saved.add(c),
+            saveNote: (note) async => savedNote = note,
             onHistory: () {},
             onTake: () {},
           ),
@@ -182,7 +180,8 @@ void main() {
           row: _row(),
           locations: const [_a],
           originLabel: _label,
-          onSave: (_, _) async => saves++,
+          saveQuantity: (_) async => saves++,
+          saveNote: (_) async => saves++,
           onHistory: () {},
           onTake: () {},
         ),
@@ -223,7 +222,8 @@ void main() {
           row: _row(),
           locations: const [_a, _b],
           originLabel: _label,
-          onSave: (_, note) async => savedNote = note,
+          saveQuantity: (_) async {},
+          saveNote: (note) async => savedNote = note,
           onHistory: () => history++,
           onTake: () {},
         ),
@@ -246,6 +246,85 @@ void main() {
     await tester.pumpAndSettle();
     expect(history, 1);
     expect(find.text('Speichern'), findsNothing);
+  });
+
+  testWidgets('a failure part-way keeps the sheet open; the retry sends only '
+      'unsaved cells', (tester) async {
+    final sent = <QuantityChange>[];
+    var calls = 0;
+    await _open(
+      tester,
+      _app(
+        (_) => InventoryArticleEditor(
+          row: _row(),
+          locations: const [_a, _b],
+          originLabel: _label,
+          saveQuantity: (c) async {
+            calls++;
+            if (calls == 2) throw StateError('offline');
+            sent.add(c);
+          },
+          saveNote: (_) async {},
+          onHistory: () {},
+          onTake: () {},
+        ),
+      ),
+    );
+    await tester.enterText(_field('a', StockOrigin.order), '5');
+    await tester.ensureVisible(_field('b', StockOrigin.order));
+    await tester.enterText(_field('b', StockOrigin.order), '7');
+    final save = find.text('Speichern');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(sent, [(locationId: 'a', origin: StockOrigin.order, quantity: 5.0)]);
+    expect(find.text('Speichern'), findsOneWidget, reason: 'still open');
+    expect(
+      find.text('Speichern fehlgeschlagen. Bitte versuche es erneut.'),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(sent, [
+      (locationId: 'a', origin: StockOrigin.order, quantity: 5.0),
+      (locationId: 'b', origin: StockOrigin.order, quantity: 7.0),
+    ]);
+    expect(find.text('Speichern'), findsNothing);
+  });
+
+  testWidgets('take: default origin is the one with stock', (tester) async {
+    final row = buildInventoryRows(
+      const [
+        StockEntry(
+          id: 'm1|a|investment',
+          materialId: 'm1',
+          materialName: 'Bacardi',
+          locationId: 'a',
+          origin: StockOrigin.investment,
+          quantity: 2,
+        ),
+      ],
+      [_a],
+    ).single;
+    (String, StockOrigin, double)? taken;
+    await _open(
+      tester,
+      _app(
+        (_) => InventoryTakeSheet(
+          row: row,
+          locations: const [_a],
+          originLabel: _label,
+          onTake: (l, o, q) async => taken = (l, o, q),
+        ),
+      ),
+    );
+    expect(find.text('Nur 2 vorhanden'), findsWidgets);
+    await tester.enterText(find.byType(TextField), '1');
+    await tester.tap(find.text('Entnehmen').last);
+    await tester.pumpAndSettle();
+    expect(taken, ('a', StockOrigin.investment, 1.0));
   });
 
   testWidgets('take: more than available is rejected', (tester) async {

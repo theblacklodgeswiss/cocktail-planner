@@ -15,15 +15,16 @@ typedef QuantityChange = ({
   double quantity,
 });
 
-/// Changed values only: every cell of [edited] that differs from [row].
+/// Changed values only: every cell of [edited] that differs from
+/// [baseline] (the last saved quantities per location and origin).
 List<QuantityChange> changedQuantities(
-  InventoryRow row,
+  Map<String, Map<StockOrigin, double>> baseline,
   Map<String, Map<StockOrigin, double>> edited,
 ) {
   final changes = <QuantityChange>[];
   edited.forEach((locationId, cells) {
     cells.forEach((origin, value) {
-      final old = row.perLocation[locationId]?[origin] ?? 0;
+      final old = baseline[locationId]?[origin] ?? 0;
       if ((value - old).abs() > 1e-9) {
         changes.add((locationId: locationId, origin: origin, quantity: value));
       }
@@ -78,8 +79,10 @@ class InventorySheetTitle extends StatelessWidget {
 /// "Auftrag" and "Investition" as steppers (comma decimals), a note, and
 /// "Speichern" (only changed values), "Verlauf" and "Entnehmen".
 ///
-/// Pure widget: [onSave] gets the changed cells and the new note (null when
-/// the note is unchanged); the caller books them. [onHistory] and [onTake]
+/// Pure widget: "Speichern" calls [saveQuantity] once per changed cell, then
+/// [saveNote] if the note changed. Each success advances the editor's
+/// baseline, so after a failure part-way the sheet stays open and a retry
+/// sends only what is still unsaved. [onHistory] and [onTake]
 /// are called after the sheet closed itself.
 class InventoryArticleEditor extends StatefulWidget {
   const InventoryArticleEditor({
@@ -87,7 +90,8 @@ class InventoryArticleEditor extends StatefulWidget {
     required this.row,
     required this.locations,
     required this.originLabel,
-    required this.onSave,
+    required this.saveQuantity,
+    required this.saveNote,
     required this.onHistory,
     required this.onTake,
   });
@@ -95,8 +99,8 @@ class InventoryArticleEditor extends StatefulWidget {
   final InventoryRow row;
   final List<StorageLocation> locations;
   final String Function(StockOrigin origin) originLabel;
-  final Future<void> Function(List<QuantityChange> changes, String? note)
-  onSave;
+  final Future<void> Function(QuantityChange change) saveQuantity;
+  final Future<void> Function(String note) saveNote;
   final VoidCallback onHistory;
   final VoidCallback onTake;
 
@@ -115,6 +119,16 @@ class _InventoryArticleEditorState extends State<InventoryArticleEditor> {
       },
   };
   late final _note = TextEditingController(text: widget.row.note ?? '');
+
+  /// Last saved state: the row's snapshot, advanced by every saved cell.
+  late final Map<String, Map<StockOrigin, double>> _baseline = {
+    for (final l in widget.locations)
+      l.id: {
+        for (final o in StockOrigin.values)
+          o: widget.row.perLocation[l.id]?[o] ?? 0,
+      },
+  };
+  late String _baselineNote = (widget.row.note ?? '').trim();
   bool _saving = false;
   String? _error;
 
@@ -144,9 +158,9 @@ class _InventoryArticleEditorState extends State<InventoryArticleEditor> {
         (edited[id] ??= {})[origin] = v;
       }
     }
-    final changes = changedQuantities(widget.row, edited);
+    final changes = changedQuantities(_baseline, edited);
     final note = _note.text.trim();
-    final noteChanged = note != (widget.row.note ?? '').trim();
+    final noteChanged = note != _baselineNote;
     if (changes.isEmpty && !noteChanged) {
       Navigator.of(context).pop();
       return;
@@ -156,7 +170,14 @@ class _InventoryArticleEditorState extends State<InventoryArticleEditor> {
       _error = null;
     });
     try {
-      await widget.onSave(changes, noteChanged ? note : null);
+      for (final c in changes) {
+        await widget.saveQuantity(c);
+        (_baseline[c.locationId] ??= {})[c.origin] = c.quantity;
+      }
+      if (noteChanged) {
+        await widget.saveNote(note);
+        _baselineNote = note;
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       if (mounted) {
@@ -393,7 +414,7 @@ class InventoryTakeSheet extends StatefulWidget {
 class _InventoryTakeSheetState extends State<InventoryTakeSheet> {
   final _controller = TextEditingController();
   late String _locationId = _initialLocation();
-  StockOrigin _origin = StockOrigin.order;
+  late StockOrigin _origin = _initialOrigin();
   bool _saving = false;
   String? _error;
 
@@ -404,6 +425,16 @@ class _InventoryTakeSheetState extends State<InventoryTakeSheet> {
       if (cells != null && cells.values.any((q) => q > 0)) return l.id;
     }
     return widget.locations.first.id;
+  }
+
+  /// "Auftrag" unless only "Investition" has stock at the location.
+  StockOrigin _initialOrigin() {
+    final cells = widget.row.perLocation[_locationId] ?? const {};
+    final order = cells[StockOrigin.order] ?? 0;
+    final investment = cells[StockOrigin.investment] ?? 0;
+    return order <= 0 && investment > 0
+        ? StockOrigin.investment
+        : StockOrigin.order;
   }
 
   double get _available => widget.row.perLocation[_locationId]?[_origin] ?? 0;

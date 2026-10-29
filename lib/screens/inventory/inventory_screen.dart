@@ -14,6 +14,7 @@ import '../../ui/widgets/glass_icon_button.dart';
 import '../../ui/widgets/states.dart';
 import '../../widgets/role_protected_screen.dart';
 import 'excel_import_dialog.dart';
+import 'inventory_actions.dart';
 import 'inventory_article_editor.dart';
 import 'inventory_rows.dart';
 import 'inventory_view.dart';
@@ -24,7 +25,11 @@ import 'rest_entry_sheet.dart';
 /// opens the stock capture, the article editor (with history and take-out)
 /// and the locations sheet.
 class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key});
+  const InventoryScreen({super.key, this.services = const InventoryServices()});
+
+  final InventoryServices services;
+
+  InventoryActions get _actions => InventoryActions(services);
 
   static String _originLabel(StockOrigin o) => o == StockOrigin.order
       ? 'rest.origin_order'.tr()
@@ -73,38 +78,12 @@ class InventoryScreen extends StatelessWidget {
         row: row,
         locations: locations,
         originLabel: _originLabel,
-        onSave: (changes, note) => _save(row, locations, changes, note),
+        saveQuantity: (c) => _actions.saveQuantity(row, c),
+        saveNote: (note) => _actions.saveNote(row, locations, note),
         onHistory: () => _showHistory(context, row, locations),
         onTake: () => _showTake(context, row, locations),
       ),
     );
-  }
-
-  /// Same calls as the former correction dialog: one setQuantity per
-  /// changed value (logged as a correction), then the note.
-  static Future<void> _save(
-    InventoryRow row,
-    List<StorageLocation> locations,
-    List<QuantityChange> changes,
-    String? note,
-  ) async {
-    for (final c in changes) {
-      await stockRepository.setQuantity(
-        materialId: row.materialId,
-        materialName: row.materialName,
-        locationId: c.locationId,
-        origin: c.origin,
-        quantity: c.quantity,
-      );
-    }
-    if (note != null && locations.isNotEmpty) {
-      await stockRepository.setArticleNote(
-        materialId: row.materialId,
-        materialName: row.materialName,
-        note: note,
-        fallbackLocationId: locations.first.id,
-      );
-    }
   }
 
   Future<void> _showTake(
@@ -119,14 +98,8 @@ class InventoryScreen extends StatelessWidget {
         row: row,
         locations: locations,
         originLabel: _originLabel,
-        onTake: (locationId, origin, amount) => stockRepository.applyMovement(
-          materialId: row.materialId,
-          materialName: row.materialName,
-          locationId: locationId,
-          origin: origin,
-          delta: -amount,
-          reason: 'take',
-        ),
+        onTake: (locationId, origin, amount) =>
+            _actions.take(row, locationId, origin, amount),
       ),
     );
   }
