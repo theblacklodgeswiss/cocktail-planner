@@ -14,7 +14,10 @@ const String superAdminEmail = 'the.blacklodge@outlook.com';
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal() {
+  AuthService._internal({
+    this.lookupAllowedUserIsAdmin = _defaultLookupAllowedUserIsAdmin,
+    this.lookupEmployeeAccess = _defaultLookupEmployeeAccess,
+  }) {
     _firebaseAuth.authStateChanges().listen((user) {
       if (user != null && !user.isAnonymous) {
         _cachedRole = null; // Clear cache, force a fresh resolve
@@ -30,6 +33,44 @@ class AuthService {
         _roleChangesController.add(_cachedRole!);
       }
     });
+  }
+
+  /// Test seam: builds an instance with fake lookups. Skips the Firebase auth
+  /// listener (only [checkRole] is meant to be exercised on such instances).
+  @visibleForTesting
+  AuthService.forTesting({
+    required this.lookupAllowedUserIsAdmin,
+    required this.lookupEmployeeAccess,
+    required String? Function() emailProvider,
+  }) : _emailOverride = emailProvider;
+
+  final Future<bool> Function(String normalizedEmail) lookupAllowedUserIsAdmin;
+  final Future<({bool exists, EmployeeRole? role})> Function(
+    String normalizedEmail,
+  )
+  lookupEmployeeAccess;
+  String? Function()? _emailOverride;
+
+  static Future<bool> _defaultLookupAllowedUserIsAdmin(String email) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('allowedUsers')
+        .doc(email)
+        .get();
+    return doc.data()?['isAdmin'] == true;
+  }
+
+  static Future<({bool exists, EmployeeRole? role})> _defaultLookupEmployeeAccess(
+    String email,
+  ) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('employeeAccess')
+        .doc(email)
+        .get();
+    if (!doc.exists) return (exists: false, role: null);
+    return (
+      exists: true,
+      role: EmployeeRole.fromFirestore(doc.data()?['role'] as String?),
+    );
   }
 
   FirebaseAuth? _auth;
@@ -142,30 +183,31 @@ class AuthService {
     EmployeeRole? employeeRoleFromMirror;
 
     if (!isSuperAdminEmail) {
-      try {
-        final allowedDoc = await FirebaseFirestore.instance
-            .collection('allowedUsers')
-            .doc(normalizedEmail)
-            .get();
-        allowedUserIsAdmin = allowedDoc.data()?['isAdmin'] == true;
-      } catch (e) {
-        debugPrint('Failed to check admin status: $e');
-      }
-
+      // Both reads are independent single-document gets: run them
+      // concurrently (one round trip instead of two). Precedence is applied
+      // afterwards exactly as before: an admin flag from allowedUsers wins and
+      // the employeeAccess result is then ignored.
+      final results = await Future.wait<Object?>([
+        lookupAllowedUserIsAdmin(normalizedEmail).then<Object?>(
+          (v) => v,
+          onError: (Object e) {
+            debugPrint('Failed to check admin status: $e');
+            return false;
+          },
+        ),
+        lookupEmployeeAccess(normalizedEmail).then<Object?>(
+          (v) => v,
+          onError: (Object e) {
+            debugPrint('Failed to check employee access: $e');
+            return (exists: false, role: null);
+          },
+        ),
+      ]);
+      allowedUserIsAdmin = results[0] as bool;
       if (!allowedUserIsAdmin) {
-        try {
-          final mirrorDoc = await FirebaseFirestore.instance
-              .collection('employeeAccess')
-              .doc(normalizedEmail)
-              .get();
-          hasEmployeeAccessDoc = mirrorDoc.exists;
-          if (hasEmployeeAccessDoc) {
-            employeeRoleFromMirror =
-                EmployeeRole.fromFirestore(mirrorDoc.data()?['role'] as String?);
-          }
-        } catch (e) {
-          debugPrint('Failed to check employee access: $e');
-        }
+        final mirror = results[1] as ({bool exists, EmployeeRole? role});
+        hasEmployeeAccessDoc = mirror.exists;
+        employeeRoleFromMirror = mirror.role;
       }
     }
 
@@ -190,7 +232,9 @@ class AuthService {
   String? get displayName => currentUser?.displayName;
 
   /// User email
-  String? get email => currentUser?.email;
+  String? get email => _emailOverride != null
+      ? _emailOverride!()
+      : currentUser?.email;
 
   /// User photo URL
   String? get photoUrl => currentUser?.photoURL;
