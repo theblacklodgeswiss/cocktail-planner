@@ -105,13 +105,14 @@ String? inventoryRowSubtitle(
   return parts.isEmpty ? null : parts.join(' · ');
 }
 
-/// Section letter of an article name: its first letter, upper case, or "#"
-/// for anything else (digits, symbols).
+/// Section letter of an article name: its first letter without diacritics,
+/// upper case ("Ärger" -> "A"), or "#" for anything else (digits,
+/// symbols), which [buildInventoryRows] sorts last.
 String inventoryLetter(String name) {
-  final t = name.trim();
-  if (t.isEmpty) return '#';
-  final c = t.substring(0, 1).toUpperCase();
-  return RegExp(r'[A-ZÄÖÜ]').hasMatch(c) ? c : '#';
+  final folded = foldInventoryName(name);
+  if (folded.isEmpty) return '#';
+  final c = folded[0];
+  return RegExp('[a-z]').hasMatch(c) ? c.toUpperCase() : '#';
 }
 
 /// One entry of the grouped list: a letter header or an article row with

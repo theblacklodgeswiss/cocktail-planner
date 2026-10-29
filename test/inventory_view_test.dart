@@ -479,7 +479,7 @@ void main() {
           rows,
           filter: InventoryFilter.empty,
         ).map((r) => r.materialId),
-        ['m3', 'm2', 'm4'],
+        ['m2', 'm4', 'm3'],
       );
       expect(
         filterInventoryRows(
@@ -487,7 +487,7 @@ void main() {
           filter: InventoryFilter.empty,
           locationId: 'a',
         ).map((r) => r.materialId),
-        ['m3', 'gone', 'm2', 'm4'],
+        ['gone', 'm2', 'm4', 'm3'],
       );
     });
 
@@ -502,8 +502,6 @@ void main() {
           },
       ];
       expect(shape, [
-        '#',
-        r'43 Licor^$',
         'A',
         r'Alter Gin^$',
         'G',
@@ -511,8 +509,10 @@ void main() {
         r'Grappa$',
         'R',
         r'Rum^$',
+        '#',
+        r'43 Licor^$',
       ]);
-      expect(inventoryLetter('ärger'), 'Ä');
+      expect(inventoryLetter('ärger'), 'A');
       expect(inventoryLetter(' '), '#');
     });
   });
@@ -601,6 +601,39 @@ void main() {
     expect(parseQuantity('abc', allowZero: true), isNull);
     expect(parseQuantity('0', allowZero: true), 0);
     expect(parseQuantity('0', allowZero: false), isNull);
+  });
+
+  test('umlauts sort with their base letter, digits and symbols last', () {
+    final rows = buildInventoryRows(
+      [],
+      [_a],
+      catalog: [
+        (id: '1', name: 'Zitrone'),
+        (id: '2', name: 'Ölfass'),
+        (id: '3', name: 'Orange'),
+        (id: '4', name: '  Ananas'),
+        (id: '5', name: '7up'),
+        (id: '6', name: 'Äpfel'),
+        (id: '7', name: '(Deko)'),
+        (id: '8', name: 'Espresso'),
+        (id: '9', name: 'Érable'),
+      ],
+    );
+    expect(rows.map((r) => r.materialName.trim()), [
+      'Ananas',
+      'Äpfel',
+      'Érable',
+      'Espresso',
+      'Ölfass',
+      'Orange',
+      'Zitrone',
+      '(Deko)',
+      '7up',
+    ]);
+    final letters = groupInventoryRows(
+      rows,
+    ).whereType<InventoryLetterItem>().map((i) => i.letter);
+    expect(letters, ['A', 'E', 'O', 'Z', '#']);
   });
 
   test('shortOrderId shortens long ids', () {

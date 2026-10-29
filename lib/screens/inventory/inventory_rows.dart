@@ -70,11 +70,40 @@ List<InventoryRow> buildInventoryRows(
       ),
     );
   });
-  rows.sort(
-    (a, b) =>
-        a.materialName.toLowerCase().compareTo(b.materialName.toLowerCase()),
-  );
+  rows.sort((a, b) {
+    final byKey = inventorySortKey(
+      a.materialName,
+    ).compareTo(inventorySortKey(b.materialName));
+    return byKey != 0 ? byKey : a.materialName.compareTo(b.materialName);
+  });
   return rows;
+}
+
+const _folds = {
+  'ä': 'a', 'à': 'a', 'á': 'a', 'â': 'a', 'å': 'a', //
+  'ö': 'o', 'ò': 'o', 'ó': 'o', 'ô': 'o', //
+  'ü': 'u', 'ù': 'u', 'ú': 'u', 'û': 'u', //
+  'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', //
+  'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i', //
+  'ß': 's', 'ç': 'c', 'ñ': 'n',
+};
+
+/// Lower case, trimmed, without diacritics ("Ärger" -> "arger").
+String foldInventoryName(String name) {
+  final lower = name.trim().toLowerCase();
+  final out = StringBuffer();
+  for (final ch in lower.split('')) {
+    out.write(_folds[ch] ?? ch);
+  }
+  return out.toString();
+}
+
+/// Sort key of the inventory: letters A-Z (umlauts with their base letter)
+/// first, then everything else (digits, symbols) as one block at the end.
+String inventorySortKey(String name) {
+  final folded = foldInventoryName(name);
+  final letter = folded.isNotEmpty && RegExp('[a-z]').hasMatch(folded[0]);
+  return '${letter ? 0 : 1}$folded';
 }
 
 /// German formatting: comma, no trailing ",0" for whole numbers. Rounded to
