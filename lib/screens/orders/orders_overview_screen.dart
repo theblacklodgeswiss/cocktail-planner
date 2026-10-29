@@ -21,15 +21,7 @@ import 'orders_overview_view.dart';
 class OrdersOverviewScreen extends StatefulWidget {
   final String? initialStatus;
 
-  /// False on the staff home (`/`) and when opened from the staff bar, where
-  /// "back to home" would only lead to another tab.
-  final bool showBack;
-
-  const OrdersOverviewScreen({
-    super.key,
-    this.initialStatus,
-    this.showBack = true,
-  });
+  const OrdersOverviewScreen({super.key, this.initialStatus});
 
   @override
   State<OrdersOverviewScreen> createState() => _OrdersOverviewScreenState();
@@ -72,7 +64,6 @@ class _OrdersOverviewScreenState extends State<OrdersOverviewScreen> {
             now: DateTime.now(),
             initialFilter: statusFilterFromQuery(widget.initialStatus),
             pendingCount: pending.data?.length ?? 0,
-            showBack: widget.showBack,
             actions: _actions(context),
             onOpen: (order) => showOrderDetails(context, order),
             onOpenPending: () => context.push('/orders/pending'),

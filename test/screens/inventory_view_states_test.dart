@@ -71,6 +71,7 @@ InventoryView view(FakeStreams f, {Duration? timeout}) => InventoryView(
   originLabel: (o) => o.name,
   onArticleTap: (_, _) {},
   onCellTap: (_, _, _) {},
+  onManageLocations: () {},
   timeout: timeout ?? inventoryLoadTimeout,
 );
 
@@ -99,29 +100,27 @@ void main() {
     expect(find.byType(LoadingState), findsOneWidget);
     f.stock.last.add([_entry]);
     await tester.pump();
-    expect(find.byType(DataTable), findsOneWidget);
+    expect(find.byType(InventoryCard), findsWidgets);
   });
 
-  testWidgets('data -> table, even before the locations arrive', (
-    tester,
-  ) async {
+  testWidgets('cards, even before the locations arrive', (tester) async {
     final f = FakeStreams();
     addTearDown(f.close);
     await pumpApp(tester, app(view(f)));
     f.stock.last.add([_entry]);
     await tester.pump();
-    expect(find.byType(DataTable), findsOneWidget);
+    expect(find.byType(InventoryCard), findsWidgets);
     expect(find.text('Rum'), findsOneWidget);
-    expect(find.textContaining('Keller'), findsNothing);
+    expect(find.text('Keller'), findsNothing);
 
     f.locations.last.add([_loc]);
     await tester.pump();
-    expect(find.textContaining('Keller'), findsNWidgets(2));
+    expect(find.text('Keller'), findsWidgets);
     expect(find.text('3'), findsWidgets);
-    expect(f.catalogCalls, 0, reason: 'catalog is not needed for the list');
+    expect(f.catalogCalls, 1, reason: 'catalog is loaded once, on start');
   });
 
-  testWidgets('empty stock -> empty state, not an error or spinner', (
+  testWidgets('no stock -> catalog articles with 0, not an error', (
     tester,
   ) async {
     final f = FakeStreams();
@@ -130,28 +129,24 @@ void main() {
     f.stock.last.add([]);
     f.locations.last.add([]);
     await tester.pump();
-    expect(find.byType(EmptyState), findsOneWidget);
-    expect(find.text('Kein Bestand gefunden.'), findsOneWidget);
+    expect(find.text('Grenadine'), findsOneWidget);
     expect(find.byType(LoadingState), findsNothing);
     expect(find.byType(ErrorState), findsNothing);
   });
 
-  testWidgets('searching loads the catalog once and finds zero rows', (
-    tester,
-  ) async {
+  testWidgets('search filters by name', (tester) async {
     final f = FakeStreams();
     addTearDown(f.close);
     await pumpApp(tester, app(view(f)));
-    f.stock.last.add([]);
+    f.stock.last.add([_entry]);
     await tester.pump();
-    await tester.runAsync(() async {
-      await tester.enterText(find.byType(TextField), 'gren');
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    });
+    await tester.enterText(find.byType(TextField), 'gren');
     await tester.pump();
     expect(find.text('Grenadine'), findsOneWidget);
-    await tester.enterText(find.byType(TextField), 'grena');
+    expect(find.text('Rum'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'xyz');
     await tester.pump();
+    expect(find.text('Keine Artikel gefunden'), findsOneWidget);
     expect(f.catalogCalls, 1);
   });
 
@@ -183,7 +178,7 @@ void main() {
     f.stock.last.add([_entry]);
     f.locations.last.add([_loc]);
     await tester.pump();
-    expect(find.byType(DataTable), findsOneWidget);
+    expect(find.byType(InventoryCard), findsWidgets);
   });
 
   testWidgets('timeout -> error with retry', (tester) async {
@@ -200,6 +195,10 @@ void main() {
     expect(find.byType(LoadingState), findsOneWidget);
     f.stock.last.add([_entry]);
     await tester.pump(const Duration(seconds: 3));
-    expect(find.byType(DataTable), findsOneWidget, reason: 'no late timeout');
+    expect(
+      find.byType(InventoryCard),
+      findsWidgets,
+      reason: 'no late timeout',
+    );
   });
 }

@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../models/order.dart';
 import '../../ui/tokens.dart';
@@ -87,7 +86,6 @@ class OrdersOverviewView extends StatefulWidget {
     required this.now,
     this.initialFilter = OrderStatusFilter.quotes,
     this.pendingCount = 0,
-    this.showBack = false,
     this.actions = const [],
     required this.onOpen,
     required this.onOpenPending,
@@ -100,7 +98,6 @@ class OrdersOverviewView extends StatefulWidget {
   final DateTime now;
   final OrderStatusFilter initialFilter;
   final int pendingCount;
-  final bool showBack;
 
   /// Extra top bar buttons (dashboard, OneDrive sync).
   final List<Widget> actions;
@@ -117,6 +114,16 @@ class _OrdersOverviewViewState extends State<OrdersOverviewView> {
   final _search = TextEditingController();
   bool _searchOpen = false;
   String _query = '';
+
+  // The orders tab keeps its page; a new `/orders?status=` link (e.g. from
+  // the dashboard) only changes this parameter.
+  @override
+  void didUpdateWidget(OrdersOverviewView old) {
+    super.didUpdateWidget(old);
+    if (widget.initialFilter != old.initialFilter) {
+      _filter = widget.initialFilter;
+    }
+  }
 
   @override
   void dispose() {
@@ -244,13 +251,6 @@ class _OrdersOverviewViewState extends State<OrdersOverviewView> {
     return StaffScaffold(
       tab: StaffTab.orders,
       title: 'orders.title'.tr(),
-      leading: widget.showBack
-          ? GlassIconButton(
-              icon: Icons.arrow_back,
-              semanticLabel: 'ui.back'.tr(),
-              onPressed: () => context.go('/'),
-            )
-          : null,
       actions: [
         GlassIconButton(
           icon: _searchOpen ? Icons.search_off : Icons.search,

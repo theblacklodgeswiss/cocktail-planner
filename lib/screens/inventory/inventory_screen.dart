@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../data/admin_repository.dart';
 import '../../data/load_error.dart';
@@ -8,102 +7,67 @@ import '../../data/stock_repository.dart';
 import '../../models/app_role.dart';
 import '../../models/stock.dart';
 import '../../services/auth_service.dart';
-import '../../ui/widgets/staff_scaffold.dart';
-import '../../ui/widgets/staff_tab_bar.dart';
+import '../../ui/tokens.dart';
+import '../../ui/widgets/app_sheet.dart';
+import '../../ui/widgets/buttons.dart';
+import '../../ui/widgets/glass_icon_button.dart';
+import '../../ui/widgets/pill_filter.dart';
 import '../../ui/widgets/states.dart';
 import '../../widgets/role_protected_screen.dart';
 import 'excel_import_dialog.dart';
 import 'inventory_rows.dart';
 import 'inventory_view.dart';
 
-/// Stock overview. Layout: one table, horizontally scrollable so it stays
-/// usable on a phone (columns: article, Auftrag/Investition per location,
-/// total, note).
+/// Inventory tab (`/inventory`, inside the staff shell): wires
+/// [InventoryView] to the stock repository and the article catalog, and
+/// opens the correction, history and locations sheets.
 class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key, this.showBack = true});
-
-  /// False when opened from the staff bar (the back arrow would only lead
-  /// to another tab).
-  final bool showBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return RoleProtectedScreen(
-      minimumRole: AppRole.employee,
-      child: StaffFrame(
-        tab: StaffTab.inventory,
-        child: _InventoryPage(showBack: showBack),
-      ),
-    );
-  }
-}
-
-class _InventoryPage extends StatelessWidget {
-  const _InventoryPage({required this.showBack});
-
-  final bool showBack;
+  const InventoryScreen({super.key});
 
   static String _originLabel(StockOrigin o) => o == StockOrigin.order
       ? 'rest.origin_order'.tr()
       : 'rest.origin_investment'.tr();
 
+  /// All catalog articles of the inventory (non-fixed-value materials that
+  /// are not archived). Throws on failure, so the view can show the cause
+  /// and a retry.
   static Future<List<({String id, String name})>> _loadCatalog() async {
-    final items = await adminRepository.getMaterialsWithIds(
-      isFixedValue: false,
-    );
-    return [for (final m in items) (id: m.id, name: m.item.name)];
+    final items = await adminRepository.getMaterialsWithIdsOrThrow();
+    return [
+      for (final m in items)
+        if (m.item.visible) (id: m.id, name: m.item.name),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('inventory.title'.tr()),
-        automaticallyImplyLeading: false,
-        leading: showBack
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () =>
-                    context.canPop() ? context.pop() : context.go('/'),
-              )
-            : null,
-        actions: [
-          if (authService.isAdmin)
-            IconButton(
-              tooltip: 'excel_import.button'.tr(),
-              icon: const Icon(Icons.upload_file),
-              onPressed: () => showExcelImportDialog(context),
-            ),
-          IconButton(
-            tooltip: 'inventory.manage_locations'.tr(),
-            icon: const Icon(Icons.warehouse_outlined),
-            onPressed: () => _showLocations(context),
-          ),
-        ],
-      ),
-      body: InventoryView(
+    return RoleProtectedScreen(
+      minimumRole: AppRole.employee,
+      child: InventoryView(
         watchStock: stockRepository.watchStock,
         watchLocations: stockRepository.watchLocations,
         loadCatalog: _loadCatalog,
         originLabel: _originLabel,
-        // Room to scroll the last row clear of the bar and the "+" button.
-        endPadding: staffFrameContentClearance(context),
+        onImport: authService.isAdmin
+            ? () => showExcelImportDialog(context)
+            : null,
+        onManageLocations: () => _showLocations(context),
         onArticleTap: (row, locations) => _showHistory(context, row, locations),
         onCellTap: (row, location, origin) =>
-            _showQuantityDialog(context, row, location, origin),
+            _showQuantity(context, row, location, origin),
       ),
     );
   }
 
-  Future<void> _showQuantityDialog(
+  Future<void> _showQuantity(
     BuildContext context,
     InventoryRow row,
     StorageLocation location,
     StockOrigin origin,
   ) {
-    return showDialog<void>(
-      context: context,
-      builder: (_) => _QuantityDialog(
+    return showAppSheet<void>(
+      context,
+      builder: (_) => _QuantitySheet(
         row: row,
         location: location,
         origin: origin,
@@ -117,10 +81,9 @@ class _InventoryPage extends StatelessWidget {
     InventoryRow row,
     List<StorageLocation> locations,
   ) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+    return showAppSheet<void>(
+      context,
+      full: true,
       builder: (_) => _HistorySheet(
         row: row,
         locations: locations,
@@ -130,17 +93,54 @@ class _InventoryPage extends StatelessWidget {
   }
 
   Future<void> _showLocations(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => const _LocationsSheet(),
-    );
+    return showAppSheet<void>(context, builder: (_) => const _LocationsSheet());
   }
 }
 
-class _QuantityDialog extends StatefulWidget {
-  const _QuantityDialog({
+/// Text field look of the inventory sheets (rounded, filled).
+InputDecoration _fieldDecoration(
+  BuildContext context, {
+  required String label,
+  String? error,
+  String? helper,
+}) {
+  final p = AppPalette.of(context);
+  OutlineInputBorder border(Color c) => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(AppRadius.control),
+    borderSide: BorderSide(color: c),
+  );
+  return InputDecoration(
+    labelText: label,
+    errorText: error,
+    helperText: helper,
+    helperMaxLines: 2,
+    errorMaxLines: 2,
+    filled: true,
+    fillColor: p.surface,
+    border: border(p.border),
+    enabledBorder: border(p.border),
+    focusedBorder: border(p.text),
+  );
+}
+
+/// Title of an inventory sheet.
+class _SheetTitle extends StatelessWidget {
+  const _SheetTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    header: true,
+    child: Text(
+      text,
+      style: AppText.heroTitle.copyWith(color: AppPalette.of(context).text),
+    ),
+  );
+}
+
+class _QuantitySheet extends StatefulWidget {
+  const _QuantitySheet({
     required this.row,
     required this.location,
     required this.origin,
@@ -153,12 +153,12 @@ class _QuantityDialog extends StatefulWidget {
   final String originLabel;
 
   @override
-  State<_QuantityDialog> createState() => _QuantityDialogState();
+  State<_QuantitySheet> createState() => _QuantitySheetState();
 }
 
-class _QuantityDialogState extends State<_QuantityDialog> {
+class _QuantitySheetState extends State<_QuantitySheet> {
   late final double _current =
-      widget.row.perLocation[widget.location.id]![widget.origin] ?? 0;
+      widget.row.perLocation[widget.location.id]?[widget.origin] ?? 0;
   late final TextEditingController _controller = TextEditingController(
     text: formatQuantity(_current),
   );
@@ -222,56 +222,61 @@ class _QuantityDialogState extends State<_QuantityDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.row.materialName),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${widget.location.name}, ${widget.originLabel}: '
-            '${formatQuantity(_current)}',
+    final p = AppPalette.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SheetTitle(widget.row.materialName),
+        const SizedBox(height: AppSpace.s4),
+        Text(
+          'inventory_list.current'.tr(
+            namedArgs: {
+              'location': widget.location.name,
+              'origin': widget.originLabel,
+              'quantity': formatQuantity(_current),
+            },
           ),
-          const SizedBox(height: 12),
-          SegmentedButton<bool>(
-            segments: [
-              ButtonSegment(
-                value: false,
-                label: Text('inventory.correct'.tr()),
-              ),
-              ButtonSegment(value: true, label: Text('inventory.take'.tr())),
-            ],
-            selected: {_take},
-            onSelectionChanged: (s) => setState(() {
-              _take = s.first;
-              _controller.text = _take ? '' : formatQuantity(_current);
-              _error = null;
-            }),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onSubmitted: (_) => _saving ? null : _save(),
-            decoration: InputDecoration(
-              labelText: _take
-                  ? 'inventory.take_amount'.tr()
-                  : 'inventory.new_quantity'.tr(),
-              errorText: _error,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: Text('common.cancel'.tr()),
+          style: AppText.body.copyWith(color: p.textSecondary),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: Text('common.save'.tr()),
+        const SizedBox(height: AppSpace.s16),
+        PillFilter<bool>(
+          value: _take,
+          onChanged: (take) => setState(() {
+            _take = take;
+            _controller.text = _take ? '' : formatQuantity(_current);
+            _error = null;
+          }),
+          options: [
+            PillOption(false, 'inventory.correct'.tr()),
+            PillOption(true, 'inventory.take'.tr()),
+          ],
+        ),
+        const SizedBox(height: AppSpace.s12),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onSubmitted: (_) => _saving ? null : _save(),
+          style: AppText.section.copyWith(color: p.text),
+          decoration: _fieldDecoration(
+            context,
+            label: _take
+                ? 'inventory.take_amount'.tr()
+                : 'inventory.new_quantity'.tr(),
+            error: _error,
+          ),
+        ),
+        const SizedBox(height: AppSpace.s24),
+        PrimaryButton(
+          label: 'common.save'.tr(),
+          loading: _saving,
+          onPressed: _save,
+        ),
+        const SizedBox(height: AppSpace.s8),
+        TextAction(
+          label: 'common.cancel'.tr(),
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
         ),
       ],
     );
@@ -312,68 +317,74 @@ class _HistorySheetState extends State<_HistorySheet> {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     final fmt = DateFormat('dd.MM.yyyy HH:mm');
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.7,
-      maxChildSize: 0.95,
-      builder: (context, scroll) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              '${'inventory.history'.tr()}: ${row.materialName}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<List<StockMovement>>(
-              stream: _movements,
-              builder: (context, snap) {
-                if (snap.hasError) {
-                  final error = snap.error!;
-                  debugPrint(
-                    'Inventory history failed: ${snap.error.runtimeType}: '
-                    '$error',
-                  );
-                  return ErrorState(
-                    message: 'inventory.load_failed'.tr(),
-                    detail: describeLoadError(error),
-                    onRetry: () => setState(() => _movements = _watch()),
-                  );
-                }
-                if (!snap.hasData) return const LoadingState();
-                final items = snap.data!;
-                if (items.isEmpty) {
-                  return Center(child: Text('inventory.history_empty'.tr()));
-                }
-                return ListView.builder(
-                  controller: scroll,
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final m = items[i];
-                    final sign = m.delta > 0 ? '+' : '';
-                    return ListTile(
-                      dense: true,
-                      title: Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SheetTitle('${'inventory.history'.tr()}: ${row.materialName}'),
+        const SizedBox(height: AppSpace.s12),
+        Expanded(
+          child: StreamBuilder<List<StockMovement>>(
+            stream: _movements,
+            builder: (context, snap) {
+              if (snap.hasError) {
+                final error = snap.error!;
+                debugPrint(
+                  'Inventory history failed: ${error.runtimeType}: $error',
+                );
+                return ErrorState(
+                  message: 'inventory.load_failed'.tr(),
+                  detail: describeLoadError(error),
+                  onRetry: () => setState(() => _movements = _watch()),
+                );
+              }
+              if (!snap.hasData) return const LoadingState();
+              final items = snap.data!;
+              if (items.isEmpty) {
+                return EmptyState(
+                  icon: Icons.history,
+                  title: 'inventory.history_empty'.tr(),
+                );
+              }
+              return ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, _) => Divider(
+                  height: AppSpace.s16,
+                  thickness: AppSize.hairline,
+                  color: p.border,
+                ),
+                itemBuilder: (context, i) {
+                  final m = items[i];
+                  final sign = m.delta > 0 ? '+' : '';
+                  final order = m.orderId == null
+                      ? ''
+                      : '  ${'inventory.order_ref'.tr(namedArgs: {'id': shortOrderId(m.orderId!)})}';
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                         '$sign${formatQuantity(m.delta)}  '
                         '${_locationName(m.locationId)}, '
                         '${originLabel(m.origin)}',
+                        style: AppText.body.copyWith(
+                          color: p.text,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      subtitle: Text(
+                      Text(
                         '${fmt.format(m.at)}  ${m.byEmail}  '
-                        '${_reason(m.reason)}'
-                        '${m.orderId == null ? '' : '  ${'inventory.order_ref'.tr(namedArgs: {'id': shortOrderId(m.orderId!)})}'}',
+                        '${_reason(m.reason)}$order',
+                        style: AppText.caption.copyWith(color: p.textSecondary),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -412,11 +423,20 @@ class _LocationsSheetState extends State<_LocationsSheet> {
     ).showSnackBar(SnackBar(content: Text('inventory.location_failed'.tr())));
   }
 
+  Future<({String name, String owner})?> _ask({
+    required String initial,
+    String initialOwner = '',
+  }) => showAppSheet<({String name, String owner})>(
+    context,
+    builder: (_) => _NameSheet(
+      initial: initial,
+      askOwner: authService.isAdmin,
+      initialOwner: initialOwner,
+    ),
+  );
+
   Future<void> _create() async {
-    final result = await showDialog<({String name, String owner})>(
-      context: context,
-      builder: (_) => _NameDialog(initial: '', askOwner: authService.isAdmin),
-    );
+    final result = await _ask(initial: '');
     if (result == null) return;
     final owner = result.owner.isEmpty
         ? authService.email
@@ -429,13 +449,9 @@ class _LocationsSheetState extends State<_LocationsSheet> {
   }
 
   Future<void> _rename(StorageLocation l) async {
-    final result = await showDialog<({String name, String owner})>(
-      context: context,
-      builder: (_) => _NameDialog(
-        initial: l.name,
-        askOwner: authService.isAdmin,
-        initialOwner: l.ownerEmail ?? '',
-      ),
+    final result = await _ask(
+      initial: l.name,
+      initialOwner: l.ownerEmail ?? '',
     );
     if (result == null) return;
     final owner = normalizeOwnerEmail(result.owner);
@@ -456,56 +472,63 @@ class _LocationsSheetState extends State<_LocationsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: StreamBuilder<List<StorageLocation>>(
-        stream: _stream,
-        builder: (context, snap) {
-          final locations = snap.data ?? const <StorageLocation>[];
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(
-                  'inventory.manage_locations'.tr(),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                trailing: FilledButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: Text('inventory.add_location'.tr()),
-                  onPressed: _create,
-                ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
+    final p = AppPalette.of(context);
+    return StreamBuilder<List<StorageLocation>>(
+      stream: _stream,
+      builder: (context, snap) {
+        final locations = snap.data ?? const <StorageLocation>[];
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _SheetTitle('inventory.manage_locations'.tr()),
+            const SizedBox(height: AppSpace.s12),
+            for (final l in locations)
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: AppSize.minTap),
+                child: Row(
                   children: [
-                    for (final l in locations)
-                      ListTile(
-                        title: Text(l.name),
-                        subtitle: l.ownerEmail == null
-                            ? null
-                            : Text(l.ownerEmail!),
-                        trailing: _canRename(l)
-                            ? IconButton(
-                                tooltip: 'inventory.rename_location'.tr(),
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () => _rename(l),
-                              )
-                            : null,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l.name,
+                            style: AppText.section.copyWith(color: p.text),
+                          ),
+                          if (l.ownerEmail != null)
+                            Text(
+                              l.ownerEmail!,
+                              style: AppText.caption.copyWith(
+                                color: p.textSecondary,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (_canRename(l))
+                      GlassIconButton(
+                        icon: Icons.edit_outlined,
+                        semanticLabel: 'inventory.rename_location'.tr(),
+                        onPressed: () => _rename(l),
                       ),
                   ],
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            const SizedBox(height: AppSpace.s16),
+            PrimaryButton(
+              label: 'inventory.add_location'.tr(),
+              onPressed: _create,
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _NameDialog extends StatefulWidget {
-  const _NameDialog({
+class _NameSheet extends StatefulWidget {
+  const _NameSheet({
     required this.initial,
     required this.askOwner,
     this.initialOwner = '',
@@ -516,10 +539,10 @@ class _NameDialog extends StatefulWidget {
   final bool askOwner;
 
   @override
-  State<_NameDialog> createState() => _NameDialogState();
+  State<_NameSheet> createState() => _NameSheetState();
 }
 
-class _NameDialogState extends State<_NameDialog> {
+class _NameSheetState extends State<_NameSheet> {
   late final _controller = TextEditingController(text: widget.initial);
   late final _owner = TextEditingController(text: widget.initialOwner);
   String? _error;
@@ -553,44 +576,47 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('stock.location_name'.tr()),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    final p = AppPalette.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SheetTitle('stock.location_name'.tr()),
+        const SizedBox(height: AppSpace.s16),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          onSubmitted: (_) => _submit(),
+          style: AppText.section.copyWith(color: p.text),
+          decoration: _fieldDecoration(
+            context,
+            label: 'stock.location_name'.tr(),
+            error: _error,
+          ),
+        ),
+        if (widget.askOwner) ...[
+          const SizedBox(height: AppSpace.s12),
           TextField(
-            controller: _controller,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
+            controller: _owner,
+            keyboardType: TextInputType.emailAddress,
             onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: 'stock.location_name'.tr(),
-              errorText: _error,
-              border: const OutlineInputBorder(),
+            style: AppText.section.copyWith(color: p.text),
+            decoration: _fieldDecoration(
+              context,
+              label: 'inventory.owner_email'.tr(),
+              helper: 'inventory.owner_hint'.tr(),
+              error: _ownerError,
             ),
           ),
-          if (widget.askOwner) ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: _owner,
-              keyboardType: TextInputType.emailAddress,
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                labelText: 'inventory.owner_email'.tr(),
-                helperText: 'inventory.owner_hint'.tr(),
-                errorText: _ownerError,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ],
         ],
-      ),
-      actions: [
-        TextButton(
+        const SizedBox(height: AppSpace.s24),
+        PrimaryButton(label: 'common.save'.tr(), onPressed: _submit),
+        const SizedBox(height: AppSpace.s8),
+        TextAction(
+          label: 'common.cancel'.tr(),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('common.cancel'.tr()),
         ),
-        FilledButton(onPressed: _submit, child: Text('common.save'.tr())),
       ],
     );
   }

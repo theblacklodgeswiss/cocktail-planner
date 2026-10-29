@@ -129,7 +129,7 @@ void main() {
     await pumpApp(tester, app(page()));
     final bar = tester.getRect(barGlass());
     final fab = tester.getRect(find.byType(FloatingFab));
-    expect(bar.bottom, lessThanOrEqualTo(640 - AppSize.barGap));
+    expect(bar.bottom, lessThanOrEqualTo(640 - AppSize.tabBarBottom));
     expect(fab.bottom, lessThanOrEqualTo(bar.top), reason: 'FAB above bar');
 
     // Some row is painted under the glass (the bar does not take space).
@@ -255,16 +255,29 @@ void main() {
     );
   });
 
-  testWidgets('active label is bold primary text, inactive secondary', (
+  testWidgets('active tab: white on a dark lens; inactive primary text', (
     tester,
   ) async {
     phone(tester);
     await pumpApp(tester, app(const _Host()));
     final active = tester.widget<Text>(find.text('Aufträge'));
     final inactive = tester.widget<Text>(find.text('Mehr'));
-    expect(active.style?.fontWeight, FontWeight.w700);
-    expect(active.style?.color, AppColors.textLight);
-    expect(inactive.style?.color, AppColors.textSecondaryLight);
+    expect(active.style?.fontWeight, FontWeight.w600);
+    expect(active.style?.color, AppColors.textDark);
+    expect(inactive.style?.color, AppColors.textLight);
+    final lensBox = tester.widget<DecoratedBox>(
+      find.descendant(of: lens(), matching: find.byType(DecoratedBox)).first,
+    );
+    expect((lensBox.decoration as BoxDecoration).color, AppColors.tabLensLight);
+    // Lens fills the bar height minus the inset.
+    final lensRect = tester.getRect(
+      find.descendant(of: lens(), matching: find.byType(DecoratedBox)).first,
+    );
+    final barRect = tester.getRect(barGlass());
+    expect(
+      barRect.height - lensRect.height,
+      closeTo(2 * AppSize.tabLensInset, 2.5),
+    );
     expect(active.style!.fontSize, greaterThanOrEqualTo(10));
     expect(find.byIcon(Icons.receipt_long), findsOneWidget);
     expect(find.byIcon(Icons.inventory_2_outlined), findsOneWidget);
@@ -343,7 +356,7 @@ void main() {
       expect(tester.takeException(), isNull);
       final bar = tester.getRect(barGlass());
       expect(bar.bottom, lessThanOrEqualTo(640));
-      expect(bar.left, greaterThanOrEqualTo(AppSize.barSide));
+      expect(bar.left, greaterThanOrEqualTo(AppSize.tabBarSide));
       expect(
         tester.getRect(find.byType(FloatingFab)).bottom,
         lessThanOrEqualTo(bar.top),
