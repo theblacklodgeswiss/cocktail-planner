@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/order.dart';
@@ -25,7 +25,8 @@ import '../screens/settings/services_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/settings/user_management_screen.dart';
 import '../screens/shopping_list/shopping_list_screen.dart';
-import '../screens/staff/staff_shell_host.dart';
+import '../services/auth_service.dart';
+import 'app_routes.dart';
 
 /// Notifier that listens to Firebase Auth state changes
 class AuthNotifier extends ChangeNotifier {
@@ -60,141 +61,54 @@ final GoRouter appRouter = GoRouter(
     // No redirect needed
     return null;
   },
-  routes: [
-    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-    GoRoute(
-      path: '/s/:code',
-      builder: (context, state) =>
-          SharedDocumentScreen(code: state.pathParameters['code']!),
-    ),
-    // Staff tabs: a persistent shell (bar and "+" stay, only the content
-    // swaps, every tab keeps its state). Branch order = staffBranchTabs.
-    // `/` belongs to the orders branch: staff get the orders list there,
-    // everyone else the customer start (the shell then shows no bar).
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, shell) => StaffShellHost(shell: shell),
-      branches: [
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/',
-              builder: (context, state) => const CustomerLandingScreen(),
-            ),
-            GoRoute(
-              path: '/orders',
-              builder: (context, state) => OrdersOverviewScreen(
-                initialStatus: state.uri.queryParameters['status'],
-              ),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/inventory',
-              builder: (context, state) => const InventoryScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/more',
-              builder: (context, state) => const MoreScreen(),
-            ),
-          ],
-        ),
-      ],
-    ),
-    GoRoute(
-      path: '/dashboard',
-      builder: (context, state) => const DashboardScreen(),
-    ),
-    GoRoute(
-      path: '/my-requests',
-      builder: (context, state) => const MyRequestsScreen(),
-    ),
-    GoRoute(
-      path: '/pending-orders',
-      builder: (context, state) => const PendingOrdersScreen(),
-    ),
-    GoRoute(
-      path: '/shopping-list',
-      builder: (context, state) {
-        final extra = state.extra;
-        return ShoppingListScreen(orderSetup: extra);
-      },
-    ),
-    GoRoute(
-      path: '/order-form',
-      builder: (context, state) {
-        final prefill = state.extra is SavedOrder
-            ? state.extra as SavedOrder
-            : null;
-        return ModernOrderFormScreen(prefill: prefill);
-      },
-    ),
-    GoRoute(
-      path: '/order-success',
-      builder: (context, state) => const OrderSuccessScreen(),
-    ),
-    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
-    GoRoute(
-      path: '/settings',
-      builder: (context, state) => const SettingsScreen(),
-    ),
-    GoRoute(
-      path: '/settings/legal/imprint',
-      builder: (context, state) =>
-          const LegalInfoScreen(type: LegalInfoType.imprint),
-    ),
-    GoRoute(
-      path: '/settings/legal/terms',
-      builder: (context, state) =>
-          const LegalInfoScreen(type: LegalInfoType.terms),
-    ),
-    GoRoute(
-      path: '/settings/legal/privacy',
-      builder: (context, state) =>
-          const LegalInfoScreen(type: LegalInfoType.privacy),
-    ),
-    GoRoute(
-      path: '/settings/admin',
-      builder: (context, state) => const AdminSettingsScreen(),
-    ),
-    GoRoute(
-      path: '/settings/users',
-      builder: (context, state) => const UserManagementScreen(),
-    ),
-    GoRoute(
-      path: '/settings/employees',
-      builder: (context, state) => const EmployeesScreen(),
-    ),
-    GoRoute(
-      path: '/settings/services',
-      builder: (context, state) => const ServicesScreen(),
-    ),
-    GoRoute(
-      path: '/orders/pending',
-      builder: (context, state) => const PendingOrdersScreen(),
-    ),
-    GoRoute(
-      path: '/orders/years',
-      builder: (context, state) => const OrdersYearOverviewScreen(),
-    ),
-    GoRoute(
-      path: '/create-offer',
-      builder: (context, state) {
-        final order = state.extra as SavedOrder;
-        return CreateOfferScreen(order: order);
-      },
-    ),
-    GoRoute(
-      path: '/create-invoice',
-      builder: (context, state) {
-        final order = state.extra as SavedOrder;
-        return CreateInvoiceScreen(order: order);
-      },
-    ),
-  ],
+  routes: buildAppRoutes(
+    page: _page,
+    isStaff: _isStaff,
+    staffChanges: authService.roleChanges.map((_) => _isStaff()),
+  ),
 );
+
+bool _isStaff() => authService.roleResolved && authService.isEmployeeOrHigher;
+
+/// The real screen of each [AppPage]; route params and extras as before.
+Widget _page(
+  BuildContext context,
+  GoRouterState state,
+  AppPage page,
+) => switch (page) {
+  AppPage.login => const LoginScreen(),
+  AppPage.sharedDocument => SharedDocumentScreen(
+    code: state.pathParameters['code']!,
+  ),
+  AppPage.home => const CustomerLandingScreen(),
+  // `extra` of a link to the orders tab (e.g. from the dashboard) is a
+  // fresh nonce, so a repeated link resets the filter of the kept page.
+  AppPage.orders => OrdersOverviewScreen(
+    initialStatus: state.uri.queryParameters['status'],
+    filterNonce: state.extra,
+  ),
+  AppPage.inventory => const InventoryScreen(),
+  AppPage.more => const MoreScreen(),
+  AppPage.dashboard => const DashboardScreen(),
+  AppPage.myRequests => const MyRequestsScreen(),
+  AppPage.pendingOrders => const PendingOrdersScreen(),
+  AppPage.shoppingList => ShoppingListScreen(orderSetup: state.extra),
+  AppPage.orderForm => ModernOrderFormScreen(
+    prefill: state.extra is SavedOrder ? state.extra as SavedOrder : null,
+  ),
+  AppPage.orderSuccess => const OrderSuccessScreen(),
+  AppPage.admin => const AdminScreen(),
+  AppPage.settings => const SettingsScreen(),
+  AppPage.legalImprint => const LegalInfoScreen(type: LegalInfoType.imprint),
+  AppPage.legalTerms => const LegalInfoScreen(type: LegalInfoType.terms),
+  AppPage.legalPrivacy => const LegalInfoScreen(type: LegalInfoType.privacy),
+  AppPage.adminSettings => const AdminSettingsScreen(),
+  AppPage.userManagement => const UserManagementScreen(),
+  AppPage.employees => const EmployeesScreen(),
+  AppPage.services => const ServicesScreen(),
+  AppPage.ordersYears => const OrdersYearOverviewScreen(),
+  AppPage.createOffer => CreateOfferScreen(order: state.extra as SavedOrder),
+  AppPage.createInvoice => CreateInvoiceScreen(
+    order: state.extra as SavedOrder,
+  ),
+};

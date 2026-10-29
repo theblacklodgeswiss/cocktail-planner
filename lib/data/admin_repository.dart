@@ -9,6 +9,30 @@ import 'firestore_service.dart';
 /// Callback to clear the data cache after modifications.
 typedef ClearCacheCallback = void Function();
 
+/// Readable catalog materials and the number of skipped documents.
+typedef MaterialCatalog = ({
+  List<({String id, MaterialItem item})> items,
+  int skipped,
+});
+
+/// Parses each material document on its own: a malformed one is skipped and
+/// logged instead of failing the whole catalog.
+MaterialCatalog parseMaterialCatalog(
+  Iterable<({String id, Map<String, dynamic> data})> docs,
+) {
+  final items = <({String id, MaterialItem item})>[];
+  var skipped = 0;
+  for (final d in docs) {
+    try {
+      items.add((id: d.id, item: MaterialItem.fromJson(d.data)));
+    } catch (e) {
+      skipped++;
+      debugPrint('Skipping malformed materials/${d.id}: $e');
+    }
+  }
+  return (items: items, skipped: skipped);
+}
+
 /// Repository for admin operations (materials/recipes CRUD).
 class AdminRepository {
   ClearCacheCallback? onCacheCleared;
@@ -130,10 +154,7 @@ class AdminRepository {
           : firestoreService.materialsCollection;
       final snapshot = await collection.get();
       return snapshot.docs
-          .map((doc) => (
-                id: doc.id,
-                item: MaterialItem.fromJson(doc.data()),
-              ))
+          .map((doc) => (id: doc.id, item: MaterialItem.fromJson(doc.data())))
           .toList();
     } catch (e) {
       debugPrint('Failed to get materials with IDs: $e');
@@ -142,16 +163,23 @@ class AdminRepository {
   }
 
   /// Like [getMaterialsWithIds] for the catalog, but throws instead of
-  /// returning an empty list when Firestore is unavailable or the read fails.
+  /// returning an empty list when Firestore is unavailable or the query
+  /// fails. Malformed documents are skipped (see [getMaterialCatalogOrThrow]).
   Future<List<({String id, MaterialItem item})>>
-  getMaterialsWithIdsOrThrow() async {
+  getMaterialsWithIdsOrThrow() async =>
+      (await getMaterialCatalogOrThrow()).items;
+
+  /// The material catalog with the number of documents that could not be
+  /// read. Throws only for query-level failures (unavailable, permission,
+  /// offline); one malformed document never hides the others.
+  Future<MaterialCatalog> getMaterialCatalogOrThrow() async {
     if (!firestoreService.isAvailable) {
       throw StateError('Firestore not available');
     }
     final snapshot = await firestoreService.materialsCollection.get();
-    return snapshot.docs
-        .map((doc) => (id: doc.id, item: MaterialItem.fromJson(doc.data())))
-        .toList();
+    return parseMaterialCatalog(
+      snapshot.docs.map((doc) => (id: doc.id, data: doc.data())),
+    );
   }
 
   /// Update sort order for fixed values.
@@ -270,10 +298,7 @@ class AdminRepository {
     try {
       final snapshot = await firestoreService.recipesCollection.get();
       return snapshot.docs
-          .map((doc) => (
-                id: doc.id,
-                item: Recipe.fromJson(doc.data()),
-              ))
+          .map((doc) => (id: doc.id, item: Recipe.fromJson(doc.data())))
           .toList();
     } catch (e) {
       debugPrint('Failed to get recipes with IDs: $e');

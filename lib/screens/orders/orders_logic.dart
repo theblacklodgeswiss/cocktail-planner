@@ -391,3 +391,8 @@ String _dominantCurrency(List<SavedOrder> orders) {
   if (currencyCounts.isEmpty) return defaultCurrency.code;
   return currencyCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
 }
+
+/// `extra` for a link to the orders tab: a fresh value per tap, so the kept
+/// orders page re-applies the link's status filter even when it is the same
+/// as last time.
+int ordersLinkNonce() => DateTime.now().microsecondsSinceEpoch;

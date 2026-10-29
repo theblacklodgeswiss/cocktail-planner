@@ -60,11 +60,12 @@ InventoryView _view({
   List<StorageLocation> locations = const [],
   List<({String id, String name})> catalog = const [],
   VoidCallback? onImport,
+  int skipped = 0,
   void Function(InventoryRow, StorageLocation, StockOrigin)? onCellTap,
 }) => InventoryView(
   watchStock: () => Stream.value(stock),
   watchLocations: () => Stream.value(locations),
-  loadCatalog: () async => catalog,
+  loadCatalog: () async => InventoryCatalog(catalog, skipped: skipped),
   originLabel: (o) => o == StockOrigin.order ? 'Auftrag' : 'Investition',
   onArticleTap: (_, _) {},
   onCellTap: onCellTap ?? (_, _, _) {},
@@ -251,7 +252,7 @@ void main() {
             loadCatalog: () async {
               calls++;
               if (calls == 1) throw TimeoutException('slow');
-              return [(id: 'm2', name: 'Gin')];
+              return const InventoryCatalog([(id: 'm2', name: 'Gin')]);
             },
             originLabel: (o) => o.name,
             onArticleTap: (_, _) {},
@@ -272,6 +273,27 @@ void main() {
       await tester.pump();
       expect(find.text('Gin'), findsOneWidget);
       expect(find.text('Rum'), findsOneWidget);
+    });
+
+    testWidgets('unreadable catalog documents are reported, rest listed', (
+      tester,
+    ) async {
+      _phone(tester);
+      await _pump(
+        tester,
+        _app(
+          _view(
+            locations: [_a],
+            catalog: [(id: 'm1', name: 'Rum')],
+            skipped: 2,
+          ),
+        ),
+      );
+      expect(find.text('Rum'), findsOneWidget);
+      expect(
+        find.text('2 Artikel konnten nicht gelesen werden.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('tapping a quantity reports location and origin', (

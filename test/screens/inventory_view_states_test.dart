@@ -52,9 +52,9 @@ class FakeStreams {
     return c.stream;
   }
 
-  Future<List<({String id, String name})>> loadCatalog() async {
+  Future<InventoryCatalog> loadCatalog() async {
     catalogCalls++;
-    return [(id: 'm9', name: 'Grenadine')];
+    return const InventoryCatalog([(id: 'm9', name: 'Grenadine')]);
   }
 
   void close() {
@@ -195,10 +195,6 @@ void main() {
     expect(find.byType(LoadingState), findsOneWidget);
     f.stock.last.add([_entry]);
     await tester.pump(const Duration(seconds: 3));
-    expect(
-      find.byType(InventoryCard),
-      findsWidgets,
-      reason: 'no late timeout',
-    );
+    expect(find.byType(InventoryCard), findsWidgets, reason: 'no late timeout');
   });
 }
