@@ -277,6 +277,7 @@ class DocumentFlowScaffold extends StatelessWidget {
             const SizedBox(width: AppSpace.s8),
             Expanded(
               child: PrimaryButton(
+                expand: true,
                 label: primaryLabel,
                 loading: loading,
                 dimmed: dimmed,
@@ -312,10 +313,7 @@ class _MenuButton extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: p.border),
           ),
-          child: Icon(
-            Icons.more_horiz,
-            color: enabled ? p.text : p.disabled,
-          ),
+          child: Icon(Icons.more_horiz, color: enabled ? p.text : p.disabled),
         ),
       ),
     );

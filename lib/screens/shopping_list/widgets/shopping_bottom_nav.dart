@@ -47,11 +47,16 @@ class ShoppingBottomNav extends StatelessWidget {
         Expanded(
           child: _isLastPage
               ? PrimaryButton(
+                  expand: true,
                   label: 'common.save_offer'.tr(),
                   onPressed: isSaving ? null : onSave,
                   loading: isSaving,
                 )
-              : PrimaryButton(label: 'common.next'.tr(), onPressed: onNext),
+              : PrimaryButton(
+                  expand: true,
+                  label: 'common.next'.tr(),
+                  onPressed: onNext,
+                ),
         ),
       ],
     );

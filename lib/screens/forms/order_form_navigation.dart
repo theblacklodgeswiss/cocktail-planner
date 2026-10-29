@@ -45,6 +45,7 @@ class OrderFormBottomBar extends StatelessWidget {
     final isLast = form.currentStep == OrderFormState.totalSteps - 1;
     if (!isLast) {
       return PrimaryButton(
+        expand: true,
         label: _nextLabel(),
         dimmed: !form.canProceed(form.currentStep),
         onPressed: onNext,
@@ -62,6 +63,7 @@ class OrderFormBottomBar extends StatelessWidget {
           const SizedBox(height: AppSpace.s8),
         ],
         PrimaryButton(
+          expand: true,
           label: isEmployeeOrHigher
               ? 'dashboard.generate_list'.tr()
               : 'order_form.submit_request'.tr(),
