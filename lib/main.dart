@@ -80,6 +80,13 @@ Future<void> main() async {
     final user = await FirebaseAuth.instance.authStateChanges().first;
     debugPrint('👤 Initial auth state: ${user?.email ?? "Not signed in"}');
     _logTiming('auth state resolved');
+
+    // Settings load + MS sync: off the critical path, but awaitable via
+    // settingsRepository.awaitReady() (settings screen, PDF builders).
+    microsoftSettingsSynced = _syncMicrosoftSettings(
+      defaultClientId: defaultMicrosoftClientId,
+    );
+    settingsRepository.trackReady(microsoftSettingsSynced);
   } catch (e) {
     // Firebase initialization failed - app will use local JSON fallback
     debugPrint('❌ Firebase initialization failed: $e');
@@ -100,14 +107,6 @@ Future<void> main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     _logTiming('first frame');
   });
-  unawaited(
-    authService.roleChanges.first.then((r) => _logTiming('role resolved ($r)')),
-  );
-
-  // Not needed for the first frame: sync Microsoft settings in the background.
-  microsoftSettingsSynced = _syncMicrosoftSettings(
-    defaultClientId: defaultMicrosoftClientId,
-  );
 }
 
 /// Syncs Microsoft Client ID from Firestore to localStorage.

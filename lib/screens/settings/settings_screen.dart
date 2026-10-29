@@ -44,6 +44,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadData() async {
+    // Company data / Microsoft status / save() base read settingsRepository
+    // synchronously: stay in the loading state until the startup load is done.
+    await settingsRepository.awaitReady();
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       _appVersion = packageInfo.version;

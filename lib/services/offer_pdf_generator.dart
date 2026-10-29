@@ -40,7 +40,8 @@ class OfferPdfGenerator {
 
   /// Builds the PDF document.
   static Future<pw.Document> _buildPdfDocument(OfferData offer) async {
-    // Load settings
+    // Load settings (wait for the startup load; falls back after a timeout)
+    await settingsRepository.awaitReady();
     final settings = settingsRepository.current;
 
     // One-shot catalog snapshot, to resolve any new-style composite

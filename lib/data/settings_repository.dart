@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/app_settings.dart';
@@ -9,6 +11,25 @@ class SettingsRepository {
   static const _settingsDocId = 'appSettings';
 
   AppSettings _cachedSettings = const AppSettings();
+
+  Future<void> _ready = Future<void>.value();
+
+  /// Registers the app-start settings load so consumers that read [current]
+  /// synchronously (settings screen, PDF builders) can wait for it via
+  /// [awaitReady]. Defaults to already-ready when nothing is registered.
+  void trackReady(Future<void> loading) => _ready = loading;
+
+  /// Waits until the tracked startup load finished, at most [timeout]; errors
+  /// and timeouts fall back to the cached/default settings (old behaviour).
+  Future<void> awaitReady({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    try {
+      await _ready.timeout(timeout);
+    } catch (e) {
+      debugPrint('Settings not ready, continuing with cached settings: $e');
+    }
+  }
 
   /// Current cached settings.
   AppSettings get current => _cachedSettings;
