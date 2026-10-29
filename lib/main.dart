@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show FirebaseFirestore, Settings;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -63,6 +65,14 @@ Future<void> main() async {
     await Firebase.initializeApp(options: firebaseOptions);
     debugPrint('✅ Firebase initialized successfully');
     _logTiming('firebase initialized');
+
+    // Firestore on the web: detect when WebChannel streaming is blocked or
+    // buffered (some iOS Safari, proxy or VPN setups) and fall back to long
+    // polling instead of hanging until the request times out ('keine
+    // Antwort vom Server'). Must be set before the first Firestore use.
+    FirebaseFirestore.instance.settings = const Settings(
+      webExperimentalAutoDetectLongPolling: true,
+    );
 
     // Initialize Auth Service with environment specific client ID
     authService.initialize(googleClientId: googleClientId);
