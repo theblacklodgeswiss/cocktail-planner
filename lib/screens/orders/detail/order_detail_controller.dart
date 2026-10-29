@@ -8,9 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../models/order.dart';
+import '../../../ui/tokens.dart';
 import '../../shopping_list/completion_deduction.dart';
 import '../order_status_helpers.dart';
-import 'dialogs.dart';
+import 'sheets.dart';
 import 'order_detail_logic.dart';
 import 'order_detail_services.dart';
 
@@ -37,7 +38,7 @@ class OrderDetailController extends ChangeNotifier {
   OrderDetailController({
     required this.order,
     required this.host,
-    this.services = const OrderDetailServices(),
+    required this.services,
   }) : currentStatus = order.status,
        declineReason = order.declineReason,
        assignedEmployees = List.from(order.assignedEmployees),
@@ -111,12 +112,7 @@ class OrderDetailController extends ChangeNotifier {
   );
 
   Future<void> editDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: currentDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-    );
+    final picked = await showOrderDateSheet(context, initial: currentDate);
     if (picked == null || !mounted) return;
     update(() => currentDate = picked);
     await services.orders.updateOrder(order.id, {
@@ -124,8 +120,22 @@ class OrderDetailController extends ChangeNotifier {
     });
   }
 
+  /// True from the first tap until the whole status flow (confirm sheet,
+  /// deduction, update, rest entry) is over. Closes the gap before
+  /// [isUpdatingStatus] is set, so a quick double tap opens one confirm only.
+  bool _statusFlowRunning = false;
+
   Future<void> updateStatus(OrderStatus newStatus) async {
-    if (isUpdatingStatus) return;
+    if (isUpdatingStatus || _statusFlowRunning) return;
+    _statusFlowRunning = true;
+    try {
+      await _updateStatus(newStatus);
+    } finally {
+      _statusFlowRunning = false;
+    }
+  }
+
+  Future<void> _updateStatus(OrderStatus newStatus) async {
     // Going back from completed to accepted skips the accept checks, dialog
     // and integrations: the order was already accepted before.
     final isReopening =
@@ -134,12 +144,9 @@ class OrderDetailController extends ChangeNotifier {
     // Block accepting if no shopping list / price has been calculated
     if (newStatus == OrderStatus.accepted && !isReopening && order.total <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Kein Angebot annehmen ohne Einkaufsliste.\nBitte zuerst Einkaufsliste erstellen.',
-          ),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 4),
+        SnackBar(
+          content: Text('order_detail.accept_blocked_msg'.tr()),
+          duration: const Duration(seconds: 4),
         ),
       );
       return;
@@ -147,12 +154,12 @@ class OrderDetailController extends ChangeNotifier {
     // Completing is only possible from accepted; confirm first
     if (newStatus == OrderStatus.completed) {
       if (!OrderStatus.canComplete(currentStatus)) return;
-      final confirmed = await showCompleteConfirmDialog(context);
+      final confirmed = await showCompleteConfirmSheet(context);
       if (confirmed != true || !mounted) return;
     }
     // If accepting, show confirmation dialog first
     if (newStatus == OrderStatus.accepted && !isReopening) {
-      final confirmed = await showAcceptConfirmDialog(context);
+      final confirmed = await showAcceptConfirmSheet(context);
       if (confirmed != true) return;
     }
     // If declining, ask for an (optional) reason first
@@ -183,7 +190,7 @@ class OrderDetailController extends ChangeNotifier {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('orders.stock_deduct_failed'.tr()),
-            backgroundColor: Colors.red,
+            backgroundColor: AppPalette.of(context).error,
             duration: const Duration(seconds: 6),
           ),
         );
@@ -192,7 +199,7 @@ class OrderDetailController extends ChangeNotifier {
       if (!mounted) return;
       // Shown right after booking and awaited: it is the only record of a
       // shortfall (a retry after a failed status update plans nothing).
-      if (deduction.hasNotes) await showStockSummaryDialog(context, deduction);
+      if (deduction.hasNotes) await showStockSummarySheet(context, deduction);
       if (!mounted) return;
     }
     final success = await services.orders.updateStatus(
@@ -241,7 +248,7 @@ class OrderDetailController extends ChangeNotifier {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('orders.stock_done_status_failed'.tr()),
-          backgroundColor: Colors.red,
+          backgroundColor: AppPalette.of(context).error,
           duration: const Duration(seconds: 8),
         ),
       );
@@ -341,7 +348,7 @@ class OrderDetailController extends ChangeNotifier {
   }
 
   Future<void> deleteOrder() async {
-    final confirm = await showDeleteOrderDialog(
+    final confirm = await showDeleteOrderSheet(
       context,
       orderName: order.name,
       delete: () => services.orders.deleteOrder(order.id),

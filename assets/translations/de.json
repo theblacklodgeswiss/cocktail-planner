@@ -1008,6 +1008,16 @@
     "completed": "Abgeschlossen",
     "declined": "Abgelehnt"
   },
+  "order_detail": {
+    "opening": "Wird geöffnet…",
+    "load_error": "Fehler beim Laden der Daten: {}",
+    "pdf_error": "Fehler beim Erstellen der PDF: {}",
+    "more_actions": "Weitere Aktionen",
+    "accept_needs_list": "Erst Einkaufsliste erstellen",
+    "accept_blocked_msg": "Kein Angebot annehmen ohne Einkaufsliste.\nBitte zuerst Einkaufsliste erstellen.",
+    "without_prices": "Ohne Preise",
+    "change_date": "Datum ändern"
+  },
   "more": {
     "title": "Mehr",
     "section_overview": "Übersicht",

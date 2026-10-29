@@ -9,6 +9,7 @@ import 'package:cocktail_planer/models/cocktail_data.dart';
 import 'package:cocktail_planer/models/employee.dart';
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_controller.dart';
+import 'package:cocktail_planer/screens/orders/detail/sheets.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_services.dart';
 import 'package:cocktail_planer/screens/shopping_list/completion_deduction.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -148,7 +149,7 @@ class DetailFakes {
         const CocktailData(materials: [], recipes: []),
     triggerMicrosoftIntegration: (c) async => log.add('microsoft'),
     askDeclineReason: declineReasonAnswer == null
-        ? const OrderDetailServices().askDeclineReason
+        ? (context, initial) => showDeclineReasonSheet(context, initial: initial)
         : (context, initial) async {
             reasonPrompts.add(initial);
             return declineReasonAnswer!(initial);
@@ -159,7 +160,12 @@ class DetailFakes {
 
 /// Wraps [home] in EasyLocalization + a GoRouter that records the editor
 /// routes the sheet pushes.
-Widget detailApp(Widget home, {List<(String, Object?)>? pushed}) {
+Widget detailApp(
+  Widget home, {
+  List<(String, Object?)>? pushed,
+  double textScale = 0.5,
+  ThemeData? theme,
+}) {
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (_, _) => home),
@@ -186,13 +192,14 @@ Widget detailApp(Widget home, {List<(String, Object?)>? pushed}) {
     child: Builder(
       builder: (context) => MaterialApp.router(
         routerConfig: router,
+        theme: theme,
         localizationsDelegates: context.localizationDelegates,
         supportedLocales: context.supportedLocales,
         locale: context.locale,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
-          ).copyWith(textScaler: const TextScaler.linear(0.5)),
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
       ),

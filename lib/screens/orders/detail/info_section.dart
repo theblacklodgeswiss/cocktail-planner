@@ -1,9 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+import '../../../ui/tokens.dart';
+import '../../../ui/widgets/date_tile.dart';
+import '../../../ui/widgets/floating_card.dart';
+import '../../../ui/widgets/pressable.dart';
 import '../../../utils/currency.dart';
 import '../order_status_helpers.dart';
-import '../widgets/order_info_chip.dart';
 import 'employee_section.dart';
 import 'order_detail_controller.dart';
 
@@ -13,90 +16,108 @@ class OrderInfoCard extends StatelessWidget {
   const OrderInfoCard({
     super.key,
     required this.controller,
-    required this.colorScheme,
     required this.currency,
   });
 
   final OrderDetailController controller;
-  final ColorScheme colorScheme;
   final Currency currency;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: 16,
-                  color: colorScheme.outline,
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: controller.editDate,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(formatDate(controller.currentDate)),
-                      const SizedBox(width: 4),
-                      Icon(Icons.edit, size: 14, color: colorScheme.outline),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    currency.format(controller.order.total),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green.shade700,
+    final p = AppPalette.of(context);
+    final order = controller.order;
+    return FloatingCard(
+      padding: const EdgeInsets.all(AppSpace.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpace.s8,
+            runSpacing: AppSpace.s4,
+            children: [
+              Pressable(
+                minSize: AppSize.minTap,
+                onTap: controller.editDate,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DateTile(controller.currentDate),
+                    const SizedBox(width: AppSpace.s8),
+                    Text(
+                      formatDate(controller.currentDate),
+                      style: AppText.body.copyWith(color: p.text),
                     ),
-                  ),
+                    const SizedBox(width: AppSpace.s4),
+                    Icon(
+                      Icons.edit_outlined,
+                      size: AppSize.metaIcon,
+                      color: p.textSecondary,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                OrderInfoChip(
-                  icon: Icons.people,
-                  label:
-                      '${controller.order.personCount} ${'orders.persons'.tr()}',
-                  colorScheme: colorScheme,
-                ),
-                const SizedBox(width: 8),
-                OrderInfoChip(
-                  icon: Icons.local_bar,
-                  label: drinkerLabel(controller.order.drinkerType),
-                  colorScheme: colorScheme,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 8),
-            EmployeeAssignmentWidget(
-              watchEmployees: controller.services.watchEmployees,
-              assignedEmployeeIds: controller.assignedEmployees,
-              onAssignmentChanged: controller.updateAssignedEmployees,
-            ),
-          ],
-        ),
+              ),
+              Text(
+                currency.format(order.total),
+                style: AppText.number.copyWith(color: p.text),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.s12),
+          Wrap(
+            spacing: AppSpace.s16,
+            runSpacing: AppSpace.s8,
+            children: [
+              _Meta(
+                icon: Icons.people_outline,
+                label: '${order.personCount} ${'orders.persons'.tr()}',
+              ),
+              _Meta(
+                icon: Icons.local_bar_outlined,
+                label: drinkerLabel(order.drinkerType),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpace.s12),
+          Divider(
+            height: AppSize.hairline,
+            thickness: AppSize.hairline,
+            color: p.border,
+          ),
+          const SizedBox(height: AppSpace.s12),
+          EmployeeAssignmentWidget(
+            watchEmployees: controller.services.watchEmployees,
+            assignedEmployeeIds: controller.assignedEmployees,
+            onAssignmentChanged: controller.updateAssignedEmployees,
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _Meta extends StatelessWidget {
+  const _Meta({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: AppSize.metaIcon, color: p.textSecondary),
+        const SizedBox(width: AppSpace.s4),
+        Flexible(
+          child: Text(
+            label,
+            style: AppText.body.copyWith(color: p.textSecondary),
+          ),
+        ),
+      ],
     );
   }
 }

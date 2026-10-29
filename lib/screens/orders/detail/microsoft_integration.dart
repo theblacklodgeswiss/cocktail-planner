@@ -13,6 +13,7 @@ import '../../../config/env_config.dart';
 import '../../../services/invoice_pdf_generator.dart';
 import '../../../services/microsoft_graph_service.dart';
 import '../../../services/pdf_generator.dart';
+import '../../../ui/tokens.dart';
 import '../../../utils/currency.dart';
 import 'order_detail_controller.dart';
 
@@ -48,7 +49,7 @@ Future<void> runMicrosoftIntegration(OrderDetailController c) async {
           builder: (_, status, child) => Row(
             children: [
               const CircularProgressIndicator(),
-              const SizedBox(width: 20),
+              const SizedBox(width: AppSpace.s16),
               Expanded(child: Text(status)),
             ],
           ),
