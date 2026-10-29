@@ -29,13 +29,17 @@ enum PlausibilityFlag {
   noStockYet,
 
   /// Zählung without origin below the Investition stock.
-  belowInvestment;
+  belowInvestment,
+
+  /// The quantity is a trailing number that may belong to the name.
+  quantityUnsure;
 
   String get key => switch (this) {
     unusuallyHigh => 'inventory_list.flag_high',
     notUnique => 'inventory_list.flag_not_unique',
     noStockYet => 'inventory_list.flag_no_stock',
     belowInvestment => 'inventory_list.flag_below_investment',
+    quantityUnsure => 'inventory_list.flag_quantity_unsure',
   };
 }
 
@@ -72,6 +76,7 @@ List<PlausibilityFlag> plausibilityFlags(
   }
   if (total <= 0) flags.add(PlausibilityFlag.noStockYet);
   if (below) flags.add(PlausibilityFlag.belowInvestment);
+  if (line.parsed.quantityUnsure) flags.add(PlausibilityFlag.quantityUnsure);
   return flags;
 }
 

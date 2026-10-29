@@ -433,7 +433,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       _stock = stock;
       _stockLoaded = withStock;
       // The rules run first and instantly; they are the fallback.
-      final parsed = parseRestTextDetailed(text);
+      final parsed = parseRestTextDetailed(text, catalog: _catalog);
       // An unparsed fragment becomes a line with the text as article search
       // and no quantity, so nothing is dropped and the user only types it.
       _ruleLines = buildRestLines(
@@ -1044,7 +1044,12 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     final flags = booked
         ? const <PlausibilityFlag>[]
         : plausibilityFlags(line, _stock, _effectiveMode)
-              .where((f) => _stockLoaded || f == PlausibilityFlag.notUnique)
+              .where(
+                (f) =>
+                    _stockLoaded ||
+                    f == PlausibilityFlag.notUnique ||
+                    f == PlausibilityFlag.quantityUnsure,
+              )
               .toList();
     return Card(
       key: ObjectKey(line),

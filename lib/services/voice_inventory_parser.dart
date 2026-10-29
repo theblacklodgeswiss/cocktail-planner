@@ -8,12 +8,17 @@ class ParsedLine {
     required this.spokenName,
     this.locationHint,
     this.originHint,
+    this.quantityUnsure = false,
   });
 
   final double quantity;
   final String spokenName;
   final String? locationHint;
   final StockOrigin? originHint;
+
+  /// The quantity is a trailing number that might be part of the name
+  /// ("Stroh 80") and no catalog could tell.
+  final bool quantityUnsure;
 }
 
 class CatalogMatch {
@@ -116,6 +121,10 @@ const _unitWords = {
   'mal',
 };
 
+/// Dropped directly after the quantity besides unit words ("einen Rest
+/// Bacardi").
+const _afterQuantityFillers = {'rest', 'reste'};
+
 // Split on , ; newline and "und", but not on a decimal comma ("2,8").
 final _separator = RegExp(
   r'(?<!\d),|,(?!\d)|;|\n|\bund\b',
@@ -152,13 +161,25 @@ class ParseResult {
 List<ParsedLine> parseRestText(String text) =>
     parseRestTextDetailed(text).lines;
 
+double _bestScore(String name, List<(String, MaterialItem)> catalog) {
+  if (name.isEmpty) return 0;
+  final m = matchCatalog(name, catalog, max: 1);
+  return m.isEmpty ? 0 : m.first.score;
+}
+
 /// Like [parseRestText], but also reports the fragments that could not be
 /// turned into a line, so none is dropped silently.
-ParseResult parseRestTextDetailed(String text) {
+///
+/// With a [catalog], names that end in a number ("Stroh 80") or contain a
+/// unit word ("Pack Eis") are kept when the catalog knows them.
+ParseResult parseRestTextDetailed(
+  String text, {
+  List<(String id, MaterialItem item)>? catalog,
+}) {
   final lines = <ParsedLine>[];
   final unparsed = <String>[];
   for (final fragment in text.split(_separator)) {
-    final (line, leftover) = _parseFragment(fragment);
+    final (line, leftover) = _parseFragment(fragment, catalog);
     if (line != null) {
       lines.add(line);
     } else if (leftover != null) {
@@ -186,7 +207,10 @@ List<String> _tokenize(String fragment) {
 }
 
 // (line, unparsedText): at most one is set; both null = nothing to say.
-(ParsedLine?, String?) _parseFragment(String fragment) {
+(ParsedLine?, String?) _parseFragment(
+  String fragment,
+  List<(String, MaterialItem)>? catalog,
+) {
   var tokens = _tokenize(fragment);
   if (tokens.isEmpty) return (null, null);
   final raw = tokens.join(' ');
@@ -199,14 +223,21 @@ List<String> _tokenize(String fragment) {
     tokens = [...tokens.sublist(0, beiAt), ...tokens.sublist(beiAt + 2)];
   }
 
+  // The origin word, with a leading "auf" ("auf Auftrag").
   StockOrigin? origin;
-  if (tokens.any((t) => t.toLowerCase() == 'investition')) {
-    origin = StockOrigin.investment;
-    tokens = tokens.where((t) => t.toLowerCase() != 'investition').toList();
-  } else if (tokens.any((t) => t.toLowerCase() == 'auftrag')) {
-    // An explicit "Auftrag" matters for a count (only that origin is set).
-    origin = StockOrigin.order;
-    tokens = tokens.where((t) => t.toLowerCase() != 'auftrag').toList();
+  for (final (word, o) in const [
+    ('investition', StockOrigin.investment),
+    ('auftrag', StockOrigin.order),
+  ]) {
+    final at = tokens.indexWhere((t) => t.toLowerCase() == word);
+    if (at < 0) continue;
+    origin = o;
+    final from = at > 0 && tokens[at - 1].toLowerCase() == 'auf' ? at - 1 : at;
+    tokens = [
+      ...tokens.sublist(0, from),
+      ...tokens.sublist(at + 1).where((t) => t.toLowerCase() != word),
+    ];
+    break;
   }
 
   var lead = 0;
@@ -215,13 +246,49 @@ List<String> _tokenize(String fragment) {
     lead++;
   }
   tokens = tokens.sublist(lead);
+  // A trailing "da" ("3 Bacardi da").
+  while (tokens.isNotEmpty && tokens.last.toLowerCase() == 'da') {
+    tokens = tokens.sublist(0, tokens.length - 1);
+  }
   if (tokens.isEmpty) return (null, null);
 
-  // The first standalone number token (digits or word) is the quantity.
-  final numAt = tokens.indexWhere((t) => _parseNumber(t) != null);
+  bool isNum(int i) => _parseNumber(tokens[i]) != null;
+  bool isUnit(int i) =>
+      i < tokens.length && _unitWords.contains(tokens[i].toLowerCase());
+
+  // Which token is the quantity, by priority:
+  // 1. a number at the start; 2. a number directly before a unit word;
+  // 3. a number word anywhere; 4. a trailing number (unless the catalog
+  // knows it as part of the name). Other digits belong to the name.
+  var unsure = false;
+  int? numAt;
+  if (isNum(0)) {
+    numAt = 0;
+  } else {
+    for (var i = 1; i < tokens.length && numAt == null; i++) {
+      if (isNum(i) && isUnit(i + 1)) numAt = i;
+    }
+    for (var i = 1; i < tokens.length && numAt == null; i++) {
+      if (_numberWords.containsKey(tokens[i].toLowerCase())) numAt = i;
+    }
+    final last = tokens.length - 1;
+    if (numAt == null && last > 0 && isNum(last)) {
+      final name = tokens.sublist(0, last).join(' ');
+      final partOfName =
+          catalog != null &&
+          _bestScore(tokens.join(' '), catalog) >= 0.8 &&
+          _bestScore(tokens.join(' '), catalog) > _bestScore(name, catalog);
+      if (!partOfName) {
+        numAt = last;
+        unsure = catalog == null;
+      }
+    }
+  }
+
   double? quantity;
-  var rest = tokens;
-  if (numAt >= 0) {
+  var nameTokens = tokens;
+  var keptUnits = tokens;
+  if (numAt != null) {
     quantity = _parseNumber(tokens[numAt]);
     var end = numAt + 1;
     // "zwei Komma acht": digits after "Komma" are the decimal places.
@@ -237,16 +304,30 @@ List<String> _tokenize(String fragment) {
         end += 2;
       }
     }
-    rest = [...tokens.sublist(0, numAt), ...tokens.sublist(end)];
+    keptUnits = [...tokens.sublist(0, numAt), ...tokens.sublist(end)];
+    // Unit words (and "Rest") only directly after the quantity.
+    var after = end;
+    while (after < tokens.length &&
+        (_unitWords.contains(tokens[after].toLowerCase()) ||
+            _afterQuantityFillers.contains(tokens[after].toLowerCase()))) {
+      after++;
+    }
+    nameTokens = [...tokens.sublist(0, numAt), ...tokens.sublist(after)];
   }
 
-  var nameTokens = rest
-      .where((t) => !_unitWords.contains(t.toLowerCase()))
-      .toList();
-  if (nameTokens.isNotEmpty && nameTokens.first.toLowerCase() == 'von') {
-    nameTokens = nameTokens.sublist(1);
+  String nameOf(List<String> t) {
+    if (t.isNotEmpty && t.first.toLowerCase() == 'von') t = t.sublist(1);
+    return t.join(' ');
   }
-  final name = nameTokens.join(' ');
+
+  var name = nameOf(nameTokens);
+  if (catalog != null) {
+    final full = nameOf(keptUnits);
+    if (full != name &&
+        _bestScore(full, catalog) > _bestScore(name, catalog)) {
+      name = full;
+    }
+  }
   if (quantity == null || name.isEmpty) {
     return (null, name.isEmpty ? raw : name);
   }
@@ -256,6 +337,7 @@ List<String> _tokenize(String fragment) {
       spokenName: name,
       locationHint: location,
       originHint: origin,
+      quantityUnsure: unsure,
     ),
     null,
   );

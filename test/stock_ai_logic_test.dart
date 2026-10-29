@@ -145,6 +145,25 @@ void main() {
       });
     }
 
+    test('a trailing-number quantity is flagged unsure', () {
+      final line = RestLine(
+        parsed: const ParsedLine(
+          quantity: 80,
+          spokenName: 'Stroh',
+          quantityUnsure: true,
+        ),
+        candidates: const [],
+        chosenMaterialId: 'm1',
+        location: _mine,
+        origin: StockOrigin.order,
+        quantity: 80,
+      );
+      expect(
+        plausibilityFlags(line, stock, CaptureMode.add),
+        contains(PlausibilityFlag.quantityUnsure),
+      );
+    });
+
     test('every flag has a de/en key', () {
       for (final f in PlausibilityFlag.values) {
         expect(f.key, startsWith('inventory_list.flag_'));

@@ -369,4 +369,102 @@ void main() {
       expect(isConfident(matchCatalog('Vodka', cat)), isFalse);
     });
   });
+
+  group('names with numbers and unit words (review I4/I5)', () {
+    final cat = <(String, MaterialItem)>[
+      ('s80', _item('Stroh 80')),
+      ('fanta', _item('Fanta 24er Pack')),
+      ('hb', _item('Hartplastikbecher 0,3')),
+      ('st', _item('Strohhalme')),
+      ('sahne', _item('Schlagsahne')),
+      ('rum', _item('Weisser Rum (Bacardi)')),
+    ];
+    ParseResult p(String t, {bool withCatalog = true}) =>
+        parseRestTextDetailed(t, catalog: withCatalog ? cat : null);
+
+    test('unit word at the end of the name stays', () {
+      final l = p('zwei Fanta 24er Pack').lines.single;
+      expect(l.quantity, 2);
+      expect(l.spokenName, 'Fanta 24er Pack');
+      expect(matchCatalog(l.spokenName, cat).first.score, 1.0);
+    });
+
+    test('"24er Pack Fanta" has no quantity: a manual line with the text', () {
+      final r = p('24er Pack Fanta');
+      expect(r.lines, isEmpty);
+      expect(r.unparsed, ['24er Pack Fanta']);
+    });
+
+    test('unit words directly after the quantity are dropped', () {
+      expect(p('zwei Pack Strohhalme').lines.single.spokenName, 'Strohhalme');
+      final s = p('eine Packung Schlagsahne').lines.single;
+      expect((s.quantity, s.spokenName), (1.0, 'Schlagsahne'));
+    });
+
+    test('"Stroh 80" with the catalog: no quantity, name kept', () {
+      final r = p('Stroh 80');
+      expect(r.lines, isEmpty);
+      expect(r.unparsed, ['Stroh 80']);
+    });
+
+    test('"Stroh 80" without catalog: 80 x Stroh, flagged unsure', () {
+      final l = p('Stroh 80', withCatalog: false).lines.single;
+      expect((l.quantity, l.spokenName), (80.0, 'Stroh'));
+      expect(l.quantityUnsure, isTrue);
+    });
+
+    test('"zwei Stroh 80" is 2 x Stroh 80', () {
+      final l = p('zwei Stroh 80').lines.single;
+      expect((l.quantity, l.spokenName), (2.0, 'Stroh 80'));
+      expect(l.quantityUnsure, isFalse);
+    });
+
+    test('"Stroh 80 zwei Flaschen" is 2 x Stroh 80, also without catalog', () {
+      for (final c in [true, false]) {
+        final l = p('Stroh 80 zwei Flaschen', withCatalog: c).lines.single;
+        expect((l.quantity, l.spokenName), (2.0, 'Stroh 80'));
+      }
+    });
+
+    test('"Hartplastikbecher 0,3 zwei Kisten" is 2 x the cup', () {
+      final l = p('Hartplastikbecher 0,3 zwei Kisten').lines.single;
+      expect((l.quantity, l.spokenName), (2.0, 'Hartplastikbecher 0,3'));
+    });
+
+    test('a trailing number that is no name part stays the quantity', () {
+      final l = p('Bacardi 3').lines.single;
+      expect((l.quantity, l.spokenName), (3.0, 'Bacardi'));
+    });
+
+    test('a digit in the middle is no quantity unless a unit follows', () {
+      expect(p('Becher 80 rot', withCatalog: false).lines, isEmpty);
+      final l = p('Becher 80 Stück', withCatalog: false).lines.single;
+      expect((l.quantity, l.spokenName), (80.0, 'Becher'));
+    });
+
+    test('a better full-text catalog hit keeps the unit word in the name', () {
+      final c = <(String, MaterialItem)>[('pk', _item('Pack Eis'))];
+      final l = parseRestTextDetailed('2 Pack Eis', catalog: c).lines.single;
+      expect(l.spokenName, 'Pack Eis');
+      expect(parseRestText('2 Pack Eis').single.spokenName, 'Eis');
+    });
+  });
+
+  group('filler words (review M1/M2)', () {
+    test('"auf Auftrag" and a trailing "da" are not part of the name', () {
+      final l = parseRestText('drei Bacardi auf Auftrag').single;
+      expect(l.spokenName, 'Bacardi');
+      expect(l.originHint, StockOrigin.order);
+      final i = parseRestText('2 Gin auf Investition').single;
+      expect((i.spokenName, i.originHint), ('Gin', StockOrigin.investment));
+      expect(parseRestText('3 Bacardi da').single.spokenName, 'Bacardi');
+    });
+
+    test('"einen Rest" / "ein Rest" is a quantity of one', () {
+      for (final t in ['einen Rest Bacardi', 'ein Rest Bacardi']) {
+        final l = parseRestText(t).single;
+        expect((l.quantity, l.spokenName), (1.0, 'Bacardi'), reason: t);
+      }
+    });
+  });
 }

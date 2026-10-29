@@ -955,7 +955,8 @@
     "flag_high": "Unusually high quantity",
     "flag_not_unique": "Article not unique",
     "flag_no_stock": "No stock yet",
-    "flag_below_investment": "Below investment stock"
+    "flag_below_investment": "Below investment stock",
+    "flag_quantity_unsure": "Quantity unsure (number at the end)"
   },
   "stock": {
     "location_prompt_title": "Your storage location",

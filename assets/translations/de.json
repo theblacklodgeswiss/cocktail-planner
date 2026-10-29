@@ -960,7 +960,8 @@
     "flag_high": "Ungewöhnlich hohe Menge",
     "flag_not_unique": "Artikel nicht eindeutig",
     "flag_no_stock": "Noch kein Bestand",
-    "flag_below_investment": "Unter Investitions-Bestand"
+    "flag_below_investment": "Unter Investitions-Bestand",
+    "flag_quantity_unsure": "Menge unsicher (Zahl am Ende)"
   },
   "stock": {
     "location_prompt_title": "Dein Lagerort",
