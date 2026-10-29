@@ -9,7 +9,7 @@ class FloatingCard extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
-    this.padding = const EdgeInsets.all(AppSpace.s12),
+    this.padding = AppSpace.card,
   });
 
   final Widget child;

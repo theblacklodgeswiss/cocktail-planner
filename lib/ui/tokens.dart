@@ -103,6 +103,12 @@ class AppSpace {
   static const double s16 = 16;
   static const double s24 = 24;
   static const double s32 = 32;
+
+  /// Default FloatingCard padding (8 px vertical keeps two-line cards at 46-52 px; 11 px horizontal as in the mockup).
+  static const EdgeInsets card = EdgeInsets.symmetric(
+    vertical: 8,
+    horizontal: 11,
+  );
 }
 
 /// Fixed sizes shared by the base widgets.
