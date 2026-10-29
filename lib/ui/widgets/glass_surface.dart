@@ -51,6 +51,12 @@ class GlassSurface extends StatelessWidget {
 
     final blur = ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
 
+    // Glass chrome (tab bar, "+", CTA bar) often floats above the pages'
+    // Scaffolds, e.g. in the staff shell. Without a Material ancestor its
+    // text would get MaterialApp's debug style (yellow underline); a
+    // transparent Material gives it the theme's text style and ink.
+    final content = Material(type: MaterialType.transparency, child: child);
+
     final body = DecoratedBox(
       decoration: BoxDecoration(
         color: fill,
@@ -71,9 +77,9 @@ class GlassSurface extends StatelessWidget {
                   colors: [p.liquidHighlight, AppColors.glowClear],
                 ),
               ),
-              child: child,
+              child: content,
             )
-          : child,
+          : content,
     );
 
     return Stack(
