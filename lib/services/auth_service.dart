@@ -14,10 +14,9 @@ const String superAdminEmail = 'the.blacklodge@outlook.com';
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal({
-    this.lookupAllowedUserIsAdmin = _defaultLookupAllowedUserIsAdmin,
-    this.lookupEmployeeAccess = _defaultLookupEmployeeAccess,
-  }) {
+  AuthService._internal()
+    : lookupAllowedUserIsAdmin = _defaultLookupAllowedUserIsAdmin,
+      lookupEmployeeAccess = _defaultLookupEmployeeAccess {
     _firebaseAuth.authStateChanges().listen((user) {
       if (user != null && !user.isAnonymous) {
         _cachedRole = null; // Clear cache, force a fresh resolve

@@ -5,9 +5,27 @@ import 'package:flutter/foundation.dart';
 class FirestoreService {
   FirebaseFirestore? _firestoreInstance;
   bool _available = false;
+  bool _checkPending = false;
+  Future<bool>? _backgroundCheck;
 
-  /// Whether Firestore is available.
-  bool get isAvailable => _available;
+  /// Whether Firestore is available. While the startup connection test started
+  /// via [startBackgroundCheck] is still running the state is "not yet known"
+  /// and is treated as available (optimistic); once the test completes it
+  /// reflects the real result, so the local fallback semantics are unchanged.
+  bool get isAvailable => _available || _checkPending;
+
+  /// Completes with the connection test result (null-safe: completes with
+  /// `false` if no background check was started and nothing is known yet).
+  Future<bool> get availabilityKnown =>
+      _backgroundCheck ?? Future.value(_available);
+
+  /// Starts the connection test without blocking the caller. Idempotent.
+  Future<bool> startBackgroundCheck() {
+    return _backgroundCheck ??= () {
+      _checkPending = true;
+      return initialize();
+    }();
+  }
 
   FirebaseFirestore get firestore {
     _firestoreInstance ??= FirebaseFirestore.instance;
@@ -51,11 +69,13 @@ class FirestoreService {
       final testDoc = await materialsCollection.limit(1).get();
       debugPrint('✅ Firestore available - fetched ${testDoc.docs.length} test docs');
       _available = true;
+      _checkPending = false;
       return true;
     } catch (e) {
       debugPrint('❌ Firestore initialization failed: $e');
       debugPrint('📋 Error type: ${e.runtimeType}');
       _available = false;
+      _checkPending = false;
       return false;
     }
   }
