@@ -1,6 +1,8 @@
 // Task 13: restyled order detail (staff): the pure primary/menu rules and
 // the widget behavior of the new sheet (one primary action, delete via
 // confirm sheet, double-tap guard, decline-reason sheet, no overflow).
+import 'dart:async';
+
 import 'package:cocktail_planer/models/employee.dart';
 import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_logic.dart';
@@ -334,6 +336,115 @@ void main() {
         );
       }
     }
+
+    testWidgets('snackbars appear inside the sheet and are tappable', (
+      tester,
+    ) async {
+      // Declined + incomplete offer: accepting shows the "offer incomplete"
+      // snackbar with an action. It must sit above the sheet, not behind.
+      await pumpSheet(
+        tester,
+        detailOrder(status: OrderStatus.declined, offerComplete: false),
+      );
+      await openMenu(tester);
+      await tester.tap(find.text('orders.accept'.tr()));
+      await tester.pumpAndSettle();
+      // One copy per registered Scaffold (page + sheet); the sheet's is last.
+      final action = find.text('orders.complete_offer'.tr()).last;
+      final hit = tester.hitTestOnBinding(tester.getCenter(action));
+      expect(
+        hit.path.any((e) => e.target == action.evaluate().first.renderObject),
+        isTrue,
+      );
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['getOrderById:o1']);
+    });
+
+    testWidgets('menu entries are disabled while a status update runs', (
+      tester,
+    ) async {
+      fakes.deductCompleter = Completer();
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      await tester.tap(find.text('orders.complete'.tr()));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('orders.complete'.tr()).last);
+      await tester.pump();
+      // The loading spinner never settles: pump fixed durations.
+      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.text('orders.decline'.tr()));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(TextField), findsNothing);
+      expect(fakes.reasonPrompts, isEmpty);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pump(const Duration(seconds: 1));
+      fakes.deductCompleter!.complete(
+        const OrderDeductionPlan(restRecorded: true),
+      );
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['deduct:o1', 'updateStatus:completed']);
+    });
+
+    testWidgets('declined with total 0: greyed accept shows the hint', (
+      tester,
+    ) async {
+      await pumpSheet(
+        tester,
+        detailOrder(status: OrderStatus.declined, total: 0),
+      );
+      await openMenu(tester);
+      expect(find.text('order_detail.accept_needs_list'.tr()), findsOneWidget);
+      await tester.tap(find.text('orders.accept'.tr()));
+      await tester.pumpAndSettle();
+      expect(fakes.log, isEmpty);
+    });
+
+    testWidgets('the close button closes the sheet', (tester) async {
+      await pumpSheet(tester, detailOrder());
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(OrderDetailView), findsNothing);
+    });
+
+    testWidgets('Abschliessen works again after a cancelled attempt', (
+      tester,
+    ) async {
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      final button = find.widgetWithText(PrimaryButton, 'orders.complete'.tr());
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ui.cancel'.tr()));
+      await tester.pumpAndSettle();
+      expect(fakes.log, isEmpty);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.text('orders.complete_confirm_title'.tr()), findsOneWidget);
+      await tester.tap(find.text('orders.complete'.tr()).last);
+      await tester.pumpAndSettle();
+      expect(fakes.log.first, 'deduct:o1');
+    });
+
+    testWidgets('Abschliessen works again after a failed deduction', (
+      tester,
+    ) async {
+      fakes.deductError = Exception('boom');
+      await pumpSheet(tester, detailOrder(status: OrderStatus.accepted));
+      final button = find.widgetWithText(PrimaryButton, 'orders.complete'.tr());
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('orders.complete'.tr()).last);
+      await tester.pumpAndSettle();
+      expect(find.text('orders.stock_deduct_failed'.tr()), findsWidgets);
+      expect(fakes.log, ['deduct:o1']);
+
+      fakes.deductError = null;
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('orders.complete'.tr()).last);
+      await tester.pumpAndSettle();
+      expect(fakes.log, ['deduct:o1', 'deduct:o1', 'updateStatus:completed', 'rest']);
+    });
 
     testWidgets('decline reason sheet fits with the keyboard open', (
       tester,

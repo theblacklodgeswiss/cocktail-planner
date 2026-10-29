@@ -117,7 +117,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         update(() => isEditingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+          SnackBar(content: Text('order_detail.load_error'.tr(args: ['$e']))),
         );
       }
     }
@@ -145,7 +145,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Fehler beim Erstellen der PDF: $e'),
+            content: Text('order_detail.pdf_error'.tr(args: ['$e'])),
             backgroundColor: AppPalette.of(context).error,
           ),
         );
@@ -170,7 +170,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Fehler beim Erstellen der PDF: $e'),
+            content: Text('order_detail.pdf_error'.tr(args: ['$e'])),
             backgroundColor: AppPalette.of(context).error,
           ),
         );
@@ -197,7 +197,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         update(() => isOpeningShoppingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+          SnackBar(content: Text('order_detail.load_error'.tr(args: ['$e']))),
         );
       }
       return;
@@ -316,7 +316,7 @@ extension OrderDetailShoppingActions on OrderDetailController {
       if (mounted) {
         update(() => isGeneratingList = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Laden der Daten: $e')),
+          SnackBar(content: Text('order_detail.load_error'.tr(args: ['$e']))),
         );
       }
       return;

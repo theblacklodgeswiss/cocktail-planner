@@ -62,32 +62,38 @@ class _OrderDetailViewState extends State<OrderDetailView>
   @override
   Widget build(BuildContext context) {
     const gap = SizedBox(height: AppSpace.s12);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        OrderDetailHeader(controller: _c),
-        Expanded(
-          child: ListView(
-            children: [
-              if (_c.currentStatus == OrderStatus.declined) ...[
-                DeclineReasonCard(controller: _c),
+    // The sheet is not inside a Scaffold of its own, so without this one the
+    // snackbars would be shown on the page behind the sheet. Transparent: the
+    // sheet card provides the background.
+    return Scaffold(
+      backgroundColor: AppColors.glowClear,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OrderDetailHeader(controller: _c),
+          Expanded(
+            child: ListView(
+              children: [
+                if (_c.currentStatus == OrderStatus.declined) ...[
+                  DeclineReasonCard(controller: _c),
+                  gap,
+                ],
+                if (widget.order.isFromForm) ...[
+                  FormDetailsCard(controller: _c),
+                  gap,
+                ],
+                OrderInfoCard(controller: _c, currency: widget.currency),
                 gap,
+                ShoppingListSection(controller: _c),
+                if (widget.order.items.isNotEmpty) ...[
+                  gap,
+                  ShoppingListTile(controller: _c, currency: widget.currency),
+                ],
               ],
-              if (widget.order.isFromForm) ...[
-                FormDetailsCard(controller: _c),
-                gap,
-              ],
-              OrderInfoCard(controller: _c, currency: widget.currency),
-              gap,
-              ShoppingListSection(controller: _c),
-              if (widget.order.items.isNotEmpty) ...[
-                gap,
-                ShoppingListTile(controller: _c, currency: widget.currency),
-              ],
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

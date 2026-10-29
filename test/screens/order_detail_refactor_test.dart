@@ -754,6 +754,9 @@ void main() {
         width: 420,
       );
       expect(tester.takeException(), isNull);
+      await openMenu(tester);
+      expect(shown('orders.finalize_offer'), isTrue);
+      await closeMenu(tester);
       expect(shown('orders.regenerate_with_claude'), isTrue);
       expect(await visible(tester), {
         'orders.invoice',

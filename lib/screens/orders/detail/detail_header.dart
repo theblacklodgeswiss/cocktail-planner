@@ -70,11 +70,23 @@ class OrderDetailHeader extends StatelessWidget {
                 onPressed: () => _showMenu(context, menu),
               ),
             ],
+            const SizedBox(width: AppSpace.s8),
+            GlassIconButton(
+              icon: Icons.close,
+              semanticLabel: 'ui.close'.tr(),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ],
         ),
         if (busy) ...[
           const SizedBox(height: AppSpace.s8),
           const LinearProgressIndicator(minHeight: AppSize.progressHeight),
+          const SizedBox(height: AppSpace.s4),
+          Text(
+            'order_detail.opening'.tr(),
+            textAlign: TextAlign.center,
+            style: AppText.caption.copyWith(color: p.textSecondary),
+          ),
         ],
         if (primary != null) ...[
           const SizedBox(height: AppSpace.s12),
@@ -130,7 +142,10 @@ class OrderDetailHeader extends StatelessWidget {
           onPressed: () => c.updateStatus(OrderStatus.completed),
         );
       case OrderDetailAction.recordRest:
-        return PrimaryButton(label: 'rest.record'.tr(), onPressed: c.recordRest);
+        return PrimaryButton(
+          label: 'rest.record'.tr(),
+          onPressed: c.recordRest,
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -169,62 +184,81 @@ class _MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    final (IconData icon, String label, VoidCallback? run, bool danger) =
-        switch (action) {
-          OrderDetailAction.finalizeOffer => (
-            Icons.description_outlined,
-            'orders.finalize_offer'.tr(),
-            c.openOfferEditor,
-            false,
-          ),
-          OrderDetailAction.invoice => (
-            Icons.receipt_long,
-            'orders.invoice'.tr(),
-            c.generateInvoice,
-            false,
-          ),
-          OrderDetailAction.accept => (
-            Icons.check,
-            'orders.accept'.tr(),
-            acceptBlockedByTotal(c.order.total)
-                ? null
-                : () => c.tryUpdateStatus(OrderStatus.accepted),
-            false,
-          ),
-          OrderDetailAction.backToAccepted => (
-            Icons.undo,
-            'orders.back_to_accepted'.tr(),
-            () => c.updateStatus(OrderStatus.accepted),
-            false,
-          ),
-          OrderDetailAction.backToQuote => (
-            Icons.undo,
-            'orders.status_quote'.tr(),
-            () => c.updateStatus(OrderStatus.quote),
-            false,
-          ),
-          OrderDetailAction.decline => (
-            Icons.close,
-            'orders.decline'.tr(),
-            () => c.updateStatus(OrderStatus.declined),
-            false,
-          ),
-          OrderDetailAction.delete => (
-            Icons.delete_forever,
-            'orders.delete_order'.tr(),
-            c.deleteOrder,
-            true,
-          ),
-          _ => (Icons.circle, '', null, false),
-        };
-    final color = run == null ? p.disabled : (danger ? p.error : p.text);
+    var (
+      IconData icon,
+      String label,
+      VoidCallback? run,
+      bool danger,
+    ) = switch (action) {
+      OrderDetailAction.finalizeOffer => (
+        Icons.description_outlined,
+        'orders.finalize_offer'.tr(),
+        c.openOfferEditor,
+        false,
+      ),
+      OrderDetailAction.invoice => (
+        Icons.receipt_long,
+        'orders.invoice'.tr(),
+        c.generateInvoice,
+        false,
+      ),
+      OrderDetailAction.accept => (
+        Icons.check,
+        'orders.accept'.tr(),
+        acceptBlockedByTotal(c.order.total)
+            ? null
+            : () => c.tryUpdateStatus(OrderStatus.accepted),
+        false,
+      ),
+      OrderDetailAction.backToAccepted => (
+        Icons.undo,
+        'orders.back_to_accepted'.tr(),
+        () => c.updateStatus(OrderStatus.accepted),
+        false,
+      ),
+      OrderDetailAction.backToQuote => (
+        Icons.undo,
+        'orders.status_quote'.tr(),
+        () => c.updateStatus(OrderStatus.quote),
+        false,
+      ),
+      OrderDetailAction.decline => (
+        Icons.close,
+        'orders.decline'.tr(),
+        () => c.updateStatus(OrderStatus.declined),
+        false,
+      ),
+      OrderDetailAction.delete => (
+        Icons.delete_forever,
+        'orders.delete_order'.tr(),
+        c.deleteOrder,
+        true,
+      ),
+      _ => (Icons.circle, '', null, false),
+    };
+    final blocked =
+        action == OrderDetailAction.accept &&
+        acceptBlockedByTotal(c.order.total);
+    final editorBusy = c.isOpeningOffer || c.isOpeningInvoice;
+    final busy = switch (action) {
+      OrderDetailAction.accept ||
+      OrderDetailAction.backToAccepted ||
+      OrderDetailAction.backToQuote ||
+      OrderDetailAction.decline => c.isUpdatingStatus,
+      OrderDetailAction.finalizeOffer ||
+      OrderDetailAction.invoice => editorBusy,
+      _ => false,
+    };
+    if (busy) run = null;
+    final go = run;
+    final color = go == null ? p.disabled : (danger ? p.error : p.text);
     return Pressable(
       minSize: AppSize.minTap,
-      onTap: run == null
+      onTap: go == null
           ? null
           : () {
               Navigator.of(sheet).pop();
-              run();
+              go();
             },
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: AppSize.minTap),
@@ -233,7 +267,17 @@ class _MenuRow extends StatelessWidget {
             Icon(icon, size: AppSize.rowIcon, color: color),
             const SizedBox(width: AppSpace.s12),
             Expanded(
-              child: Text(label, style: AppText.button.copyWith(color: color)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppText.button.copyWith(color: color)),
+                  if (blocked)
+                    Text(
+                      'order_detail.accept_needs_list'.tr(),
+                      style: AppText.caption.copyWith(color: p.textSecondary),
+                    ),
+                ],
+              ),
             ),
           ],
         ),
