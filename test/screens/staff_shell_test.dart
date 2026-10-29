@@ -22,6 +22,16 @@ class _TabPage extends StatelessWidget {
     title: 'Seite ${tab.name}',
     slivers: [
       SliverToBoxAdapter(child: TextField(key: Key('tf ${tab.name}'))),
+      SliverToBoxAdapter(
+        child: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('snack ${tab.name}'))),
+            child: Text('show snack ${tab.name}'),
+          ),
+        ),
+      ),
       SliverList.builder(
         itemCount: 40,
         itemBuilder: (_, i) => SizedBox(
@@ -373,5 +383,49 @@ void main() {
     expect(find.byType(StaffTabBar).hitTestable(), findsOneWidget);
     expect(r.state.uri.toString(), '/orders?status=accepted');
     expect(r.canPop(), isFalse);
+  });
+
+  for (final size in [const Size(360, 640), const Size(390, 844)]) {
+    testWidgets('snackbar on a tab floats above bar and + ($size)', (
+      tester,
+    ) async {
+      phone(tester, w: size.width, h: size.height);
+      await pumpApp(tester, app(shellRouter()));
+      await tester.tap(find.text('show snack orders'));
+      await tester.pumpAndSettle();
+      // The visible snackbar (its Material), without the floating margin.
+      final snack = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(SnackBar),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      final bar = _bar(tester);
+      final fab = tester.getRect(find.byType(FloatingFab));
+      expect(snack.bottom, lessThanOrEqualTo(bar.top));
+      expect(snack.bottom, lessThanOrEqualTo(fab.top));
+      expect(snack.height, lessThan(100), reason: 'no padded block');
+      expect(find.text('snack orders').hitTestable(), findsOneWidget);
+    });
+  }
+
+  testWidgets('snackbar on a pushed page keeps the default look', (
+    tester,
+  ) async {
+    phone(tester);
+    final r = shellRouter();
+    await pumpApp(tester, app(r));
+    r.push('/dashboard');
+    await tester.pumpAndSettle();
+    ScaffoldMessenger.of(
+      tester.element(find.text('to orders')),
+    ).showSnackBar(const SnackBar(content: Text('pushed snack')));
+    await tester.pumpAndSettle();
+    final snack = tester.widget<SnackBar>(find.byType(SnackBar).last);
+    expect(snack.behavior, isNull);
+    final rect = tester.getRect(find.byType(SnackBar).last);
+    expect(rect.bottom, 640, reason: 'fixed at the bottom edge');
   });
 }

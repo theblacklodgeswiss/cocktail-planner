@@ -135,20 +135,42 @@ class _StaffShellState extends State<StaffShell> {
     // Read above the pages' Scaffolds, which strip the inset for their body.
     final keyboard = keyboardOpen(context);
     final m = MediaQuery.of(context);
+    final theme = Theme.of(context);
     return StaffShellScope(
       reselects: _signals,
       child: Stack(
         children: [
           Positioned.fill(
-            child: MediaQuery(
+            // Snackbars of the tab pages float above the bar and the "+": a
+            // fixed snackbar would pad itself by the shell's bottom padding
+            // into a tall block half behind the bar, and a Scaffold ignores
+            // that padding when it places a snackbar. Pages outside the shell
+            // keep the app's default.
+            child: Theme(
               data: chrome
-                  ? m.copyWith(
-                      padding: m.padding.copyWith(
-                        bottom: keyboard ? 0 : _shellClearance(context),
+                  ? theme.copyWith(
+                      snackBarTheme: theme.snackBarTheme.copyWith(
+                        behavior: SnackBarBehavior.floating,
+                        insetPadding: EdgeInsets.fromLTRB(
+                          AppSpace.s16,
+                          AppSpace.s4,
+                          AppSpace.s16,
+                          (keyboard ? 0 : _shellClearance(context)) +
+                              AppSpace.s12,
+                        ),
                       ),
                     )
-                  : m,
-              child: widget.child,
+                  : theme,
+              child: MediaQuery(
+                data: chrome
+                    ? m.copyWith(
+                        padding: m.padding.copyWith(
+                          bottom: keyboard ? 0 : _shellClearance(context),
+                        ),
+                      )
+                    : m,
+                child: widget.child,
+              ),
             ),
           ),
           if (chrome)
