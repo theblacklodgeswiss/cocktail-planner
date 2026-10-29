@@ -467,4 +467,31 @@ void main() {
       }
     });
   });
+
+  group('items without "und" (quantity word starts a new item)', () {
+    List<(double, String)> parse(String t) => parseRestTextDetailed(t)
+        .lines
+        .map((l) => (l.quantity, l.spokenName))
+        .toList();
+
+    test('drei Bacardi fünf Rohrzucker und drei Wodkaflaschen', () {
+      expect(
+        parse('Ich hab drei Bacardi fünf Rohrzucker und drei Wodkaflaschen'),
+        [(3.0, 'Bacardi'), (5.0, 'Rohrzucker'), (3.0, 'Wodkaflaschen')],
+      );
+    });
+
+    test('digits and units: 2 Flaschen Rum 3 Flaschen Gin', () {
+      expect(parse('2 Flaschen Rum 3 Flaschen Gin'), [
+        (2.0, 'Rum'),
+        (3.0, 'Gin'),
+      ]);
+    });
+
+    test('names with numbers and decimals stay together', () {
+      expect(parse('zwei Komma acht Bacardi'), [(2.8, 'Bacardi')]);
+      expect(parse('zwei Stroh 80'), [(2.0, 'Stroh 80')]);
+      expect(parse('3 Bacardi 5'), [(3.0, 'Bacardi 5')]);
+    });
+  });
 }

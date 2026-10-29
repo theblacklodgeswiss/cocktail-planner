@@ -178,7 +178,7 @@ ParseResult parseRestTextDetailed(
 }) {
   final lines = <ParsedLine>[];
   final unparsed = <String>[];
-  for (final fragment in text.split(_separator)) {
+  for (final fragment in text.split(_separator).expand(_splitAtQuantities)) {
     final (line, leftover) = _parseFragment(fragment, catalog);
     if (line != null) {
       lines.add(line);
@@ -187,6 +187,40 @@ ParseResult parseRestTextDetailed(
     }
   }
   return ParseResult(lines: lines, unparsed: unparsed);
+}
+
+/// "drei Bacardi fünf Rohrzucker" is two items without an "und": a fragment
+/// that starts with a quantity is split before a later quantity word that
+/// starts a new item (it is followed by a name, or the first quantity also
+/// had a unit: "zwei Flaschen Rum drei Flaschen Gin"). "zwei Komma acht" and
+/// names ending in a number stay together.
+Iterable<String> _splitAtQuantities(String fragment) {
+  final tokens = _tokenize(fragment);
+  var start = 0;
+  while (start < tokens.length &&
+      _leadFillers.contains(tokens[start].toLowerCase())) {
+    start++;
+  }
+  bool isNumToken(int i) => _parseNumber(tokens[i]) != null;
+  bool isUnitToken(int i) =>
+      i < tokens.length && _unitWords.contains(tokens[i].toLowerCase());
+  if (start >= tokens.length || !isNumToken(start)) return [fragment];
+  final firstHadUnit = isUnitToken(start + 1);
+  final parts = <String>[];
+  var from = 0;
+  for (var i = start + 2; i < tokens.length - 1; i++) {
+    if (!isNumToken(i)) continue;
+    final prev = tokens[i - 1].toLowerCase();
+    final next = tokens[i + 1].toLowerCase();
+    if (prev == 'komma' || next == 'komma') continue;
+    if (isUnitToken(i + 1) && !firstHadUnit) continue;
+    if (isNumToken(i + 1)) continue;
+    parts.add(tokens.sublist(from, i).join(' '));
+    from = i;
+  }
+  if (parts.isEmpty) return [fragment];
+  parts.add(tokens.sublist(from).join(' '));
+  return parts;
 }
 
 List<String> _tokenize(String fragment) {
