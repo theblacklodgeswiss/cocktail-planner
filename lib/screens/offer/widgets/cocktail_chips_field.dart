@@ -12,11 +12,15 @@ class CocktailChipsField extends StatefulWidget {
     required this.controller,
     required this.label,
     this.validator,
+    this.loadCatalog,
   });
 
   final TextEditingController controller;
   final String label;
   final String? Function(String?)? validator;
+
+  /// Recipe names for the "add" search; defaults to the cocktail repository.
+  final Future<List<String>> Function()? loadCatalog;
 
   @override
   State<CocktailChipsField> createState() => _CocktailChipsFieldState();
@@ -50,8 +54,10 @@ class _CocktailChipsFieldState extends State<CocktailChipsField> {
 
   Future<void> _loadCatalog() async {
     try {
-      final data = await cocktailRepository.load();
-      final names = data.recipes.map((r) => r.name).toSet().toList()..sort();
+      final loaded = widget.loadCatalog != null
+          ? await widget.loadCatalog!()
+          : (await cocktailRepository.load()).recipes.map((r) => r.name);
+      final names = loaded.toSet().toList()..sort();
       if (mounted) setState(() => _catalog = names);
     } catch (_) {
       // Catalog unavailable (offline): custom names can still be typed.

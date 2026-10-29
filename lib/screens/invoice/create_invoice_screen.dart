@@ -5,36 +5,66 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/env_config.dart';
-import '../../data/employee_repository.dart';
-import '../../data/order_repository.dart';
-import '../../data/share_link_repository.dart';
-import '../../models/employee.dart';
-import '../../models/offer.dart';
 import '../../models/order.dart';
-import '../../services/auth_service.dart';
 import '../../services/invoice_pdf_generator.dart';
 import '../../services/microsoft_graph_service.dart';
 import '../../services/pdf_generator.dart';
 import '../../utils/currency.dart';
-import '../../utils/position_translation.dart';
-import '../../utils/signed_number_input.dart';
-import '../../widgets/discount_editor.dart';
-import '../offer/widgets/cocktail_chips_field.dart';
-import '../offer/widgets/event_type_selector.dart';
-import '../offer/widgets/section_header.dart';
+import '../offer/offer_form_state.dart' show formatDocumentDate;
+import '../shared/document_sections/common_sections.dart';
+import '../shared/document_sections/document_field.dart';
+import '../shared/document_sections/document_services.dart';
+import '../shared/document_sections/position_dialog.dart';
+import 'invoice_form_state.dart';
+import 'sections/invoice_extra_hours_section.dart';
+import 'sections/invoice_positions_section.dart';
+import 'sections/invoice_preview_and_actions.dart';
 
-/// Screen to create and export an Invoice (Auftragsbestätigung) from a [SavedOrder].
-/// Similar to CreateOfferScreen but for invoices, with position validation.
+/// Screen to create and export an Invoice (Auftragsbestätigung) from a
+/// [SavedOrder]. Data and logic live in [InvoiceFormState]; the sections are
+/// widgets in `sections/` and `../shared/document_sections/`.
 class CreateInvoiceScreen extends StatefulWidget {
-  const CreateInvoiceScreen({super.key, required this.order});
+  const CreateInvoiceScreen({
+    super.key,
+    required this.order,
+    this.services = const DocumentServices(),
+  });
 
   final SavedOrder order;
+  final DocumentServices services;
 
   @override
   State<CreateInvoiceScreen> createState() => _CreateInvoiceScreenState();
 }
 
 class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late final InvoiceFormState _form;
+
+  @override
+  void initState() {
+    super.initState();
+    _form = InvoiceFormState(
+      widget.order,
+      displayName: widget.services.displayName(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _form.dispose();
+    super.dispose();
+  }
+
+  void _update(VoidCallback fn) => setState(fn);
+
+  void _snack(String key) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(key.tr())));
+  }
+
   // Confirmation dialog for PDF save
   Future<void> _confirmGeneratePdf() async {
     final confirmed = await showDialog<bool>(
@@ -59,510 +89,41 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
   }
 
-  final _formKey = GlobalKey<FormState>();
-
-  // Language
-  String _language = 'de';
-
-  // Event date (editable)
-  late DateTime _eventDate;
-  late String _serviceType;
-
-  // Controllers
-  late final _editorNameCtrl = TextEditingController(
-    text: authService.displayName ?? 'Mario Kantharoobarajah',
-  );
-  final _eventTimeCtrl = TextEditingController();
-  final _clientNameCtrl = TextEditingController();
-  final _clientContactCtrl = TextEditingController();
-  final _locationCtrl = TextEditingController();
-  late final TextEditingController _guestCountCtrl;
-  final _cocktailsCtrl = TextEditingController();
-  final _barDescCtrl = TextEditingController();
-  final _shotsCtrl = TextEditingController();
-
-  // Position controllers
-  late final TextEditingController _barServiceCostCtrl;
-  final _distanceKmCtrl = TextEditingController();
-  final _travelCostPerKmCtrl = TextEditingController(text: '0.70');
-  late final TextEditingController _thekeCostCtrl;
-  late final TextEditingController _shotsCountCtrl;
-  final _shotsPricePerPieceCtrl = TextEditingController(text: '1.50');
-  final _shotsRemarkCtrl = TextEditingController();
-
-  // Discount (Rabatt): percentage of the positions subtotal or fixed amount
-  bool _discountIsPercent = true;
-  final _discountValueCtrl = TextEditingController();
-  final _discountRemarkCtrl = TextEditingController();
-
-  // Extra hours (Extrastunden)
-  late final TextEditingController _extraHoursCtrl;
-  final _extraHourRateCtrl = TextEditingController(text: '50.00');
-
-  // Assigned employees
-  late Set<String> _selectedEmployees;
-
-  // Event types
-  final Set<EventType> _eventTypes = {};
-
-  // Extra positions (used in fields mode, backward compat)
-  final List<ExtraPosition> _extraPositions = [];
-
-  /// All offer positions loaded from offerPositions field.
-  /// When non-empty, the screen operates in "positions mode":
-  /// the grand total is derived from these positions instead of from
-  /// the individual bar service / travel / theke fields.
-  final List<ExtraPosition> _offerPositions = [];
-
-  bool get _usePositionsMode => _offerPositions.isNotEmpty;
-
-  bool _isGenerating = false;
-  String? _totalValidationError;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeControllers();
-  }
-
-  void _initializeControllers() {
-    _eventDate = widget.order.date;
-    _guestCountCtrl = TextEditingController(
-      text: widget.order.personCount.toString(),
-    );
-
-    // Calculate initial bar service cost
-    final travelTotal = widget.order.distanceKm * 2 * 0.70;
-    final barServiceCost =
-        widget.order.total - travelTotal - widget.order.thekeCost;
-    _barServiceCostCtrl = TextEditingController(
-      text: barServiceCost.toStringAsFixed(2),
-    );
-
-    // Pre-fill from order data
-    // For form orders, cocktails may be in requestedCocktails (not yet in cocktails)
-    final cocktailSource = widget.order.cocktails.isNotEmpty
-        ? widget.order.cocktails
-        : widget.order.requestedCocktails;
-    _cocktailsCtrl.text = cocktailSource.join(', ');
-    _shotsCtrl.text = widget.order.shots.join(', ');
-    _barDescCtrl.text = widget.order.bar;
-    _distanceKmCtrl.text = widget.order.distanceKm > 0
-        ? widget.order.distanceKm.toString()
-        : '';
-    _thekeCostCtrl = TextEditingController(
-      text: widget.order.thekeCost > 0
-          ? widget.order.thekeCost.toStringAsFixed(2)
-          : '',
-    );
-
-    // Shots position - use saved values or calculate from personCount
-    final shotsCount = widget.order.offerShotsCount > 0
-        ? widget.order.offerShotsCount
-        : (widget.order.shots.isNotEmpty ? widget.order.personCount ~/ 5 : 0);
-    _shotsCountCtrl = TextEditingController(
-      text: shotsCount > 0 ? shotsCount.toString() : '',
-    );
-    _shotsPricePerPieceCtrl.text = widget.order.offerShotsPricePerPiece
-        .toStringAsFixed(2);
-
-    // Shots remark - use saved value or generate default from shot names
-    if (widget.order.offerShotsRemark.isNotEmpty) {
-      _shotsRemarkCtrl.text = widget.order.offerShotsRemark;
-    } else if (widget.order.shots.isNotEmpty) {
-      _shotsRemarkCtrl.text =
-          'Shots – ${widget.order.shots.join(", ")}\nAusgeschenkt in 0.4 CL Shotbechern';
-    }
-
-    // Load saved offer data from order
-    _clientNameCtrl.text = widget.order.offerClientName;
-    _clientContactCtrl.text = widget.order.offerClientContact;
-    _locationCtrl.text = widget.order.location;
-    _eventTimeCtrl.text = widget.order.offerEventTime;
-    _language = widget.order.offerLanguage;
-
-    // Load event types
-    for (final typeStr in widget.order.offerEventTypes) {
-      final type = EventType.values.where((e) => e.name == typeStr).firstOrNull;
-      if (type != null) _eventTypes.add(type);
-    }
-
-    // Load positions: prefer offerPositions (positions mode); else load extra positions (fields mode)
-    if (widget.order.offerPositions.isNotEmpty) {
-      for (final posData in widget.order.offerPositions) {
-        _offerPositions.add(ExtraPosition.fromJson(posData));
-      }
-    } else {
-      for (final posData in widget.order.offerExtraPositions) {
-        _extraPositions.add(ExtraPosition.fromJson(posData));
-      }
-    }
-
-    _initializeDiscount();
-
-    // Load extra hours
-    _extraHoursCtrl = TextEditingController(
-      text: widget.order.offerExtraHours > 0
-          ? widget.order.offerExtraHours.toString()
-          : '',
-    );
-    _extraHourRateCtrl.text = widget.order.offerExtraHourRate.toStringAsFixed(
-      2,
-    );
-
-    // Load assigned employees
-    _selectedEmployees = Set.from(widget.order.assignedEmployees);
-
-    // Set service type
-    _serviceType = _normalizeServiceType(
-      widget.order.serviceType.isNotEmpty
-          ? widget.order.serviceType
-          : 'cocktail_barservice',
-    );
-  }
-
-  /// Loads the saved discount. Offers saved before the dedicated discount
-  /// field existed kept it as a negative "Rabatt" position; that position is
-  /// lifted out of the list into the discount field so it isn't applied twice.
-  void _initializeDiscount() {
-    final order = widget.order;
-    _discountRemarkCtrl.text = order.offerDiscountRemark;
-    if (order.offerDiscountPercent > 0) {
-      _discountIsPercent = true;
-      _discountValueCtrl.text = formatDiscountPercent(
-        order.offerDiscountPercent,
-      );
-      return;
-    }
-    if (order.offerDiscount > 0) {
-      _discountIsPercent = false;
-      _discountValueCtrl.text = order.offerDiscount.toStringAsFixed(2);
-      return;
-    }
-
-    final legacyIndex = _offerPositions.indexWhere(isLegacyDiscountPosition);
-    if (legacyIndex == -1) return;
-    final legacy = _offerPositions.removeAt(legacyIndex);
-    _discountIsPercent = false;
-    _discountValueCtrl.text = (-legacy.total).toStringAsFixed(2);
-    if (_discountRemarkCtrl.text.trim().isEmpty) {
-      _discountRemarkCtrl.text = legacy.remark;
-    }
-  }
-
-  String _normalizeServiceType(String serviceType) {
-    return switch (serviceType) {
-      'cocktailservice' => 'cocktail_service',
-      'barservice' => 'bar_service',
-      _ => serviceType,
-    };
-  }
-
-  @override
-  void dispose() {
-    _editorNameCtrl.dispose();
-    _eventTimeCtrl.dispose();
-    _clientNameCtrl.dispose();
-    _clientContactCtrl.dispose();
-    _guestCountCtrl.dispose();
-    _cocktailsCtrl.dispose();
-    _barDescCtrl.dispose();
-    _shotsCtrl.dispose();
-    _barServiceCostCtrl.dispose();
-    _distanceKmCtrl.dispose();
-    _travelCostPerKmCtrl.dispose();
-    _thekeCostCtrl.dispose();
-    _shotsCountCtrl.dispose();
-    _shotsPricePerPieceCtrl.dispose();
-    _shotsRemarkCtrl.dispose();
-    _discountValueCtrl.dispose();
-    _discountRemarkCtrl.dispose();
-    _extraHoursCtrl.dispose();
-    _extraHourRateCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onLanguageChanged(String lang) {
-    setState(() {
-      _language = lang;
-      // Standard positions (Extrastunden, Bargetränke, ...) follow the
-      // selected language; custom-typed texts are left alone.
-      for (var i = 0; i < _offerPositions.length; i++) {
-        _offerPositions[i] = translateStandardPosition(_offerPositions[i], lang);
-      }
-    });
-  }
-
-  double get _barServiceCost =>
-      double.tryParse(_barServiceCostCtrl.text.trim()) ?? 0;
-  int get _distanceKm => int.tryParse(_distanceKmCtrl.text.trim()) ?? 0;
-  double get _travelCostPerKm =>
-      double.tryParse(_travelCostPerKmCtrl.text.trim()) ?? 0.70;
-  double get _travelCostTotal => _distanceKm * 2 * _travelCostPerKm;
-  double get _thekeCost => double.tryParse(_thekeCostCtrl.text.trim()) ?? 0;
-  int get _shotsCount => int.tryParse(_shotsCountCtrl.text.trim()) ?? 0;
-  double get _shotsPricePerPiece =>
-      double.tryParse(_shotsPricePerPieceCtrl.text.trim()) ?? 1.50;
-  double get _shotsCostTotal => _shotsCount * _shotsPricePerPiece;
-  double get _extraPositionsTotal =>
-      _extraPositions.fold(0.0, (sum, p) => sum + p.total);
-
-  // Extra hours calculation: employees × hours × rate
-  int get _extraHours => int.tryParse(_extraHoursCtrl.text.trim()) ?? 0;
-  double get _extraHourRate =>
-      double.tryParse(_extraHourRateCtrl.text.trim()) ?? 50.0;
-  double get _extraHoursTotal =>
-      _selectedEmployees.length * _extraHours * _extraHourRate;
-
-  /// Sum of all positions (without discount)
-  double get _positionsSum =>
-      _barServiceCost +
-      _travelCostTotal +
-      _thekeCost +
-      _shotsCostTotal +
-      _extraHoursTotal +
-      _extraPositionsTotal;
-
-  /// Sum of all offer positions (positions mode)
-  double get _offerPositionsSum =>
-      _offerPositions.fold(0.0, (sum, p) => sum + p.total);
-
-  /// Subtotal the discount applies to
-  double get _subtotal => _usePositionsMode ? _offerPositionsSum : _positionsSum;
-
-  double get _discountInput =>
-      DiscountEditor.parseValue(_discountValueCtrl.text) ?? 0;
-
-  double get _discountPercent =>
-      _discountIsPercent ? _discountInput.clamp(0, 100).toDouble() : 0;
-
-  /// Resolved discount amount (percentage applied to the subtotal)
-  double get _discount => resolveDiscountAmount(
-    subtotal: _subtotal,
-    percent: _discountPercent,
-    amount: _discountIsPercent ? 0 : _discountInput,
-  );
-
-  /// Discount percentage persisted alongside the amount (0 = fixed amount)
-  double get _storedDiscountPercent => _discount > 0 ? _discountPercent : 0;
-
-  /// Grand total after discount
-  double get _grandTotal => _subtotal - _discount;
-
-  /// Validates that employees are assigned
-  bool _validateEmployees() {
-    if (_selectedEmployees.isEmpty) {
-      setState(() {
-        _employeeValidationError = 'invoice.employees_required'.tr();
-      });
-      return false;
-    }
-    _employeeValidationError = null;
-    return true;
-  }
-
-  String? _employeeValidationError;
-
-  /// Validates that total is not less than sum of positions (before discount)
-  bool _validateTotal() {
-    // The grand total should be at least the sum of positions minus discount
-    // But discount cannot make total negative
-    if (_grandTotal < 0) {
-      setState(() {
-        _totalValidationError = 'invoice.total_cannot_be_negative'.tr();
-      });
-      return false;
-    }
-    _totalValidationError = null;
-    return true;
-  }
-
-  /// Validate all fields
-  bool _validateAll() {
-    final employeesValid = _validateEmployees();
-    final totalValid = _validateTotal();
-    return employeesValid && totalValid;
-  }
-
-  /// Get the first validation error message
-  String? get _validationError =>
-      _employeeValidationError ?? _totalValidationError;
-
-  /// Build updated order with invoice data
-  SavedOrder _buildUpdatedOrder() {
-    // In positions mode: total = sum of all offer positions
-    // In fields mode: total = barServiceCost + travelCostTotal + thekeCost
-    final newTotal = _usePositionsMode
-        ? _offerPositionsSum
-        : (_barServiceCost + _travelCostTotal + _thekeCost);
-
-    return SavedOrder(
-      id: widget.order.id,
-      name: widget.order.name,
-      date: _eventDate,
-      items: widget.order.items,
-      total: newTotal,
-      personCount:
-          int.tryParse(_guestCountCtrl.text.trim()) ?? widget.order.personCount,
-      drinkerType: widget.order.drinkerType,
-      currency: widget.order.currency,
-      status: widget.order.status,
-      createdBy: widget.order.createdBy,
-      createdAt: widget.order.createdAt,
-      cocktails: _cocktailsCtrl.text
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(),
-      shots: _shotsCtrl.text
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(),
-      bar: _barDescCtrl.text.trim(),
-      distanceKm: _distanceKm,
-      thekeCost: _thekeCost,
-      offerClientName: _clientNameCtrl.text.trim(),
-      offerClientContact: _clientContactCtrl.text.trim(),
-      offerEventTime: _eventTimeCtrl.text.trim(),
-      offerEventTypes: _eventTypes.map((e) => e.name).toList(),
-      offerDiscount: _discount,
-      offerDiscountRemark: _discountRemarkCtrl.text.trim(),
-      offerDiscountPercent: _storedDiscountPercent,
-      offerLanguage: _language,
-      offerExtraPositions: _usePositionsMode
-          ? []
-          : _extraPositions.map((e) => e.toJson()).toList(),
-      offerPositions: _usePositionsMode
-          ? _offerPositions.map((e) => e.toJson()).toList()
-          : widget.order.offerPositions,
-        offerShotsCount: _usePositionsMode ? 0 : _shotsCount,
-        offerShotsPricePerPiece: _usePositionsMode ? 0 : _shotsPricePerPiece,
-        offerShotsRemark: _usePositionsMode ? '' : _shotsRemarkCtrl.text.trim(),
-        offerExtraHours: _usePositionsMode ? 0 : _extraHours,
-        offerExtraHourRate: _usePositionsMode ? 0 : _extraHourRate,
-      assignedEmployees: _selectedEmployees.toList(),
-      source: widget.order.source,
-      hasShoppingList: widget.order.hasShoppingList,
-      formSubmissionId: widget.order.formSubmissionId,
-      formCreatedAt: widget.order.formCreatedAt,
-      phone: widget.order.phone,
-      location: widget.order.location,
-      guestCountRange: widget.order.guestCountRange,
-      mobileBar: widget.order.mobileBar,
-      eventType: widget.order.eventType,
-      serviceType: _serviceType,
-      requestedCocktails: widget.order.requestedCocktails,
-    );
+  /// Form validators, then employees and total; explains failures.
+  bool _validate() {
+    if (!_formKey.currentState!.validate()) return false;
+    late bool valid;
+    setState(() => valid = _form.validateAll());
+    if (!valid) _snack(_form.validationErrorKey ?? 'common.error');
+    return valid;
   }
 
   Future<bool> _saveInvoiceData() async {
-    final offerSaved = await orderRepository.updateOfferData(
-      orderId: widget.order.id,
-      clientName: _clientNameCtrl.text.trim(),
-      clientContact: _clientContactCtrl.text.trim(),
-      eventTime: _eventTimeCtrl.text.trim(),
-      eventTypes: _eventTypes.map((e) => e.name).toList(),
-      discount: _discount,
-      discountRemark: _discountRemarkCtrl.text.trim(),
-      discountPercent: _storedDiscountPercent,
-      language: _language,
-      eventDate: _eventDate,
-      extraPositions: _usePositionsMode
-          ? []
-          : _extraPositions.map((e) => e.toJson()).toList(),
-      offerPositions: _usePositionsMode
-          ? _offerPositions.map((e) => e.toJson()).toList()
-          : [],
-        shotsCount: _usePositionsMode ? 0 : _shotsCount,
-        shotsPricePerPiece: _usePositionsMode ? 0 : _shotsPricePerPiece,
-        shotsRemark: _usePositionsMode ? '' : _shotsRemarkCtrl.text.trim(),
-        extraHours: _usePositionsMode ? 0 : _extraHours,
-        extraHourRate: _usePositionsMode ? 0 : _extraHourRate,
-      assignedEmployees: _selectedEmployees.toList(),
-      serviceType: _serviceType,
-    );
-
-    if (!offerSaved) {
-      return false;
-    }
-
-    // Also update the order totals and cocktails/bar/shots
-    return orderRepository.updateOrderTotals(
-      orderId: widget.order.id,
-      total: _usePositionsMode
-          ? _offerPositionsSum
-          : (_barServiceCost + _travelCostTotal + _thekeCost),
-      distanceKm: _usePositionsMode ? 0 : _distanceKm,
-      thekeCost: _usePositionsMode ? 0 : _thekeCost,
-      cocktails: _cocktailsCtrl.text
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(),
-      shots: _shotsCtrl.text
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(),
-      bar: _barDescCtrl.text.trim(),
-    );
+    final saved = await _form.save(widget.services.orders);
+    if (!saved) _snack('invoice.save_failed');
+    return saved;
   }
 
   Future<void> _saveOnly() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_validateAll()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
-      );
-      return;
-    }
-
-    setState(() => _isGenerating = true);
+    if (!_validate()) return;
+    setState(() => _form.isGenerating = true);
     try {
-      final saved = await _saveInvoiceData();
-      if (!saved) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
-        }
-        return;
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('invoice.saved'.tr())));
-      }
+      if (!await _saveInvoiceData()) return;
+      _snack('invoice.saved');
     } finally {
-      if (mounted) setState(() => _isGenerating = false);
+      if (mounted) setState(() => _form.isGenerating = false);
     }
   }
 
   Future<void> _previewPdf() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_validateAll()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
-      );
-      return;
-    }
-
-    setState(() => _isGenerating = true);
+    if (!_validate()) return;
+    setState(() => _form.isGenerating = true);
     try {
-      final saved = await _saveInvoiceData();
-      if (!saved) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
-        }
-        return;
-      }
-      final updatedOrder = _buildUpdatedOrder();
+      if (!await _saveInvoiceData()) return;
+      final updatedOrder = _form.buildUpdatedOrder();
       final pdfBytes = await InvoicePdfGenerator.generateBytes(
         updatedOrder,
-        language: _language,
+        language: _form.language,
       );
       if (mounted) {
         // In-app preview: layoutPdf's print dialog shows nothing on iOS
@@ -583,18 +144,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isGenerating = false);
+      if (mounted) setState(() => _form.isGenerating = false);
     }
   }
 
   Future<void> _generatePdf() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_validateAll()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
-      );
-      return;
-    }
+    if (!_validate()) return;
 
     // Without a Microsoft login the OneDrive upload is silently skipped,
     // so ask first. Declining still saves and creates the link.
@@ -603,97 +158,58 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       if (!mounted) return;
     }
 
-    setState(() => _isGenerating = true);
+    setState(() => _form.isGenerating = true);
     try {
-      final saved = await _saveInvoiceData();
-      if (!saved) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
-        }
-        return;
-      }
-      final updatedOrder = _buildUpdatedOrder();
+      if (!await _saveInvoiceData()) return;
+      final updatedOrder = _form.buildUpdatedOrder();
       final pdfBytes = await InvoicePdfGenerator.generateBytes(
         updatedOrder,
-        language: _language,
+        language: _form.language,
       );
 
-      // Upload to OneDrive if supported and in production
       final fileName = InvoicePdfGenerator.getFilename(updatedOrder);
       if (microsoftGraphService.isSupported &&
           EnvConfig.isOneDriveEnabled &&
           microsoftGraphService.isLoggedIn) {
-        final oneDrivePath = MicrosoftGraphService.buildOneDrivePath(
-          rootFolder: 'Aufträge',
-          date: updatedOrder.date,
-          fileName: fileName,
-        );
         await microsoftGraphService.uploadToOneDrive(
-          oneDrivePath: oneDrivePath,
+          oneDrivePath: MicrosoftGraphService.buildOneDrivePath(
+            rootFolder: 'Aufträge',
+            date: updatedOrder.date,
+            fileName: fileName,
+          ),
           bytes: pdfBytes,
         );
       }
 
-      // Create a 14-day share link instead of attaching raw PDF bytes
-      // (which produced an unusable blob: URL for the recipient on web).
-      final code = await shareLinkRepository.createInvoiceShareLink(
+      // A 14-day share link instead of raw PDF bytes (unusable blob: URL).
+      final code = await widget.services.shareLinks.createInvoiceShareLink(
         updatedOrder,
       );
-      final shareUrl = '${Uri.base.origin}/s/$code';
-      await Clipboard.setData(ClipboardData(text: shareUrl));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('invoice.share_link_copied'.tr())),
-        );
-      }
+      await Clipboard.setData(
+        ClipboardData(text: '${Uri.base.origin}/s/$code'),
+      );
+      _snack('invoice.share_link_copied');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('invoice.share_link_failed'.tr())));
-      }
+      _snack('invoice.share_link_failed');
     } finally {
-      if (mounted) setState(() => _isGenerating = false);
+      if (mounted) setState(() => _form.isGenerating = false);
     }
   }
 
   /// Saves, creates a 14-day link and opens WhatsApp with it.
   Future<void> _shareConfirmation() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_validateAll()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
-      );
-      return;
-    }
-
-    setState(() => _isGenerating = true);
+    if (!_validate()) return;
+    setState(() => _form.isGenerating = true);
     try {
-      final saved = await _saveInvoiceData();
-      if (!saved) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
-        }
-        return;
-      }
-      final code = await shareLinkRepository.createInvoiceShareLink(
-        _buildUpdatedOrder(),
+      if (!await _saveInvoiceData()) return;
+      final code = await widget.services.shareLinks.createInvoiceShareLink(
+        _form.buildUpdatedOrder(),
       );
-      final shareUrl = '${Uri.base.origin}/s/$code';
-      // Follows the DE/EN toggle of this screen, not the app locale.
-      final message = _language == 'en'
-          ? 'Hello, here is your order confirmation for ${widget.order.name}: $shareUrl'
-          : 'Hallo, hier ist deine Auftragsbestätigung für ${widget.order.name}: $shareUrl';
+      final message = _form.shareMessage('${Uri.base.origin}/s/$code');
       await Clipboard.setData(ClipboardData(text: message));
       if (!mounted) return;
-      // Browsers (iOS Safari especially) block window.open after an async
-      // gap, so WhatsApp is opened from a fresh tap in this dialog rather
-      // than straight after creating the link.
+      // Browsers block window.open after an async gap, so WhatsApp is
+      // opened from a fresh tap in this dialog.
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -704,11 +220,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: message));
                 if (ctx.mounted) Navigator.of(ctx).pop();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('invoice.share_link_copied'.tr())),
-                  );
-                }
+                _snack('invoice.share_link_copied');
               },
               child: Text('invoice.copy'.tr()),
             ),
@@ -729,19 +241,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('invoice.share_link_failed'.tr())),
-        );
-      }
+      _snack('invoice.share_link_failed');
     } finally {
-      if (mounted) setState(() => _isGenerating = false);
+      if (mounted) setState(() => _form.isGenerating = false);
     }
   }
 
-  /// Makes sure a Microsoft account is signed in (needed for OneDrive and
-  /// the calendar). If not, asks the user to sign in via popup. Returns
-  /// true when signed in afterwards.
+  /// Makes sure a Microsoft account is signed in (OneDrive and calendar).
   Future<bool> _ensureMicrosoftLogin() async {
     if (!microsoftGraphService.isSupported) return false;
     if (microsoftGraphService.isLoggedIn) return true;
@@ -767,47 +273,25 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     if (wantsLogin != true) return false;
 
     final account = await microsoftGraphService.login();
-    if (account == null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('invoice.ms_login_failed'.tr())),
-      );
-    }
+    if (account == null) _snack('invoice.ms_login_failed');
     return account != null;
   }
 
-  /// Creates the Outlook calendar entry for this order with the
-  /// confirmation PDF attached (and uploaded to OneDrive for the link).
+  /// Outlook calendar entry with the confirmation PDF attached.
   Future<void> _createCalendarEntry() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_validateAll()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_validationError ?? 'common.error'.tr())),
-      );
-      return;
-    }
+    if (!_validate()) return;
     if (!microsoftGraphService.isSupported) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('invoice.calendar_unsupported'.tr())),
-      );
-      return;
+      return _snack('invoice.calendar_unsupported');
     }
     if (!await _ensureMicrosoftLogin()) return;
 
-    setState(() => _isGenerating = true);
+    setState(() => _form.isGenerating = true);
     try {
-      final saved = await _saveInvoiceData();
-      if (!saved) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('invoice.save_failed'.tr())));
-        }
-        return;
-      }
-      final order = _buildUpdatedOrder();
+      if (!await _saveInvoiceData()) return;
+      final order = _form.buildUpdatedOrder();
       final pdfBytes = await InvoicePdfGenerator.generateBytes(
         order,
-        language: _language,
+        language: _form.language,
       );
       final fileName = InvoicePdfGenerator.getFilename(order);
       final shoppingListBytes = await PdfGenerator.generateBytesFromSavedOrder(
@@ -839,42 +323,18 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         );
       }
 
-      var eventStart = order.date;
-      final timeParts = order.offerEventTime.split(':');
-      if (timeParts.length >= 2) {
-        eventStart = DateTime(
-          order.date.year,
-          order.date.month,
-          order.date.day,
-          int.tryParse(timeParts[0]) ?? 0,
-          int.tryParse(timeParts[1]) ?? 0,
-        );
-      }
-      final customer = order.offerClientName.isNotEmpty
-          ? order.offerClientName
-          : order.name;
-      final employeeNames = order.assignedEmployees.isNotEmpty
-          ? order.assignedEmployees.join(', ')
-          : 'TBD';
-      final bodyLines = <String>[
-        'Auftrag: $customer',
-        if (order.location.isNotEmpty) 'Adresse: ${order.location}',
-        'Personen: ${order.personCount}',
-        'Mitarbeiter: $employeeNames',
-        // Discounted total, matching the price preview (order.total is
-        // the undiscounted positions sum).
-        'Gesamtbetrag: ${Currency.fromCode(order.currency).format(_grandTotal)}',
-        '',
-        '--- Dokumente ---',
-        if (documentUrl != null) 'Auftragsbestätigung: $documentUrl',
-        if (shoppingListUrl != null) 'Einkaufsliste: $shoppingListUrl',
-      ];
-
+      final eventStart = InvoiceFormState.calendarStart(order);
       final eventId = await microsoftGraphService.createCalendarEvent(
-        subject: 'Blacklodge - $customer',
+        subject: 'Blacklodge - ${InvoiceFormState.calendarCustomer(order)}',
         start: eventStart,
         end: eventStart.add(const Duration(hours: 5)),
-        bodyContent: bodyLines.join('\n'),
+        bodyContent: _form
+            .calendarBodyLines(
+              order,
+              documentUrl: documentUrl,
+              shoppingListUrl: shoppingListUrl,
+            )
+            .join('\n'),
         location: order.location,
       );
       if (eventId != null && eventId != 'unknown') {
@@ -889,34 +349,49 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           bytes: shoppingListBytes,
         );
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              eventId != null
-                  ? 'invoice.calendar_created'.tr()
-                  : 'invoice.calendar_failed'.tr(),
-            ),
-          ),
-        );
-      }
+      _snack(
+        eventId != null ? 'invoice.calendar_created' : 'invoice.calendar_failed',
+      );
     } catch (e) {
       debugPrint('Calendar entry error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('invoice.calendar_failed'.tr())),
-        );
-      }
+      _snack('invoice.calendar_failed');
     } finally {
-      if (mounted) setState(() => _isGenerating = false);
+      if (mounted) setState(() => _form.isGenerating = false);
+    }
+  }
+
+  Future<void> _editOfferPosition({int? index}) async {
+    final result = await showDocumentPositionDialog(
+      context,
+      prefix: 'invoice',
+      currencyCode: widget.order.currency,
+      defaultDate: formatDocumentDate(_form.eventDate),
+      existing: index != null ? _form.offerPositions[index] : null,
+    );
+    if (result != null) {
+      setState(() => _form.putOfferPosition(result, index: index));
+    }
+  }
+
+  Future<void> _editExtraPosition({int? index}) async {
+    final result = await showExtraPositionDialog(
+      context,
+      currencyCode: widget.order.currency,
+      existing: index != null ? _form.extraPositions[index] : null,
+    );
+    if (result != null) {
+      setState(() => _form.putExtraPosition(result, index: index));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final curr = Currency.fromCode(widget.order.currency);
     final colorScheme = Theme.of(context).colorScheme;
+    final field = DocumentFieldFactory(
+      requiredKey: 'invoice.field_required',
+      alignLabelWithHint: true,
+      onChanged: () => setState(() {}),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -929,8 +404,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 ButtonSegment(value: 'de', label: Text('DE')),
                 ButtonSegment(value: 'en', label: Text('EN')),
               ],
-              selected: {_language},
-              onSelectionChanged: (v) => _onLanguageChanged(v.first),
+              selected: {_form.language},
+              onSelectionChanged: (v) =>
+                  setState(() => _form.changeLanguage(v.first)),
               style: SegmentedButton.styleFrom(
                 visualDensity: VisualDensity.compact,
               ),
@@ -963,12 +439,19 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 800),
-                    child: _buildActionButtons(),
+                    child: InvoiceActionButtons(
+                      isGenerating: _form.isGenerating,
+                      onSave: _saveOnly,
+                      onPreview: _previewPdf,
+                      onGeneratePdf: _confirmGeneratePdf,
+                      onShare: _shareConfirmation,
+                      onCalendar: _createCalendarEntry,
+                    ),
                   ),
                 ),
               ),
             ),
-            // ── Scrollable form ───────────────────────────────────────────
+            // ── Scrollable form ────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
@@ -978,23 +461,73 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildOrderInfoBanner(colorScheme, curr),
+                        DocumentOrderBanner(
+                          order: widget.order,
+                          currency: Currency.fromCode(widget.order.currency),
+                        ),
                         const SizedBox(height: 20),
-                        _buildEditorSection(),
+                        DocumentEditorSection(
+                          prefix: 'invoice',
+                          controller: _form.editorNameCtrl,
+                          field: field,
+                        ),
                         const SizedBox(height: 20),
-                        _buildClientSection(),
+                        DocumentClientSection(
+                          prefix: 'invoice',
+                          nameCtrl: _form.clientNameCtrl,
+                          contactCtrl: _form.clientContactCtrl,
+                          locationCtrl: _form.locationCtrl,
+                          field: field,
+                          allRequired: false,
+                        ),
                         const SizedBox(height: 20),
-                        _buildEventTypeSection(),
+                        DocumentEventTypeSection(
+                          prefix: 'invoice',
+                          selected: _form.eventTypes,
+                          onChanged: (types) =>
+                              setState(() => _form.setEventTypes(types)),
+                        ),
                         const SizedBox(height: 20),
-                        _buildEventDetailsSection(),
+                        DocumentEventDetailsSection(
+                          prefix: 'invoice',
+                          guestCountCtrl: _form.guestCountCtrl,
+                          eventTimeCtrl: _form.eventTimeCtrl,
+                          eventDate: _form.eventDate,
+                          onDateChanged: (d) =>
+                              setState(() => _form.eventDate = d),
+                          field: field,
+                          timeRequired: false,
+                        ),
                         const SizedBox(height: 20),
-                        _buildServiceTypeSection(),
+                        DocumentServiceTypeSection(
+                          value: _form.serviceType,
+                          onChanged: (v) =>
+                              setState(() => _form.serviceType = v),
+                        ),
                         const SizedBox(height: 20),
-                        _buildServicesSection(),
+                        DocumentServicesSection(
+                          prefix: 'invoice',
+                          cocktailsCtrl: _form.cocktailsCtrl,
+                          barDescCtrl: _form.barDescCtrl,
+                          shotsCtrl: _form.shotsCtrl,
+                          field: field,
+                        ),
                         const SizedBox(height: 20),
-                        _buildPositionsSection(curr),
+                        InvoicePositionsSection(
+                          form: _form,
+                          update: _update,
+                          field: field,
+                          extraHours: InvoiceExtraHoursSection(
+                            form: _form,
+                            update: _update,
+                            field: field,
+                            employees: widget.services.watchEmployees(),
+                          ),
+                          onEditOfferPosition: _editOfferPosition,
+                          onEditExtraPosition: _editExtraPosition,
+                        ),
                         const SizedBox(height: 20),
-                        _buildPricePreview(curr),
+                        InvoicePricePreview(form: _form),
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -1004,1468 +537,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildOrderInfoBanner(ColorScheme colorScheme, Currency curr) {
-    return Card(
-      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-      child: ListTile(
-        leading: const Icon(Icons.receipt_long),
-        title: Text(widget.order.name),
-        subtitle: Text(
-          '${widget.order.date.day.toString().padLeft(2, '0')}.${widget.order.date.month.toString().padLeft(2, '0')}.${widget.order.date.year}'
-          ' • ${curr.format(widget.order.total)}',
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEditorSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'invoice.editor'.tr()),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 400,
-          child: _field(
-            controller: _editorNameCtrl,
-            label: 'invoice.editor_name'.tr(),
-            required: true,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildClientSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'invoice.client'.tr()),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 500;
-            final fields = [
-              _field(
-                controller: _clientNameCtrl,
-                label: 'invoice.client_name'.tr(),
-                required: true,
-              ),
-              _field(
-                controller: _clientContactCtrl,
-                label: 'invoice.client_contact'.tr(),
-                hint: 'invoice.client_contact_hint'.tr(),
-              ),
-            ];
-            return Column(
-              children: [
-                wide
-                    ? Row(
-                        children: fields
-                            .map(
-                              (f) => Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: f,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : Column(
-                        children: [
-                          fields[0],
-                          const SizedBox(height: 8),
-                          fields[1],
-                        ],
-                      ),
-                const SizedBox(height: 8),
-                _field(
-                  controller: _locationCtrl,
-                  label: 'orders.location'.tr(),
-                  hint: 'z.B. Musterstrasse 123, 3000 Bern',
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEventTypeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'invoice.event_type'.tr()),
-        const SizedBox(height: 8),
-        EventTypeSelector(
-          selectedTypes: _eventTypes,
-          onChanged: (newTypes) => setState(() {
-            _eventTypes.clear();
-            _eventTypes.addAll(newTypes);
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEventDetailsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'invoice.event_details'.tr()),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 600;
-            final fields = [
-              SizedBox(
-                width: 200,
-                child: _field(
-                  controller: _guestCountCtrl,
-                  label: 'invoice.guest_count'.tr(),
-                  keyboard: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  required: true,
-                ),
-              ),
-              SizedBox(
-                width: 200,
-                child: _field(
-                  controller: _eventTimeCtrl,
-                  label: 'invoice.event_time'.tr(),
-                  hint: '17:30',
-                ),
-              ),
-              SizedBox(width: 200, child: _buildDatePicker()),
-            ];
-            return wide
-                ? Row(
-                    children: fields
-                        .map(
-                          (f) => Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: f,
-                          ),
-                        )
-                        .toList(),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: fields
-                        .map(
-                          (f) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: f,
-                          ),
-                        )
-                        .toList(),
-                  );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDatePicker() {
-    return InkWell(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: _eventDate,
-          firstDate: DateTime(2020),
-          lastDate: DateTime.now().add(const Duration(days: 1825)), // 5 Jahre voraus
-        );
-        if (picked != null) {
-          setState(() => _eventDate = picked);
-        }
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'invoice.event_date'.tr(),
-          suffixIcon: const Icon(Icons.calendar_today),
-        ),
-        child: Text(
-          '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}',
-        ),
-      ),
-    );
-  }
-
-  Widget _buildServicesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'invoice.services'.tr()),
-        const SizedBox(height: 8),
-        CocktailChipsField(
-          controller: _cocktailsCtrl,
-          label: 'invoice.cocktails'.tr(),
-        ),
-        const SizedBox(height: 8),
-        _field(
-          controller: _barDescCtrl,
-          label: 'invoice.bar_description'.tr(),
-          hint: 'invoice.bar_description_hint'.tr(),
-        ),
-        const SizedBox(height: 8),
-        _field(
-          controller: _shotsCtrl,
-          label: 'invoice.shots'.tr(),
-          hint: 'invoice.shots_hint'.tr(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildServiceTypeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'orders.service_type'.tr()),
-        const SizedBox(height: 8),
-        InputDecorator(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          ),
-          child: DropdownButton<String>(
-            value: _serviceType,
-            isExpanded: true,
-            underline: const SizedBox.shrink(),
-            items: [
-              DropdownMenuItem(
-                value: 'cocktail_barservice',
-                child: Text('orders.service_cocktail_bar'.tr()),
-              ),
-              DropdownMenuItem(
-                value: 'cocktail_service',
-                child: Text('orders.service_cocktail_only'.tr()),
-              ),
-              DropdownMenuItem(
-                value: 'mocktail_service',
-                child: Text('orders.service_mocktail_only'.tr()),
-              ),
-              DropdownMenuItem(
-                value: 'bar_service',
-                child: Text('orders.service_bar_only'.tr()),
-              ),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _serviceType = value);
-              }
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPositionsSection(Currency curr) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(label: 'invoice.positions'.tr()),
-        const SizedBox(height: 8),
-
-        // ── Positions mode (loaded from offerPositions) ──────────────────
-        if (_usePositionsMode) ...[
-          _buildInvoiceOfferPositionsCard(curr),
-          const SizedBox(height: 12),
-        ],
-
-        // ── Fields mode (classic individual fields, shown when no offerPositions) ──
-        if (!_usePositionsMode) ...[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _field(
-                    controller: _barServiceCostCtrl,
-                    label:
-                        '${'invoice.bar_service_cost'.tr()} (${widget.order.currency})',
-                    keyboard: TextInputType.number,
-                    required: true,
-                  ),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 500;
-                      final fields = [
-                        _field(
-                          controller: _distanceKmCtrl,
-                          label: 'invoice.distance_km'.tr(),
-                          hint: '150',
-                          keyboard: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                        _field(
-                          controller: _travelCostPerKmCtrl,
-                          label:
-                              '${'invoice.travel_cost_per_km'.tr()} (${widget.order.currency})',
-                          keyboard: TextInputType.number,
-                        ),
-                      ];
-                      return wide
-                          ? Row(
-                              children: fields
-                                  .map(
-                                    (f) => Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 8,
-                                        ),
-                                        child: f,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            )
-                          : Column(
-                              children: fields
-                                  .map(
-                                    (f) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: f,
-                                    ),
-                                  )
-                                  .toList(),
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 250,
-                    child: _field(
-                      controller: _thekeCostCtrl,
-                      label:
-                          '${'invoice.theke_cost'.tr()} (${widget.order.currency})',
-                      hint: '0',
-                      keyboard: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // Shots Section - separate card
-        if (!_usePositionsMode && _shotsCtrl.text.trim().isNotEmpty) ...[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'invoice.shots_position'.tr(),
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 500;
-                      final fields = [
-                        _field(
-                          controller: _shotsCountCtrl,
-                          label: 'invoice.shots_count'.tr(),
-                          hint: '60',
-                          keyboard: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                        _field(
-                          controller: _shotsPricePerPieceCtrl,
-                          label:
-                              '${'invoice.shots_price_per_piece'.tr()} (${widget.order.currency})',
-                          hint: '1.50',
-                          keyboard: TextInputType.number,
-                        ),
-                      ];
-                      return wide
-                          ? Row(
-                              children: fields
-                                  .map(
-                                    (f) => Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 8,
-                                        ),
-                                        child: f,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                            )
-                          : Column(
-                              children: fields
-                                  .map(
-                                    (f) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: f,
-                                    ),
-                                  )
-                                  .toList(),
-                            );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _field(
-                    controller: _shotsRemarkCtrl,
-                    label: 'invoice.shots_remark'.tr(),
-                    hint:
-                        'Shots – Aarewasser, Erdbeer Lime\nAusgeschenkt in 0.4 CL Shotbechern',
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // Discount - separate card
-        DiscountEditor(
-          currency: curr,
-          subtotal: _subtotal,
-          isPercent: _discountIsPercent,
-          valueController: _discountValueCtrl,
-          remarkController: _discountRemarkCtrl,
-          onTypeChanged: (isPercent) => setState(() {
-            _discountIsPercent = isPercent;
-            _discountValueCtrl.clear();
-          }),
-          onChanged: () => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-
-        // Extra hours - separate card
-        if (!_usePositionsMode) ...[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _buildExtraHoursSection(),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // Extra positions (fields mode only)
-        if (!_usePositionsMode) _buildExtraPositionsSection(curr),
-      ],
-    );
-  }
-
-  /// Build extra hours section with employee selection
-  Widget _buildExtraHoursSection() {
-    return StreamBuilder<List<Employee>>(
-      stream: employeeRepository.watchEmployees(),
-      builder: (context, snapshot) {
-        final employees = snapshot.data ?? [];
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'invoice.extra_hours_section'.tr(),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Employee selection
-            Text(
-              'invoice.select_employees'.tr(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (employees.isEmpty)
-              Text(
-                'orders.no_employees_available'.tr(),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: employees.map((employee) {
-                  final isSelected = _selectedEmployees.contains(employee.name);
-                  return FilterChip(
-                    selected: isSelected,
-                    label: Text(employee.name),
-                    avatar: CircleAvatar(
-                      backgroundColor: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
-                      child: Text(
-                        employee.name.isNotEmpty
-                            ? employee.name[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          _selectedEmployees.add(employee.name);
-                        } else {
-                          _selectedEmployees.remove(employee.name);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-            const SizedBox(height: 12),
-
-            // Extra hours inputs
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 500;
-                final fields = [
-                  _field(
-                    controller: _extraHoursCtrl,
-                    label: 'invoice.extra_hours'.tr(),
-                    hint: '0',
-                    keyboard: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                  _field(
-                    controller: _extraHourRateCtrl,
-                    label:
-                        '${'invoice.extra_hour_rate'.tr()} (${widget.order.currency})',
-                    hint: '50.00',
-                    keyboard: TextInputType.number,
-                  ),
-                ];
-                return wide
-                    ? Row(
-                        children: fields
-                            .map(
-                              (f) => Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: f,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : Column(
-                        children: fields
-                            .map(
-                              (f) => Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: f,
-                              ),
-                            )
-                            .toList(),
-                      );
-              },
-            ),
-
-            // Show calculation if employees selected and hours > 0
-            if (_selectedEmployees.isNotEmpty && _extraHours > 0) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${_selectedEmployees.length} ${'invoice.employees'.tr()} × ${_extraHours}h × ${Currency.fromCode(widget.order.currency).format(_extraHourRate)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    Text(
-                      '= ${Currency.fromCode(widget.order.currency).format(_extraHoursTotal)}',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            // Error message for missing employees
-            if (_employeeValidationError != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _employeeValidationError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  // ── Invoice positions mode ──────────────────────────────────────────────
-
-  Widget _buildInvoiceOfferPositionsCard(Currency curr) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isCompact = constraints.maxWidth < 620;
-                final titleRow = Row(
-                  children: [
-                    Icon(
-                      Icons.list_alt,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Angebotspositionen',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                  ],
-                );
-                final addButton = FilledButton.tonalIcon(
-                  onPressed: () => _showInvoicePositionDialog(),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text('invoice.add_position'.tr()),
-                );
-
-                if (isCompact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleRow,
-                      const SizedBox(height: 12),
-                      addButton,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: titleRow),
-                    const SizedBox(width: 12),
-                    addButton,
-                  ],
-                );
-              },
-            ),
-            if (_offerPositions.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
-              ..._offerPositions.asMap().entries.map((entry) {
-                final index = entry.key;
-                final pos = entry.value;
-                final isTbd = pos.quantity == 0;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isCompact = constraints.maxWidth < 460;
-                      final dateChip = pos.date.isNotEmpty
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                pos.date,
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                            )
-                          : null;
-                      final titleColumn = Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (dateChip != null) ...[dateChip, const SizedBox(height: 6)],
-                          Text(
-                            pos.quantity > 1
-                                ? '${pos.quantity}\u00d7 ${pos.name}'
-                                : pos.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (pos.remark.isNotEmpty)
-                            Text(
-                              pos.remark.split('\n').first,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.outline,
-                                  ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      );
-                      final totalText = Text(
-                        isTbd ? 'tbd' : curr.format(pos.total),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isTbd
-                              ? Theme.of(context).colorScheme.outline
-                              : null,
-                        ),
-                      );
-                      final actionButtons = Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 18),
-                            onPressed: () =>
-                                _showInvoicePositionDialog(index: index),
-                            tooltip: 'common.edit'.tr(),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.delete,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                            onPressed: () =>
-                                setState(() => _offerPositions.removeAt(index)),
-                            tooltip: 'common.delete'.tr(),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      );
-
-                      if (isCompact) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: titleColumn),
-                                const SizedBox(width: 8),
-                                actionButtons,
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            totalText,
-                          ],
-                        );
-                      }
-
-                      return Row(
-                        children: [
-                          Expanded(flex: 3, child: titleColumn),
-                          const SizedBox(width: 8),
-                          totalText,
-                          const SizedBox(width: 4),
-                          actionButtons,
-                        ],
-                      );
-                    },
-                  ),
-                );
-              }),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showInvoicePositionDialog({int? index}) async {
-    final existing = index != null ? _offerPositions[index] : null;
-    final defaultDate =
-        '${_eventDate.day.toString().padLeft(2, '0')}.${_eventDate.month.toString().padLeft(2, '0')}.${_eventDate.year}';
-
-    final dateCtrl = TextEditingController(
-      text: existing?.date.isNotEmpty == true ? existing!.date : defaultDate,
-    );
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final quantityCtrl = TextEditingController(
-      text: existing != null ? existing.quantity.toString() : '1',
-    );
-    final priceCtrl = TextEditingController(
-      text: existing != null ? existing.price.toStringAsFixed(2) : '',
-    );
-    final remarkCtrl = TextEditingController(text: existing?.remark ?? '');
-    final formKey = GlobalKey<FormState>();
-
-    final result = await showDialog<ExtraPosition>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          existing == null
-              ? 'invoice.add_position'.tr()
-              : 'invoice.edit_position'.tr(),
-        ),
-        content: Form(
-          key: formKey,
-          child: SizedBox(
-            width: 380,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: dateCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Datum',
-                      hintText: 'dd.MM.yyyy',
-                      prefixIcon: Icon(Icons.calendar_today, size: 18),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'invoice.position_name'.tr(),
-                      prefixIcon: const Icon(Icons.label_outline),
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'invoice.field_required'.tr()
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: quantityCtrl,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          decoration: InputDecoration(
-                            labelText: 'invoice.position_quantity'.tr(),
-                            prefixIcon: const Icon(Icons.numbers, size: 18),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextFormField(
-                          controller: priceCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            signed: true,
-                            decimal: true,
-                          ),
-                          decoration: InputDecoration(
-                            labelText:
-                                '${'invoice.position_price'.tr()} (${widget.order.currency})',
-                            prefixIcon:
-                                const Icon(Icons.attach_money, size: 18),
-                            suffixIcon: SignToggleButton(controller: priceCtrl),
-                          ),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'invoice.field_required'.tr();
-                            }
-                            if (parseDecimal(v) == null) {
-                              return 'invoice.invalid_number'.tr();
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: remarkCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'invoice.position_remark'.tr(),
-                      prefixIcon: const Icon(Icons.notes),
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(
-                  ctx,
-                  ExtraPosition(
-                    date: dateCtrl.text.trim(),
-                    name: nameCtrl.text.trim(),
-                    quantity: int.tryParse(quantityCtrl.text.trim()) ?? 1,
-                    price: parseDecimal(priceCtrl.text) ?? 0,
-                    remark: remarkCtrl.text.trim(),
-                  ),
-                );
-              }
-            },
-            child: Text('common.save'.tr()),
-          ),
-        ],
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        if (index != null) {
-          _offerPositions[index] = result;
-        } else {
-          _offerPositions.add(result);
-        }
-      });
-    }
-  }
-
-  Widget _buildExtraPositionsSection(Currency curr) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.add_circle_outline,
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'invoice.extra_positions'.tr(),
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const Spacer(),
-            FilledButton.tonalIcon(
-              onPressed: _showAddExtraPositionDialog,
-              icon: const Icon(Icons.add, size: 18),
-              label: Text('invoice.add_position'.tr()),
-            ),
-          ],
-        ),
-        if (_extraPositions.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          const Divider(height: 1),
-          const SizedBox(height: 8),
-          ..._extraPositions.asMap().entries.map((entry) {
-            final index = entry.key;
-            final pos = entry.value;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          pos.quantity > 1
-                              ? '${pos.quantity}x ${pos.name}'
-                              : pos.name,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        if (pos.remark.isNotEmpty)
-                          Text(
-                            pos.remark,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.outline,
-                                ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    pos.quantity > 1
-                        ? '${pos.quantity} × ${curr.format(pos.price)} = ${curr.format(pos.total)}'
-                        : curr.format(pos.price),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.edit, size: 18),
-                    onPressed: () => _showEditExtraPositionDialog(index),
-                    tooltip: 'common.edit'.tr(),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.delete,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    onPressed: () =>
-                        setState(() => _extraPositions.removeAt(index)),
-                    tooltip: 'common.delete'.tr(),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ],
-    );
-  }
-
-  Future<void> _showAddExtraPositionDialog() async {
-    final result = await _showExtraPositionDialog();
-    if (result != null) {
-      setState(() => _extraPositions.add(result));
-    }
-  }
-
-  Future<void> _showEditExtraPositionDialog(int index) async {
-    final result = await _showExtraPositionDialog(
-      existing: _extraPositions[index],
-    );
-    if (result != null) {
-      setState(() => _extraPositions[index] = result);
-    }
-  }
-
-  Future<ExtraPosition?> _showExtraPositionDialog({
-    ExtraPosition? existing,
-  }) async {
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final quantityCtrl = TextEditingController(
-      text: existing != null ? existing.quantity.toString() : '1',
-    );
-    final priceCtrl = TextEditingController(
-      text: existing != null ? existing.price.toStringAsFixed(2) : '',
-    );
-    final remarkCtrl = TextEditingController(text: existing?.remark ?? '');
-    final formKey = GlobalKey<FormState>();
-
-    return showDialog<ExtraPosition>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          existing == null
-              ? 'invoice.add_position'.tr()
-              : 'invoice.edit_position'.tr(),
-        ),
-        content: Form(
-          key: formKey,
-          child: SizedBox(
-            width: 350,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'invoice.position_name'.tr(),
-                    prefixIcon: const Icon(Icons.label_outline),
-                  ),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'invoice.field_required'.tr()
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: quantityCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'invoice.position_quantity'.tr(),
-                    prefixIcon: const Icon(Icons.numbers),
-                  ),
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'invoice.field_required'.tr();
-                    }
-                    if (int.tryParse(v.trim()) == null ||
-                        int.parse(v.trim()) < 1) {
-                      return 'invoice.invalid_number'.tr();
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: priceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText:
-                        '${'invoice.position_price'.tr()} (${widget.order.currency})',
-                    prefixIcon: const Icon(Icons.attach_money),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'invoice.field_required'.tr();
-                    }
-                    if (double.tryParse(v.trim()) == null) {
-                      return 'invoice.invalid_number'.tr();
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: remarkCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'invoice.position_remark'.tr(),
-                    prefixIcon: const Icon(Icons.notes),
-                  ),
-                  maxLines: 2,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('common.cancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(
-                  ctx,
-                  ExtraPosition(
-                    name: nameCtrl.text.trim(),
-                    quantity: int.parse(quantityCtrl.text.trim()),
-                    price: double.parse(priceCtrl.text.trim()),
-                    remark: remarkCtrl.text.trim(),
-                  ),
-                );
-              }
-            },
-            child: Text('common.save'.tr()),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPricePreview(Currency curr) {
-    return Card(
-      color: Theme.of(
-        context,
-      ).colorScheme.secondaryContainer.withValues(alpha: 0.4),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'invoice.price_preview'.tr(),
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            // Positions mode: show each offer position
-            if (_usePositionsMode) ...[
-              ..._offerPositions.map(
-                (pos) => _PreviewRow(
-                  label: pos.quantity > 1
-                      ? '${pos.quantity}\u00d7 ${pos.name}'
-                      : pos.name,
-                  value: pos.quantity == 0
-                      ? 'tbd'
-                      : curr.format(pos.total),
-                ),
-              ),
-              const Divider(),
-              _PreviewRow(
-                label: 'invoice.positions_sum'.tr(),
-                value: curr.format(_offerPositionsSum),
-                bold: true,
-              ),
-            ],
-            // Fields mode: show individual field sums
-            if (!_usePositionsMode) ...[
-              _PreviewRow(
-                label: 'invoice.bar_service_cost'.tr(),
-                value: curr.format(_barServiceCost),
-              ),
-              if (_distanceKm > 0)
-                _PreviewRow(
-                  label: 'invoice.travel_cost'.tr(),
-                  value:
-                      '${_distanceKm * 2} km × ${curr.format(_travelCostPerKm)} = ${curr.format(_travelCostTotal)}',
-                ),
-              if (_thekeCost > 0)
-                _PreviewRow(
-                  label: 'invoice.theke_cost'.tr(),
-                  value: curr.format(_thekeCost),
-                ),
-              if (_shotsCount > 0)
-                _PreviewRow(
-                  label: 'Shots',
-                  value:
-                      '$_shotsCount × ${curr.format(_shotsPricePerPiece)} = ${curr.format(_shotsCostTotal)}',
-                ),
-              if (_extraHoursTotal > 0)
-                _PreviewRow(
-                  label: 'invoice.extra_hours_label'.tr(),
-                  value:
-                      '${_selectedEmployees.length} × ${_extraHours}h × ${curr.format(_extraHourRate)} = ${curr.format(_extraHoursTotal)}',
-                ),
-              if (_extraPositionsTotal > 0)
-                _PreviewRow(
-                  label: 'invoice.extra_positions'.tr(),
-                  value: curr.format(_extraPositionsTotal),
-                ),
-              const Divider(),
-              _PreviewRow(
-                label: 'invoice.positions_sum'.tr(),
-                value: curr.format(_positionsSum),
-                bold: true,
-              ),
-            ],
-            if (_discount > 0)
-              _PreviewRow(
-                label: _storedDiscountPercent > 0
-                    ? '${'invoice.discount'.tr()} (${formatDiscountPercent(_storedDiscountPercent)}%)'
-                    : 'invoice.discount'.tr(),
-                value: '-${curr.format(_discount)}',
-              ),
-            const Divider(),
-            _PreviewRow(
-              label: 'invoice.grand_total'.tr(),
-              value: curr.format(_grandTotal),
-              bold: true,
-              highlight: true,
-            ),
-            if (_totalValidationError != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _totalValidationError!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons() {
-    final saveBtn = OutlinedButton.icon(
-      onPressed: _isGenerating ? null : _saveOnly,
-      icon: const Icon(Icons.save_outlined, size: 18),
-      label: Text('invoice.save'.tr()),
-    );
-
-    final previewBtn = OutlinedButton.icon(
-      onPressed: _isGenerating ? null : _previewPdf,
-      icon: const Icon(Icons.visibility, size: 18),
-      label: Text('invoice.preview'.tr()),
-    );
-
-    final pdfBtn = FilledButton.icon(
-      onPressed: _isGenerating ? null : _confirmGeneratePdf,
-      icon: _isGenerating
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Icon(Icons.picture_as_pdf, size: 18),
-      label: Text('invoice.generate_pdf'.tr()),
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-      ),
-    );
-
-    final shareBtn = OutlinedButton.icon(
-      onPressed: _isGenerating ? null : _shareConfirmation,
-      icon: const Icon(Icons.share, size: 18),
-      label: Text('invoice.share'.tr()),
-    );
-
-    final calendarBtn = OutlinedButton.icon(
-      onPressed: _isGenerating ? null : _createCalendarEntry,
-      icon: const Icon(Icons.event, size: 18),
-      label: Text('invoice.create_calendar'.tr()),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 720) {
-          return Row(
-            children: [
-              saveBtn,
-              const SizedBox(width: 8),
-              previewBtn,
-              const SizedBox(width: 8),
-              shareBtn,
-              const SizedBox(width: 8),
-              calendarBtn,
-              const Spacer(),
-              pdfBtn,
-            ],
-          );
-        } else {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: saveBtn),
-                  const SizedBox(width: 8),
-                  Expanded(child: previewBtn),
-                ],
-              ),
-              const SizedBox(height: 8),
-              pdfBtn,
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: shareBtn),
-                  const SizedBox(width: 8),
-                  Expanded(child: calendarBtn),
-                ],
-              ),
-            ],
-          );
-        }
-      },
-    );
-  }
-
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    String? hint,
-    bool required = false,
-    TextInputType? keyboard,
-    List<TextInputFormatter>? inputFormatters,
-    int maxLines = 1,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboard,
-      inputFormatters: inputFormatters,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        alignLabelWithHint: maxLines > 1,
-      ),
-      validator: required
-          ? (v) => (v == null || v.trim().isEmpty)
-                ? 'invoice.field_required'.tr()
-                : null
-          : null,
-      onChanged: (_) => setState(() {}),
-    );
-  }
-}
-
-class _PreviewRow extends StatelessWidget {
-  const _PreviewRow({
-    required this.label,
-    required this.value,
-    this.bold = false,
-    this.highlight = false,
-  });
-
-  final String label;
-  final String value;
-  final bool bold;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-                color: highlight ? Theme.of(context).colorScheme.primary : null,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            value,
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-              color: highlight ? Theme.of(context).colorScheme.primary : null,
-            ),
-          ),
-        ],
       ),
     );
   }
