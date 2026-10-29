@@ -10,6 +10,7 @@ import 'package:cocktail_planer/models/order.dart';
 import 'package:cocktail_planer/screens/invoice/invoice_form_state.dart';
 import 'package:cocktail_planer/screens/offer/offer_form_state.dart';
 import 'package:cocktail_planer/services/invoice_pdf_generator.dart';
+import 'package:cocktail_planer/utils/discount_input.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'document_test_harness.dart';
@@ -184,11 +185,16 @@ void main() {
       expect(s.cocktailsErrorKey('Mojito'), isNull);
       s.changeServiceType('bar_service');
       expect(s.cocktailsErrorKey(''), isNull);
-      expect(s.eventTypeErrorKey, isNull); // hints only after an attempt
-      s.showValidationErrors = true;
-      expect(s.eventTypeErrorKey, 'offer.event_type_required');
-      s.offerPositions.clear();
-      expect(s.positionsErrorKey, 'offer.positions_required');
+      // Event type and positions: see the `issues` group below.
+    });
+
+    test('discount input: parse and validate', () {
+      expect(parseDiscountInput(' 7,5 '), 7.5);
+      expect(parseDiscountInput('x'), isNull);
+      expect(discountInputErrorKey('', isPercent: true), isNull);
+      expect(discountInputErrorKey('-1', isPercent: false), 'offer.invalid_number');
+      expect(discountInputErrorKey('101', isPercent: true), 'discount.percent_too_high');
+      expect(discountInputErrorKey('101', isPercent: false), isNull);
     });
 
     test('save writes exactly these arguments', () async {
@@ -280,15 +286,12 @@ void main() {
     test('validation: employees and negative total', () {
       final s = InvoiceFormState(invoiceOrder(assignedEmployees: const []));
       addTearDown(s.dispose);
-      expect(s.validateAll(), isFalse);
-      expect(s.validationErrorKey, 'invoice.employees_required');
+      expect(s.issues.single.messageKey, 'invoice.employees_required');
       s.toggleEmployee('Ana', true);
       s.barServiceCostCtrl.text = '-2000';
-      expect(s.validateAll(), isFalse);
-      expect(s.validationErrorKey, 'invoice.total_cannot_be_negative');
+      expect(s.issues.single.messageKey, 'invoice.total_cannot_be_negative');
       s.barServiceCostCtrl.text = '830';
-      expect(s.validateAll(), isTrue);
-      expect(s.validationErrorKey, isNull);
+      expect(s.issues, isEmpty);
     });
 
     test('save writes exactly these arguments', () async {

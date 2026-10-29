@@ -6,7 +6,7 @@ import '../../models/offer.dart';
 import '../../models/order.dart';
 import '../../utils/currency.dart';
 import '../../utils/order_option_labels.dart';
-import '../../widgets/discount_editor.dart';
+import '../../utils/discount_input.dart';
 import '../shared/document_sections/document_flow.dart' show DocIssue;
 
 /// Splits a comma-separated list field ("Mojito, Hugo") into trimmed,
@@ -73,7 +73,6 @@ class OfferFormState {
   final List<ExtraPosition> offerPositions = [];
 
   bool isGenerating = false;
-  bool showValidationErrors = false;
   bool savedSuccessfully = false;
 
   /// Additional-services catalog for resolving composite
@@ -285,16 +284,6 @@ class OfferFormState {
 
   bool get hasOfferPositions => offerPositions.isNotEmpty;
 
-  /// Translation key of the event type hint, or null.
-  String? get eventTypeErrorKey => showValidationErrors && !hasEventTypeSelection
-      ? 'offer.event_type_required'
-      : null;
-
-  /// Translation key of the positions hint, or null.
-  String? get positionsErrorKey => showValidationErrors && !hasOfferPositions
-      ? 'offer.positions_required'
-      : null;
-
   /// Translation key of the guest count error, or null.
   static String? guestCountErrorKey(String? value) {
     if (value == null || value.trim().isEmpty) {
@@ -342,7 +331,7 @@ class OfferFormState {
       (
         3,
         'discount',
-        DiscountEditor.errorKeyOf(
+        discountInputErrorKey(
           discountValueCtrl.text,
           isPercent: discountIsPercent,
         ),
@@ -385,7 +374,7 @@ class OfferFormState {
       offerPositions.fold<double>(0.0, (sum, p) => sum + p.total);
 
   double get discountInput =>
-      DiscountEditor.parseValue(discountValueCtrl.text) ?? 0;
+      parseDiscountInput(discountValueCtrl.text) ?? 0;
 
   double get discountPercent =>
       discountIsPercent ? discountInput.clamp(0, 100).toDouble() : 0;
@@ -402,13 +391,6 @@ class OfferFormState {
   /// What the offer PDF shows as total (`OfferData.grandTotal` with
   /// positions; offers always have positions here).
   double get grandTotal => positionsSubtotal - discountAmount;
-
-  // Price preview inputs (the preview falls back to 0, not order.total).
-  double get previewOrderTotal => double.tryParse(orderTotalCtrl.text.trim()) ?? 0;
-  int get distanceKm => int.tryParse(distanceKmCtrl.text.trim()) ?? 0;
-  double get travelCostPerKm =>
-      double.tryParse(travelCostPerKmCtrl.text.trim()) ?? 0.70;
-  double get barCost => double.tryParse(barCostCtrl.text.trim()) ?? 0;
 
   void setDiscountType(bool isPercent) {
     discountIsPercent = isPercent;

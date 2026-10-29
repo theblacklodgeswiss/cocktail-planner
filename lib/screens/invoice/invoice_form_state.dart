@@ -5,7 +5,7 @@ import '../../models/offer.dart';
 import '../../models/order.dart';
 import '../../utils/currency.dart';
 import '../../utils/position_translation.dart';
-import '../../widgets/discount_editor.dart';
+import '../../utils/discount_input.dart';
 import '../shared/document_sections/document_flow.dart' show DocIssue;
 import '../offer/offer_form_state.dart' show splitCommaList;
 
@@ -71,8 +71,6 @@ class InvoiceFormState {
   bool get usePositionsMode => offerPositions.isNotEmpty;
 
   bool isGenerating = false;
-  String? totalValidationErrorKey;
-  String? employeeValidationErrorKey;
 
   /// Every controller, in the order [dispose] releases them. Note: the
   /// former screen never disposed the location controller (a leak); it is
@@ -297,7 +295,7 @@ class InvoiceFormState {
   double get subtotal => usePositionsMode ? offerPositionsSum : positionsSum;
 
   double get discountInput =>
-      DiscountEditor.parseValue(discountValueCtrl.text) ?? 0;
+      parseDiscountInput(discountValueCtrl.text) ?? 0;
 
   double get discountPercent =>
       discountIsPercent ? discountInput.clamp(0, 100).toDouble() : 0;
@@ -321,38 +319,8 @@ class InvoiceFormState {
       ? offerPositionsSum
       : (barServiceCost + travelCostTotal + thekeCost);
 
-  /// Employees must be assigned. Sets/clears [employeeValidationErrorKey].
-  bool validateEmployees() {
-    if (selectedEmployees.isEmpty) {
-      employeeValidationErrorKey = 'invoice.employees_required';
-      return false;
-    }
-    employeeValidationErrorKey = null;
-    return true;
-  }
-
-  /// The discount may not make the total negative.
-  bool validateTotal() {
-    if (grandTotal < 0) {
-      totalValidationErrorKey = 'invoice.total_cannot_be_negative';
-      return false;
-    }
-    totalValidationErrorKey = null;
-    return true;
-  }
-
-  bool validateAll() {
-    final employeesValid = validateEmployees();
-    final totalValid = validateTotal();
-    return employeesValid && totalValid;
-  }
-
-  /// The first validation error's translation key.
-  String? get validationErrorKey =>
-      employeeValidationErrorKey ?? totalValidationErrorKey;
-
   /// Everything missing or invalid, by step (same rules as the old
-  /// screen's form validators plus [validateAll]).
+  /// screen's form validators plus its employee and total checks).
   List<DocIssue> get issues {
     String? req(TextEditingController c) =>
         c.text.trim().isEmpty ? 'invoice.field_required' : null;
@@ -373,7 +341,7 @@ class InvoiceFormState {
       (
         3,
         'discount',
-        DiscountEditor.errorKeyOf(
+        discountInputErrorKey(
           discountValueCtrl.text,
           isPercent: discountIsPercent,
         ),

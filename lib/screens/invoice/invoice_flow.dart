@@ -11,7 +11,7 @@ import '../../ui/tokens.dart';
 import '../../ui/widgets/app_sheet.dart';
 import '../../ui/widgets/buttons.dart';
 import '../../utils/currency.dart';
-import '../../widgets/discount_editor.dart';
+import '../shared/document_sections/discount_editor.dart';
 import '../forms/steps/wizard_widgets.dart' show FieldHint;
 import '../offer/offer_form_state.dart' show formatDocumentDate;
 import '../shared/document_sections/common_sections.dart';

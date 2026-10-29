@@ -10,7 +10,7 @@ import '../../models/offer.dart';
 import '../../models/order.dart';
 import '../../ui/tokens.dart';
 import '../../ui/widgets/app_sheet.dart';
-import '../../widgets/discount_editor.dart';
+import '../shared/document_sections/discount_editor.dart';
 import '../forms/steps/wizard_widgets.dart' show WizardSection;
 import '../shared/document_sections/common_sections.dart';
 import '../shared/document_sections/document_field.dart';
@@ -112,7 +112,6 @@ class _OfferFlowState extends State<OfferFlow>
   /// All steps valid? Otherwise jump to the first problem and explain.
   bool _validate() {
     final issue = checkAll();
-    setState(() => _form.showValidationErrors = true);
     if (issue == null) return true;
     _snack('offer.validation_error');
     return false;
@@ -349,7 +348,6 @@ class _OfferFlowState extends State<OfferFlow>
           Icons.picture_as_pdf,
           _confirmGeneratePdf,
         ),
-        DocMenuAction('offer.generate_link'.tr(), Icons.link, _share),
       ],
       child: _stepContent(),
     );

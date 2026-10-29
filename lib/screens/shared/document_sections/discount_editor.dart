@@ -2,11 +2,12 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/offer.dart';
-import '../screens/forms/steps/wizard_widgets.dart';
-import '../screens/shared/document_sections/document_field.dart';
-import '../ui/tokens.dart';
-import '../utils/currency.dart';
+import '../../../models/offer.dart';
+import '../../../ui/tokens.dart';
+import '../../../utils/currency.dart';
+import '../../../utils/discount_input.dart';
+import '../../forms/steps/wizard_widgets.dart';
+import 'document_field.dart';
 
 /// Card for entering a discount (Rabatt) on offers and invoices, either as a
 /// percentage of the positions subtotal or as a fixed amount.
@@ -38,23 +39,10 @@ class DiscountEditor extends StatelessWidget {
   final VoidCallback onChanged;
   final DocHints? hints;
 
-  static double? parseValue(String text) =>
-      double.tryParse(text.trim().replaceAll(',', '.'));
-
-  /// Translation key of the value's error, or null (empty is fine).
-  static String? errorKeyOf(String? value, {required bool isPercent}) {
-    final text = value?.trim() ?? '';
-    if (text.isEmpty) return null;
-    final parsed = parseValue(text);
-    if (parsed == null || parsed < 0) return 'offer.invalid_number';
-    if (isPercent && parsed > 100) return 'discount.percent_too_high';
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    final value = parseValue(valueController.text) ?? 0;
+    final value = parseDiscountInput(valueController.text) ?? 0;
     final amount = resolveDiscountAmount(
       subtotal: subtotal,
       percent: isPercent ? value : 0,

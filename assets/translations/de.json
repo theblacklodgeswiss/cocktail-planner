@@ -1144,8 +1144,7 @@
     "missing_title": "Kein Auftrag ausgewählt",
     "missing_body": "Öffne Angebot oder Auftragsbestätigung aus der Auftragsübersicht.",
     "to_orders": "Zu den Aufträgen",
-    "fields_card": "Leistung, Anfahrt und Theke",
-    "breakdown": "Aufstellung"
+    "fields_card": "Leistung, Anfahrt und Theke"
   },
   "months": {
     "1": "Januar",

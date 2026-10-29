@@ -1139,8 +1139,7 @@
     "missing_title": "No order selected",
     "missing_body": "Open the offer or order confirmation from the orders overview.",
     "to_orders": "Go to orders",
-    "fields_card": "Service, travel and counter",
-    "breakdown": "Breakdown"
+    "fields_card": "Service, travel and counter"
   },
   "months": {
     "1": "January",

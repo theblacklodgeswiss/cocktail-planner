@@ -18,7 +18,6 @@ class InvoiceExtraHoursSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = AppPalette.of(context);
     final code = form.order.currency;
     final curr = Currency.fromCode(code);
     return WizardSection(
@@ -49,14 +48,7 @@ class InvoiceExtraHoursSection extends StatelessWidget {
               value: '= ${curr.format(form.extraHoursTotal)}',
               bold: true,
             ),
-          ] else if (form.selectedEmployees.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpace.s8),
-              child: Text(
-                'invoice.select_employees'.tr(),
-                style: AppText.caption.copyWith(color: p.textSecondary),
-              ),
-            ),
+          ],
         ],
       ),
     );

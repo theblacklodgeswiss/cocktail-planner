@@ -15,13 +15,11 @@ class CocktailChipsField extends StatefulWidget {
     super.key,
     required this.controller,
     required this.label,
-    this.validator,
     this.loadCatalog,
   });
 
   final TextEditingController controller;
   final String label;
-  final String? Function(String?)? validator;
 
   /// Recipe names for the "add" search; defaults to the cocktail repository.
   final Future<List<String>> Function()? loadCatalog;
@@ -89,7 +87,6 @@ class _CocktailChipsFieldState extends State<CocktailChipsField> {
   @override
   Widget build(BuildContext context) {
     final items = _selected;
-    final error = widget.validator?.call(widget.controller.text);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -110,7 +107,6 @@ class _CocktailChipsFieldState extends State<CocktailChipsField> {
             ),
           ],
         ),
-        if (error != null) FieldHint(error),
       ],
     );
   }
