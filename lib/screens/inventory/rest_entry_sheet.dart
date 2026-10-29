@@ -410,8 +410,9 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     setState(() => _loading = true);
     final text = _textController.text;
     final interpret = _services.interpret;
-    final useAi =
+    var useAi =
         interpret != null && _aiAvailable && _aiEnabled && text.trim().isNotEmpty;
+    var stockFailed = false;
     try {
       final location = await _services.ownLocation(context);
       if (location == null || !mounted) {
@@ -422,10 +423,22 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       final locations = await _services.loadLocations();
       // The count view shows the stock before and after; the AI checks the
       // statement against it.
-      final withStock = _counting || useAi;
-      final stock = withStock
-          ? await _services.loadStock()
-          : const <StockEntry>[];
+      var withStock = _counting || useAi;
+      var stock = const <StockEntry>[];
+      if (_counting) {
+        // The count needs the stock: a failure stops here (load_failed).
+        stock = await _services.loadStock();
+      } else if (withStock) {
+        // Only the AI wanted it: without stock, continue with the rules.
+        try {
+          stock = await _services.loadStock();
+        } catch (e) {
+          debugPrint('Stock for the AI not loaded (${e.runtimeType})');
+          withStock = false;
+          useAi = false;
+          stockFailed = true;
+        }
+      }
       if (!mounted) return;
       _defaultLocation = location;
       _catalog = catalog;
@@ -455,6 +468,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       if (!useAi) {
         setState(() {
           _showRules();
+          _aiFallbackHint = stockFailed;
           _confirming = true;
           _loading = false;
         });
@@ -467,7 +481,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
         _interpreting = true;
       });
       final attempt = await _interpret(
-        interpret,
+        interpret!,
         StockInterpretRequest(
           text: text,
           mode: stockAiModeOf(_effectiveMode),
@@ -548,9 +562,14 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
     _showingAi = true;
   }
 
-  void _toggleAi(bool enabled) {
+  Future<void> _toggleAi(bool enabled) async {
     setState(() => _aiEnabled = enabled);
-    _services.setStockAiEnabled(enabled);
+    try {
+      await _services.setStockAiEnabled(enabled);
+    } catch (e) {
+      // The choice holds for this sheet; it is just not remembered.
+      debugPrint('KI-Auswertung preference not saved (${e.runtimeType})');
+    }
   }
 
   void _addManualLine() {
@@ -966,9 +985,24 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                 ),
               if (_unparsedCount > 0) ...[
                 const SizedBox(height: AppSpace.s4),
-                Text(
-                  'rest.partly_recognized'.tr(),
-                  style: AppText.body.copyWith(color: AppColors.warning),
+                // Warning colour on the icon only: the text keeps the
+                // palette's contrast on the plain background.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      size: AppSize.metaIcon,
+                      color: AppColors.warning,
+                    ),
+                    const SizedBox(width: AppSpace.s4),
+                    Expanded(
+                      child: Text(
+                        'rest.partly_recognized'.tr(),
+                        style: AppText.body.copyWith(color: p.text),
+                      ),
+                    ),
+                  ],
                 ),
               ],
               if (_counting) ...[

@@ -58,7 +58,12 @@ class UserPreferencesService extends ChangeNotifier {
     final locale = localeCode != null ? Locale(localeCode) : null;
 
     _preferences = UserPreferences(themeMode: themeMode, locale: locale);
-    _stockAiEnabled = prefs.getBool(_stockAiKey) ?? true;
+    try {
+      _stockAiEnabled = prefs.getBool(_stockAiKey) ?? true;
+    } catch (e) {
+      // A stored value of another type: fall back to the default.
+      _stockAiEnabled = true;
+    }
     notifyListeners();
   }
 
@@ -86,7 +91,11 @@ class UserPreferencesService extends ChangeNotifier {
   /// Switch the stock capture's Claude interpretation on or off.
   Future<void> setStockAiEnabled(bool enabled) async {
     _stockAiEnabled = enabled;
-    await _prefs?.setBool(_stockAiKey, enabled);
+    try {
+      await _prefs?.setBool(_stockAiKey, enabled);
+    } catch (e) {
+      debugPrint('stockAiEnabled not saved: $e');
+    }
     notifyListeners();
   }
 }

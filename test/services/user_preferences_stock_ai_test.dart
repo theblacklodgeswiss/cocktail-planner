@@ -25,4 +25,11 @@ void main() {
     await again.initialize();
     expect(again.stockAiEnabled, isFalse);
   });
+
+  test('a stored value of another type falls back to true', () async {
+    SharedPreferences.setMockInitialValues({'stockAiEnabled': 'nope'});
+    final s = UserPreferencesService();
+    await s.initialize();
+    expect(s.stockAiEnabled, isTrue);
+  });
 }

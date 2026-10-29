@@ -51,6 +51,8 @@ class _Fake {
   ];
   bool aiConfigured = true;
   bool aiEnabled = true;
+  bool stockFails = false;
+  bool saveEnabledFails = false;
 
   /// What the fake AI answers; null = the AI is not wired at all.
   Future<StockAiResult?> Function(StockInterpretRequest)? answer;
@@ -66,7 +68,10 @@ class _Fake {
       ('m4', _item('Sprite Zero')),
     ],
     loadLocations: () async => const [_mine, _mario],
-    loadStock: () async => stock,
+    loadStock: () async {
+      if (stockFails) throw StateError('offline');
+      return stock;
+    },
     applyMovement:
         ({
           required materialId,
@@ -115,7 +120,10 @@ class _Fake {
           },
     aiConfigured: () => aiConfigured,
     stockAiEnabled: () => aiEnabled,
-    setStockAiEnabled: (v) async => enabledWrites.add(v),
+    setStockAiEnabled: (v) async {
+      if (saveEnabledFails) throw StateError('storage');
+      enabledWrites.add(v);
+    },
   );
 }
 
@@ -540,5 +548,36 @@ void main() {
     expect(fake.movements.single['orderId'], 'o1');
     expect(fake.movements.single['delta'], 2.0);
     expect(fake.orderUpdates.single.$2, {'restRecorded': true});
+  });
+
+  testWidgets('stock load fails in "Dazu": rules without AI, no dead end', (
+    tester,
+  ) async {
+    final fake = _Fake()
+      ..answer = ((_) async => _aiAnswer)
+      ..stockFails = true;
+    await _open(tester, fake);
+    await _typeAndContinue(tester, '2 Bacardi');
+    await tester.pumpAndSettle();
+    expect(fake.requests, isEmpty);
+    expect(find.text('Erkannter Text'), findsOneWidget);
+    await _shown(tester, find.text('Ohne KI ausgewertet'));
+    expect(find.text('Noch kein Bestand'), findsNothing);
+    await _tap(tester, find.text('Speichern'));
+    expect(fake.movements.single['delta'], 2.0);
+  });
+
+  testWidgets('saving the switch fails: no crash, the switch still works', (
+    tester,
+  ) async {
+    final fake = _Fake()
+      ..answer = ((_) async => _aiAnswer)
+      ..saveEnabledFails = true;
+    await _open(tester, fake);
+    await _tap(tester, find.text('KI-Auswertung'));
+    expect(tester.takeException(), isNull);
+    await _typeAndContinue(tester, '2 Bacardi');
+    await tester.pumpAndSettle();
+    expect(fake.requests, isEmpty);
   });
 }
