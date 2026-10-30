@@ -91,13 +91,13 @@ class _WebSpeechInput implements SpeechInput {
           if (controller.isClosed || !identical(_active, recognition)) return;
           final results = _ResultEvent(raw).results;
           final length = (results['length'] as JSNumber).toDartInt;
-          final buffer = StringBuffer();
+          final parts = <String>[];
           for (var i = 0; i < length; i++) {
             final result = results[i.toString()] as JSObject;
             final alt = result['0'] as JSObject;
-            buffer.write((alt['transcript'] as JSString).toDart);
+            parts.add((alt['transcript'] as JSString).toDart);
           }
-          current = buffer.toString().trim();
+          current = mergeTranscripts(parts);
           restarts = 0;
           emit();
         }).toJS

@@ -39,3 +39,22 @@ abstract class SpeechInput {
 
 /// Creates the speech input implementation for the current platform.
 SpeechInput createSpeechInput() => impl.createPlatformSpeechInput();
+
+/// Joins the transcripts of one recognition session. Desktop browsers give
+/// one segment per result; Android Chrome in continuous mode repeats the whole
+/// text so far in every result and drops the spaces between segments.
+/// A transcript that extends the text so far replaces it, one already
+/// contained is skipped, anything else is appended after a space.
+String mergeTranscripts(List<String> parts) {
+  var text = '';
+  for (final raw in parts) {
+    final t = raw.trim();
+    if (t.isEmpty) continue;
+    if (text.isEmpty || t.startsWith(text)) {
+      text = t;
+    } else if (!text.endsWith(t)) {
+      text = '$text $t';
+    }
+  }
+  return text;
+}
