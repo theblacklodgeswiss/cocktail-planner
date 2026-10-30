@@ -125,11 +125,20 @@ const _unitWords = {
 /// Bacardi").
 const _afterQuantityFillers = {'rest', 'reste'};
 
-// Split on , ; newline and "und", but not on a decimal comma ("2,8").
-final _separator = RegExp(
-  r'(?<!\d),|,(?!\d)|;|\n|\bund\b',
-  caseSensitive: false,
-);
+// Split on , ; newline and "und", but not on a decimal comma ("2,8"). No
+// lookbehind: older Safari versions cannot compile it.
+final _separator = RegExp(r',|;|\n|\bund\b', caseSensitive: false);
+final _decimalComma = RegExp(r'(\d),(\d)');
+const _decimalPlaceholder = '\u0001';
+
+/// Splits [text] into fragments, keeping decimal commas inside a fragment.
+Iterable<String> _splitFragments(String text) => text
+    .replaceAllMapped(
+      _decimalComma,
+      (m) => '${m[1]}$_decimalPlaceholder${m[2]}',
+    )
+    .split(_separator)
+    .map((f) => f.replaceAll(_decimalPlaceholder, ','));
 
 final _plainNumber = RegExp(r'^\d+([.,]\d+)?$');
 final _numberWithX = RegExp(r'^(\d+([.,]\d+)?)x$', caseSensitive: false);
@@ -178,7 +187,7 @@ ParseResult parseRestTextDetailed(
 }) {
   final lines = <ParsedLine>[];
   final unparsed = <String>[];
-  for (final fragment in text.split(_separator).expand(_splitAtQuantities)) {
+  for (final fragment in _splitFragments(text).expand(_splitAtQuantities)) {
     final (line, leftover) = _parseFragment(fragment, catalog);
     if (line != null) {
       lines.add(line);

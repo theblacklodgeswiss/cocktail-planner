@@ -63,9 +63,8 @@ class _OrderShoppingListPageState extends State<OrderShoppingListPage> {
 
   Future<void> _loadStaffData() async {
     try {
-      final catalog = await adminRepository.getMaterialsWithIds(
-        isFixedValue: false,
-      );
+      // The same catalog as the stock deduction (ingredients + consumables).
+      final catalog = await adminRepository.getMaterialsWithIdsOrThrow();
       final own = await stockRepository.ownLocation();
       if (!mounted) return;
       setState(() {

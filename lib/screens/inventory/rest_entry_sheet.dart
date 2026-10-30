@@ -88,7 +88,7 @@ bool _defaultIsAdmin() => authService.isAdmin;
 // Ingredients and consumables, the same catalog as the inventory list.
 Future<List<(String, MaterialItem)>> _defaultLoadCatalog() async => [
   for (final m in await adminRepository.getMaterialsWithIdsOrThrow())
-    (m.id, m.item),
+    if (m.item.visible) (m.id, m.item),
 ];
 
 Future<List<StorageLocation>> _defaultLoadLocations() =>
@@ -200,11 +200,6 @@ class RestEntryServices {
   /// The local "KI-Auswertung" preference.
   final bool Function() stockAiEnabled;
   final Future<void> Function(bool enabled) setStockAiEnabled;
-}
-
-String _formatQuantity(double q) {
-  final text = q == q.truncateToDouble() ? q.toInt().toString() : q.toString();
-  return text.replaceAll('.', ',');
 }
 
 /// The capture flow: voice or text input, then a confirmation view of the
@@ -1126,7 +1121,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
                   child: TextFormField(
                     initialValue: line.quantity < 0
                         ? ''
-                        : _formatQuantity(line.quantity),
+                        : formatQuantity(line.quantity),
                     autofocus: identical(line, _focusLine),
                     enabled: !booked && !_saving,
                     keyboardType: const TextInputType.numberWithOptions(
