@@ -1,3 +1,8 @@
+// Newer Flutter releases export CupertinoPageTransitionsBuilder from the
+// cupertino library only; older ones from material. Both imports keep the
+// file compiling on either (CI follows the stable channel).
+// ignore: unnecessary_import, unused_import
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'motion.dart';
