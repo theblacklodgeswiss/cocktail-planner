@@ -176,10 +176,19 @@ class AdminRepository {
     if (!firestoreService.isAvailable) {
       throw StateError('Firestore not available');
     }
-    final snapshot = await firestoreService.materialsCollection.get();
-    return parseMaterialCatalog(
-      snapshot.docs.map((doc) => (id: doc.id, data: doc.data())),
-    );
+    // Ingredients plus the consumables (straws, cups, ... = fixed values of
+    // the category 'purchase'); staff, services and equipment stay out. The
+    // ids are Firestore auto-ids, so they do not collide.
+    final snapshots = await Future.wait([
+      firestoreService.materialsCollection.get(),
+      firestoreService.fixedValuesCollection.get(),
+    ]);
+    return parseMaterialCatalog([
+      for (final doc in snapshots[0].docs) (id: doc.id, data: doc.data()),
+      for (final doc in snapshots[1].docs)
+        if (doc.data()['category'] == 'purchase')
+          (id: doc.id, data: doc.data()),
+    ]);
   }
 
   /// Update sort order for fixed values.
