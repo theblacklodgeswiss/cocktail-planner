@@ -48,6 +48,13 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Order fields only staff may change.
+    function touchesStaffOrderFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['status', 'statusUpdatedAt', 'stockApplied',
+                        'restRecorded', 'assignedEmployees']);
+    }
+
     function isOrderOwner() {
       return request.auth != null && (
         resource.data.get('userId', '') == request.auth.uid ||
@@ -118,7 +125,11 @@ service cloud.firestore {
       // reverted to the original, unconditional-for-authenticated-users
       // check while the exact cause of the mismatch is investigated.
       allow create: if isAuthenticated();
-      allow update: if isOrderOwner() || hasFullOrderAccess() || isShareLinkResponse(orderId);
+      // The owner (a customer) may edit the request, but never the fields
+      // that staff control: status, the stock flags and the assigned crew.
+      allow update: if hasFullOrderAccess() ||
+                       (isOrderOwner() && !touchesStaffOrderFields()) ||
+                       isShareLinkResponse(orderId);
       allow delete: if isOrderOwner() || hasFullOrderAccess();
     }
     
@@ -203,11 +214,24 @@ service cloud.firestore {
     // at any location, but only a location's owner or an admin may rename or
     // delete it.
     match /storageLocations/{locationId} {
-      allow read, create: if hasFullOrderAccess();
-      allow update, delete: if isAdmin() ||
-                               (hasFullOrderAccess() &&
-                                resource.data.get('ownerEmail', '') != '' &&
-                                resource.data.ownerEmail.lower() == authEmail());
+      allow read: if hasFullOrderAccess();
+      // A new location is ownerless or owned by the caller; only an admin
+      // may create one for somebody else.
+      allow create: if isAdmin() ||
+                       (hasFullOrderAccess() &&
+                        (request.resource.data.get('ownerEmail', '') == '' ||
+                         request.resource.data.ownerEmail.lower() == authEmail()));
+      // Owners may rename their location but not hand it to someone else.
+      allow update: if isAdmin() ||
+                       (hasFullOrderAccess() &&
+                        resource.data.get('ownerEmail', '') != '' &&
+                        resource.data.ownerEmail.lower() == authEmail() &&
+                        request.resource.data.get('ownerEmail', '') ==
+                          resource.data.get('ownerEmail', ''));
+      allow delete: if isAdmin() ||
+                       (hasFullOrderAccess() &&
+                        resource.data.get('ownerEmail', '') != '' &&
+                        resource.data.ownerEmail.lower() == authEmail());
     }
 
     match /stockEntries/{entryId} {
@@ -216,7 +240,10 @@ service cloud.firestore {
 
     // Append-only movement log: no update, no delete.
     match /stockMovements/{movementId} {
-      allow read, create: if hasFullOrderAccess();
+      allow read: if hasFullOrderAccess();
+      // The log names the caller, never somebody else.
+      allow create: if hasFullOrderAccess() &&
+                       request.resource.data.get('byEmail', '').lower() == authEmail();
       allow update, delete: if false;
     }
 
