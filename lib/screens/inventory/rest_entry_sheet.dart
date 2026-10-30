@@ -85,10 +85,9 @@ bool _defaultCanRecord() => authService.isEmployeeOrHigher;
 
 bool _defaultIsAdmin() => authService.isAdmin;
 
+// Ingredients and consumables, the same catalog as the inventory list.
 Future<List<(String, MaterialItem)>> _defaultLoadCatalog() async => [
-  for (final m in await adminRepository.getMaterialsWithIds(
-    isFixedValue: false,
-  ))
+  for (final m in await adminRepository.getMaterialsWithIdsOrThrow())
     (m.id, m.item),
 ];
 
