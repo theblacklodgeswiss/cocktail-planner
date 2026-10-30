@@ -666,29 +666,46 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
       line.chosenMaterialName ?? line.parsed.spokenName;
 
   /// Adds every unbooked line ("Dazu" and the rest of an order).
-  Future<void> _bookAdditions() async {
-    for (final line in _lines) {
-      if (_booked.contains(line)) continue;
-      await _services.applyMovement(
-        materialId: line.chosenMaterialId!,
-        materialName: _nameOf(line),
-        locationId: line.location.id,
-        origin: line.origin,
-        delta: line.quantity,
-        reason: widget.standalone ? 'manual' : 'rest',
-        orderId: widget.orderId,
-        // Standalone: a retry after a commit whose answer got lost is a no-op.
-        movementId: widget.standalone ? manualMovementId(line) : null,
-      );
-      _booked.add(line);
+  /// Books all open lines at the same time (each is its own transaction, so
+  /// the round trips overlap instead of adding up). Lines that succeed are
+  /// remembered even when another fails, so a retry only books the rest.
+  Future<void> _bookAll(Future<void> Function(RestLine line) book) async {
+    Object? firstError;
+    StackTrace? firstStack;
+    await Future.wait([
+      for (final line in _lines)
+        if (!_booked.contains(line))
+          book(line).then(
+            (_) => _booked.add(line),
+            onError: (Object e, StackTrace st) {
+              firstError ??= e;
+              firstStack ??= st;
+            },
+          ),
+    ]);
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStack ?? StackTrace.current);
     }
   }
 
+  Future<void> _bookAdditions() => _bookAll(
+    (line) => _services.applyMovement(
+      materialId: line.chosenMaterialId!,
+      materialName: _nameOf(line),
+      locationId: line.location.id,
+      origin: line.origin,
+      delta: line.quantity,
+      reason: widget.standalone ? 'manual' : 'rest',
+      orderId: widget.orderId,
+      // Standalone: a retry after a commit whose answer got lost is a no-op.
+      movementId: widget.standalone ? manualMovementId(line) : null,
+    ),
+  );
+
   /// "Zählung": per line the planned corrections (changed origins only).
-  Future<void> _bookCounts() async {
+  Future<void> _bookCounts() {
     final plans = _countPlans();
-    for (final line in _lines) {
-      if (_booked.contains(line)) continue;
+    return _bookAll((line) async {
       for (final (origin, quantity) in plans[line]!.writes) {
         await _services.setQuantity(
           materialId: line.chosenMaterialId!,
@@ -698,8 +715,7 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
           quantity: quantity,
         );
       }
-      _booked.add(line);
-    }
+    });
   }
 
   Future<void> _save() async {
