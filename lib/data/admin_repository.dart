@@ -169,23 +169,16 @@ class AdminRepository {
   getMaterialsWithIdsOrThrow() async =>
       (await getMaterialCatalogOrThrow()).items;
 
-  /// The material catalog (ingredients and consumables) with the number of documents that could not be
+  /// The material catalog with the number of documents that could not be
   /// read. Throws only for query-level failures (unavailable, permission,
   /// offline); one malformed document never hides the others.
   Future<MaterialCatalog> getMaterialCatalogOrThrow() async {
     if (!firestoreService.isAvailable) {
       throw StateError('Firestore not available');
     }
-    // Ingredients and consumables (straws, cups, ...) both belong in the
-    // inventory; the ids are Firestore auto-ids, so they do not collide.
-    final snapshots = await Future.wait([
-      firestoreService.materialsCollection.get(),
-      firestoreService.fixedValuesCollection.get(),
-    ]);
+    final snapshot = await firestoreService.materialsCollection.get();
     return parseMaterialCatalog(
-      snapshots.expand(
-        (s) => s.docs.map((doc) => (id: doc.id, data: doc.data())),
-      ),
+      snapshot.docs.map((doc) => (id: doc.id, data: doc.data())),
     );
   }
 

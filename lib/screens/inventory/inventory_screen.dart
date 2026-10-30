@@ -35,8 +35,8 @@ class InventoryScreen extends StatelessWidget {
       ? 'rest.origin_order'.tr()
       : 'rest.origin_investment'.tr();
 
-  /// All catalog articles of the inventory (ingredients and consumables
-  /// that are not archived). Throws on failure, so the view can show the cause
+  /// All catalog articles of the inventory (non-fixed-value materials that
+  /// are not archived). Throws on failure, so the view can show the cause
   /// and a retry.
   static Future<InventoryCatalog> _loadCatalog() async {
     final catalog = await adminRepository.getMaterialCatalogOrThrow();
