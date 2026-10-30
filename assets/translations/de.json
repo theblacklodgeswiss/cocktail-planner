@@ -1018,6 +1018,7 @@
       "mic_stop": "Stopp",
       "mic_unsupported": "Spracheingabe wird in diesem Browser nicht unterstützt. Bitte tippe den Rest ein.",
       "mic_denied": "Zugriff auf das Mikrofon wurde verweigert. Bitte erlaube ihn im Browser oder tippe den Rest ein.",
+      "create_named": "„{name}“ neu anlegen",
       "mic_failed": "Spracheingabe fehlgeschlagen ({code}). Bitte versuche es erneut oder tippe den Rest ein.",
       "mic_no_speech": "Ich habe nichts gehört. Sprich nach dem Tippen auf „Sprechen“ gleich los oder tippe den Rest ein.",
       "load_failed": "Daten konnten nicht geladen werden. Bitte versuche es erneut.",

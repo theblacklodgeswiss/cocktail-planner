@@ -588,21 +588,25 @@ class _RestEntrySheetState extends State<RestEntrySheet> {
   }
 
   Future<void> _pickAnyItem(RestLine line) async {
-    final picked = await showDialog<(String, MaterialItem)>(
+    final picked = await showDialog<Object>(
       context: context,
       builder: (_) => CatalogPickerDialog(catalog: _catalog),
     );
     if (picked == null || !mounted) return;
+    // "„Becher“ neu anlegen": the searched text is not in the catalog.
+    if (picked is String) return _createItem(line, initialName: picked);
+    if (picked is! (String, MaterialItem)) return;
     setState(() {
       line.chosenMaterialId = picked.$1;
       line.chosenMaterialName = picked.$2.name;
     });
   }
 
-  Future<void> _createItem(RestLine line) async {
+  Future<void> _createItem(RestLine line, {String? initialName}) async {
     final result = await showDialog<(String, String)>(
       context: context,
-      builder: (_) => NewItemDialog(initialName: line.parsed.spokenName),
+      builder: (_) =>
+          NewItemDialog(initialName: initialName ?? line.parsed.spokenName),
     );
     if (result == null || !mounted) return;
     final (name, unit) = result;
@@ -1557,6 +1561,16 @@ class CatalogPickerDialogState extends State<CatalogPickerDialog> {
                     ListTile(
                       title: Text(e.$2.name),
                       onTap: () => Navigator.of(context).pop(e),
+                    ),
+                  if (_filter.trim().isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.add),
+                      title: Text(
+                        'rest.create_named'.tr(
+                          namedArgs: {'name': _filter.trim()},
+                        ),
+                      ),
+                      onTap: () => Navigator.of(context).pop(_filter.trim()),
                     ),
                 ],
               ),
