@@ -4,7 +4,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
+import '../../data/additional_service_repository.dart';
 import '../../data/share_link_repository.dart';
+import '../../models/additional_service.dart';
 import '../../models/offer.dart';
 import '../../models/order.dart';
 import '../../services/invoice_pdf_generator.dart';
@@ -19,6 +21,7 @@ import '../../ui/widgets/large_title_scaffold.dart';
 import '../../ui/widgets/states.dart';
 import '../../ui/widgets/status_dot.dart';
 import '../../utils/currency.dart';
+import '../../utils/order_option_labels.dart';
 
 /// Brand name shown above the summary. Not translated on purpose; the
 /// snapshots carry no firm name.
@@ -84,6 +87,9 @@ class _Summary {
     required this.discount,
     required this.discountText,
     required this.total,
+    this.cocktails = const [],
+    this.additionalServices = const [],
+    this.isEnglish = false,
   });
 
   final Currency currency;
@@ -95,6 +101,12 @@ class _Summary {
   final double discount;
   final String discountText;
   final double total;
+
+  /// Offer only: the cocktails and extra services that belong to the first
+  /// position (the cocktail / bar service), listed under it.
+  final List<String> cocktails;
+  final List<String> additionalServices;
+  final bool isEnglish;
 
   static _Position _position(ExtraPosition p) => _Position(
     name: p.name,
@@ -120,6 +132,16 @@ class _Summary {
         ),
         // Same getter the offer PDF prints in its total row.
         total: offer.grandTotal,
+        cocktails: [
+          for (final c in offer.cocktails)
+            // "Mojito (Rum, Minze)" -> "Mojito", as in the PDF.
+            if ((c.contains('(') ? c.substring(0, c.indexOf('(')) : c)
+                .trim()
+                .isNotEmpty)
+              (c.contains('(') ? c.substring(0, c.indexOf('(')) : c).trim(),
+        ],
+        additionalServices: offer.additionalServices,
+        isEnglish: offer.language == 'en',
       );
     }
     final order = SavedOrder.fromFirestore('shared', result.snapshot!);
@@ -162,6 +184,9 @@ class _SharedDocumentScreenState extends State<SharedDocumentScreen> {
   _Summary? _summary;
   Future<Uint8List>? _pdfFuture;
 
+  /// Readable lines listed under the first position (cocktails, services).
+  List<String> _serviceLines = const [];
+
   /// Mirrors [ShareLinkResult.response] once known, whether that came from
   /// the initial fetch (a prior visit already responded) or from this
   /// visitor's own click just now.
@@ -186,13 +211,42 @@ class _SharedDocumentScreenState extends State<SharedDocumentScreen> {
         summary = null; // Unreadable snapshot: treated like an invalid link.
       }
     }
+    final serviceLines = summary == null
+        ? const <String>[]
+        : await _loadServiceLines(summary);
     if (!mounted) return;
     setState(() {
+      _serviceLines = serviceLines;
       _result = result;
       _summary = summary;
       _localResponse = result.response;
       _loading = false;
     });
+  }
+
+  /// "Cocktails: A, B" plus one line per extra service. A composite
+  /// "serviceId:variantId" needs the catalog; without it (offline, denied)
+  /// the stored value still resolves through the legacy label.
+  Future<List<String>> _loadServiceLines(_Summary summary) async {
+    var catalog = const <AdditionalService>[];
+    if (summary.additionalServices.any((v) => v.contains(':'))) {
+      try {
+        catalog = await additionalServiceRepository
+            .watchServices()
+            .first
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }
+    return [
+      if (summary.cocktails.isNotEmpty)
+        'Cocktails: ${summary.cocktails.join(', ')}',
+      for (final value in summary.additionalServices)
+        resolveAdditionalServiceLabel(
+          value,
+          catalog: catalog,
+          isEnglish: summary.isEnglish,
+        ),
+    ];
   }
 
   Future<Uint8List> _buildPdf(ShareLinkResult result) async {
@@ -375,9 +429,14 @@ class _SharedDocumentScreenState extends State<SharedDocumentScreen> {
                   ),
                 ),
               ],
-              for (final pos in summary.positions) ...[
+              for (var i = 0; i < summary.positions.length; i++) ...[
                 const SizedBox(height: AppSpace.s12),
-                _PositionCard(position: pos, currency: summary.currency),
+                _PositionCard(
+                  position: summary.positions[i],
+                  currency: summary.currency,
+                  // The services belong to the first position.
+                  lines: i == 0 ? _serviceLines : const [],
+                ),
               ],
               if (summary.discount > 0) ...[
                 const SizedBox(height: AppSpace.s12),
@@ -459,10 +518,17 @@ class _SharedDocumentScreenState extends State<SharedDocumentScreen> {
 }
 
 class _PositionCard extends StatelessWidget {
-  const _PositionCard({required this.position, required this.currency});
+  const _PositionCard({
+    required this.position,
+    required this.currency,
+    this.lines = const [],
+  });
 
   final _Position position;
   final Currency currency;
+
+  /// Listed under the title, e.g. the cocktails and extra services.
+  final List<String> lines;
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +542,7 @@ class _PositionCard extends StatelessWidget {
       child: _Line(
         title: position.name,
         detail: detail,
+        lines: lines,
         amount: position.isTbd ? 'tbd' : currency.format(position.total),
         color: p.text,
       ),
@@ -488,12 +555,14 @@ class _Line extends StatelessWidget {
     required this.title,
     required this.amount,
     this.detail,
+    this.lines = const [],
     this.color,
   });
 
   final String title;
   final String amount;
   final String? detail;
+  final List<String> lines;
   final Color? color;
 
   @override
@@ -511,6 +580,14 @@ class _Line extends StatelessWidget {
                 Text(
                   detail!,
                   style: AppText.caption.copyWith(color: p.textSecondary),
+                ),
+              for (final line in lines)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpace.s4),
+                  child: Text(
+                    line,
+                    style: AppText.caption.copyWith(color: p.textSecondary),
+                  ),
                 ),
             ],
           ),

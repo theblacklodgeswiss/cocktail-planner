@@ -168,6 +168,28 @@ void main() {
     expect(find.text('Hallo!'), findsOneWidget);
   });
 
+  testWidgets(
+    'cocktails and extra services are listed under the first position',
+    (tester) async {
+      phone(tester);
+      final snapshot = offer().toJson()
+        ..['cocktails'] = ['Mojito (Rum, Minze)', 'Gin Tonic']
+        ..['additionalServices'] = ['Flaschenservice'];
+      final result = ShareLinkResult.found(
+        type: 'offer',
+        snapshot: snapshot,
+        orderId: 'o1',
+        bullets: const [],
+      );
+      await pumpApp(tester, app(FakeRepo(result)));
+      expect(tester.takeException(), isNull);
+      expect(find.text('Cocktails: Mojito, Gin Tonic'), findsOneWidget);
+      expect(find.textContaining('Flaschenservice'), findsOneWidget);
+      // Only the first position carries them.
+      expect(find.text('Anfahrt'), findsOneWidget);
+    },
+  );
+
   testWidgets('accept asks first and responds only after confirming', (
     tester,
   ) async {
