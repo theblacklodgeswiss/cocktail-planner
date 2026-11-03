@@ -12,7 +12,6 @@ import 'package:cocktail_planer/screens/dashboard/customer_start.dart';
 import 'package:cocktail_planer/screens/dashboard/staff_dashboard_view.dart';
 import 'package:cocktail_planer/screens/dashboard/widgets/my_requests_list.dart';
 import 'package:cocktail_planer/screens/inventory/inventory_view.dart';
-import 'package:cocktail_planer/screens/login_screen.dart';
 import 'package:cocktail_planer/screens/more/more_view.dart';
 import 'package:cocktail_planer/screens/offer/offer_flow.dart';
 import 'package:cocktail_planer/screens/orders/detail/order_detail_view.dart';
@@ -157,7 +156,6 @@ void main() {
           _host(CustomerStart(signedIn: false, onOpenRequest: (_) {}), dark: d),
       true,
     ),
-    'login': ((d) => _host(const LoginScreen(), dark: d), false),
     'my requests': (
       (d) => _host(
         LargeTitleScaffold(

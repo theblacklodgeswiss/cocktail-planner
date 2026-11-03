@@ -9,7 +9,7 @@ import '../ui/widgets/staff_tab_bar.dart';
 /// screens; tests map them to stand-ins, so the route table itself (paths,
 /// shell branches, order) is VM-testable.
 enum AppPage {
-  login,
+  entry,
   sharedDocument,
   home,
   orders,
@@ -56,7 +56,8 @@ List<RouteBase> buildAppRoutes({
   required bool Function() isStaff,
   required Stream<bool> staffChanges,
 }) => [
-  _route('/login', AppPage.login, page),
+  // No login form: guests are signed in there (see GuestEntryScreen).
+  _route('/login', AppPage.entry, page),
   _route('/s/:code', AppPage.sharedDocument, page),
   StatefulShellRoute.indexedStack(
     builder: (context, state, shell) => StaffShellHost(

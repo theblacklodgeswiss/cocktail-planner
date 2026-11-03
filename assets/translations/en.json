@@ -100,10 +100,6 @@
     "account": "Account"
   },
   "login": {
-    "subtitle": "Plan your cocktail bar: send a request, get an offer, celebrate.",
-    "google": "Sign in with Google",
-    "guest": "Continue as guest",
-    "guest_hint": "As a guest you can send a request right away. With Google you see your requests on all devices.",
     "error_failed": "Sign-in failed. Please try again.",
     "error_guest": "Guest sign-in failed.",
     "error_cancelled": "Sign-in cancelled.",

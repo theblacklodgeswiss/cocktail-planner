@@ -11,7 +11,7 @@ import '../screens/forms/modern_order_form_screen.dart';
 import '../screens/forms/order_success_screen.dart';
 import '../screens/inventory/inventory_screen.dart';
 import '../screens/invoice/create_invoice_screen.dart';
-import '../screens/login_screen.dart';
+import '../screens/guest_entry_screen.dart';
 import '../screens/more/more_screen.dart';
 import '../screens/offer/create_offer_screen.dart';
 import '../screens/share/shared_document_screen.dart';
@@ -91,7 +91,7 @@ Widget _page(
   GoRouterState state,
   AppPage page,
 ) => switch (page) {
-  AppPage.login => const LoginScreen(),
+  AppPage.entry => const GuestEntryScreen(),
   AppPage.sharedDocument => SharedDocumentScreen(
     code: state.pathParameters['code']!,
   ),

@@ -6,7 +6,7 @@ import 'package:cocktail_planer/ui/widgets/glass_icon_button.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cocktail_planer/screens/dashboard/widgets/my_requests_list.dart';
 import 'package:cocktail_planer/screens/forms/order_success_screen.dart';
-import 'package:cocktail_planer/screens/login_screen.dart';
+import 'package:cocktail_planer/screens/guest_entry_screen.dart';
 import 'package:cocktail_planer/ui/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -207,26 +207,50 @@ void main() {
     });
   });
 
-  group('LoginScreen', () {
-    for (final dark in [false, true]) {
-      testWidgets('shows both buttons without overflow (dark: $dark)', (
+  group('GuestEntryScreen (replaces the login screen)', () {
+    testWidgets('a visitor is signed in as a guest, no form is shown', (
+      tester,
+    ) async {
+      phone(tester);
+      var signedIn = 0;
+      await pumpApp(
         tester,
-      ) async {
-        phone(tester);
-        await pumpApp(
-          tester,
-          app(
-            const LoginScreen(),
-            theme: dark ? AppTheme.dark() : AppTheme.light(),
-            textScale: 1.3,
+        app(
+          GuestEntryScreen(
+            currentUser: () => null,
+            signInAsGuest: () async => signedIn++,
           ),
-        );
+        ),
+      );
 
-        expect(tester.takeException(), isNull);
-        expect(find.text('Mit Google anmelden'), findsOneWidget);
-        expect(find.text('Als Gast fortfahren'), findsOneWidget);
-      });
-    }
+      expect(signedIn, 1);
+      expect(find.text('Mit Google anmelden'), findsNothing);
+      expect(find.text('Als Gast fortfahren'), findsNothing);
+    });
+
+    testWidgets('a failed guest sign-in offers a retry', (tester) async {
+      phone(tester);
+      var calls = 0;
+      await pumpApp(
+        tester,
+        app(
+          GuestEntryScreen(
+            currentUser: () => null,
+            signInAsGuest: () async {
+              calls++;
+              throw Exception('offline');
+            },
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(calls, 1);
+      expect(find.text('Gast-Anmeldung fehlgeschlagen.'), findsOneWidget);
+      await tester.tap(find.text('Erneut versuchen'));
+      await tester.pump();
+      expect(calls, 2);
+    });
   });
 
   group('OrderSuccessScreen', () {

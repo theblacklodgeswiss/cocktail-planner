@@ -101,10 +101,6 @@
     "account": "Konto"
   },
   "login": {
-    "subtitle": "Plane deine Cocktailbar: Anfrage senden, Angebot erhalten, feiern.",
-    "google": "Mit Google anmelden",
-    "guest": "Als Gast fortfahren",
-    "guest_hint": "Als Gast kannst du sofort eine Anfrage senden. Mit Google siehst du deine Anfragen auf allen Geräten.",
     "error_failed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
     "error_guest": "Gast-Anmeldung fehlgeschlagen.",
     "error_cancelled": "Anmeldung abgebrochen.",

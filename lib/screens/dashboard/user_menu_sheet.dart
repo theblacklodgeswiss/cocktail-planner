@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
 import 'link_google.dart';
+import 'staff_login.dart';
 
 /// Shows the user menu as a bottom sheet. Opened from the customer start
 /// (and the old dashboard app bar); staff screens use the tab bar and the
@@ -146,9 +147,11 @@ class _UserMenuSheet extends StatelessWidget {
     return ListTile(
       leading: const Icon(Icons.badge_outlined),
       title: Text('drawer.staff_login'.tr()),
-      onTap: () {
+      onTap: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final router = GoRouter.of(context);
         Navigator.pop(context);
-        context.push('/login');
+        if (await staffGoogleLogin(messenger)) router.go('/');
       },
     );
   }

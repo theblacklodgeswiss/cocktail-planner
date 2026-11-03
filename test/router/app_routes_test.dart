@@ -90,7 +90,7 @@ void main() {
     ('/settings/services', AppPage.services, null),
     ('/create-offer', AppPage.createOffer, null),
     ('/create-invoice', AppPage.createInvoice, null),
-    ('/login', AppPage.login, null),
+    ('/login', AppPage.entry, null),
     ('/s/abc', AppPage.sharedDocument, null),
   ];
 
