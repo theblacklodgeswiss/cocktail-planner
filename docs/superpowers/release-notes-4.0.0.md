@@ -26,3 +26,7 @@
 ## 4.0.1
 
 - Angebots-Link: Unter "Cocktail- & Barservice" stehen jetzt die Cocktails und die gebuchten Zusatz-Services.
+
+## 4.0.2
+
+- Neue Besucher landen direkt im Anfrage-Formular statt auf der Login-Seite.
