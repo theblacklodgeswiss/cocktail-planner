@@ -93,13 +93,14 @@ Future<void> main() async {
     _logTiming('auth state resolved');
 
     // New visitors skip the login screen: sign them in as a guest and open
-    // the order form right away. Staff reach the Google login via the user
-    // menu (/login). Not for /login itself or public share links.
+    // the order form right away. That includes a first load of /login (an
+    // old tab or bookmark from the time the app sent everyone there); staff
+    // reach the Google login via the user menu. Not for public share links.
     final path = Uri.base.path;
-    if (user == null && path != '/login' && !path.startsWith('/s/')) {
+    if (user == null && !path.startsWith('/s/')) {
       try {
         await authService.signInAnonymously();
-        if (path == '/') openOrderFormOnStart = true;
+        if (path == '/' || path == '/login') openOrderFormOnStart = true;
         _logTiming('guest signed in');
       } catch (e) {
         // Falls back to the login screen via the router redirect.
