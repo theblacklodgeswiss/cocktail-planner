@@ -30,3 +30,8 @@
 ## 4.0.2
 
 - Neue Besucher landen direkt im Anfrage-Formular statt auf der Login-Seite.
+
+## 4.0.3
+
+- Der Login-Screen ist entfernt: Besucher werden automatisch als Gast angemeldet und landen im Anfrage-Formular, auch nach dem Ausloggen.
+- Mitarbeiter melden sich über "Mitarbeiter-Login" im Benutzermenü direkt mit Google an.
