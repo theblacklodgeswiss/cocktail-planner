@@ -182,8 +182,8 @@ class Harness {
           builder: (_, _) => const Scaffold(body: Text('page /order-success')),
         ),
         GoRoute(
-          path: '/dashboard',
-          builder: (_, _) => const Scaffold(body: Text('page /dashboard')),
+          path: '/',
+          builder: (_, _) => const Scaffold(body: Text('page /')),
         ),
       ],
     );

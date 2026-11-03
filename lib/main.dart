@@ -13,6 +13,7 @@ import 'data/firestore_service.dart';
 import 'data/settings_repository.dart';
 import 'firebase_options_dev.dart' as dev;
 import 'firebase_options_prod.dart' as prod;
+import 'router/app_router.dart' show openOrderFormOnStart;
 import 'services/auth_service.dart';
 import 'services/microsoft_graph_service.dart';
 import 'services/user_preferences_service.dart';
@@ -90,6 +91,21 @@ Future<void> main() async {
     final user = await FirebaseAuth.instance.authStateChanges().first;
     debugPrint('👤 Initial auth state: ${user?.email ?? "Not signed in"}');
     _logTiming('auth state resolved');
+
+    // New visitors skip the login screen: sign them in as a guest and open
+    // the order form right away. Staff reach the Google login via the user
+    // menu (/login). Not for /login itself or public share links.
+    final path = Uri.base.path;
+    if (user == null && path != '/login' && !path.startsWith('/s/')) {
+      try {
+        await authService.signInAnonymously();
+        if (path == '/') openOrderFormOnStart = true;
+        _logTiming('guest signed in');
+      } catch (e) {
+        // Falls back to the login screen via the router redirect.
+        debugPrint('Automatic guest sign-in failed: $e');
+      }
+    }
 
     // Settings load + MS sync: off the critical path, but awaitable via
     // settingsRepository.awaitReady() (settings screen, PDF builders).

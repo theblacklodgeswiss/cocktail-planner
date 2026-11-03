@@ -40,6 +40,7 @@ class _UserMenuSheet extends StatelessWidget {
             _buildInventoryTile(context),
           _buildSettingsTile(context),
           if (user.isAnonymous) _buildLinkGoogleTile(context),
+          if (user.isAnonymous) _buildStaffLoginTile(context),
           _buildLogoutTile(context),
         ],
       ),
@@ -137,6 +138,17 @@ class _UserMenuSheet extends StatelessWidget {
         final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
         linkGoogleAccount(messenger);
+      },
+    );
+  }
+
+  Widget _buildStaffLoginTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.badge_outlined),
+      title: Text('drawer.staff_login'.tr()),
+      onTap: () {
+        Navigator.pop(context);
+        context.push('/login');
       },
     );
   }

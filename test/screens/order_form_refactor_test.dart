@@ -250,7 +250,7 @@ void main() {
       expect(h.urls.last, stepUrl(0));
     });
 
-    testWidgets('back arrow on step 0 goes to /dashboard when it cannot pop', (
+    testWidgets('back arrow on step 0 goes to the start page when it cannot pop', (
       tester,
     ) async {
       mobile(tester);
@@ -259,7 +259,7 @@ void main() {
       await settle(tester);
       await tester.tap(find.byIcon(Icons.arrow_back));
       await settle(tester);
-      expect(find.text('page /dashboard'), findsOneWidget);
+      expect(find.text('page /'), findsOneWidget);
     });
   });
 

@@ -145,6 +145,7 @@
     "users_title": "Manage Users",
     "users_subtitle": "Add new users",
     "link_google_title": "Link with Google",
+    "staff_login": "Staff login",
     "link_google_subtitle": "Save your data permanently",
     "link_success": "Account successfully linked!",
     "logout": "Sign out"

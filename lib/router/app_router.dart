@@ -41,6 +41,10 @@ class AuthNotifier extends ChangeNotifier {
 
 final _authNotifier = AuthNotifier();
 
+/// Set by main() when a new visitor was signed in as a guest on `/`: the
+/// first navigation to `/` then opens the order form instead.
+bool openOrderFormOnStart = false;
+
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   refreshListenable: _authNotifier,
@@ -55,9 +59,15 @@ final GoRouter appRouter = GoRouter(
       return '/login';
     }
 
-    // Logged in and on login page -> redirect to home
-    if (isLoggedIn && isLoginRoute) {
+    // Logged in and on login page -> redirect to home. Guests may stay:
+    // that is how staff on a new device reach the Google login.
+    if (user != null && !user.isAnonymous && isLoginRoute) {
       return '/';
+    }
+
+    if (openOrderFormOnStart && state.matchedLocation == '/') {
+      openOrderFormOnStart = false;
+      return '/order-form';
     }
 
     // No redirect needed

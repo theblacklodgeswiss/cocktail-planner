@@ -284,7 +284,7 @@ class _ModernOrderFormScreenState extends State<ModernOrderFormScreen> {
     } else if (context.canPop()) {
       context.pop();
     } else {
-      context.go('/dashboard');
+      context.go('/');
     }
   }
 

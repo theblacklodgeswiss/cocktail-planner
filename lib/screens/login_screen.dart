@@ -59,7 +59,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await authService.signInAnonymously();
+      // Already a guest (came here via "Mitarbeiter-Login"): keep that
+      // account and its requests.
+      if (authService.currentUser?.isAnonymous != true) {
+        await authService.signInAnonymously();
+      }
       if (mounted) {
         context.go('/');
       }
