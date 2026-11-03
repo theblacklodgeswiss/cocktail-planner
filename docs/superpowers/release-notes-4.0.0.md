@@ -22,3 +22,7 @@
   1. `firebase deploy --only firestore:rules --project <id>`
   2. `firebase deploy --only firestore:indexes --project <id>`
 - Alte Clients kennen den Status "completed" nicht (und das neue Theme nicht): Nutzer müssen neu laden.
+
+## 4.0.1
+
+- Angebots-Link: Unter "Cocktail- & Barservice" stehen jetzt die Cocktails und die gebuchten Zusatz-Services.
