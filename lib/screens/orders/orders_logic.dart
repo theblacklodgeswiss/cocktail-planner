@@ -1,4 +1,5 @@
 import '../../models/order.dart';
+import '../../services/invoice_pdf_generator.dart';
 import '../../utils/currency.dart';
 
 /// Pure list rules of the staff order screens (overview, pending, years,
@@ -326,6 +327,10 @@ class KpiStats {
   final String currency;
 }
 
+/// Revenue of one order: the customer price as on the offer/invoice PDF
+/// (offer positions minus discount), not the shopping list cost.
+double orderRevenue(SavedOrder o) => InvoicePdfGenerator.grandTotalOf(o);
+
 /// "1234.50 CHF", as the old cards formatted money.
 String kpiMoney(double value, String currency) =>
     '${value.toStringAsFixed(2)} $currency';
@@ -337,7 +342,7 @@ KpiStats dashboardStats(List<SavedOrder> orders) {
   final acceptedOrders = completedOrders.where((o) => o.isAccepted).toList();
   final totalRevenue = acceptedOrders.fold<double>(
     0,
-    (sum, o) => sum + o.total,
+    (sum, o) => sum + orderRevenue(o),
   );
   final totalPersons = acceptedOrders.fold<int>(
     0,
@@ -362,7 +367,7 @@ KpiStats overviewTotals(List<SavedOrder> orders) {
   final acceptedOrders = orders.where((o) => o.isAccepted).toList();
   final totalRevenue = acceptedOrders.fold<double>(
     0,
-    (sum, o) => sum + o.total,
+    (sum, o) => sum + orderRevenue(o),
   );
   final totalPersons = acceptedOrders.fold<int>(
     0,
