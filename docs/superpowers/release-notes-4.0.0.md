@@ -43,3 +43,7 @@
 ## 4.0.5
 
 - Auftragskarte und Auftragsliste zeigen den Angebotspreis (Positionen minus Rabatt, wie im PDF) statt des Einkaufslisten-Betrags; Änderungen an den Positionen sind jetzt sofort sichtbar.
+
+## 4.0.6
+
+- Angebot: Zusatzleistungen aus der Anfrage (z. B. PhotoBox) erscheinen nicht mehr doppelt und kommen nach dem Löschen der Kopie nicht wieder.
