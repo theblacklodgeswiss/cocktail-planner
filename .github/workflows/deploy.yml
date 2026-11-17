@@ -19,6 +19,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          # Pinned: Flutter 3.41.x reopens the iOS keyboard in a loop when a text
+          # field gets focus (flutter/flutter#184875); 3.38.10 is not affected.
+          flutter-version: '3.38.10'
           cache: true
 
       - name: Generate firebase_options_prod.dart
