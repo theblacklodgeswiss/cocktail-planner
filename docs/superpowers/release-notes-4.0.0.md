@@ -39,3 +39,7 @@
 ## 4.0.4
 
 - Textfelder auf dem iPhone: Die Tastatur geht beim Antippen nicht mehr ständig zu und wieder auf, Markieren und Bearbeiten funktioniert wieder.
+
+## 4.0.5
+
+- Auftragskarte und Auftragsliste zeigen den Angebotspreis (Positionen minus Rabatt, wie im PDF) statt des Einkaufslisten-Betrags; Änderungen an den Positionen sind jetzt sofort sichtbar.
