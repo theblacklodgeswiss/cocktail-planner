@@ -26,16 +26,18 @@ class OfferPdfGenerator {
   /// Generates and shares an offer PDF.
   static Future<void> generateAndDownload(OfferData offer) async {
     final pdfBytes = await generatePdfBytes(offer);
+    await Printing.sharePdf(bytes: pdfBytes, filename: filenameOf(offer));
+  }
+
+  /// "angebot_<name>_<yyyymmdd>.pdf".
+  static String filenameOf(OfferData offer) {
     final dateTag =
         '${offer.eventDate.year}${offer.eventDate.month.toString().padLeft(2, '0')}${offer.eventDate.day.toString().padLeft(2, '0')}';
     final safeName = offer.orderName.toLowerCase().replaceAll(
       RegExp(r'[^a-z0-9]'),
       '_',
     );
-    await Printing.sharePdf(
-      bytes: pdfBytes,
-      filename: 'angebot_${safeName}_$dateTag.pdf',
-    );
+    return 'angebot_${safeName}_$dateTag.pdf';
   }
 
   /// Builds the PDF document.

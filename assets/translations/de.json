@@ -454,6 +454,8 @@
     "share_pdf_tip": "Tipp: \"PDF teilen\" erstellt einen 14 Tage gültigen Link zum Angebot, kopiert die Nachricht mit dem Link in die Zwischenablage und öffnet WhatsApp.",
     "share_pdf_hint": "Nachricht wurde kopiert! Füge sie in WhatsApp ein.",
     "share_pdf_error": "PDF konnte nicht geteilt werden.",
+    "share_pdf_file": "Nur PDF-Datei teilen",
+    "share_pdf_file_retry": "PDF ist bereit – bitte nochmals tippen.",
     "share_cocktail_selection": "Cocktails anpassen (optional)",
     "share_regenerate_hint": "Neu generieren"
   },

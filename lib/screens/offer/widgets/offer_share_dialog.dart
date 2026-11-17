@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../data/cocktail_repository.dart';
+import '../../../services/file_share.dart';
 import '../../../ui/tokens.dart';
 import '../../../ui/widgets/app_sheet.dart';
 import '../../../ui/widgets/buttons.dart';
@@ -28,6 +31,8 @@ Future<void> showOfferShareSheet(
   required Future<String> Function(List<String> bullets) createShareLink,
   Future<List<String>> Function() loadCocktailNames = _defaultLoadCocktailNames,
   ShareMiddleGenerator generateMiddle = defaultGenerateShareMiddle,
+  Future<Uint8List> Function()? loadPdf,
+  String pdfFilename = 'angebot.pdf',
 }) {
   return showAppSheet<void>(
     context,
@@ -40,6 +45,8 @@ Future<void> showOfferShareSheet(
       createShareLink: createShareLink,
       loadCocktailNames: loadCocktailNames,
       generateMiddle: generateMiddle,
+      loadPdf: loadPdf,
+      pdfFilename: pdfFilename,
     ),
   );
 }
@@ -57,6 +64,8 @@ class OfferShareSheet extends StatefulWidget {
     required this.createShareLink,
     this.loadCocktailNames = _defaultLoadCocktailNames,
     this.generateMiddle = defaultGenerateShareMiddle,
+    this.loadPdf,
+    this.pdfFilename = 'angebot.pdf',
   });
 
   final String clientName;
@@ -68,6 +77,12 @@ class OfferShareSheet extends StatefulWidget {
   final Future<String> Function(List<String> bullets) createShareLink;
   final Future<List<String>> Function() loadCocktailNames;
   final ShareMiddleGenerator generateMiddle;
+
+  /// Builds the offer PDF for "PDF-Datei teilen" (system share sheet, e.g.
+  /// WhatsApp). The button only shows when set and the browser can share
+  /// files.
+  final Future<Uint8List> Function()? loadPdf;
+  final String pdfFilename;
 
   @override
   State<OfferShareSheet> createState() => _OfferShareSheetState();
@@ -90,6 +105,11 @@ class _OfferShareSheetState extends State<OfferShareSheet> {
   bool _pdfSharing = false;
   bool _linkCopying = false;
 
+  /// PDF for the file share, built when the sheet opens: Safari only allows
+  /// a share right after a tap, so it must be ready by then.
+  Future<Uint8List>? _pdfBytes;
+  bool _fileSharing = false;
+
   /// Reused by "copy link" and the WhatsApp button within one session.
   String? _cachedShareCode;
 
@@ -107,6 +127,9 @@ class _OfferShareSheetState extends State<OfferShareSheet> {
     _messageCtrl = TextEditingController();
     _bulletsCtrl = TextEditingController(text: _defaultShareBullets)
       ..addListener(_invalidateCachedShareCode);
+    if (widget.loadPdf != null && canShareFiles()) {
+      _pdfBytes = widget.loadPdf!()..ignore();
+    }
     _generate();
   }
 
@@ -270,6 +293,38 @@ $editorFirst''';
     }
   }
 
+  /// Only the PDF file, through the system share sheet (pick WhatsApp and
+  /// the contact there). No await before [shareFile] when the PDF is
+  /// ready, so Safari still counts the tap.
+  Future<void> _sharePdfFile() async {
+    final pending = _pdfBytes;
+    if (pending == null) return;
+    setState(() => _fileSharing = true);
+    try {
+      final bytes = await pending;
+      final result = await shareFile(
+        bytes: bytes,
+        filename: widget.pdfFilename,
+      );
+      switch (result) {
+        case FileShareResult.shared:
+        case FileShareResult.cancelled:
+          break;
+        case FileShareResult.needsGesture:
+          _snack('offer.share_pdf_file_retry');
+        case FileShareResult.unsupported:
+        case FileShareResult.failed:
+          _snack('offer.share_pdf_error');
+      }
+    } catch (_) {
+      // Building the PDF failed: allow a fresh attempt.
+      _pdfBytes = widget.loadPdf!()..ignore();
+      _snack('offer.share_pdf_error');
+    } finally {
+      if (mounted) setState(() => _fileSharing = false);
+    }
+  }
+
   /// Message + link: copied and opened in WhatsApp.
   Future<void> _sharePdf() async {
     setState(() => _pdfSharing = true);
@@ -295,7 +350,7 @@ $editorFirst''';
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    final busy = _loading || _pdfSharing;
+    final busy = _loading || _pdfSharing || _fileSharing;
     // The sheet has no Scaffold of its own, so without this one the
     // snackbars ("Link kopiert", ...) would show on the page behind it.
     // Transparent: the sheet card provides the background.
@@ -407,6 +462,14 @@ $editorFirst''';
             loading: _pdfSharing,
             onPressed: busy ? null : _sharePdf,
           ),
+          if (_pdfBytes != null) ...[
+            const SizedBox(height: AppSpace.s8),
+            SecondaryButton(
+              label: 'offer.share_pdf_file'.tr(),
+              loading: _fileSharing,
+              onPressed: busy ? null : _sharePdfFile,
+            ),
+          ],
           const SizedBox(height: AppSpace.s8),
           SecondaryButton(
             label: 'offer.share_whatsapp'.tr(),

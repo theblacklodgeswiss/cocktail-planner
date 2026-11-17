@@ -8,6 +8,7 @@ import '../../models/additional_service.dart';
 import '../../models/employee.dart';
 import '../../models/offer.dart';
 import '../../models/order.dart';
+import '../../services/offer_pdf_generator.dart';
 import '../../ui/tokens.dart';
 import '../../ui/widgets/app_sheet.dart';
 import '../shared/document_sections/discount_editor.dart';
@@ -178,6 +179,8 @@ class _OfferFlowState extends State<OfferFlow>
       selectedCocktails: splitCommaList(_form.cocktailsCtrl.text),
       loadCocktailNames: widget.services.loadCocktailNames,
       generateMiddle: widget.services.generateShareMiddle,
+      loadPdf: () => OfferPdfGenerator.generatePdfBytes(offerSnapshot),
+      pdfFilename: OfferPdfGenerator.filenameOf(offerSnapshot),
       createShareLink: (bullets) =>
           widget.services.shareLinks.createOfferShareLink(
             offerSnapshot,
