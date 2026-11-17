@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+import '../../../services/invoice_pdf_generator.dart';
 import '../../../ui/tokens.dart';
 import '../../../ui/widgets/date_tile.dart';
 import '../../../ui/widgets/floating_card.dart';
@@ -58,8 +59,10 @@ class OrderInfoCard extends StatelessWidget {
                   ],
                 ),
               ),
+              // The customer price (offer positions minus discount, as on
+              // the offer/invoice PDF), not the shopping list cost.
               Text(
-                currency.format(order.total),
+                currency.format(InvoicePdfGenerator.grandTotalOf(order)),
                 style: AppText.number.copyWith(color: p.text),
               ),
             ],

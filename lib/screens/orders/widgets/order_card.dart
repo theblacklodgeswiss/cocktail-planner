@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/order.dart';
+import '../../../services/invoice_pdf_generator.dart';
 import '../../../ui/tokens.dart';
 import '../../../ui/widgets/date_tile.dart';
 import '../../../ui/widgets/floating_card.dart';
@@ -19,9 +20,10 @@ StatusKind staffStatusKind(OrderStatus status) => switch (status) {
   OrderStatus.declined => StatusKind.declined,
 };
 
-/// Total as the old staff list showed it ("1234.50 CHF").
+/// Customer price as on the offer/invoice PDF ("1234.50 CHF"): offer
+/// positions minus discount, not the shopping list cost.
 String orderTotalLabel(SavedOrder o) =>
-    '${o.total.toStringAsFixed(2)} ${o.currency}';
+    '${InvoicePdfGenerator.grandTotalOf(o).toStringAsFixed(2)} ${o.currency}';
 
 /// "Juni 2026" in the active language.
 String monthHeading(int year, int month) => '${'months.$month'.tr()} $year';
