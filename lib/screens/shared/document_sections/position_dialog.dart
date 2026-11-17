@@ -109,6 +109,11 @@ class _PositionFormState extends State<_PositionForm> {
   );
   bool _attempted = false;
 
+  // Stable per field: a fresh GlobalKey on every build would remount the
+  // TextField whenever the sheet rebuilds (e.g. the keyboard opening), which
+  // drops focus, closes the keyboard and breaks text selection.
+  final _anchors = <String, GlobalKey>{};
+
   @override
   void dispose() {
     for (final c in [_date, _name, _quantity, _price, _remark]) {
@@ -163,7 +168,7 @@ class _PositionFormState extends State<_PositionForm> {
     final errors = _errors;
     final hints = DocHints(
       hintOf: (f) => _attempted ? errors[f] : null,
-      anchorOf: (_) => GlobalKey(),
+      anchorOf: (f) => _anchors.putIfAbsent(f, () => GlobalKey()),
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
