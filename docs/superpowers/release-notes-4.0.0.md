@@ -35,3 +35,7 @@
 
 - Der Login-Screen ist entfernt: Besucher werden automatisch als Gast angemeldet und landen im Anfrage-Formular, auch nach dem Ausloggen.
 - Mitarbeiter melden sich über "Mitarbeiter-Login" im Benutzermenü direkt mit Google an.
+
+## 4.0.4
+
+- Textfelder auf dem iPhone: Die Tastatur geht beim Antippen nicht mehr ständig zu und wieder auf, Markieren und Bearbeiten funktioniert wieder.
