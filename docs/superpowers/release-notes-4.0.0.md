@@ -47,3 +47,8 @@
 ## 4.0.6
 
 - Angebot: Zusatzleistungen aus der Anfrage (z. B. PhotoBox) erscheinen nicht mehr doppelt und kommen nach dem Löschen der Kopie nicht wieder.
+
+## 4.0.7
+
+- Umsatz und Durchschnitt in den Kennzahlen rechnen mit dem Angebotspreis statt mit dem Einkaufslisten-Betrag.
+- Angebot teilen: neuer Button "Nur PDF-Datei teilen" öffnet das Teilen-Menü des Handys mit der PDF-Datei (z. B. für WhatsApp).
