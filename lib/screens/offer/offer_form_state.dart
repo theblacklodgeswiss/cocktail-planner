@@ -754,6 +754,18 @@ class OfferFormState {
       );
       if (resolvedName == rawService) continue; // still unresolved
 
+      // The row was seeded under its raw name because the catalog was not
+      // loaded yet, so the saved position with the resolved name was not
+      // recognised. Drop the seed instead of renaming it into a duplicate.
+      final resolvedKey = positionNameKey(resolvedName);
+      final alreadyThere = offerPositions.indexed.any(
+        (e) => e.$1 != index && positionNameKey(e.$2.name) == resolvedKey,
+      );
+      if (alreadyThere) {
+        offerPositions.removeAt(index);
+        continue;
+      }
+
       final resolvedPrice = resolveAdditionalServicePrice(
         rawService,
         catalog: catalog,
